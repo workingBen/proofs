@@ -15,6 +15,7 @@ title, skill, caption (or a one-line "short" caption, preferred when present) an
 It replaces what it owns, so the manifest is always the full set:
   docs/examples/<id>/<frame>-<width>.webp and .jpg   resized, metadata stripped
   assets/examples/<id>/wipe.gif                      for the README (GitHub runs no scripts)
+  assets/examples/rows/row-<n>.gif                   two wipes per README row in one gif, so a row moves in step (needs ffmpeg)
   site-src/examples.json                             read by build.py
   README.md, between the <!-- examples:grid --> markers
 
@@ -110,24 +111,65 @@ def resize(tool, src, dst, width, quality):
                    check=True)
 
 
-def readme_block(examples):
-    """The README's See it work grid. The hero example leads it; the 30-second tour is the README's top picture."""
+def readme_grid(examples):
+    """The examples the README grid shows, in order: the hero example first."""
     gifs = [x for x in examples if x["gif"]]
     gifs.sort(key=lambda x: x["use"] != "hero")
-    grid = [x for x in gifs if x["use"] != "skill"][:README_GRID]
-    rows = ""
-    for i in range(0, len(grid), 2):
-        cells = ""
-        for x in grid[i:i + 2]:
-            cells += (f'<td width="50%" valign="top"><img src="{x["gif"]}" width="100%" '
-                      f'alt="{esc(x["title"])}: before and after."><br>'
-                      f'<b><a href="{SITE}{x["skill"]}.html">{x["skill"]}</a></b> · {esc(x["caption"])}</td>')
-        rows += f"<tr>{cells}</tr>\n"
-    grid_md = ""
-    if rows:
-        grid_md = ("## See it work\n\nReal pages, before and after one review. "
-                   f"[See all of them, as sliders]({SITE}).\n\n<table>\n{rows}</table>")
-    return grid_md
+    return [x for x in gifs if x["use"] != "skill"][:README_GRID]
+
+
+ROW_CELL = (600, 375)   # every example sits in the same 16:10 frame; tall phone shots are boxed, not stretched
+ROW_GAP, ROW_BG = 16, "0x1e1b16"
+
+
+def row_gif(root, pair, n):
+    """Two wipes side by side in ONE gif, so they always move together (separate gifs start whenever each
+    finishes loading, so they drift). The shorter one holds its last frame to match the longer."""
+    w, h = ROW_CELL
+    durs = []
+    for x in pair:
+        r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
+                            os.path.join(root, x["gif"])], capture_output=True, text=True, check=True)
+        durs.append(float(r.stdout.strip()))
+    longest = max(durs)
+    cmd, chains = ["ffmpeg", "-v", "error", "-y"], []
+    for i, x in enumerate(pair):
+        cmd += ["-i", os.path.join(root, x["gif"])]
+        right = ROW_GAP if i < len(pair) - 1 else 0
+        chains.append(f"[{i}:v]fps=10,scale={w}:{h}:force_original_aspect_ratio=decrease,"
+                      f"pad={w + right}:{h}:({w}-iw)/2:(oh-ih)/2:color={ROW_BG},"
+                      f"tpad=stop_mode=clone:stop_duration={longest - durs[i]:.2f}[v{i}]")
+    stack = "".join(f"[v{i}]" for i in range(len(pair)))
+    graph = ";".join(chains) + (f";{stack}hstack=inputs={len(pair)}[s]" if len(pair) > 1 else ";[v0]null[s]")
+    graph += ";[s]split[a][b];[a]palettegen=max_colors=192:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle"
+    rel = f"assets/examples/rows/row-{n}.gif"
+    os.makedirs(os.path.join(root, "assets", "examples", "rows"), exist_ok=True)
+    subprocess.run(cmd + ["-filter_complex", graph, "-t", f"{longest:.2f}", "-loop", "0", os.path.join(root, rel)], check=True)
+    return rel
+
+
+def readme_block(examples, rows=None):
+    """The README's See it work grid. The hero example leads it; the 30-second tour is the README's top picture.
+    With rows (one combined gif per pair, from row_gif), each pair plays in step; without, one gif per cell."""
+    grid = readme_grid(examples)
+    body = ""
+    for n, i in enumerate(range(0, len(grid), 2)):
+        pair = grid[i:i + 2]
+        caps = "".join(f'<td width="50%" valign="top"><b><a href="{SITE}{x["skill"]}.html">{x["skill"]}</a></b> · '
+                       f'{esc(x["caption"])}</td>' for x in pair)
+        if rows:
+            alt = " Right: ".join(f'{esc(x["title"])}, before and after' for x in pair)
+            body += (f'<tr><td colspan="2"><img src="{rows[n]}" width="100%" alt="Left: {alt}."></td></tr>\n'
+                     f"<tr>{caps}</tr>\n")
+        else:
+            cells = "".join(f'<td width="50%" valign="top"><img src="{x["gif"]}" width="100%" '
+                            f'alt="{esc(x["title"])}: before and after."><br>'
+                            f'<b><a href="{SITE}{x["skill"]}.html">{x["skill"]}</a></b> · {esc(x["caption"])}</td>' for x in pair)
+            body += f"<tr>{cells}</tr>\n"
+    if not body:
+        return ""
+    return ("## See it work\n\nReal pages, before and after one review. "
+            f"[See all of them, as sliders]({SITE}).\n\n<table>\n{body}</table>")
 
 
 def esc(s):
@@ -219,7 +261,12 @@ def main(argv=None):
     readme = os.path.join(root, "README.md")
     if os.path.isfile(readme):
         text = open(readme, encoding="utf-8").read()
-        text, ok = replace_block(text, "grid", readme_block(out))
+        grid, rows = readme_grid(out), []
+        try:
+            rows = [row_gif(root, grid[i:i + 2], n + 1) for n, i in enumerate(range(0, len(grid), 2))]
+        except (OSError, ValueError, subprocess.CalledProcessError) as err:
+            print(f"warning: could not build the README row gifs ({err}); one gif per cell instead", file=sys.stderr)
+        text, ok = replace_block(text, "grid", readme_block(out, rows))
         if not ok:
             print("warning: README.md is missing the examples markers; left as is", file=sys.stderr)
         open(readme, "w", encoding="utf-8").write(text)

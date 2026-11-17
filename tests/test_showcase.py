@@ -125,11 +125,17 @@ class ReadmeGridTests(unittest.TestCase):
     def test_hero_example_leads_the_grid(self):
         sys.path.insert(0, os.path.dirname(IMPORT))
         import import_examples
-        ex = lambda i, use: {"id": i, "title": i, "skill": "design-review", "caption": "c", "use": use,
+        ex = lambda i, use: {"id": i, "title": i, "skill": "design-review", "caption": f"Caption {i}.", "use": use,
                              "gif": f"assets/examples/{i}/wipe.gif"}
-        grid = import_examples.readme_block([ex("a", "featured"), ex("h", "hero"), ex("s", "skill")])
-        self.assertLess(grid.index("examples/h/"), grid.index("examples/a/"))
-        self.assertNotIn("examples/s/", grid)
+        exs = [ex("alpha", "featured"), ex("herox", "hero"), ex("skillonly", "skill")]
+        self.assertEqual([x["id"] for x in import_examples.readme_grid(exs)], ["herox", "alpha"])
+        cells = import_examples.readme_block(exs)
+        self.assertLess(cells.index("examples/herox/"), cells.index("examples/alpha/"))
+        self.assertNotIn("skillonly", cells)
+        rows = import_examples.readme_block(exs, ["assets/examples/rows/row-1.gif"])
+        self.assertIn('<td colspan="2"><img src="assets/examples/rows/row-1.gif"', rows)
+        self.assertLess(rows.index("Caption herox."), rows.index("Caption alpha."))
+        self.assertNotIn("examples/alpha/wipe.gif", rows)
 
 
 class ShowcaseBuildTests(unittest.TestCase):

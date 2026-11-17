@@ -110,7 +110,8 @@ CSS = '''
   padding:6px 9px;border-radius:999px;background:rgba(20,18,15,.78);color:#fff;pointer-events:none;
   max-width:calc(50% - 16px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:opacity .12s linear}
 .ba-lbl.l{left:10px} .ba-lbl.r{right:10px;background:var(--accent)} .st-img .ba-lbl.r{right:auto}
-.ba.v-phone,.steps.v-phone .st-stage{max-width:320px;margin-inline:auto}
+.ba.v-phone,.steps.v-phone .st-stage{aspect-ratio:16/10!important;background:var(--soft)}
+.ba.v-phone .ba-img img,.steps.v-phone .st-img img{object-fit:contain;object-position:center}
 .steps{display:grid;gap:10px}
 .st-stage{position:relative;width:100%;overflow:hidden;border-radius:12px;border:1px solid var(--line);background:var(--card)}
 .st-img{position:absolute;inset:0;opacity:0;transition:opacity .6s ease}
@@ -124,9 +125,9 @@ CSS = '''
 .st-n{font:600 11px "JetBrains Mono",monospace;color:var(--accent)}
 .st-bar{position:absolute;left:0;bottom:0;height:3px;width:0;background:var(--accent)}
 .st-b.on .st-bar{width:var(--t,100%)}
-.bx-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:start}
+.bx-grid{columns:2;column-gap:18px}
+.bx-grid>.bx{break-inside:avoid;margin-bottom:18px}
 .bx{margin:0;display:grid;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
-.bx.v-phone{background:var(--soft)}
 .bx figcaption{display:grid;gap:4px;padding:0 4px 4px;min-width:0}
 .bx h3{margin:0;font:400 28px/1.08 "Instrument Serif",Georgia,serif;text-wrap:balance}
 .bx .sub{margin:0;color:var(--muted);font-size:16px;line-height:1.4}
@@ -137,7 +138,7 @@ a.bx-skill:hover{border-color:var(--accent)}
 .showcase .lede{display:grid;gap:6px;margin-bottom:18px}
 .showcase .lede h2{font:400 40px/1.1 "Instrument Serif",Georgia,serif;margin:0}
 .showcase .lede p{margin:0;font-size:18px;font-weight:650;line-height:1.35;max-width:40em}
-@media (max-width:900px){.bx-grid{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:900px){.bx-grid{columns:1}}
 @media (max-width:440px){.bx{padding:10px}.bx h3{font-size:25px}.ba-lbl{font-size:10px;padding:5px 7px}.st-b{font-size:12px;padding:8px 8px 11px}}
 @media (prefers-reduced-motion:reduce){.st-img{transition:none}}
 '''
@@ -164,7 +165,7 @@ JS = r'''
   }
   [].forEach.call(document.querySelectorAll('[data-ba]'), function(el){
     var l=el.querySelector('.ba-lbl.l'), r=el.querySelector('.ba-lbl.r');
-    var auto=!RM, seen=false, run=false, t0=0, phase=0, raf=0, cur=.5;
+    var auto=!RM, run=false, raf=0, cur=.5;
     function set(p){
       p=Math.max(0,Math.min(1,p)); cur=p;
       el.style.setProperty('--p',p);
@@ -172,8 +173,9 @@ JS = r'''
       el.setAttribute('aria-valuenow',v); el.setAttribute('aria-valuetext',v+'% after');
       l.style.opacity=fade(p); r.style.opacity=fade(1-p);
     }
-    function tick(now){ if(!run) return; phase=now-t0; set(at(phase)); raf=requestAnimationFrame(tick); }
-    function start(){ if(!auto||run) return; run=true; if(!seen){seen=true; phase=0; set(HI);} t0=performance.now()-phase; raf=requestAnimationFrame(tick); }
+    /* One clock for the whole page, so every slider sweeps in step with the others. */
+    function tick(now){ if(!run) return; set(at(now)); raf=requestAnimationFrame(tick); }
+    function start(){ if(!auto||run) return; run=true; raf=requestAnimationFrame(tick); }
     function stop(){ run=false; cancelAnimationFrame(raf); }
     function grab(){ auto=false; stop(); el.classList.add('held'); }
     if(auto){

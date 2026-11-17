@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 560" width="720" height="560" role="img" aria-labelledby="t d">
 <title id="t">How every skill works</title>
-<desc id="d">Four steps: 1 Claude does the work. 2 Publishes a page. 3 You decide (highlighted). 4 Paste it back.</desc>
+<desc id="d">Four steps: 1 Claude does the work. 2 Publishes a page. 3 You decide visually (highlighted). 4 Paste it back.</desc>
 <rect width="720" height="560" rx="16" fill="#15130f"/>
 <rect x="32" y="32" width="300" height="232" rx="14" fill="#1e1b16" stroke="#3a352c" stroke-width="1.5"/>
 <text x="56" y="74" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="22" font-weight="700" fill="#ff8a4c">01</text>
@@ -18,6 +18,7 @@
 <rect x="32" y="296" width="300" height="232" rx="14" fill="#3a2216" stroke="#ff8a4c" stroke-width="2.5"/>
 <text x="56" y="338" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="22" font-weight="700" fill="#ff8a4c">03</text>
 <text x="56" y="384" font-family="Georgia, 'Times New Roman', serif" font-size="32" fill="#efe8dc">You decide</text>
+<text x="56" y="422" font-family="Georgia, 'Times New Roman', serif" font-size="32" fill="#efe8dc">visually</text>
 <text x="56" y="466" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="23" fill="#a69d8e">Clear buttons and</text>
 <text x="56" y="496" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="23" fill="#a69d8e">room for a comment.</text>
 <path d="M344 412.0 h32 m-8 -8 l8 8 l-8 8" fill="none" stroke="#ff8a4c" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>

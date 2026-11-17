@@ -75,7 +75,7 @@ body = f'''<header class="top"><div class="in"><a class="logo" href="index.html"
 {show}<section class="loopw"><div class="in"><h2 class="h2">How every skill works</h2><div class="loop">
   <div class="step"><span class="n">01</span><b>Claude does the work</b><span>Screenshots, measurements, drafts, mockups.</span></div>
   <div class="step"><span class="n">02</span><b>Publishes a page</b><span>A private review page, not a wall of chat.</span></div>
-  <div class="step you"><span class="n">03</span><b>You decide</b><span>Clear buttons on every item, and room for a comment. Works on a phone.</span></div>
+  <div class="step you"><span class="n">03</span><b>You decide visually</b><span>Clear buttons on every item, and room for a comment. Works on a phone.</span></div>
   <div class="step"><span class="n">04</span><b>Paste it back</b><span>One Copy button. Claude does exactly what you chose.</span></div>
 </div></div></section>
 <section class="in" id="skills" style="padding-block:24px 80px"><h2 class="h2">All skills</h2>{cards}</section>

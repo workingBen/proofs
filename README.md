@@ -57,7 +57,7 @@ No claude.ai artifacts? Pages open in your browser instead, or on your phone ove
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/how-it-works-dark.svg">
-  <img src="assets/how-it-works-light.svg" alt="Four steps. 1: Claude does the work. 2: Publishes a page. 3: You decide, with clear buttons on every item and room for a comment. 4: Paste it back, with one Copy button, and Claude does exactly what you chose." width="100%">
+  <img src="assets/how-it-works-light.svg" alt="Four steps. 1: Claude does the work. 2: Publishes a page. 3: You decide visually, with clear buttons on every item and room for a comment. 4: Paste it back, with one Copy button, and Claude does exactly what you chose." width="100%">
 </picture>
 
 Every skill below plugs into this loop.

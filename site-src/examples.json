@@ -501,43 +501,6 @@
     }
    ],
    "gif": "assets/examples/x-copy-edit/wipe.gif"
-  },
-  {
-   "id": "e-flyer-photo",
-   "title": "Flyer photo swap",
-   "skill": "photo-picker",
-   "caption": "A gray smart-meter photo becomes towers at sunset.",
-   "use": "featured",
-   "view": "desktop",
-   "w": 840,
-   "h": 512,
-   "frames": [
-    {
-     "name": "before",
-     "label": "Before · smart meter",
-     "widths": [
-      480,
-      840
-     ]
-    },
-    {
-     "name": "picker",
-     "label": "Picker · two options",
-     "widths": [
-      480,
-      840
-     ]
-    },
-    {
-     "name": "after",
-     "label": "After · option A",
-     "widths": [
-      480,
-      840
-     ]
-    }
-   ],
-   "gif": "assets/examples/e-flyer-photo/wipe.gif"
   }
  ]
 }

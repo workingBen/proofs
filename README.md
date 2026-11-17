@@ -1,15 +1,9 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/banner-dark.svg">
-    <img src="assets/banner-light.svg" alt="Claude skills that show their work. Skills for Claude Code, with four decision buttons: Keep original, Use selected, Approve with comment, Request revision." width="100%">
+    <img src="assets/banner-light.svg" alt="Claude skills that show their work. Skills for Claude Code: design reviews, visual QA and copy edits you decide on a page." width="100%">
   </picture>
 </p>
-
-<!-- examples:hero:start -->
-<p align="center"><a href="https://workingben.github.io/proofs/"><img src="assets/examples/c-retreat-look/wipe.gif" width="100%" alt="Retreat page hero: before and after, wiping from one to the other."></a></p>
-
-<p align="center"><sub>A pale boxed card becomes a full-bleed sunset hero. Made with <a href="https://workingben.github.io/proofs/design-review.html">design-review</a>.</sub></p>
-<!-- examples:hero:end -->
 
 <p align="center">
   <img src="https://img.shields.io/badge/Claude_Code-plugin-c2410c" alt="Claude Code plugin">
@@ -19,29 +13,6 @@
 
 Stop reading walls of terminal text. Every skill here ends with a page you can look at, click through and decide on, then hand back to Claude in one paste. Design reviews, visual QA, copy edits and decision pages for [Claude Code](https://claude.com/claude-code): Claude builds the review, you choose with real buttons, and Claude builds what you chose.
 
-**[Browse the site](https://workingben.github.io/proofs/)** for all 10 skills and 230+ features, each with a short write-up.
-
-## The 30-second tour
-
-<p align="center"><a href="assets/clips/proofs-30s.mp4"><img src="assets/clips/proofs-30s.gif" width="100%" alt="The 30-second proofs tour: real pages wipe from before to after under short captions, from Done? Prove it. to Tap. Paste. Done., ending on the two install commands."></a></p>
-
-<p align="center"><sub>Every picture is a real page, before and after. <a href="assets/clips/proofs-30s.mp4">Full-size MP4</a> (1920x1080, silent).</sub></p>
-
-<!-- examples:grid:start -->
-## See it work
-
-Real pages, before and after one review. [See all of them, as sliders](https://workingben.github.io/proofs/).
-
-<table>
-<tr><td width="50%" valign="top"><img src="assets/examples/c-hero-photos-3step/wipe.gif" width="100%" alt="Hero photo, picked: before and after."><br><b><a href="https://workingben.github.io/proofs/photo-picker.html">photo-picker</a></b> · A hazy hero, a photo picker, then a lupine hero.</td><td width="50%" valign="top"><img src="assets/examples/b-bed-map-report/wipe.gif" width="100%" alt="Bed map in the EMF report: before and after."><br><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A table of readings becomes before-and-after bed heat maps.</td></tr>
-<tr><td width="50%" valign="top"><img src="assets/examples/d-movie-page/wipe.gif" width="100%" alt="Movie page on a phone: before and after."><br><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A lonely cover becomes a header with the cover beside the title.</td><td width="50%" valign="top"><img src="assets/examples/a-organ-table-to-gauges/wipe.gif" width="100%" alt="Organs table to range gauges: before and after."><br><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A dense readings table becomes seven colored range gauges.</td></tr>
-<tr><td width="50%" valign="top"><img src="assets/examples/b-supplement-chart/wipe.gif" width="100%" alt="Supplement test sample chart: before and after."><br><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A text section gains a ranked green-to-red bar chart.</td><td width="50%" valign="top"><img src="assets/examples/d-book-cover-wall/wipe.gif" width="100%" alt="Medical library cover wall: before and after."><br><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A text list becomes a wall of big book covers.</td></tr>
-<tr><td width="50%" valign="top"><img src="assets/examples/a-report-stacks/wipe.gif" width="100%" alt="Full reports as page stacks: before and after."><br><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · Three plain links become fanned stacks of real report pages.</td><td width="50%" valign="top"><img src="assets/examples/b-nine-devices/wipe.gif" width="100%" alt="The nine devices: before and after."><br><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · Emoji cards become a dark band with line icons.</td></tr>
-</table>
-<!-- examples:grid:end -->
-
-## Install
-
 In Claude Code:
 
 ```
@@ -49,7 +20,28 @@ In Claude Code:
 /plugin install proofs@proofs
 ```
 
-Then ask for one by name, like `design review for /pricing`, or run `/proofs:visual-qa /checkout`. To get new versions later: `/plugin marketplace update proofs`.
+**[Browse the site](https://workingben.github.io/proofs/)** for all 10 skills and 230+ features, each with a short write-up.
+
+<p align="center"><a href="assets/clips/proofs-30s.mp4"><img src="assets/clips/proofs-30s.gif" width="100%" alt="The 30-second proofs tour: real pages wipe from before to after under short captions, from Done? Prove it. to Tap. Paste. Done., ending on the two install commands."></a></p>
+
+<p align="center"><sub>The 30-second tour. Every picture is a real page, before and after. <a href="assets/clips/proofs-30s.mp4">Full-size MP4</a> (1920x1080, silent).</sub></p>
+
+<!-- examples:grid:start -->
+## See it work
+
+Real pages, before and after one review. [See all of them, as sliders](https://workingben.github.io/proofs/).
+
+<table>
+<tr><td width="50%" valign="top"><img src="assets/examples/c-retreat-look/wipe.gif" width="100%" alt="Retreat page hero: before and after."><br><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A pale boxed card becomes a full-bleed sunset hero.</td><td width="50%" valign="top"><img src="assets/examples/c-hero-photos-3step/wipe.gif" width="100%" alt="Hero photo, picked: before and after."><br><b><a href="https://workingben.github.io/proofs/photo-picker.html">photo-picker</a></b> · A hazy hero, a photo picker, then a lupine hero.</td></tr>
+<tr><td width="50%" valign="top"><img src="assets/examples/b-bed-map-report/wipe.gif" width="100%" alt="Bed map in the EMF report: before and after."><br><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A table of readings becomes before-and-after bed heat maps.</td><td width="50%" valign="top"><img src="assets/examples/d-movie-page/wipe.gif" width="100%" alt="Movie page on a phone: before and after."><br><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A lonely cover becomes a header with the cover beside the title.</td></tr>
+<tr><td width="50%" valign="top"><img src="assets/examples/a-organ-table-to-gauges/wipe.gif" width="100%" alt="Organs table to range gauges: before and after."><br><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A dense readings table becomes seven colored range gauges.</td><td width="50%" valign="top"><img src="assets/examples/b-supplement-chart/wipe.gif" width="100%" alt="Supplement test sample chart: before and after."><br><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A text section gains a ranked green-to-red bar chart.</td></tr>
+<tr><td width="50%" valign="top"><img src="assets/examples/d-book-cover-wall/wipe.gif" width="100%" alt="Medical library cover wall: before and after."><br><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A text list becomes a wall of big book covers.</td><td width="50%" valign="top"><img src="assets/examples/a-report-stacks/wipe.gif" width="100%" alt="Full reports as page stacks: before and after."><br><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · Three plain links become fanned stacks of real report pages.</td></tr>
+</table>
+<!-- examples:grid:end -->
+
+## After installing
+
+Ask for a skill by name, like `design review for /pricing`, or run `/proofs:visual-qa /checkout`. To get new versions later: `/plugin marketplace update proofs`.
 
 No claude.ai artifacts? Pages open in your browser instead, or on your phone over Wi-Fi. See [Where the Page Goes](https://workingben.github.io/proofs/design-review.html#wp).
 
@@ -57,7 +49,7 @@ No claude.ai artifacts? Pages open in your browser instead, or on your phone ove
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/how-it-works-dark.svg">
-  <img src="assets/how-it-works-light.svg" alt="Four steps. 1: Claude does the work. 2: Publishes a page. 3: You decide visually, with clear buttons on every item and room for a comment. 4: Paste it back, with one Copy button, and Claude does exactly what you chose." width="100%">
+  <img src="assets/how-it-works-light.svg" alt="Four steps. 1: Claude shows you first: mockups, measurements and drafts, before anything changes. 2: Publishes a page. 3: You decide visually, with clear buttons on every item and room for a comment. 4: Paste it back, with one Copy button, and Claude does exactly what you chose." width="100%">
 </picture>
 
 Every skill below plugs into this loop.

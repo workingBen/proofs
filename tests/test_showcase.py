@@ -58,8 +58,7 @@ class ImportExamplesTests(unittest.TestCase):
         }
         json.dump(manifest, open(os.path.join(self.final, "manifest.json"), "w"))
         with open(os.path.join(self.root, "README.md"), "w") as f:
-            f.write("# x\n<!-- examples:hero:start -->\nold\n<!-- examples:hero:end -->\n"
-                    "<!-- examples:grid:start -->\nold\n<!-- examples:grid:end -->\ntail\n")
+            f.write("# x\n<!-- examples:grid:start -->\nold\n<!-- examples:grid:end -->\ntail\n")
 
     def tearDown(self):
         shutil.rmtree(self.tmp)
@@ -120,6 +119,17 @@ class ImportExamplesTests(unittest.TestCase):
         r = self.run_import()
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("unknown skill", r.stderr)
+
+
+class ReadmeGridTests(unittest.TestCase):
+    def test_hero_example_leads_the_grid(self):
+        sys.path.insert(0, os.path.dirname(IMPORT))
+        import import_examples
+        ex = lambda i, use: {"id": i, "title": i, "skill": "design-review", "caption": "c", "use": use,
+                             "gif": f"assets/examples/{i}/wipe.gif"}
+        grid = import_examples.readme_block([ex("a", "featured"), ex("h", "hero"), ex("s", "skill")])
+        self.assertLess(grid.index("examples/h/"), grid.index("examples/a/"))
+        self.assertNotIn("examples/s/", grid)
 
 
 class ShowcaseBuildTests(unittest.TestCase):

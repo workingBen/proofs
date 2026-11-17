@@ -16,7 +16,7 @@ It replaces what it owns, so the manifest is always the full set:
   docs/examples/<id>/<frame>-<width>.webp and .jpg   resized, metadata stripped
   assets/examples/<id>/wipe.gif                      for the README (GitHub runs no scripts)
   site-src/examples.json                             read by build.py
-  README.md, between the <!-- examples:... --> markers
+  README.md, between the <!-- examples:grid --> markers
 
 Needs ImageMagick (magick, or convert on version 6). Run build.py afterwards.
 """
@@ -111,16 +111,10 @@ def resize(tool, src, dst, width, quality):
 
 
 def readme_block(examples):
-    """The two README blocks: the hero wipe under the banner and the See it work grid."""
+    """The README's See it work grid. The hero example leads it; the 30-second tour is the README's top picture."""
     gifs = [x for x in examples if x["gif"]]
-    hero = next((x for x in gifs if x["use"] == "hero" and len(x["frames"]) == 2), gifs[0] if gifs else None)
-    hero_md = ""
-    if hero:
-        hero_md = (f'<p align="center"><a href="{SITE}"><img src="{hero["gif"]}" width="100%" '
-                   f'alt="{esc(hero["title"])}: before and after, wiping from one to the other."></a></p>\n\n'
-                   f'<p align="center"><sub>{esc(hero["caption"])} Made with '
-                   f'<a href="{SITE}{hero["skill"]}.html">{hero["skill"]}</a>.</sub></p>')
-    grid = [x for x in gifs if x is not hero and x["use"] != "skill"][:README_GRID]
+    gifs.sort(key=lambda x: x["use"] != "hero")
+    grid = [x for x in gifs if x["use"] != "skill"][:README_GRID]
     rows = ""
     for i in range(0, len(grid), 2):
         cells = ""
@@ -133,7 +127,7 @@ def readme_block(examples):
     if rows:
         grid_md = ("## See it work\n\nReal pages, before and after one review. "
                    f"[See all of them, as sliders]({SITE}).\n\n<table>\n{rows}</table>")
-    return hero_md, grid_md
+    return grid_md
 
 
 def esc(s):
@@ -225,10 +219,8 @@ def main(argv=None):
     readme = os.path.join(root, "README.md")
     if os.path.isfile(readme):
         text = open(readme, encoding="utf-8").read()
-        hero_md, grid_md = readme_block(out)
-        text, ok1 = replace_block(text, "hero", hero_md)
-        text, ok2 = replace_block(text, "grid", grid_md)
-        if not (ok1 and ok2):
+        text, ok = replace_block(text, "grid", readme_block(out))
+        if not ok:
             print("warning: README.md is missing the examples markers; left as is", file=sys.stderr)
         open(readme, "w", encoding="utf-8").write(text)
 

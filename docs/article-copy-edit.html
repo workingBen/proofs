@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>proofs · article-copy-edit</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#f4efe6; --card:#fffdf9; --fg:#1d1b17; --muted:#6b6458; --line:#ddd5c6; --soft:#ece5d8; --sk:#e2dacb; --skd:#c9bfad;
+  --accent:#c2410c; --accent-soft:#fde4d6; --ok:#1a7f37; --ok-soft:#dcf5e3; --bad:#b42318; --bad-soft:#fde8e6;
+  --mid:#8a5a00; --mid-soft:#fbefd2; --ink:#1d1b17; --paper:#f4efe6;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#15130f; --card:#1e1b16; --fg:#efe8dc; --muted:#a69d8e; --line:#3a352c; --soft:#2a261f; --sk:#38332a; --skd:#524a3d;
+  --accent:#ff8a4c; --accent-soft:#3a2216; --ok:#4ac26b; --ok-soft:#14281a; --bad:#ff6b5e; --bad-soft:#341815;
+  --mid:#e0b14a; --mid-soft:#2f2612; --ink:#efe8dc; --paper:#15130f; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#15130f; --card:#1e1b16; --fg:#efe8dc; --muted:#a69d8e; --line:#3a352c; --soft:#2a261f; --sk:#38332a; --skd:#524a3d;
+  --accent:#ff8a4c; --accent-soft:#3a2216; --ok:#4ac26b; --ok-soft:#14281a; --bad:#ff6b5e; --bad-soft:#341815;
+  --mid:#e0b14a; --mid-soft:#2f2612; --ink:#efe8dc; --paper:#15130f; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{scroll-behavior:smooth;scroll-padding-top:24px}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+.in{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+a{color:inherit}
+.top{border-bottom:1px solid var(--line)}
+.top .in{display:flex;align-items:center;gap:10px;padding-block:14px;font:600 13px "JetBrains Mono",monospace;color:var(--muted)}
+.top .logo{color:var(--fg);font:400 22px "Instrument Serif",Georgia,serif;text-decoration:none}
+.top .logo i{color:var(--accent)}
+.hero .in{padding-block:48px 36px;display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+.eyebrow{font:600 12px/1 "JetBrains Mono",monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.hero h1{font:400 clamp(40px,7vw,76px)/1 "Instrument Serif",Georgia,serif;margin:0;letter-spacing:-.01em}
+.hero .tagline{font:400 clamp(22px,3vw,30px)/1.25 "Instrument Serif",Georgia,serif;margin:0;max-width:30em;text-wrap:balance}
+.hero .use{color:var(--muted);max-width:44em;margin:0}
+.try{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;max-width:760px;margin-top:6px}
+.try .lbl{font:600 11px "JetBrains Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.trybox{display:flex;gap:10px;align-items:center;background:var(--ink);color:var(--paper);border-radius:10px;padding:12px 12px 12px 16px}
+.trybox code{flex:1;min-width:0;font:14px/1.5 "JetBrains Mono",monospace}
+.trybox button{flex:none;font:700 13px -apple-system,sans-serif;padding:10px 14px;min-height:40px;border-radius:7px;border:0;background:var(--accent);color:#fff;cursor:pointer}
+.stats{display:flex;flex-wrap:wrap;gap:8px 20px;font:600 13px "JetBrains Mono",monospace;color:var(--muted)}
+.stats b{color:var(--fg)}
+.layout{display:grid;grid-template-columns:250px minmax(0,1fr);gap:40px;padding-block:24px 96px}
+nav.toc{position:sticky;top:20px;align-self:start;max-height:calc(100vh - 40px);overflow:auto;font-size:14px}
+.toc h2{font:600 11px "JetBrains Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+.toc ol{list-style:none;margin:0;padding:0}
+.toc > ol > li{margin-bottom:12px}
+.toc > ol > li > a{font-weight:700;text-decoration:none}
+.toc ol ol{margin-top:4px;border-left:2px solid var(--line);padding-left:10px;counter-reset:none}
+.toc ol ol a{display:block;padding:3px 0;color:var(--muted);text-decoration:none;line-height:1.35}
+.toc a:hover,.toc a.on{color:var(--accent)}
+.toc ol ol a.on{font-weight:600}
+.sec{display:grid;gap:18px;margin-bottom:48px}
+.sec h2{display:flex;gap:12px;align-items:baseline;font:400 40px/1.1 "Instrument Serif",Georgia,serif;margin:0 0 4px;border-bottom:1px solid var(--line);padding-bottom:12px}
+.sec h2 span{font:600 13px "JetBrains Mono",monospace;color:var(--accent)}
+.feat{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:28px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 24px}
+.fx{display:grid;gap:6px;min-width:0}
+.fn{font:600 12px "JetBrains Mono",monospace;color:var(--accent)}
+.fx h3{margin:0;font:400 34px/1.05 "Instrument Serif",Georgia,serif;text-wrap:balance}
+.fx .sub{margin:0 0 4px;font-size:18px;font-weight:650;line-height:1.35;text-wrap:balance}
+.fx p{margin:0;color:var(--muted)}
+.fx p.sub{color:var(--fg)}
+.fig{min-width:0;background:var(--soft);border-radius:12px;padding:16px;font-size:12px}
+/* drawing kit */
+.mk{display:block;background:var(--sk);border-radius:4px}
+.mk.d{background:var(--skd)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.two.mid{align-items:center}
+.three{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.four{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.col{display:grid;gap:7px;align-content:start}
+.row{display:flex;gap:6px;align-items:center}
+.row.wrap{flex-wrap:wrap}
+.opt{position:relative;background:var(--card);border:1.5px solid var(--line);border-radius:9px;padding:9px;display:grid;gap:5px;align-content:start}
+.opt.sm{padding:6px}
+.opt.sel{border:2px solid var(--accent)}
+.opt.old{opacity:.5;border-style:dashed}
+.opt.brand{border-color:var(--accent)}
+.ck{position:absolute;top:6px;right:6px;width:18px;height:18px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center}
+.tag{font:600 10px "JetBrains Mono",monospace;letter-spacing:.06em;color:var(--muted);text-transform:uppercase}
+.tag.acc,.acc{color:var(--accent)}
+.mb{font:600 11.5px -apple-system,sans-serif;padding:7px 9px;border-radius:7px;border:1px solid var(--line);background:var(--card);white-space:nowrap}
+.mb.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.mb.on.acc{background:var(--accent);border-color:var(--accent);color:#fff}
+.mb.sm{padding:5px 8px}
+.win{position:relative;background:var(--card);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.wb{display:flex;gap:4px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--line);font:600 10px "JetBrains Mono",monospace;color:var(--muted)}
+.wb i{width:7px;height:7px;border-radius:50%;background:var(--line)}
+.wb span{margin-left:6px}
+.wbody{padding:10px;display:grid;gap:7px}
+.cam{position:absolute;right:8px;bottom:8px;display:flex;gap:4px;align-items:center;font:600 10px "JetBrains Mono",monospace;background:var(--ink);color:var(--paper);padding:4px 7px;border-radius:999px}
+.sw{display:flex;gap:5px}
+.sw b{width:22px;height:22px;border-radius:5px;border:1px solid var(--line)}
+.aa{font:400 30px/1 "Instrument Serif",Georgia,serif}
+.aa small{font:600 10px "JetBrains Mono",monospace;color:var(--muted);margin-left:6px}
+.hl{font:600 12px -apple-system,sans-serif;display:flex;gap:4px;align-items:center}
+.hl.strike{text-decoration:line-through;color:var(--muted)}
+.hl.ok{color:var(--ok)}
+.pg{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:8px;display:grid;gap:6px;max-width:300px;margin:0 auto;width:100%}
+.band{display:flex;gap:8px;align-items:center;border:1px dashed var(--line);border-radius:6px;padding:8px}
+.num{flex:none;width:20px;height:20px;border-radius:50%;background:var(--accent);color:#fff;font:700 11px/20px -apple-system,sans-serif;text-align:center}
+.rec{font:600 10.5px "JetBrains Mono",monospace;padding:3px 7px;border-radius:999px;margin-left:auto}
+.rec.yes{background:var(--ok-soft);color:var(--ok)} .rec.no{background:var(--bad-soft);color:var(--bad)}
+.hd{font:600 12.5px -apple-system,sans-serif}
+.why{font-size:12px;background:var(--card);border:1px solid var(--line);border-radius:7px;padding:7px 9px}
+.phone{background:var(--card);border:1.5px solid var(--skd);border-radius:14px;padding:9px 7px;display:grid;gap:5px;max-width:84px;width:100%;justify-self:center}
+.desk{background:var(--card);border:1.5px solid var(--skd);border-radius:7px;padding:9px}
+.openi{display:flex;gap:7px;align-items:center;font:600 12px -apple-system,sans-serif;background:var(--card);border:1.5px solid var(--accent);border-radius:7px;padding:8px 10px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.recap{font:600 11px "JetBrains Mono",monospace;color:var(--muted);border:1px solid var(--line);border-radius:7px;padding:7px 10px}
+.cbox{position:relative;background:var(--card);border:1.5px solid var(--accent);border-radius:7px;padding:9px 10px;font:12.5px -apple-system,sans-serif}
+.caret{display:inline-block;width:1.5px;height:13px;background:var(--accent);vertical-align:-2px;margin-left:2px}
+.pill{font:600 10.5px "JetBrains Mono",monospace;padding:3px 8px;border-radius:999px;margin-left:auto}
+.pill.ok{background:var(--ok-soft);color:var(--ok)} .pill.mid{background:var(--mid-soft);color:var(--mid)} .pill.mute{background:var(--soft);color:var(--muted);border:1px solid var(--line)} .pill.line{border:1px solid var(--line);color:var(--muted);background:var(--card)}
+.itm{display:flex;gap:8px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:7px;padding:8px 10px;font:600 12px -apple-system,sans-serif}
+.itm span:first-child{flex:1}
+.itm small{font:600 10px "JetBrains Mono",monospace;color:var(--muted)}
+.tg{width:28px;height:16px;border-radius:9px;background:var(--line);position:relative}
+.tg b{position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:var(--card)}
+.tg.on{background:var(--ok)} .tg.on b{left:14px}
+.note2{font:600 10.5px "JetBrains Mono",monospace;color:var(--muted)}
+.bottom{display:flex;gap:10px;align-items:center;justify-content:space-between;background:var(--ink);color:var(--paper);border-radius:9px;padding:10px 12px;font:600 12px "JetBrains Mono",monospace}
+.tally{display:flex;gap:5px}
+.tally b{min-width:20px;text-align:center;border-radius:5px;padding:2px 5px;font-size:11px}
+.tally .ok{background:var(--ok);color:#fff}.tally .mid{background:var(--mid);color:#fff}.tally .mute{background:var(--muted);color:#fff}
+.ex{margin:0;font:11.5px/1.55 "JetBrains Mono",monospace;background:var(--card);border:1px solid var(--line);border-radius:7px;padding:10px;white-space:pre-wrap;word-break:break-word}
+.flow{background:var(--card);border:1px solid var(--line);border-radius:7px;padding:6px 8px}
+.st{font:600 11px -apple-system,sans-serif;padding:3px 8px;border-radius:999px}
+.st.ok{background:var(--ok-soft);color:var(--ok)}.st.mid{background:var(--mid-soft);color:var(--mid)}.st.mute{background:var(--soft);color:var(--muted)}
+.arr{margin-left:auto;font:600 11px "JetBrains Mono",monospace;color:var(--muted)}
+.ph{font:600 11px -apple-system,sans-serif;color:var(--muted);font-style:italic}
+.code{display:grid;gap:3px;background:var(--ink);color:var(--paper);border-radius:8px;padding:10px;font:11px/1.4 "JetBrains Mono",monospace}
+.chk span{display:flex;gap:6px;align-items:center;font:600 12px -apple-system,sans-serif;color:var(--ok)}
+.link{font:600 10.5px "JetBrains Mono",monospace;color:var(--accent);border:1px dashed var(--accent);border-radius:999px;padding:3px 8px;width:fit-content}
+.bub{background:var(--card);border:1px solid var(--line);border-radius:12px 12px 12px 3px;padding:8px 12px;font:italic 13px Georgia,serif;width:fit-content}
+.pn .in{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding-block:0 40px}
+.pn a{display:grid;gap:4px;text-decoration:none;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.pn a span{font:600 11px "JetBrains Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.pn a b{font:400 26px/1.1 "Instrument Serif",Georgia,serif}
+.pn a.nx{text-align:right}
+.foot{border-top:1px solid var(--line);color:var(--muted);font-size:14px}
+.foot .in{padding-block:28px;display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between}
+@media (max-width:900px){
+  .layout{grid-template-columns:1fr;gap:16px}
+  nav.toc{position:static;max-height:none;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .toc ol ol{display:none}
+  .toc > ol{display:flex;flex-wrap:wrap;gap:6px}
+  .toc > ol > li{margin:0}
+  .toc > ol > li > a{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:14px}
+  .feat{grid-template-columns:1fr;gap:16px;padding:18px}
+}
+@media (max-width:440px){.three{grid-template-columns:1fr 1fr}.three>.opt:nth-child(3){display:none}.four{grid-template-columns:1fr 1fr}.row.wrap .mb{font-size:11px}}
+
+/* before/after showcase */
+.ba{position:relative;width:100%;overflow:hidden;border-radius:12px;border:1px solid var(--line);background:var(--card);
+  touch-action:pan-y;user-select:none;-webkit-user-select:none;cursor:ew-resize;outline:none;box-shadow:0 1px 0 var(--line)}
+.ba:focus-visible{box-shadow:0 0 0 3px var(--accent)}
+.ba-img,.ba-img picture,.ba-img img{position:absolute;inset:0;width:100%;height:100%;display:block}
+.ba-img img{object-fit:cover;object-position:top;pointer-events:none}
+.ba-after{clip-path:inset(0 0 0 calc(var(--p) * 100%))}
+.ba-line{position:absolute;top:0;bottom:0;left:calc(var(--p) * 100%);width:2px;margin-left:-1px;background:#fff;
+  box-shadow:0 0 0 1px rgba(0,0,0,.25);pointer-events:none}
+.ba-knob{position:absolute;top:50%;left:50%;width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;
+  background:var(--accent);color:#fff;display:grid;place-items:center;box-shadow:0 2px 10px rgba(0,0,0,.3)}
+.ba-lbl{position:absolute;top:10px;font:600 11px/1 "JetBrains Mono",monospace;letter-spacing:.06em;text-transform:uppercase;
+  padding:6px 9px;border-radius:999px;background:rgba(20,18,15,.78);color:#fff;pointer-events:none;
+  max-width:calc(50% - 16px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:opacity .12s linear}
+.ba-lbl.l{left:10px} .ba-lbl.r{right:10px;background:var(--accent)} .st-img .ba-lbl.r{right:auto}
+.ba.v-phone,.steps.v-phone .st-stage{max-width:320px;margin-inline:auto}
+.steps{display:grid;gap:10px}
+.st-stage{position:relative;width:100%;overflow:hidden;border-radius:12px;border:1px solid var(--line);background:var(--card)}
+.st-img{position:absolute;inset:0;opacity:0;transition:opacity .6s ease}
+.st-img.on{opacity:1}
+.st-img picture,.st-img img{display:block;width:100%;height:100%}
+.st-img img{object-fit:cover;object-position:top}
+.st-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:6px}
+.st-b{position:relative;display:flex;gap:6px;align-items:baseline;text-align:left;overflow:hidden;font:600 13px/1.25 -apple-system,sans-serif;
+  color:var(--fg);background:var(--card);border:1px solid var(--line);border-radius:9px;padding:10px 10px 12px;min-height:44px;cursor:pointer}
+.st-b.on{border-color:var(--accent)}
+.st-n{font:600 11px "JetBrains Mono",monospace;color:var(--accent)}
+.st-bar{position:absolute;left:0;bottom:0;height:3px;width:0;background:var(--accent)}
+.st-b.on .st-bar{width:var(--t,100%)}
+.bx-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:start}
+.bx{margin:0;display:grid;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+.bx.v-phone{background:var(--soft)}
+.bx figcaption{display:grid;gap:4px;padding:0 4px 4px;min-width:0}
+.bx h3{margin:0;font:400 28px/1.08 "Instrument Serif",Georgia,serif;text-wrap:balance}
+.bx .sub{margin:0;color:var(--muted);font-size:16px;line-height:1.4}
+.bx-skill{display:inline-flex;gap:6px;align-items:center;width:fit-content;margin-top:4px;font:600 12.5px "JetBrains Mono",monospace;
+  color:var(--accent);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:5px 11px;min-height:32px}
+a.bx-skill:hover{border-color:var(--accent)}
+.showcase{padding-block:8px 40px}
+.showcase .lede{display:grid;gap:6px;margin-bottom:18px}
+.showcase .lede h2{font:400 40px/1.1 "Instrument Serif",Georgia,serif;margin:0}
+.showcase .lede p{margin:0;font-size:18px;font-weight:650;line-height:1.35;max-width:40em}
+@media (max-width:900px){.bx-grid{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:440px){.bx{padding:10px}.bx h3{font-size:25px}.ba-lbl{font-size:10px;padding:5px 7px}.st-b{font-size:12px;padding:8px 8px 11px}}
+@media (prefers-reduced-motion:reduce){.st-img{transition:none}}
+</style>
+
+<header class="top"><div class="in"><a class="logo" href="index.html">pro<i>o</i>fs</a><span>/ <a href="index.html#skills" style="text-decoration:none">skills</a> /</span><span style="color:var(--fg)">article-copy-edit</span></div></header>
+<section class="hero"><div class="in">
+  <div class="eyebrow">Skill · Claude Code</div>
+  <h1>article-copy-edit</h1>
+  <p class="tagline">Review copy edits word by word, with a claims check first</p>
+  <p class="use"><b style="color:var(--fg)">Use it when</b> You have copy-edit feedback for an article or page and want to approve each change yourself, with risky claims flagged, before anything touches the file.</p>
+  <div class="try"><span class="lbl">Try it: paste this into Claude Code</span><div class="trybox"><code id="tryc">Use the article-copy-edit skill to review these suggested edits to my pricing page before you apply any of them.</code><button type="button" id="tryb">Copy</button></div></div>
+  <div class="stats"><span><b>23</b> features</span><span>No edit lands until you approve it</span><span>Risky claims are checked every time</span></div>
+</div></section>
+<section class="in showcase" id="examples"><div class="lede"><div class="eyebrow">Real work, before and after</div><h2>See it work</h2><p>Real pages, before and after a article-copy-edit round. They play on their own. Drag a slider to compare.</p></div><div class="bx-grid"><figure class="bx v-desktop" id="ex-x-copy-edit"><div class="ba v-desktop" data-ba style="--p:.5;aspect-ratio:842/612" role="slider" tabindex="0" aria-label="Copy edit with a claims check: drag to compare before and after" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" aria-valuetext="50% after"><div class="ba-img"><picture><source type="image/webp" srcset="examples/x-copy-edit/before-480.webp 480w, examples/x-copy-edit/before-842.webp 842w" sizes="(min-width: 900px) 560px, 100vw"><img src="examples/x-copy-edit/before-842.jpg" srcset="examples/x-copy-edit/before-480.jpg 480w, examples/x-copy-edit/before-842.jpg 842w" sizes="(min-width: 900px) 560px, 100vw" width="842" height="612" alt="Your draft" loading="lazy" decoding="async" draggable="false"></picture></div><div class="ba-img ba-after"><picture><source type="image/webp" srcset="examples/x-copy-edit/after-480.webp 480w, examples/x-copy-edit/after-842.webp 842w" sizes="(min-width: 900px) 560px, 100vw"><img src="examples/x-copy-edit/after-842.jpg" srcset="examples/x-copy-edit/after-480.jpg 480w, examples/x-copy-edit/after-842.jpg 842w" sizes="(min-width: 900px) 560px, 100vw" width="842" height="612" alt="The edit" loading="lazy" decoding="async" draggable="false"></picture></div><span class="ba-lbl l">Your draft</span><span class="ba-lbl r">The edit</span><span class="ba-line" aria-hidden="true"><span class="ba-knob"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l-6 6 6 6M15 6l6 6-6 6"/></svg></span></span></div><figcaption><span class="fn">01</span><h3>Copy edit with a claims check</h3><p class="sub">A plain sentence becomes a tracked edit with a claims check.</p><span class="bx-skill">article-copy-edit</span></figcaption></figure></div></section><div class="in layout">
+  <nav class="toc" aria-label="Features"><h2>On this page</h2><ol><li><a href="#s1">Claims check first</a><ol><li><a href="#f1">Risky Claims, Checked First</a></li><li><a href="#f2">What&#x27;s Risky in Your Field?</a></li><li><a href="#f3">The Usual Suspects</a></li><li><a href="#f4">Missing Affiliate Disclosures</a></li><li><a href="#f5">A Clean Check Still Shows</a></li></ol></li><li><a href="#s2">What you see</a><ol><li><a href="#f6">The Exact Words</a></li><li><a href="#f7">See Exactly What Changed</a></li><li><a href="#f8">Looks Like Your Page</a></li><li><a href="#f9">Three Sections, Fixed Order</a></li><li><a href="#f10">New Sections Say Where</a></li><li><a href="#f11">Rivals Say So</a></li><li><a href="#f12">Behind-the-Scenes Text Too</a></li><li><a href="#f13">An Honest Opinion</a></li></ol></li><li><a href="#s3">How you decide</a><ol><li><a href="#f14">Four Clear Choices</a></li><li><a href="#f15">Say It in Words</a></li><li><a href="#f16">Always Know Where You Are</a></li></ol></li><li><a href="#s4">After you decide</a><ol><li><a href="#f17">One Labeled Paste Back</a></li><li><a href="#f18">Only What You Approved</a></li><li><a href="#f19">Tested Before You See It</a></li></ol></li><li><a href="#s5">Rounds</a><ol><li><a href="#f20">Just the Revisions</a></li><li><a href="#f21">Nothing Undecided Gets Lost</a></li><li><a href="#f22">Your Comment, Right There</a></li><li><a href="#wp">Where the Page Goes</a></li></ol></li></ol></nav>
+  <main><section class="sec" id="s1"><h2><span>1</span>Claims check first</h2><article class="feat" id="f1"><div class="fx"><span class="fn">01</span><h3>Risky Claims, Checked First</h3><p class="sub">A claims check is always the first section</p><p>Before your own feedback is touched, the whole page is read for claims that could get you in trouble, and the findings appear first. It runs every time, even when your feedback says nothing about claims.</p></div><div class="fig" aria-hidden="true"><div class="pg"><div class="band"><span class="num">1</span><b class="hd">Claims check</b></div><div class="band"><span class="num">2</span><i class="mk" style="width:70%;height:7px"></i></div><div class="band"><span class="num">3</span><i class="mk" style="width:60%;height:7px"></i></div></div></div></article><article class="feat" id="f2"><div class="fx"><span class="fn">02</span><h3>What&#x27;s Risky in Your Field?</h3><p class="sub">Claude asks which claims are risky in your line of work</p><p>Risky claims depend on the business: health and wellness sites, product-safety claims, financial results and so on each have their own. Claude looks in your project notes, asks once if they don&#x27;t say, and keeps the answer in the notes so it does not ask again. It checks for those claims on top of the general list.</p></div><div class="fig" aria-hidden="true"><div class="col"><div class="bub">What claims are risky in your field?</div><div class="cbox">supplements: no cure or treatment claims<span class="caret"></span></div></div></div></article><article class="feat" id="f3"><div class="fx"><span class="fn">03</span><h3>The Usual Suspects</h3><p class="sub">Guarantees, cure claims, results without a caveat, risky headlines</p><p>The check always looks for guarantee language, claims to diagnose or cure, results or testimonials with no &quot;results vary&quot; note, and headlines that read as a claim on their own, since titles end up in tabs, search results and link previews.</p></div><div class="fig" aria-hidden="true"><div class="col"><div class="row"><span class="hd"><s>guaranteed</s> results</span><span class="rec no">Risky</span></div><div class="row"><span class="hd">Cures <s>back pain</s></span><span class="rec no">Risky</span></div><div class="row"><span class="hd">Results vary by person</span><span class="rec yes">Safe</span></div></div></div></article><article class="feat" id="f4"><div class="fx"><span class="fn">04</span><h3>Missing Affiliate Disclosures</h3><p class="sub">Pages with affiliate links but no disclosure get flagged</p><p>If a page recommends products through affiliate links without the disclosure the FTC requires, it is flagged, even when fixing it is outside this review.</p></div><div class="fig" aria-hidden="true"><div class="col"><div class="row"><b class="hd">Product picks</b><span class="rec no">No disclosure</span></div><div class="why">Affiliate links found, but no "we may earn a commission" note.</div></div></div></article><article class="feat" id="f5"><div class="fx"><span class="fn">05</span><h3>A Clean Check Still Shows</h3><p class="sub">No findings is shown as a passed check, not a missing section</p><p>When nothing is found, the section still appears and says no concerns were found in this pass. You can see the check happened rather than wondering whether it was skipped.</p></div><div class="fig" aria-hidden="true"><div class="col"><div class="row"><b class="hd">1 · Claims check</b><span class="pill ok">Passed</span></div><div class="why">No claims concerns found in this pass.</div></div></div></article></section><section class="sec" id="s2"><h2><span>2</span>What you see</h2><article class="feat" id="f6"><div class="fx"><span class="fn">06</span><h3>The Exact Words</h3><p class="sub">Before and after show the real text, never a summary</p><p>The Original and Edit panes always hold the exact sentence a reader would see, written out in full even when the feedback only described the change. You decide on real copy.</p></div><div class="fig" aria-hidden="true"><div class="two"><div class="opt"><span class="tag">Original</span><span class="hd">Our plans start at $9 a month.</span></div><div class="opt"><span class="tag acc">Edit</span><span class="hd">Plans start at $9 a month.</span></div></div></div></article><article class="feat" id="f7"><div class="fx"><span class="fn">07</span><h3>See Exactly What Changed</h3><p class="sub">Changed words are highlighted inside the sentence</p><p>Inside each pair, only the words that changed are marked, so a one-word fix in a long paragraph is easy to spot.</p></div><div class="fig" aria-hidden="true"><div class="opt"><span class="hd">Try it <s>for free</s> <b class="acc">free for 14 days</b>, no card needed.</span></div></div></article><article class="feat" id="f8"><div class="fx"><span class="fn">08</span><h3>Looks Like Your Page</h3><p class="sub">Uses your page&#x27;s own type and before/after colors</p><p>The review page borrows the real page&#x27;s fonts and colors, including any before/after colors your site already uses, and works in light and dark mode. The edits read the way they will on the site.</p></div><div class="fig" aria-hidden="true"><div class="two mid"><div class="opt"><span class="tag">Your page</span><i class="mk d" style="width:100%;height:14px"></i><i class="mk" style="width:100%;height:7px"></i><i class="mk" style="width:60%;height:7px"></i></div><div class="opt brand"><span class="tag acc">Review</span><i class="mk d" style="width:100%;height:14px"></i><i class="mk" style="width:100%;height:7px"></i><i class="mk" style="width:60%;height:7px"></i></div></div></div></article><article class="feat" id="f9"><div class="fx"><span class="fn">09</span><h3>Three Sections, Fixed Order</h3><p class="sub">Claims check, then copy edits, then additions</p><p>Items are grouped as Claims check, Copy Edits, and Additions and Recommendations, always in that order, each item numbered.</p></div><div class="fig" aria-hidden="true"><div class="col"><div class="row"><span class="num">1</span><b class="hd">Claims check</b></div><div class="row"><span class="num">2</span><b class="hd">Copy edits</b></div><div class="row"><span class="num">3</span><b class="hd">Additions</b></div></div></div></article><article class="feat" id="f10"><div class="fx"><span class="fn">10</span><h3>New Sections Say Where</h3><p class="sub">Proposed additions show what&#x27;s there now and where they&#x27;d go</p><p>A suggested new section or call to action shows what&#x27;s there today, usually nothing, next to the proposed text and where on the page it would go.</p></div><div class="fig" aria-hidden="true"><div class="col"><span class="tag">Where: after the pricing table</span><div class="two"><div class="opt"><span class="tag">Original</span><span class="hd"><i>nothing here today</i></span></div><div class="opt"><span class="tag acc">Edit</span><span class="hd">Questions? Book a 15-minute call.</span></div></div></div></div></article><article class="feat" id="f11"><div class="fx"><span class="fn">11</span><h3>Rivals Say So</h3><p class="sub">Competing options each note that picking one replaces the other</p><p>When two suggestions compete, like two different titles, each appears as its own item and says that accepting it rules out the other.</p></div><div class="fig" aria-hidden="true"><div class="col"><div class="opt"><b class="hd">Title A</b><div class="note2">Replaces Title B if accepted</div></div><div class="opt"><b class="hd">Title B</b><div class="note2">Replaces Title A if accepted</div></div></div></div></article><article class="feat" id="f12"><div class="fx"><span class="fn">12</span><h3>Behind-the-Scenes Text Too</h3><p class="sub">Alt text and meta tags shown as code</p><p>Changes readers don&#x27;t see directly, like image alt text or page descriptions, still get a card, shown as before and after code snippets.</p></div><div class="fig" aria-hidden="true"><div class="col"><div class="code"><span>alt="photo"</span></div><div class="code"><span>alt="Two mugs of tea on a table"</span></div></div></div></article><article class="feat" id="f13"><div class="fx"><span class="fn">13</span><h3>An Honest Opinion</h3><p class="sub">Every item has a reason and a recommendation</p><p>Each item says why the change is proposed and carries a Recommended or Not Recommended badge. Items Claude has doubts about are still shown, marked Not Recommended with the reason, so you can overrule it.</p></div><div class="fig" aria-hidden="true"><div class="col"><div class="row"><b class="hd">4 · Shorter intro</b><span class="rec yes">Recommended</span></div><div class="row"><b class="hd">5 · SEO title</b><span class="rec no">Not recommended</span></div><div class="why"><b>Reason:</b> the new title reads as a promise of results.</div></div></div></article></section><section class="sec" id="s3"><h2><span>3</span>How you decide</h2><article class="feat" id="f14"><div class="fx"><span class="fn">14</span><h3>Four Clear Choices</h3><p class="sub">Keep, use, approve with a comment, or ask for another try</p><p>Each item has Keep Original, Use Edit, Approve with Comment and Request Revision. Every item starts undecided, and only one choice can be active.</p></div><div class="fig" aria-hidden="true"><div class="row wrap"><span class="mb">Keep Original</span><span class="mb on">Use Edit</span><span class="mb">Approve with Comment</span><span class="mb">Request Revision</span></div></div></article><article class="feat" id="f15"><div class="fx"><span class="fn">15</span><h3>Say It in Words</h3><p class="sub">A comment box opens when your words matter</p><p>Approve with Comment and Request Revision open a comment box straight away, since the comment is the point. Keep Original and Use Edit allow an optional note.</p></div><div class="fig" aria-hidden="true"><div class="col"><div class="row"><span class="mb on">Approve with Comment</span></div><div class="cbox">yes, but say "two weeks"<span class="caret"></span></div></div></div></article><article class="feat" id="f16"><div class="fx"><span class="fn">16</span><h3>Always Know Where You Are</h3><p class="sub">A progress bar stays in view as you go</p><p>A pinned bar shows how many items you&#x27;ve reviewed, a count for each decision, and the Copy My Decisions button.</p></div><div class="fig" aria-hidden="true"><div class="bottom"><span>9 of 14 reviewed</span><span class="tally"><b class="ok">6</b><b class="mid">2</b><b class="mute">1</b></span><span class="mb on sm">Copy</span></div></div></article></section><section class="sec" id="s4"><h2><span>4</span>After you decide</h2><article class="feat" id="f17"><div class="fx"><span class="fn">17</span><h3>One Labeled Paste Back</h3><p class="sub">Copy My Decisions sends every choice, headed with the page name</p><p>One button copies a numbered summary of your decisions and comments. Its first line names the page under review, so it can&#x27;t be mixed up with another review in progress.</p></div><div class="fig" aria-hidden="true"><div class="col"><div class="row"><span class="mb on acc">Copy My Decisions</span></div><pre class="ex">[Pricing page · Copy-edit review]
+3. Intro: ACCEPT
+5. SEO title: DENY (Keep Original)</pre></div></div></article><article class="feat" id="f18"><div class="fx"><span class="fn">18</span><h3>Only What You Approved</h3><p class="sub">Accepted edits are applied, with your comments worked in</p><p>Accepted edits go into the file as shown. Approved-with-comment edits are rewritten to follow your comment first. Kept, revise and undecided items leave the file untouched.</p></div><div class="fig" aria-hidden="true"><div class="col"><div class="row flow"><span class="st ok">Accept</span><span class="arr">→ applied</span></div><div class="row flow"><span class="st ok">With comment</span><span class="arr">→ adjusted, applied</span></div><div class="row flow"><span class="st mid">Revise</span><span class="arr">untouched</span></div><div class="row flow"><span class="st mute">Keep</span><span class="arr">untouched</span></div></div></div></article><article class="feat" id="f19"><div class="fx"><span class="fn">19</span><h3>Tested Before You See It</h3><p class="sub">Every button is clicked before the page reaches you</p><p>Before each publish, the page&#x27;s script is syntax-checked and the page is loaded and clicked through automatically. You don&#x27;t get a page that looks fine but shows no items.</p></div><div class="fig" aria-hidden="true"><div class="two mid"><div class="opt"><i class="mk d" style="width:100%;height:14px"></i><i class="mk" style="width:100%;height:7px"></i><div class="row"><span class="mb">Use</span><span class="mb">Keep</span></div></div><div class="col chk"><span><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 8.5l3.2 3L13 4.5"/></svg> script runs</span><span><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 8.5l3.2 3L13 4.5"/></svg> all items show</span><span><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 8.5l3.2 3L13 4.5"/></svg> buttons work</span></div></div></div></article></section><section class="sec" id="s5"><h2><span>5</span>Rounds</h2><article class="feat" id="f20"><div class="fx"><span class="fn">20</span><h3>Just the Revisions</h3><p class="sub">The next round brings back only what&#x27;s still open</p><p>Items you sent back come back in a new round at the same link, with new proposals. Anything already decided stays settled and isn&#x27;t shown again.</p></div><div class="fig" aria-hidden="true"><div class="two mid"><div class="col"><span class="tag">Round 1 · 14 items</span><i class="mk" style="width:100%;height:7px"></i><i class="mk" style="width:100%;height:7px"></i><i class="mk" style="width:100%;height:7px"></i><i class="mk" style="width:100%;height:7px"></i></div><div class="col"><span class="tag acc">Round 2 · 3 items</span><i class="mk d" style="width:100%;height:7px"></i><span class="link">same link</span></div></div></div></article><article class="feat" id="f21"><div class="fx"><span class="fn">21</span><h3>Nothing Undecided Gets Lost</h3><p class="sub">Items you never got to are carried into the next round</p><p>An item you didn&#x27;t decide on isn&#x27;t dropped when the next round is built around your revisions. Every item without a final decision comes forward, so you always have a way to decide it.</p></div><div class="fig" aria-hidden="true"><div class="col"><div class="row"><span class="st mid">Revise</span><b class="hd">Item 4</b></div><div class="row"><span class="st mute">Pending</span><b class="hd">Item 9</b></div><div class="note2">Both carried into Round 2</div></div></div></article><article class="feat" id="f22"><div class="fx"><span class="fn">22</span><h3>Your Comment, Right There</h3><p class="sub">Each revised item shows last round&#x27;s version and what you said</p><p>A revised item shows the earlier proposal, labeled with its round, and your revision comment, above the new proposal. You don&#x27;t have to scroll back through chat to remember what you asked for.</p></div><div class="fig" aria-hidden="true"><div class="col"><div class="opt old"><span class="tag">Round 1 · revision requested</span><i class="mk" style="width:80%;height:7px"></i></div><div class="bub">too salesy, keep it plain</div><div class="opt"><span class="tag acc">Round 2 proposal</span><i class="mk" style="width:100%;height:7px"></i><i class="mk" style="width:70%;height:7px"></i></div></div></div></article><article class="feat" id="wp"><div class="fx"><span class="fn">23</span><h3>Where the Page Goes</h3><p class="sub">A private link, a local file, or your Wi-Fi</p><p>Your project picks where review pages go: a private claude.ai link, an HTML file that opens in your browser, or that file served on your home Wi-Fi so a phone can open it. Nothing is ever uploaded or tunneled in the Wi-Fi mode, and the server stops when the review ends.</p></div><div class="fig" aria-hidden="true"><div class="col"><div class="opt"><span class="tag">artifact</span><div class="row" style="align-items:stretch"><div class="phone" style="max-width:112px;flex:none"><i class="mk d" style="width:100%;height:16px"></i><i class="mk" style="width:100%;height:7px"></i><i class="mk" style="width:70%;height:7px"></i><span class="link" style="font-size:9px;padding:2px 6px">private link</span></div><div class="desk" style="flex:1;min-width:0;display:grid;gap:5px;align-content:start"><i class="mk d" style="width:100%;height:24px"></i><i class="mk" style="width:100%;height:7px"></i><i class="mk" style="width:60%;height:7px"></i><span class="link" style="font-size:9px;padding:2px 6px">private link</span></div></div></div><div class="opt"><span class="tag">file</span><div class="win" style="max-width:240px"><div class="wb"><i></i><i></i><i></i><span>file</span></div><div class="wbody"><i class="mk d" style="width:100%;height:18px"></i><i class="mk" style="width:100%;height:7px"></i><i class="mk" style="width:70%;height:7px"></i></div></div></div><div class="opt"><span class="tag">wifi</span><div class="row"><div class="phone" style="max-width:84px;flex:none"><i class="mk d" style="width:100%;height:16px"></i><i class="mk" style="width:100%;height:7px"></i><i class="mk" style="width:70%;height:7px"></i></div><div class="col" style="flex:1;min-width:0;justify-items:center;gap:3px"><span class="note2">same Wi-Fi</span><span style="display:block;width:100%;border-top:2px dashed var(--accent)"></span></div><div class="desk" style="flex:none;width:96px;display:grid;gap:5px;align-content:start"><i class="mk d" style="width:100%;height:18px"></i><i class="mk" style="width:100%;height:7px"></i><i class="mk" style="width:60%;height:7px"></i></div></div></div></div></div></article></section></main>
+</div>
+<nav class="pn" aria-label="More skills"><div class="in"><a href="design-review.html"><span>Previous</span><b>design-review</b></a><a class="nx" href="photo-picker.html"><span>Next</span><b>photo-picker</b></a></div></nav>
+<footer class="foot"><div class="in"><span>proofs · Claude skills that show their work</span><span>MIT license</span></div></footer>
+<script>
+(function(){
+  var b=document.getElementById('tryb'),c=document.getElementById('tryc');
+  b.addEventListener('click',function(){
+    var done=function(){b.textContent='Copied';setTimeout(function(){b.textContent='Copy'},1500)};
+    try{navigator.clipboard.writeText(c.textContent).then(done,function(){var r=document.createRange();r.selectNodeContents(c);var s=getSelection();s.removeAllRanges();s.addRange(r)})}catch(_){}
+  });
+  var links=[].slice.call(document.querySelectorAll('.toc a')),map={};
+  links.forEach(function(a){map[a.getAttribute('href').slice(1)]=a});
+  if('IntersectionObserver' in window){
+    var io=new IntersectionObserver(function(es){es.forEach(function(en){if(en.isIntersecting){links.forEach(function(a){a.classList.remove('on')});var a=map[en.target.id];if(a)a.classList.add('on')}})},{rootMargin:'-30% 0px -60% 0px'});
+    document.querySelectorAll('.feat').forEach(function(f){io.observe(f)});
+  }
+})();
+</script>
+<script>
+(function(){
+  var RM = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var IO = 'IntersectionObserver' in window;
+  function ease(t){return t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2}
+  /* A label shows in full while its side fills most of the frame (FADE_HI or more)
+     and is gone by FADE_LO, so the label always names the picture you see. */
+  var FADE_LO=.35, FADE_HI=.65;
+  function fade(share){ var t=Math.max(0,Math.min(1,(share-FADE_LO)/(FADE_HI-FADE_LO))); return t*t*(3-2*t); }
+  /* Auto-sweep: hold on Before, sweep to After, hold, sweep back. */
+  var LO=.03, HI=.97, HOLD_B=1100, SWEEP=1700, HOLD_A=1500, CYCLE=HOLD_B+SWEEP+HOLD_A+SWEEP;
+  function at(t){
+    t%=CYCLE;
+    if(t<HOLD_B) return HI;
+    t-=HOLD_B; if(t<SWEEP) return HI-(HI-LO)*ease(t/SWEEP);
+    t-=SWEEP; if(t<HOLD_A) return LO;
+    t-=HOLD_A; return LO+(HI-LO)*ease(t/SWEEP);
+  }
+  [].forEach.call(document.querySelectorAll('[data-ba]'), function(el){
+    var l=el.querySelector('.ba-lbl.l'), r=el.querySelector('.ba-lbl.r');
+    var auto=!RM, seen=false, run=false, t0=0, phase=0, raf=0, cur=.5;
+    function set(p){
+      p=Math.max(0,Math.min(1,p)); cur=p;
+      el.style.setProperty('--p',p);
+      var v=Math.round((1-p)*100);
+      el.setAttribute('aria-valuenow',v); el.setAttribute('aria-valuetext',v+'% after');
+      l.style.opacity=fade(p); r.style.opacity=fade(1-p);
+    }
+    function tick(now){ if(!run) return; phase=now-t0; set(at(phase)); raf=requestAnimationFrame(tick); }
+    function start(){ if(!auto||run) return; run=true; if(!seen){seen=true; phase=0; set(HI);} t0=performance.now()-phase; raf=requestAnimationFrame(tick); }
+    function stop(){ run=false; cancelAnimationFrame(raf); }
+    function grab(){ auto=false; stop(); el.classList.add('held'); }
+    if(auto){
+      set(HI);
+      if(IO){ new IntersectionObserver(function(es){es.forEach(function(en){en.isIntersecting?start():stop()})},{threshold:.35}).observe(el); }
+      else start();
+    } else { set(.5); l.style.opacity=1; r.style.opacity=1; }
+    function fromX(x){ var b=el.getBoundingClientRect(); set((x-b.left)/b.width); }
+    var drag=false;
+    el.addEventListener('pointerdown',function(ev){ grab(); drag=true; try{el.setPointerCapture(ev.pointerId)}catch(_){} fromX(ev.clientX); });
+    el.addEventListener('pointermove',function(ev){ if(drag) fromX(ev.clientX); });
+    function up(){ drag=false; }
+    el.addEventListener('pointerup',up); el.addEventListener('pointercancel',up);
+    el.addEventListener('keydown',function(ev){
+      var p=cur, k=ev.key, step=null;
+      if(k==='ArrowLeft'||k==='ArrowDown') step=-.05; else if(k==='ArrowRight'||k==='ArrowUp') step=.05;
+      else if(k==='PageDown') step=-.2; else if(k==='PageUp') step=.2;
+      else if(k==='Home'){ grab(); set(1); ev.preventDefault(); return; }
+      else if(k==='End'){ grab(); set(0); ev.preventDefault(); return; }
+      if(step===null) return;
+      /* The value counts how much After shows, so Right or Up shows more of it. */
+      grab(); set(p-step); ev.preventDefault();
+    });
+  });
+  [].forEach.call(document.querySelectorAll('[data-steps]'), function(el){
+    var imgs=el.querySelectorAll('.st-img'), btns=el.querySelectorAll('.st-b'), n=imgs.length;
+    var i=0, auto=!RM, run=false, raf=0, t0=0, el0=0, STEP=2600;
+    function show(k){
+      i=(k+n)%n;
+      for(var j=0;j<n;j++){ imgs[j].classList.toggle('on',j===i); btns[j].classList.toggle('on',j===i); btns[j].setAttribute('aria-pressed',j===i?'true':'false'); btns[j].style.removeProperty('--t'); }
+    }
+    function tick(now){
+      if(!run) return; var d=now-t0;
+      if(d>=STEP){ show(i+1); t0=now; d=0; }
+      btns[i].style.setProperty('--t',(d/STEP*100)+'%'); el0=d;
+      raf=requestAnimationFrame(tick);
+    }
+    function start(){ if(!auto||run) return; run=true; t0=performance.now()-el0; raf=requestAnimationFrame(tick); }
+    function stop(){ run=false; cancelAnimationFrame(raf); }
+    [].forEach.call(btns,function(b,k){ b.addEventListener('click',function(){ auto=false; stop(); show(k); }); });
+    if(auto){
+      if(IO){ new IntersectionObserver(function(es){es.forEach(function(en){en.isIntersecting?start():stop()})},{threshold:.35}).observe(el); }
+      else start();
+    }
+  });
+})();
+</script>

@@ -1,0 +1,23 @@
+#!/bin/sh
+# Install this repo's own pre-commit hook: privacy scan on staged files, then skill checks.
+# Refuses to overwrite a different existing pre-commit hook unless --force is passed.
+set -e
+root=$(git rev-parse --show-toplevel)
+hooks=$(git rev-parse --git-path hooks)
+case "$hooks" in /*) ;; *) hooks="$PWD/$hooks" ;; esac
+mkdir -p "$hooks"
+new=$(mktemp)
+cat > "$new" <<'HOOK'
+#!/bin/sh
+root=$(git rev-parse --show-toplevel)
+python3 "$root/bin/privacy-scan" --staged || exit 1
+python3 "$root/bin/check-skills" || exit 1
+HOOK
+if [ -e "$hooks/pre-commit" ] && ! cmp -s "$new" "$hooks/pre-commit" && [ "$1" != "--force" ]; then
+  rm -f "$new"
+  echo "A different pre-commit hook already exists in $hooks. Re-run with --force to replace it." >&2
+  exit 1
+fi
+mv "$new" "$hooks/pre-commit"
+chmod +x "$hooks/pre-commit"
+echo "pre-commit hook installed"

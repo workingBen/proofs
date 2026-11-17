@@ -1,0 +1,13 @@
+{
+  "base": "http://localhost:3000",
+  "setup": "signin.cjs",
+  "minText": 16,
+  "minTap": 44,
+  "pages": [
+    { "name": "home", "path": "/" },
+    { "name": "list", "state": "full", "path": "/my/list", "items": "li.line" },
+    { "name": "list", "state": "empty", "path": "/my/list?as=empty-account", "items": "li.line" },
+    { "name": "product", "state": "sheet-open", "path": "/store",
+      "actions": [{ "click": ".tile >> nth=0" }, { "waitFor": "dialog[open]" }] }
+  ]
+}

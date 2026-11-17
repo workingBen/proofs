@@ -1,0 +1,254 @@
+{
+ "skill": "working-log",
+ "tagline": "A page Claude talks to you through when the terminal fails you",
+ "use_when": "You can't comfortably read terminal output, you want a durable, tickable page of what Claude has told you instead of chat scrollback, or open questions are piling up and you would rather answer them all in one pass on a page, at your own pace or from your phone.",
+ "try_it": "Use /proofs:working-log to start a working log for this session and post your updates there instead of in chat.",
+ "sections": [
+  {
+   "title": "What you see",
+   "features": [
+    {
+     "id": "f1",
+     "label": "Always Know Where You Are",
+     "sub": "A fixed top bar names the project, session and repo",
+     "title": "A fixed top bar names the project, session and repo",
+     "what": "A dark bar stays pinned at the top with the project name, the session name and the repository. With logs from several projects open, you can tell the tabs apart at a glance.",
+     "html": "<div class=\"bottom\"><span>Acme Shop · <b class=\"acc\">checkout-fix</b></span><span>acme/shop</span></div><div class=\"col\"><i class=\"mk d\" style=\"width:100%;height:10px\"></i><i class=\"mk\" style=\"width:80%;height:7px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i></div>"
+    },
+    {
+     "id": "f2",
+     "label": "Session Name First",
+     "sub": "The session name leads the tab title and the top bar",
+     "title": "The session name leads the tab title and the top bar",
+     "what": "When several sessions run on one project, their logs would otherwise look identical. The session name goes first in the browser tab, where titles get cut off last, and is highlighted in the top bar, so you reply to the right one.",
+     "html": "<div class=\"col\"><div class=\"win\"><div class=\"wb\"><i></i><i></i><i></i><span class=\"acc\">checkout-fix</span><span>· Acme Shop log</span></div></div><div class=\"win\"><div class=\"wb\"><i></i><i></i><i></i><span class=\"acc\">billing-bug</span><span>· Acme Shop log</span></div></div><div class=\"note2\">Same project, two sessions, no mix-ups</div></div>"
+    },
+    {
+     "id": "f3",
+     "label": "Did My Reload Land?",
+     "sub": "A version marker shows you have the newest page",
+     "title": "A version marker shows you have the newest page",
+     "what": "The status bar reads like \"v3 · updated Nov 2 · entry 14\" and goes up with every republish. After you reload the same link, you can see at once whether the new version arrived.",
+     "html": "<div class=\"col\"><div class=\"itm\"><span>6 / 9 read</span><small><b class=\"acc\">v3</b> · updated Nov 2 · entry 14</small></div><div class=\"itm\"><span>6 / 9 read</span><small><b class=\"acc\">v4</b> · updated Nov 2 · entry 15</small></div><div class=\"note2\">Reloaded: new entry is in</div></div>"
+    },
+    {
+     "id": "f4",
+     "label": "Newest on Top",
+     "sub": "The latest message is always the first thing you see",
+     "title": "The latest message is always the first thing you see",
+     "what": "Messages are listed newest first, each with a number, a title and a status chip such as Your move, Background, Queued or Done. You open the page and the thing that needs you is right there.",
+     "html": "<div class=\"col\"><div class=\"row\"><b class=\"hd\">14 · Approve the refund flow</b><span class=\"pill mid\">Your move</span></div><div class=\"row\"><b class=\"hd\">13 · Tests running</b><span class=\"pill line\">Background</span></div><div class=\"row\"><b class=\"hd\">12 · Next: email copy</b><span class=\"pill mute\">Queued</span></div><div class=\"row\"><b class=\"hd\">11 · Cart bug fixed</b><span class=\"pill ok\">Done</span></div></div>"
+    },
+    {
+     "id": "f5",
+     "label": "Headline, Then Detail",
+     "sub": "One plain sentence first, the specifics underneath",
+     "title": "One plain sentence first, the specifics underneath",
+     "what": "Each message opens with a full-strength summary sentence, with the detail below in quieter text. You can skim the headlines and read deeper only where you need to.",
+     "html": "<div class=\"opt\"><b class=\"hd\">The cart bug is fixed and tested.</b><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:90%;height:7px\"></i><i class=\"mk\" style=\"width:55%;height:7px\"></i></div>"
+    },
+    {
+     "id": "f6",
+     "label": "Facts at a Glance",
+     "sub": "A short bar of live facts: branch, tests, what's live, what's waiting",
+     "title": "A short bar of live facts: branch, tests, what's live, what's waiting",
+     "what": "Three or four current facts sit near the top: the working branch, whether tests pass, what is live, and what is waiting on you. You get the state of play without reading every message.",
+     "html": "<div class=\"col\"><div class=\"row wrap\"><span class=\"st mute\">branch: fix-cart</span><span class=\"st ok\">tests: 412 passing</span></div><div class=\"row wrap\"><span class=\"st mute\">live: v2.3</span><span class=\"st mid\">waiting on you: 2</span></div></div>"
+    },
+    {
+     "id": "f7",
+     "label": "How to Get Back Here",
+     "sub": "The exact command to reopen the page",
+     "title": "The exact command to reopen the page",
+     "what": "The page tells you how to reopen it, because you will close the tab: the exact command if your project has an opener script, or the place the project keeps its links. You don't have to dig for the link later.",
+     "html": "<div class=\"col\"><span class=\"tag\">Reopen this page</span><div class=\"code\"><span>$ open-log checkout-fix</span></div></div>"
+    },
+    {
+     "id": "f8",
+     "label": "Easy on the Eyes",
+     "sub": "A wide page, large text and big buttons and tick boxes",
+     "title": "A wide page, large text and big buttons and tick boxes",
+     "what": "The log uses most of a laptop screen with large body text, and the parts you actually click, the option buttons, note fields and tick boxes, are larger still. It is meant to be read comfortably, not squinted at.",
+     "html": "<div class=\"desk\"><div class=\"col\"><b class=\"hd\">Approve the refund flow?</b><i class=\"mk\" style=\"width:100%;height:9px\"></i><i class=\"mk\" style=\"width:85%;height:9px\"></i><div class=\"row\"><span class=\"mb\">Yes, ship it</span><span class=\"mb\">Wait</span><span class=\"st ok\"><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg></span></div></div></div>"
+    }
+   ]
+  },
+  {
+   "title": "How you reply",
+   "features": [
+    {
+     "id": "f9",
+     "label": "Tick It Off",
+     "sub": "A Read this tick per message dims what you've seen",
+     "title": "A Read this tick per message dims what you've seen",
+     "what": "Every message has a Read this tick that dims the card and updates the read count. What you haven't seen yet stands out from what you have.",
+     "html": "<div class=\"col\"><div class=\"itm\"><span>14 · Approve the refund flow</span><span class=\"st mute\">&nbsp;&nbsp;&nbsp;</span></div><div class=\"opt old\"><div class=\"row\"><b class=\"hd\">13 · Tests running</b><span class=\"st ok\"><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg></span></div></div><div class=\"itm\"><span>Read</span><small>1 / 2</small></div></div>"
+    },
+    {
+     "id": "f10",
+     "label": "Buttons Only When Asked",
+     "sub": "Answer buttons appear only on real questions",
+     "title": "Answer buttons appear only on real questions",
+     "what": "Most messages are just news and carry no buttons. When a message does show options, you know Claude is really asking, so you never learn to click past them.",
+     "html": "<div class=\"col\"><div class=\"opt\"><b class=\"hd\">Ship the refund flow today?</b><div class=\"row\"><span class=\"mb on\">Ship today</span><span class=\"mb\">Wait for review</span></div></div><div class=\"opt\"><b class=\"hd\">Tests are running</b><div class=\"note2\">No question, no buttons</div></div></div>"
+    },
+    {
+     "id": "f11",
+     "label": "Two Questions, Two Answers",
+     "sub": "Each question in a message keeps its own answer",
+     "title": "Each question in a message keeps its own answer",
+     "what": "When one message asks two things, each answer is saved separately and copied back by name. A second click can't wipe out the first, and anything you skipped shows as unanswered instead of vanishing.",
+     "html": "<div class=\"col\"><div class=\"row\"><span class=\"mb on\">Tonight</span><span class=\"mb\">Tomorrow</span></div><div class=\"row\"><span class=\"mb\">Keep old page</span><span class=\"mb\">Remove it</span></div><pre class=\"ex\">deploy window: Tonight\nold page: (unanswered)</pre></div>"
+    },
+    {
+     "id": "f12",
+     "label": "Say It in Your Words",
+     "sub": "A note field on every message, plus an anything-else box",
+     "title": "A note field on every message, plus an anything-else box",
+     "what": "Each message has its own note field, and there is one more box at the end for anything else. Your reply isn't limited to the options offered.",
+     "html": "<div class=\"col\"><b class=\"hd\">14 · Approve the refund flow</b><div class=\"cbox\">yes, but keep the old email too<span class=\"caret\"></span></div></div>"
+    },
+    {
+     "id": "f13",
+     "label": "Close the Tab, Keep Your Place",
+     "sub": "Ticks and answers are saved in your browser",
+     "title": "Ticks and answers are saved in your browser",
+     "what": "Your ticks, answers and notes survive a closed tab. They are saved per project and per session, so two logs open at once never overwrite each other.",
+     "html": "<div class=\"col\"><div class=\"itm\"><span>checkout-fix</span><small>4 ticks · 2 answers saved</small></div><div class=\"itm\"><span>billing-bug</span><small>1 tick saved</small></div><div class=\"note2\">Kept apart, never overwritten</div></div>"
+    },
+    {
+     "id": "f14",
+     "label": "What Failure Looks Like",
+     "sub": "Any command you're asked to run comes with its error text",
+     "title": "Any command you're asked to run comes with its error text",
+     "what": "When a message asks you to run something, it shows what success prints and the most likely failure message. You can tell how it went even if your terminal is hard to read.",
+     "html": "<div class=\"col\"><div class=\"why\"><b>Expected:</b> Deployed version 2.4</div><div class=\"why\"><b>If it fails:</b> permission denied (missing token)</div></div>"
+    }
+   ]
+  },
+  {
+   "title": "Sending it back",
+   "features": [
+    {
+     "id": "f15",
+     "label": "One Paste Back",
+     "sub": "Copy my replies puts everything on your clipboard",
+     "title": "Copy my replies puts everything on your clipboard",
+     "what": "One button copies plain text with every message marked read or unread, plus your answers and notes. You paste it into chat, which works even when reading the terminal doesn't.",
+     "html": "<div class=\"col\"><div class=\"row\"><span class=\"mb on acc\">Copy my replies</span></div><pre class=\"ex\">M14  [read]  Approve the refund flow\n      answer: Ship today\nM13  [unread]  Tests running</pre></div>"
+    },
+    {
+     "id": "f16",
+     "label": "The Paste Knows Where It's From",
+     "sub": "Copied replies open with project, session, repo and time",
+     "title": "Copied replies open with project, session, repo and time",
+     "what": "The copied text starts with a short block naming the project, session, repository, the round of work and when you exported it. The session that receives it can tell straight away whether the reply belongs to it, and an old paste doesn't pass for a fresh one.",
+     "html": "<pre class=\"ex\">WORKING LOG — my replies\nproject: Acme Shop\nsession: checkout-fix\nrepo: acme/shop\nexported: Nov 2 14:05</pre>"
+    }
+   ]
+  },
+  {
+   "title": "Keeping it current",
+   "features": [
+    {
+     "id": "f17",
+     "label": "Same Link, Every Update",
+     "sub": "Each update goes to the link you already have open",
+     "title": "Each update goes to the link you already have open",
+     "what": "The page is republished to the same link every time, from the same folder, so the tab you keep open just updates. A new link would leave you reading a stale page.",
+     "html": "<div class=\"row\"><span class=\"tag\">v1</span><span class=\"note2\">→</span><span class=\"tag\">v2</span><span class=\"note2\">→</span><span class=\"tag acc\">v3</span><span class=\"link\">same link</span></div>"
+    },
+    {
+     "id": "f18",
+     "label": "Settled Moves Out of the Way",
+     "sub": "Finished messages shrink to a line at the bottom",
+     "title": "Finished messages shrink to a line at the bottom",
+     "what": "Once a message is resolved it moves to a Settled section as a line or two, or goes entirely. The top of the page is always what still needs you.",
+     "html": "<div class=\"col\"><div class=\"openi\"><span class=\"dot\"></span>14 · Approve the refund flow</div><div class=\"openi\"><span class=\"dot\"></span>12 · Email copy question</div><div class=\"recap\">Settled · 6 messages ▸</div></div>"
+    },
+    {
+     "id": "f19",
+     "label": "Back on Track After a Reset",
+     "sub": "After a reset, Claude updates your page instead of starting another",
+     "title": "After a reset, Claude updates your page instead of starting another",
+     "what": "If the conversation is reset mid-task, Claude looks up the log's saved link and updates that page rather than starting a second one you aren't looking at. Each session keeps its own log, so two sessions never overwrite each other's messages.",
+     "html": "<div class=\"col\"><div class=\"row flow\"><span class=\"st mid\">Session reset</span><span class=\"arr\">look up saved link</span></div><div class=\"row flow\"><span class=\"st ok\">Same page updated</span><span class=\"arr\">your tab stays current</span></div></div>"
+    },
+    {
+     "id": "f20",
+     "label": "Tested Before You See It",
+     "sub": "Every button is clicked and the layout looked at before publishing",
+     "title": "Every button is clicked and the layout looked at before publishing",
+     "what": "Before each publish the page is loaded and clicked through to confirm ticks, answers and the copied text all work, including the session name. Then one real screenshot at laptop and phone width checks that nothing scrolls sideways or squeezes text into a narrow column.",
+     "html": "<div class=\"two mid\"><div class=\"phone\"><i class=\"mk d\" style=\"width:100%;height:12px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i></div><div class=\"col chk\"><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> buttons work</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> export has session</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> no sideways scroll</span></div></div>"
+    }
+   ]
+  },
+  {
+   "title": "Questions-for-you mode",
+   "features": [
+    {
+     "id": "q1",
+     "label": "Real Buttons, Not Letters",
+     "sub": "Questions-for-you mode: every question has options you click",
+     "title": "Real Buttons, Not Letters",
+     "what": "When questions pile up, switch to the questions-for-you mode: one page holds every open question, each with options you select on the page and a notes box for the answer nobody thought to offer. A pinned bar counts what you have answered, and answers save in your browser as you go. You never have to type Q2: C in chat and hope it is understood.",
+     "html": "<div class=\"col\"><b class=\"hd\">Where should the dropdown sit?</b><div class=\"opt\"><div class=\"row\"><span class=\"tag\">A</span><i class=\"mk\" style=\"width:70%;height:7px\"></i></div></div><div class=\"opt sel\"><div class=\"row\"><span class=\"tag acc\">B</span><i class=\"mk\" style=\"width:60%;height:7px\"></i></div></div><div class=\"opt\"><div class=\"row\"><span class=\"tag\">C</span><i class=\"mk\" style=\"width:50%;height:7px\"></i></div></div></div>"
+    },
+    {
+     "id": "q2",
+     "label": "The Ask, the Why, a Pick",
+     "sub": "Each question says why it matters, what each option costs, and Claude's choice",
+     "title": "The Ask, the Why, a Pick",
+     "what": "A question states what is being decided, why it matters, and a real trade-off for every option. Claude marks the option it would choose and says why, and keeps defensible options it disagrees with on the list so you can overrule it. Decisions you delegated appear too, as a stated call with an overrule control.",
+     "html": "<div class=\"col\"><b class=\"hd\">Show search results as you type?</b><div class=\"why\"><b>Why it matters:</b> slow phones lag on every key.</div><div class=\"opt\"><b class=\"hd\">Yes</b><div class=\"note2\">feels fast, more server load</div></div><div class=\"opt\"><b class=\"hd\">After a pause</b><div class=\"note2\">smoother, half a second later</div></div></div>"
+    },
+    {
+     "id": "q3",
+     "label": "See It to Decide It",
+     "sub": "Visual questions come with drawn mockups",
+     "title": "See It to Decide It",
+     "what": "When a question is about where something goes or how it looks, each option is drawn as a mockup at the real width. You choose by looking, not by picturing a description.",
+     "html": "<div class=\"three\"><div class=\"opt sm\"><span class=\"tag\">A</span><div class=\"phone\"><i class=\"mk d\" style=\"width:100%;height:10px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i></div></div><div class=\"opt sm\"><span class=\"tag\">B</span><div class=\"phone\"><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk d\" style=\"width:100%;height:14px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i></div></div><div class=\"opt sm\"><span class=\"tag\">C</span><div class=\"phone\"><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i><i class=\"mk d\" style=\"width:100%;height:10px\"></i></div></div></div>"
+    },
+    {
+     "id": "q4",
+     "label": "Answers That Can't Be Misfiled",
+     "sub": "Every answer carries its question id, the round and the full option text",
+     "title": "Answers That Can't Be Misfiled",
+     "what": "Each question keeps a short id that never changes, and the copied text opens with the project, stream, round, page link and time. It carries the whole wording of the option you chose, not a letter, and says UNANSWERED plainly for anything you skipped. A late reply to an earlier round still lands on the right question.",
+     "html": "<pre class=\"ex\">Q placement (raised r1)\n  -> B - Below the field, flips up on short screens\nQ spec-approval (raised r2)\n  -> (UNANSWERED)</pre>"
+    },
+    {
+     "id": "q5",
+     "label": "A Test Checklist for You",
+     "sub": "Checks only you can run, marked Pass, Fail or Couldn't test",
+     "title": "A Test Checklist for You",
+     "what": "After something ships, the same page can list checks that need your device or your live data, worst failures first. Each says what to do, what passing looks like and why it is on the list, which ones Claude could not verify itself, and what will look broken but is simply not built yet. Results come back in their own block.",
+     "html": "<div class=\"col\"><b class=\"hd\">Delete a clip that made a recommendation</b><div class=\"why\"><b>Expected:</b> it deletes cleanly.</div><div class=\"row wrap\"><span class=\"mb on\">Pass</span><span class=\"mb\">Fail</span><span class=\"mb\">Couldn't test</span></div></div>"
+    },
+    {
+     "id": "q6",
+     "label": "No Building on Guesses",
+     "sub": "Claude waits on blocking questions and works around them",
+     "title": "No Building on Guesses",
+     "what": "Claude stops at a question it truly needs answered, carries on with work that does not depend on it, and does not guess and build on the guess. Answered questions stay on the page as a short record, and things noticed but not done go in a parked list.",
+     "html": "<div class=\"col\"><div class=\"row flow\"><span class=\"st mid\">placement</span><span class=\"arr\">waiting on you</span></div><div class=\"row flow\"><span class=\"st ok\">tests, docs</span><span class=\"arr\">carrying on meanwhile</span></div></div>"
+    },
+    {
+     "id": "wp",
+     "label": "Where the Page Goes",
+     "sub": "A private link, a local file, or your Wi-Fi",
+     "title": "A private link, a local file, or your Wi-Fi",
+     "what": "Your project picks where review pages go: a private claude.ai link, an HTML file that opens in your browser, or that file served on your home Wi-Fi so a phone can open it. Nothing is ever uploaded or tunneled in the Wi-Fi mode, and the server stops when the review ends.",
+     "html": "<div class=\"col\"><div class=\"opt\"><span class=\"tag\">artifact</span><div class=\"row\" style=\"align-items:stretch\"><div class=\"phone\" style=\"max-width:112px;flex:none\"><i class=\"mk d\" style=\"width:100%;height:16px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i><span class=\"link\" style=\"font-size:9px;padding:2px 6px\">private link</span></div><div class=\"desk\" style=\"flex:1;min-width:0;display:grid;gap:5px;align-content:start\"><i class=\"mk d\" style=\"width:100%;height:24px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i><span class=\"link\" style=\"font-size:9px;padding:2px 6px\">private link</span></div></div></div><div class=\"opt\"><span class=\"tag\">file</span><div class=\"win\" style=\"max-width:240px\"><div class=\"wb\"><i></i><i></i><i></i><span>file</span></div><div class=\"wbody\"><i class=\"mk d\" style=\"width:100%;height:18px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i></div></div></div><div class=\"opt\"><span class=\"tag\">wifi</span><div class=\"row\"><div class=\"phone\" style=\"max-width:84px;flex:none\"><i class=\"mk d\" style=\"width:100%;height:16px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i></div><div class=\"col\" style=\"flex:1;min-width:0;justify-items:center;gap:3px\"><span class=\"note2\">same Wi-Fi</span><span style=\"display:block;width:100%;border-top:2px dashed var(--accent)\"></span></div><div class=\"desk\" style=\"flex:none;width:96px;display:grid;gap:5px;align-content:start\"><i class=\"mk d\" style=\"width:100%;height:18px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i></div></div></div></div>"
+    }
+   ]
+  }
+ ],
+ "promises": [
+  "Works on phone and desktop",
+  "Answer many questions at once",
+  "Your replies go back with one paste"
+ ]
+}

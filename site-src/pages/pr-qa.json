@@ -1,0 +1,229 @@
+{
+ "skill": "pr-qa",
+ "tagline": "See what each pull request really changed before you merge it",
+ "use_when": "Pull requests are waiting, especially ones an AI agent opened while you were away, and you want screenshots and findings instead of reading a diff.",
+ "try_it": "Use the pr-qa skill to check every open pull request before I merge anything.",
+ "sections": [
+  {
+   "title": "Before it starts",
+   "features": [
+    {
+     "id": "pq1",
+     "label": "Every Open PR, Every Time",
+     "sub": "With no arguments, it checks all open pull requests",
+     "title": "With no arguments, it checks all open pull requests",
+     "what": "The list comes from your code host, not from whatever the conversation happened to mention. It says up front which pull requests it is covering, and names any it skipped and why.",
+     "html": "<div class=\"col\"><pre class=\"ex\">3 open: #12, #15, #16\nChecking all 3.</pre><div class=\"note2\">skipped: none</div></div>"
+    },
+    {
+     "id": "pq2",
+     "label": "Nothing Goes Quiet",
+     "sub": "An opt-in start-of-session note says how many PRs are open",
+     "title": "Each new session says how many PRs are open",
+     "what": "Turn on the optional session reminder with one command and each new session starts with a short note saying how many pull requests are open and how old the oldest one is. It ships with the plugin but stays off until you turn it on with one setting in your project's settings file, and then stays silent when there is no token, no network or nothing open. A pull request nobody mentioned cannot sit unreviewed for days.",
+     "html": "<div class=\"win\"><div class=\"wb\"><i></i><i></i><i></i><span>New session</span></div><div class=\"wbody\"><pre class=\"ex\">2 pull requests open.\nOldest: 3 days.</pre></div></div>"
+    }
+   ]
+  },
+  {
+   "title": "What it checks",
+   "features": [
+    {
+     "id": "pq3",
+     "label": "Runs It for Real",
+     "sub": "Each branch is checked out, started and used",
+     "title": "Each branch is checked out, started and used",
+     "what": "Every pull request is read first to find the page and the record that show the change, then run for real: checked out, started up, signed in and photographed. Helper scripts pick the pages from a map you write for your own routes, and you bring the screenshot step (the scripts read the before and after evidence you produce). Nothing is recommended for merging that was not actually run.",
+     "html": "<div class=\"col chk\"><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> diff read</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> branch checked out</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> app started</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> signed in</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> after shots taken</span></div>"
+    },
+    {
+     "id": "pq4",
+     "label": "Before Shots Come First",
+     "sub": "The main branch is photographed before anything changes",
+     "title": "The main branch is photographed before anything changes",
+     "what": "Before pictures are taken on the main branch before the pull request runs, so a database change cannot get in the way of capturing the old state.",
+     "html": "<div class=\"col\"><div class=\"row flow\"><span class=\"st mute\">1 · main</span><span class=\"arr\">before shots</span></div><div class=\"row flow\"><span class=\"st ok\">2 · branch</span><span class=\"arr\">after shots</span></div><div class=\"note2\">before any database change</div></div>"
+    },
+    {
+     "id": "pq5",
+     "label": "Desktop and Phone, Every PR",
+     "sub": "Both screen sizes for every pull request",
+     "title": "Both screen sizes for every pull request",
+     "what": "Every pull request is captured at desktop size and at phone size, even a change that seems desktop-only, because phone layouts are where things quietly break.",
+     "html": "<div class=\"two mid\"><div class=\"desk\"><div class=\"two\"><i class=\"mk d\" style=\"width:100%;height:30px\"></i><div class=\"col\"><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i><i class=\"mk\" style=\"width:80%;height:7px\"></i></div></div></div><div class=\"phone\"><i class=\"mk d\" style=\"width:100%;height:16px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i></div></div>"
+    },
+    {
+     "id": "pq6",
+     "label": "Proof It Signed In",
+     "sub": "It refuses to save a picture of the sign-in page",
+     "title": "It refuses to save a picture of the sign-in page",
+     "what": "Before any screenshot is saved, it checks the page is not the sign-in form and that something unique to the change is on screen. A failed sign-in can look like a normal page load, and four perfect pictures of a login form are not evidence.",
+     "html": "<div class=\"two mid\"><div class=\"opt old\"><span class=\"tag\">Sign-in page</span><i class=\"mk\" style=\"width:100%;height:12px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i><div class=\"hl strike\">saved</div></div><div class=\"opt\"><span class=\"tag acc\">Your page</span><i class=\"mk d\" style=\"width:100%;height:12px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i><div class=\"hl ok\">saved <svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg></div></div></div>"
+    },
+    {
+     "id": "pq7",
+     "label": "Real People Stay Private",
+     "sub": "Names and emails are replaced before the shot",
+     "title": "Names and emails are replaced before the shot",
+     "what": "On admin pages, real names and email addresses are overwritten on the page before the screenshot is taken, so nothing personal reaches the shared review page. Cropping afterward is not trusted to do the same job. Your screenshot step is told to do this redaction.",
+     "html": "<div class=\"col\"><div class=\"hl strike\">real.person@example.com</div><div class=\"hl ok\">person@example.com <svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg></div><div class=\"note2\">replaced before the picture</div></div>"
+    },
+    {
+     "id": "pq8",
+     "label": "Its Own Tests, Counted",
+     "sub": "Says whether the pull request added any tests",
+     "title": "Says whether the pull request added any tests",
+     "what": "The pull request's own tests are run, and the report says whether it added any. A passing suite and a tested change are not the same claim.",
+     "html": "<div class=\"col\"><div class=\"col chk\"><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> 48 tests pass</span></div><div class=\"row\"><b class=\"hd\">Tests added by this PR</b><span class=\"pill mid\">0</span></div></div>"
+    },
+    {
+     "id": "pq9",
+     "label": "What Tests Can’t Catch",
+     "sub": "A checklist of problems that pass every test",
+     "title": "A checklist of problems that pass every test",
+     "what": "Each pull request is checked for things a green suite misses: two PRs making the same database change, old records missing new data, layouts that wrap badly, private details showing up where they shouldn't, a page left outside a lock, and comments that contradict the code.",
+     "html": "<div class=\"col\"><div class=\"row\"><b class=\"hd\">Same database change twice</b><span class=\"pill mid\">Found</span></div><div class=\"row\"><b class=\"hd\">Old records lack new field</b><span class=\"pill mid\">Found</span></div><div class=\"row\"><b class=\"hd\">Layout wraps badly</b><span class=\"pill ok\">Clear</span></div><div class=\"row\"><b class=\"hd\">Private note shown</b><span class=\"pill ok\">Clear</span></div></div>"
+    },
+    {
+     "id": "pq10",
+     "label": "Honest When It Can’t Reproduce",
+     "sub": "Says so when the reported bug doesn't happen",
+     "title": "Says so when the reported bug doesn't happen",
+     "what": "If the original bug cannot be made to happen, the report says so instead of calling the change a confirmed fix. It may still be an improvement, but you learn to check it on a real device.",
+     "html": "<div class=\"col\"><div class=\"row\"><b class=\"hd\">Phone overlap fix</b><span class=\"pill mid\">Not confirmed</span></div><div class=\"why\"><b>Note:</b> no overlap at 3 phone heights; check on a real phone.</div></div>"
+    },
+    {
+     "id": "pq11",
+     "label": "No Useless Pictures",
+     "sub": "Common setup mistakes are ruled out first",
+     "title": "Common setup mistakes are ruled out first",
+     "what": "Before shooting, it rules out the usual ways a screenshot run goes wrong: missing styles, missing settings, two apps on one port, and a sample record that doesn't show the change. Every picture is looked at before it goes on the page.",
+     "html": "<div class=\"col chk\"><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> styles built</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> settings in place</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> free port</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> record shows the change</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> every shot looked at</span></div>"
+    }
+   ]
+  },
+  {
+   "title": "The review page",
+   "features": [
+    {
+     "id": "pq12",
+     "label": "The Verdict Up Top",
+     "sub": "A summary table you can decide from alone",
+     "title": "A summary table you can decide from alone",
+     "what": "The page opens with a table of every pull request: its test result and the recommended action. You can stop reading there and still make a decision.",
+     "html": "<div class=\"col\"><div class=\"row\"><b class=\"hd\">#15 Date field</b><span class=\"pill mid\">Send back</span></div><div class=\"row\"><b class=\"hd\">#16 Footer</b><span class=\"pill ok\">Merge</span></div><div class=\"row\"><b class=\"hd\">#12 Search</b><span class=\"pill line\">Not read</span></div></div>"
+    },
+    {
+     "id": "pq13",
+     "label": "Worst First",
+     "sub": "The one that must not merge sits at the top",
+     "title": "The one that must not merge sits at the top",
+     "what": "Pull requests are ordered worst first, each with a status label, so bad news is never buried under the safe ones.",
+     "html": "<div class=\"col\"><div class=\"openi\"><span class=\"dot\"></span>#15 Date field · do not merge</div><div class=\"recap\">#16 Footer · looks safe</div></div>"
+    },
+    {
+     "id": "pq14",
+     "label": "Flip Between Views",
+     "sub": "Before/After and Desktop/Phone switches on each PR",
+     "title": "Before/After and Desktop/Phone switches on each PR",
+     "what": "Each pull request has two switches, Before/After and Desktop/Phone, over a single picture. It opens on the view that shows the change best.",
+     "html": "<div class=\"col\"><div class=\"row wrap\"><span class=\"mb\">Before</span><span class=\"mb on\">After</span><span class=\"mb on\">Desktop</span><span class=\"mb\">Phone</span></div><div class=\"desk\"><i class=\"mk d\" style=\"width:100%;height:18px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i></div></div>"
+    },
+    {
+     "id": "pq15",
+     "label": "Phone at Phone Size",
+     "sub": "Phone shots are shown at true phone width",
+     "title": "Phone shots are shown at true phone width",
+     "what": "Phone screenshots are shown at real phone width and centered, not stretched across the card, where giant text would make them look like desktop shots. They are captured sharp enough to stay crisp at that size.",
+     "html": "<div class=\"two mid\"><div class=\"opt old\"><span class=\"tag\">Stretched</span><i class=\"mk d\" style=\"width:100%;height:22px\"></i><i class=\"mk\" style=\"width:100%;height:12px\"></i></div><div class=\"phone\"><span class=\"tag acc\">390px</span><i class=\"mk d\" style=\"width:100%;height:12px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i></div></div>"
+    },
+    {
+     "id": "pq16",
+     "label": "Findings in Plain Words",
+     "sub": "Numbered findings: what is wrong and why it matters",
+     "title": "Numbered findings: what is wrong and why it matters",
+     "what": "Each finding is one sentence on what is wrong and one on why it matters. You can act on them, or send them back as the brief for another try.",
+     "html": "<div class=\"pg\"><div class=\"band\"><span class=\"num\">1</span><span>Empty date box on old records</span></div><div class=\"band\"><span class=\"num\">2</span><span>Form fields misaligned on phone</span></div></div>"
+    },
+    {
+     "id": "pq17",
+     "label": "Unchecked Never Looks Clean",
+     "sub": "A PR nobody reviewed says so plainly",
+     "title": "A PR nobody reviewed says so plainly",
+     "what": "If no reviewer has written findings for a pull request, it reads “not yet read by a reviewer” instead of showing an empty, problem-free list. A gap stays visible as a gap.",
+     "html": "<div class=\"col\"><div class=\"row\"><b class=\"hd\">#12 Search</b><span class=\"pill line\">Not yet read by a reviewer</span></div><div class=\"row\"><b class=\"hd\">#16 Footer</b><span class=\"pill ok\">Reviewed: no issues</span></div></div>"
+    },
+    {
+     "id": "pq18",
+     "label": "Tested Before You See It",
+     "sub": "The review page is checked before it's published",
+     "title": "The review page is checked before it's published",
+     "what": "Before publishing, the page is loaded and clicked through automatically: every picture is present, the switches change the picture, phone view stays phone-sized, and the export lists every pull request.",
+     "html": "<div class=\"two mid\"><div class=\"desk\"><i class=\"mk d\" style=\"width:100%;height:14px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><div class=\"row\"><span class=\"mb on sm\">After</span><span class=\"mb sm\">Phone</span></div></div><div class=\"col chk\"><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> pictures load</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> switches work</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> export complete</span></div></div>"
+    }
+   ]
+  },
+  {
+   "title": "How you decide",
+   "features": [
+    {
+     "id": "pq19",
+     "label": "Four Clear Choices",
+     "sub": "Merge and push, merge and hold, send back, or wait",
+     "title": "Merge and push, merge and hold, send back, or wait",
+     "what": "Each pull request gets one decision, with a line under each option saying exactly what will happen. Wait, I will check it myself is always there, because not deciding yet is allowed.",
+     "html": "<div class=\"col\"><div class=\"row wrap\"><span class=\"mb\">Merge and push</span><span class=\"mb\">Merge, hold the push</span></div><div class=\"row wrap\"><span class=\"mb\">Send it back</span><span class=\"mb\">Wait, I'll check it</span></div></div>"
+    },
+    {
+     "id": "pq20",
+     "label": "A Recommendation, Not a Default",
+     "sub": "The suggested choice is marked, never pre-selected",
+     "title": "The suggested choice is marked, never pre-selected",
+     "what": "The recommended decision carries a badge, but nothing is selected for you. Nobody can approve a merge by scrolling past it, and an untouched pull request exports as no decision yet.",
+     "html": "<div class=\"col\"><div class=\"row\"><span class=\"mb\">Merge and push</span><span class=\"rec yes\">Recommended</span></div><div class=\"row\"><span class=\"mb\">Send it back</span></div><div class=\"note2\">untouched → no decision yet</div></div>"
+    },
+    {
+     "id": "pq21",
+     "label": "One Paste Back",
+     "sub": "Copy my decisions sends every verdict to Claude",
+     "title": "Copy my decisions sends every verdict to Claude",
+     "what": "One button copies a plain-text block per pull request, which you paste into chat to have the decisions carried out.",
+     "html": "<div class=\"col\"><div class=\"row\"><span class=\"mb on acc\">Copy my decisions</span></div><pre class=\"ex\">[PR QA]\n#15 Date field: SEND BACK\n#16 Footer: MERGE AND PUSH\n#12 Search: (no decision yet)</pre></div>"
+    }
+   ]
+  },
+  {
+   "title": "After you decide",
+   "features": [
+    {
+     "id": "pq22",
+     "label": "Done the Way You Said",
+     "sub": "Each decision is carried out, one per pull request",
+     "title": "Each decision is carried out, one per pull request",
+     "what": "Merges are made, held locally or pushed exactly as chosen, with a note when a deploy or database change follows. Sent-back findings become the brief for another attempt, and if that needs you to edit a ticket, it tells you instead of quietly doing the work itself.",
+     "html": "<div class=\"col\"><div class=\"row flow\"><span class=\"st ok\">#16 merge and push</span><span class=\"arr\">→ merged, pushed</span></div><div class=\"row flow\"><span class=\"st mid\">#15 send back</span><span class=\"arr\">→ findings = new brief</span></div><div class=\"row flow\"><span class=\"st mute\">#12 wait</span><span class=\"arr\">→ untouched</span></div></div>"
+    },
+    {
+     "id": "pq23",
+     "label": "Leaves No Mess",
+     "sub": "Your project is put back the way it was",
+     "title": "Your project is put back the way it was",
+     "what": "When it is done, test database changes are rolled back, the main branch is checked out again, and temporary working copies are removed, because other sessions may be using the same machine.",
+     "html": "<div class=\"col chk\"><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> database changes rolled back</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> main checked out</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> temporary copies removed</span></div>"
+    },
+    {
+     "id": "wp",
+     "label": "Where the Page Goes",
+     "sub": "A private link, a local file, or your Wi-Fi",
+     "title": "A private link, a local file, or your Wi-Fi",
+     "what": "Your project picks where review pages go: a private claude.ai link, an HTML file that opens in your browser, or that file served on your home Wi-Fi so a phone can open it. Nothing is ever uploaded or tunneled in the Wi-Fi mode, and the server stops when the review ends.",
+     "html": "<div class=\"col\"><div class=\"opt\"><span class=\"tag\">artifact</span><div class=\"row\" style=\"align-items:stretch\"><div class=\"phone\" style=\"max-width:112px;flex:none\"><i class=\"mk d\" style=\"width:100%;height:16px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i><span class=\"link\" style=\"font-size:9px;padding:2px 6px\">private link</span></div><div class=\"desk\" style=\"flex:1;min-width:0;display:grid;gap:5px;align-content:start\"><i class=\"mk d\" style=\"width:100%;height:24px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i><span class=\"link\" style=\"font-size:9px;padding:2px 6px\">private link</span></div></div></div><div class=\"opt\"><span class=\"tag\">file</span><div class=\"win\" style=\"max-width:240px\"><div class=\"wb\"><i></i><i></i><i></i><span>file</span></div><div class=\"wbody\"><i class=\"mk d\" style=\"width:100%;height:18px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i></div></div></div><div class=\"opt\"><span class=\"tag\">wifi</span><div class=\"row\"><div class=\"phone\" style=\"max-width:84px;flex:none\"><i class=\"mk d\" style=\"width:100%;height:16px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i></div><div class=\"col\" style=\"flex:1;min-width:0;justify-items:center;gap:3px\"><span class=\"note2\">same Wi-Fi</span><span style=\"display:block;width:100%;border-top:2px dashed var(--accent)\"></span></div><div class=\"desk\" style=\"flex:none;width:96px;display:grid;gap:5px;align-content:start\"><i class=\"mk d\" style=\"width:100%;height:18px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i></div></div></div></div>"
+    }
+   ]
+  }
+ ],
+ "promises": [
+  "Desktop and phone screenshots",
+  "Nothing merges until you choose"
+ ]
+}

@@ -1,0 +1,352 @@
+<!-- Reference implementation for the working-log skill's questions-for-you mode.
+     Adapt the CONTENT wholesale; keep the mechanics and the palette. The
+     palette is not a suggestion -- see SKILL.md's "Questions-for-you mode: visual treatment": neutral
+     near-black with a violet accent, single theme, chosen by the user over the
+     alternatives. What else to keep: the sticky bar with tally + Clear + Copy,
+     the radio+notes question card, localStorage persistence, the stable
+     data-qid on each question, and the export's self-identifying META header.
+     Set META.project / .stream / .round / .artifact for your own work-stream. -->
+<title>Acme app — work log &amp; open questions</title>
+
+<style>
+  :root {
+    /* Single visual world, deliberately -- no light counterpart: a neutral
+       near-black with a violet accent. The theme toggle is honored
+       structurally below but resolves to the same palette, so the page always
+       looks the way it was designed. */
+    --ground:#0e0e14; --raised:#16161f; --sunk:#0a0a0f;
+    --ink:#ececf1; --ink-soft:#a8a8b8; --ink-faint:#6f6f82; --rule:#262632;
+    --accent:#a855f7; --accent-soft:rgba(168,85,247,.14); --accent-ink:#ffffff;
+    --good:#4ade80; --good-soft:rgba(74,222,128,.13);
+    --warn:#fbbf24; --warn-soft:rgba(251,191,36,.13);
+    --shadow:0 1px 2px rgba(0,0,0,.5), 0 10px 30px rgba(0,0,0,.4);
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",sans-serif;
+    --serif:Charter,"Bitstream Charter","Iowan Old Style",Georgia,serif;
+  }
+  :root[data-theme="light"], :root[data-theme="dark"] {
+    --ground:#0e0e14; --raised:#16161f; --sunk:#0a0a0f;
+    --ink:#ececf1; --ink-soft:#a8a8b8; --ink-faint:#6f6f82; --rule:#262632;
+    --accent:#a855f7; --accent-soft:rgba(168,85,247,.14); --accent-ink:#ffffff;
+    --good:#4ade80; --good-soft:rgba(74,222,128,.13);
+    --warn:#fbbf24; --warn-soft:rgba(251,191,36,.13);
+    --shadow:0 1px 2px rgba(0,0,0,.5), 0 10px 30px rgba(0,0,0,.4);
+  }
+
+  body { background:var(--ground); color:var(--ink); font-family:var(--serif); font-size:19px; line-height:1.62; }
+  * { box-sizing:border-box; }
+
+  .bar { position:sticky; top:0; z-index:50; display:flex; flex-wrap:wrap; align-items:center;
+    gap:12px 20px; padding:14px 24px; background:color-mix(in srgb, var(--ground) 88%, transparent);
+    backdrop-filter:blur(10px); border-bottom:1px solid var(--rule); }
+  .bar-title { font-family:var(--sans); font-weight:700; font-size:15px; letter-spacing:-.01em; margin-right:auto; }
+  .bar-title span { color:var(--ink-faint); font-weight:500; }
+  .tally { font-family:var(--sans); font-size:13px; font-weight:600; color:var(--ink-soft); font-variant-numeric:tabular-nums; }
+  .tally b { color:var(--accent); }
+  button.copy { font-family:var(--sans); font-size:14px; font-weight:650; padding:9px 16px;
+    border-radius:8px; cursor:pointer; background:var(--accent); color:var(--accent-ink); border:1px solid transparent; }
+  button.copy:hover { filter:brightness(1.08); }
+  button.copy:focus-visible { outline:3px solid var(--accent); outline-offset:3px; }
+  button.ghost { font-family:var(--sans); font-size:14px; font-weight:600; padding:9px 14px;
+    border-radius:8px; cursor:pointer; background:transparent; color:var(--ink-soft);
+    border:1px solid var(--rule); }
+  button.ghost:hover { color:var(--ink); border-color:var(--ink-faint); }
+  button.ghost:focus-visible { outline:3px solid var(--accent); outline-offset:3px; }
+
+  main { max-width:74ch; margin:0 auto; padding:40px 24px 96px; }
+  .prose { max-width:68ch; }
+  h1 { font-family:var(--sans); font-size:clamp(30px,5vw,40px); font-weight:760; letter-spacing:-.025em;
+    line-height:1.12; text-wrap:balance; margin:0 0 12px; }
+  .standfirst { font-size:20px; color:var(--ink-soft); margin:0 0 8px; text-wrap:balance; }
+  h2 { font-family:var(--sans); font-size:13px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.1em; color:var(--ink-faint); margin:56px 0 18px; padding-bottom:8px; border-bottom:1px solid var(--rule); }
+  code { font-family:var(--mono); font-size:.86em; background:var(--sunk); padding:1px 5px;
+    border-radius:4px; color:var(--ink-soft); word-break:break-word; }
+
+  .q { background:var(--raised); border:1px solid var(--rule); border-left:4px solid var(--accent);
+    border-radius:12px; padding:26px 26px 22px; margin:0 0 26px; box-shadow:var(--shadow); }
+  .q.answered { border-left-color:var(--good); }
+  .q-num { font-family:var(--sans); font-size:12px; font-weight:700; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--accent); }
+  .q.answered .q-num { color:var(--good); }
+  .q-num .qid { color:var(--ink-faint); font-family:var(--mono); text-transform:none; letter-spacing:0; font-weight:500; }
+  .q-ask { font-family:var(--sans); font-size:23px; font-weight:680; letter-spacing:-.018em;
+    line-height:1.28; text-wrap:balance; margin:6px 0 4px; }
+  .q-why { color:var(--ink-soft); margin:0 0 20px; }
+  .q-why :last-child { margin-bottom:0; }
+  .quote { border-left:3px solid var(--rule); padding-left:16px; font-style:italic; margin:0 0 14px; }
+
+  .opts { display:flex; flex-direction:column; gap:10px; }
+  .opt { display:flex; gap:13px; align-items:flex-start; padding:15px 17px; border:1px solid var(--rule);
+    border-radius:10px; background:var(--ground); cursor:pointer; }
+  .opt:hover { border-color:var(--ink-faint); }
+  .opt:has(input:checked) { border-color:var(--accent); background:var(--accent-soft); }
+  .opt:focus-within { outline:3px solid var(--warn); outline-offset:2px; }
+  .opt input { margin:5px 0 0; accent-color:var(--accent); width:18px; height:18px; flex:0 0 auto; }
+  .opt-label { font-family:var(--sans); font-weight:650; font-size:17px; letter-spacing:-.01em; }
+  .rec { color:var(--accent); font-size:13px; font-weight:700; letter-spacing:.03em; }
+  .opt-note { font-size:16.5px; color:var(--ink-soft); line-height:1.5; margin-top:5px; }
+
+  .notes { margin-top:16px; }
+  .notes label { display:block; font-family:var(--sans); font-size:12px; font-weight:700;
+    letter-spacing:.08em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:6px; }
+  .notes textarea { width:100%; min-height:68px; resize:vertical; padding:11px 13px;
+    font-family:var(--serif); font-size:17px; line-height:1.5; background:var(--ground);
+    color:var(--ink); border:1px solid var(--rule); border-radius:9px; }
+  .notes textarea:focus-visible { outline:3px solid var(--warn); outline-offset:1px; border-color:var(--accent); }
+
+  .frames { display:flex; flex-wrap:wrap; gap:18px; margin:6px 0 14px; }
+  .frame { flex:1 1 240px; min-width:0; }
+  .frame-cap { font-family:var(--sans); font-size:12px; font-weight:700; letter-spacing:.07em;
+    text-transform:uppercase; color:var(--ink-faint); margin-bottom:7px; }
+  .phone { width:100%; background:var(--sunk); border:1px solid var(--rule); border-radius:10px;
+    padding:11px; font-family:var(--sans); }
+  .fld { background:var(--raised); border:1px solid var(--rule); border-radius:7px; padding:8px 9px;
+    font-size:12.5px; color:var(--ink); margin-bottom:5px; }
+  .fld.ph { color:var(--ink-faint); }
+  .rowline { display:flex; align-items:center; justify-content:space-between; gap:8px;
+    background:var(--raised); border:1px solid var(--rule); border-radius:7px; padding:9px;
+    font-size:12.5px; margin-bottom:5px; }
+  .chev { color:var(--ink-faint); font-size:11px; }
+  .cta { background:var(--accent); color:var(--accent-ink); border-radius:7px; padding:10px;
+    text-align:center; font-weight:700; font-size:13px; margin-bottom:6px; }
+  .chip { display:inline-block; padding:1px 7px; border-radius:999px; font-size:10.5px; font-weight:700;
+    background:var(--accent-soft); color:var(--accent); margin-left:5px; }
+  .chip.amb { background:var(--warn-soft); color:var(--warn); }
+  /* --- QA checklist (working-log questions mode). Same machinery as questions, different
+     vocabulary: PASS / FAIL / COULDN'T TEST, counted in its own tally. --- */
+  .qa { background:var(--raised); border:1px solid var(--rule); border-left:4px solid var(--ink-faint);
+    border-radius:11px; padding:20px 22px 18px; margin:0 0 14px; box-shadow:var(--shadow); }
+  .qa.pass { border-left-color:var(--good); }
+  .qa.fail { border-left-color:var(--warn); }
+  .qa.skip { border-left-color:var(--ink-faint); opacity:.7; }
+  .qa-num { font-family:var(--sans); font-size:12px; font-weight:700; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--ink-faint); }
+  .qa-what { font-family:var(--sans); font-size:19px; font-weight:660; letter-spacing:-.015em;
+    margin:5px 0; text-wrap:balance; }
+  .qa-why { color:var(--ink-soft); font-size:16.5px; margin:0 0 14px; }
+  .qa-opts { flex-direction:row; flex-wrap:wrap; }
+  .qa-opts .opt { flex:1 1 28%; padding:11px 13px; justify-content:center; align-items:center; }
+  .qa-opts .opt input { margin:0; }
+  .qa-opts .opt-label { font-size:15px; }
+  .qa.pass .opt:has(input:checked) { border-color:var(--good); background:var(--good-soft); }
+  .qa.fail .opt:has(input:checked) { border-color:var(--warn); background:var(--warn-soft); }
+  .hl { background:var(--warn-soft); color:var(--warn); border-radius:3px; padding:0 3px; }
+  .dists { display:grid; grid-template-columns:repeat(4,1fr); gap:4px; margin-bottom:5px; }
+  .dist { background:var(--raised); border:1px solid var(--rule); border-radius:6px; padding:6px 2px;
+    text-align:center; font-size:10.5px; color:var(--ink-faint); }
+
+  .log { list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:2px; }
+  .log li { display:flex; gap:11px; align-items:baseline; padding:10px 13px; border-radius:8px;
+    background:var(--raised); border:1px solid var(--rule); font-size:16.5px; }
+  .log .tick { color:var(--good); font-weight:700; flex:0 0 auto; }
+  .log .sha { font-family:var(--mono); font-size:12.5px; color:var(--ink-faint); flex:0 0 auto; }
+  .log .what { color:var(--ink-soft); }
+  .log .what b { color:var(--ink); font-weight:650; }
+  .fine { font-size:16px; color:var(--ink-faint); }
+
+  .flash { position:fixed; left:50%; bottom:28px; transform:translateX(-50%) translateY(12px);
+    background:var(--ink); color:var(--ground); font-family:var(--sans); font-weight:620; font-size:15px;
+    padding:12px 22px; border-radius:999px; opacity:0; pointer-events:none;
+    transition:opacity .18s, transform .18s; z-index:90; }
+  .flash.on { opacity:1; transform:translateX(-50%) translateY(0); }
+  @media (prefers-reduced-motion: reduce) { .flash { transition:none; } }
+</style>
+
+<div class="bar">
+  <div class="bar-title">Acme app <span>· work log · round 2</span></div>
+  <div class="tally" id="tally">—</div>
+  <button class="ghost" id="clearBtn" type="button">Clear</button>
+  <button class="copy" id="copyBtn" type="button">Copy my answers</button>
+</div>
+
+<main>
+  <div class="prose">
+    <h1>One question left</h1>
+    <p class="standfirst">Three of four decided. The last one needs a look at what already exists, so the answer below comes first, then a sharper choice.</p>
+    <p class="fine">Answer in any order, then <b>Copy my answers</b> and paste back. Each carries a short id so answers land correctly even out of order. Picks save in this browser.</p>
+    <p class="fine">Now working the <b>sync-retry fix</b>, per your answer to "what's next".</p>
+  </div>
+
+  <h2>Open — needs you</h2>
+
+  <div class="q" data-qid="filter-placement" data-ask="Where the new filter control sits on the list screen" data-round="1">
+    <div class="q-num">Question 1 <span class="qid">· id: filter-placement</span></div>
+    <div class="q-ask">Where the new filter control sits on the list screen</div>
+    <div class="q-why">
+      <p class="quote">"The filter should be easy to reach, but I don't want it to push the list down on a phone."</p>
+      <p><b>What exists today:</b> the list has a sort menu in the header and nothing else. A filter can share that row, sit above the list, or open from a button.</p>
+      <p>So the real question is only where it goes. Each mockup below is drawn at phone width.</p>
+    </div>
+
+    <div class="frames">
+      <div class="frame"><div class="frame-cap">A · Beside the sort menu</div>
+        <div class="phone">
+          <div class="fld" style="font-size:11.5px;line-height:1.7"><span class="chip">Sort</span> <span class="chip">Filter</span><br>Item one<br>Item two<br>Item three</div>
+        </div></div>
+      <div class="frame"><div class="frame-cap">B · Chips above the list</div>
+        <div class="phone">
+          <div class="fld" style="font-size:11.5px;line-height:1.7"><span class="chip">All</span> <span class="chip">Open</span> <span class="chip">Done</span><br>Item one<br>Item two</div>
+        </div></div>
+      <div class="frame"><div class="frame-cap">C · Button that opens a sheet</div>
+        <div class="phone">
+          <div class="fld" style="font-size:11.5px;line-height:1.7">Item one<br>Item two<br>Item three<br><span class="hl">Filter ▸</span></div>
+        </div></div>
+    </div>
+
+    <div class="opts">
+      <label class="opt"><input type="radio" name="filter-placement" value="A - Beside the sort menu in the header row"><span><span class="opt-label">A · Beside the sort menu <span class="rec">— RECOMMENDED</span></span><span class="opt-note">One row for both controls, so the list keeps its height. Cost: two small targets side by side on a phone.</span></span></label>
+      <label class="opt"><input type="radio" name="filter-placement" value="B - Filter chips in a row above the list"><span><span class="opt-label">B · Chips above the list</span><span class="opt-note">Always visible and one tap, but it uses a full row and grows with the number of filters.</span></span></label>
+      <label class="opt"><input type="radio" name="filter-placement" value="C - A button that opens a filter sheet"><span><span class="opt-label">C · Button that opens a sheet</span><span class="opt-note">Keeps the list clean and scales to many filters, but takes two taps and hides which filter is active.</span></span></label>
+    </div>
+    <div class="notes"><label for="n1">Or in your own words</label><textarea id="n1" data-note="filter-placement"></textarea></div>
+  </div>
+
+  <!-- QA CHECKLIST (working-log questions mode). Only include this section once the work has
+       actually shipped -- an unrunnable checklist teaches the user to ignore it.
+       Order items by consequence: a crash or data-loss check goes first. Mark
+       explicitly anything you were STRUCTURALLY unable to verify yourself (no
+       WebKit in the sandbox, an unreachable image host, no production data) --
+       those are the items that justify the section. Copy one card per check. -->
+  <h2>QA after deploy — check these off</h2>
+  <p class="fine" style="margin-top:-6px">Mark each PASS / FAIL / COULDN'T TEST, add what you saw, then hit <b>Copy my answers</b> — QA results come back in their own block, separate from the decisions above.</p>
+
+  <div class="qa" data-qaid="qa-delete-item" data-check="Delete an item that has an attachment">
+    <div class="qa-num">QA 1 <span class="qid">· id: qa-delete-item</span></div>
+    <div class="qa-what">Delete an item that has an attachment</div>
+    <div class="qa-why">State the action, then what pass looks like, then why it is on the list. <b>Expected:</b> it deletes cleanly. Before this push it raised an error. Say here if you could not verify it yourself and why — that is what makes the item worth the user's time.</div>
+    <div class="opts qa-opts">
+      <label class="opt"><input type="radio" name="qa-delete-item" value="PASS"><span class="opt-label">Pass</span></label>
+      <label class="opt"><input type="radio" name="qa-delete-item" value="FAIL"><span class="opt-label">Fail</span></label>
+      <label class="opt"><input type="radio" name="qa-delete-item" value="COULDN'T TEST"><span class="opt-label">Couldn't test</span></label>
+    </div>
+    <div class="notes"><label for="qa1n">What happened</label><textarea id="qa1n" data-note="qa-delete-item"></textarea></div>
+  </div>
+
+  <p class="fine"><b>Expected, not a bug:</b> name anything that will look broken but is simply not in scope yet, or it comes back as a regression report.</p>
+
+  <h2>Shipped this cycle — no action needed</h2>
+  <ul class="log">
+    <li><span class="tick">✓</span><span class="sha">1a2b3c4</span><span class="what"><b>Home-screen icon.</b> It pointed at a transparent image, and the phone composites transparency onto white. Replaced with an opaque one.</span></li>
+    <li><span class="tick">✓</span><span class="sha">5d6e7f8</span><span class="what"><b>Date field styling.</b> The rule set a border color with no width, so it rendered nothing. A rule that looked right and did nothing.</span></li>
+    <li><span class="tick">✓</span><span class="sha">9a0b1c2</span><span class="what"><b>Row width.</b> Rows were content-sized, so they changed width as their text loaded. Now a fixed share of the column.</span></li>
+  </ul>
+  <p class="fine">All automated tests green. Deployable now.</p>
+
+  <h2>Settled — round 1</h2>
+  <ul class="log">
+    <li><span class="tick">✓</span><span class="what"><b>Export format</b> — plain text with the full option text, never a bare letter.</span></li>
+    <li><span class="tick">✓</span><span class="what"><b>Form simplification</b> — primary action first, everything else behind one disclosure.</span></li>
+    <li><span class="tick">✓</span><span class="what"><b>Next up</b> — the sync-retry fix, ahead of all feature work. <b>In progress now.</b></span></li>
+  </ul>
+
+  <h2>Parked</h2>
+  <p class="fine" style="margin-top:0">Things found but not being done this cycle, so they are not silently dropped: keyboard affordances on the collapse toggle · the unit label not refreshing mid-session.</p>
+</main>
+
+<div class="flash" id="flash">Copied — paste it back to me</div>
+
+<script>
+  var META = {
+    format: "working-log questions v1.2",
+    project: "acme-app",
+    stream: "list screen filters",
+    round: 2,
+    artifact: "(the published URL of this page)"
+  };
+  var KEY = "working-log-questions-v1";
+  var state = {};
+  try { state = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) { state = {}; }
+
+  function radios() { return Array.prototype.slice.call(document.querySelectorAll("input[type=radio]")); }
+  function notes() { return Array.prototype.slice.call(document.querySelectorAll("[data-note]")); }
+  function restore() {
+    radios().forEach(function (r) { if (state[r.name] === r.value) r.checked = true; });
+    notes().forEach(function (t) { var v = state["note:" + t.dataset.note]; if (v) t.value = v; });
+  }
+  function persist() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+  function paint() {
+    var checked = {};
+    radios().forEach(function (r) { if (r.checked) checked[r.name] = r.value; });
+    // Questions and QA items are tallied separately -- a QA item is not an open
+    // decision and must not inflate the outstanding-questions count.
+    function tally(sel) {
+      var names = Array.prototype.slice.call(document.querySelectorAll(sel)).map(function (c) {
+        var r = c.querySelector("input[type=radio]"); return r ? r.name : null;
+      }).filter(Boolean);
+      return { total: names.length, done: names.filter(function (n) { return checked[n]; }).length };
+    }
+    var q = tally("[data-qid]"), qa = tally("[data-qaid]");
+    var parts = [];
+    if (q.total) parts.push(q.done === q.total ? "all " + q.total + " answered"
+      : "<b>" + q.done + "</b> of " + q.total + " answered");
+    if (qa.total) parts.push(qa.done === qa.total ? "QA all " + qa.total + " checked"
+      : "QA <b>" + qa.done + "</b> of " + qa.total);
+    document.getElementById("tally").innerHTML = parts.join(" \u00b7 ");
+    document.querySelectorAll(".q").forEach(function (card) {
+      var r = card.querySelector("input[type=radio]");
+      card.classList.toggle("answered", !!(r && checked[r.name]));
+    });
+    document.querySelectorAll(".qa").forEach(function (card) {
+      var r = card.querySelector("input[type=radio]");
+      var v = r ? checked[r.name] : null;
+      card.classList.toggle("pass", v === "PASS");
+      card.classList.toggle("fail", v === "FAIL");
+      card.classList.toggle("skip", v === "COULDN'T TEST");
+    });
+  }
+  document.addEventListener("change", function (e) {
+    if (e.target.type === "radio") { state[e.target.name] = e.target.value; persist(); paint(); }
+  });
+  document.addEventListener("input", function (e) {
+    if (e.target.dataset && e.target.dataset.note) { state["note:" + e.target.dataset.note] = e.target.value; persist(); }
+  });
+  function stamp() {
+    var d = new Date(); function p(n) { return (n < 10 ? "0" : "") + n; }
+    return d.getUTCFullYear() + "-" + p(d.getUTCMonth() + 1) + "-" + p(d.getUTCDate()) +
+           "T" + p(d.getUTCHours()) + ":" + p(d.getUTCMinutes()) + "Z";
+  }
+  document.getElementById("copyBtn").addEventListener("click", function () {
+    var lines = ["[" + META.format + " — answers]", "project: " + META.project,
+      "stream:  " + META.stream, "round:   " + META.round,
+      "artifact: " + META.artifact, "sent:    " + stamp(), ""];
+    document.querySelectorAll("[data-qid]").forEach(function (card) {
+      var qid = card.dataset.qid;
+      lines.push("Q " + qid + " (raised r" + (card.dataset.round || "?") + ") | " + (card.dataset.ask || qid));
+      lines.push("  -> " + (state[qid] || "(UNANSWERED)"));
+      var note = state["note:" + qid];
+      if (note && note.trim()) note.trim().split("\n").forEach(function (ln) { lines.push("  note: " + ln); });
+      lines.push("");
+    });
+    // QA results go in their own block so an unfinished QA pass is never
+    // mistaken for an undecided question -- hence (NOT CHECKED), not (UNANSWERED).
+    var qaCards = document.querySelectorAll("[data-qaid]");
+    if (qaCards.length) {
+      lines.push("--- QA results ---", "");
+      qaCards.forEach(function (card) {
+        var id = card.dataset.qaid;
+        lines.push("QA " + id + " | " + (card.dataset.check || id));
+        lines.push("  -> " + (state[id] || "(NOT CHECKED)"));
+        var n = state["note:" + id];
+        if (n && n.trim()) n.trim().split("\n").forEach(function (ln) { lines.push("  note: " + ln); });
+        lines.push("");
+      });
+    }
+    var text = lines.join("\n").replace(/\n+$/, "\n");
+    var flash = document.getElementById("flash");
+    function ok() { flash.classList.add("on"); setTimeout(function () { flash.classList.remove("on"); }, 2200); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(ok, function () { window.prompt("Copy this:", text); });
+    } else { window.prompt("Copy this:", text); }
+  });
+  document.getElementById("clearBtn").addEventListener("click", function () {
+    if (!window.confirm("Clear every answer and note on this page?")) return;
+    state = {};
+    persist();
+    radios().forEach(function (r) { r.checked = false; });
+    notes().forEach(function (t) { t.value = ""; });
+    paint();
+  });
+
+  restore(); paint();
+</script>

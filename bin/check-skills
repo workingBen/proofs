@@ -1,0 +1,130 @@
+#!/usr/bin/env python3
+"""Check every skills/<name>/SKILL.md against the repo rules.
+
+Usage: check-skills [skills_dir]   (default: skills/ at the repo root)
+Exit 1 on any problem.
+"""
+import re
+import sys
+from pathlib import Path
+
+SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
+SCRIPT = re.compile(r"[\w./${}-]*scripts/(?:[\w.-]+/)*[\w.-]+\.(?:py|cjs|js|sh)")
+INTERPRETER = re.compile(r"(?:python3|node)(?: -[\w-]+)* [\"']?$")
+NAME = r"(?:([a-z][a-z0-9-]*):)?([a-z][a-z0-9-]*)"
+REFS = [re.compile(r"`" + NAME + r"`\s+[Ss]kill\b"),
+        re.compile(r"\b[Ss]kill\s+`" + NAME + r"`"),
+        re.compile(r"(?<![\w/.:<-])/" + NAME + r"(?![\w/.:-])")]
+BUILTIN = {"help", "clear", "compact", "init", "review", "model", "config", "loop", "schedule",
+           "simplify", "login", "logout", "status", "memory", "agents", "hooks", "mcp", "plugin", "plugins"}
+PAGE_SKILLS = {"design-review", "visual-qa", "pr-qa", "working-log", "article-copy-edit",
+               "style-guide", "photo-picker", "todos", "review-cycle"}
+PAGE_VALUES = ("artifact", "file", "wifi")
+
+
+def frontmatter(text):
+    m = re.match(r"---\n(.*?)\n---\n", text, re.S)
+    if not m:
+        return None, text
+    fm = {}
+    for line in m.group(1).splitlines():
+        k, sep, v = line.partition(":")
+        if sep:
+            fm[k.strip()] = v.strip().strip("\"'")
+    return fm, text[m.end():]
+
+
+def page_section(body):
+    """Text under '## Where the page goes' (headings inside code fences ignored), or None."""
+    out, in_fence, active = [], False, False
+    for line in body.splitlines():
+        if line.lstrip().startswith(("```", "~~~")):
+            in_fence = not in_fence
+        elif not in_fence and line.startswith("## "):
+            if active:
+                break
+            active = line.strip() == "## Where the page goes"
+            continue
+        if active:
+            out.append(line)
+    return "\n".join(out).strip() if (active or out) else None
+
+
+def check(path, names):
+    errs = []
+    fm, body = frontmatter(path.read_text())
+    folder = path.parent.name
+    if fm is None:
+        return ["missing frontmatter"]
+    if fm.get("name") != folder:
+        errs.append("name %r does not match folder %r" % (fm.get("name"), folder))
+    if not fm.get("description", "").startswith("Use when"):
+        errs.append("description must start with 'Use when'")
+    version = fm.get("version", "")
+    if not SEMVER.match(version):
+        errs.append("version %r is not semver" % version)
+    m = re.search(r"^## Changelog\s*\n(.*)", body, re.S | re.M)
+    if not m:
+        errs.append("missing '## Changelog' section")
+    else:
+        entry = next((l for l in m.group(1).splitlines() if l.strip()), "")
+        if SEMVER.match(version) and not re.search(r"(?<![\w.])" + re.escape(version) + r"(?![\w.])", entry):
+            errs.append("changelog first entry must be version %s" % version)
+    if folder in PAGE_SKILLS:
+        sec = page_section(body)
+        if sec is None:
+            errs.append("missing '## Where the page goes' section")
+        else:
+            for v in PAGE_VALUES:
+                if not re.search(r"\b" + v + r"\b", sec):
+                    errs.append("'Where the page goes' does not mention %s" % v)
+    in_fence = False
+    for n, line in enumerate(body.splitlines(), 1):
+        fence = line.lstrip().startswith(("```", "~~~"))
+        if fence:
+            in_fence = not in_fence
+        for sm in SCRIPT.finditer(line):
+            if not INTERPRETER.search(line[:sm.start()]):
+                errs.append("line %d: script %s must run through python3 or node" % (n, sm.group(0)))
+        if in_fence or fence:
+            continue
+        for rx in REFS:
+            for rm in rx.finditer(line):
+                ns, name = rm.group(1), rm.group(2)
+                if ns not in (None, "proofs") or (ns is None and rx is REFS[2] and name in BUILTIN):
+                    continue
+                if name not in names:
+                    errs.append("line %d: references skill %r which does not exist" % (n, name))
+    return errs
+
+
+def main():
+    root = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).resolve().parent.parent / "skills"
+    files = sorted(root.glob("*/SKILL.md")) if root.is_dir() else []
+    if not files:
+        print("check-skills: no skills found in %s" % root, file=sys.stderr)
+        return 1
+    names = {f.parent.name for f in files}
+    bad = 0
+    sections = {}
+    for f in files:
+        if f.parent.name in PAGE_SKILLS:
+            sec = page_section(frontmatter(f.read_text())[1])
+            if sec is not None:
+                sections[f.parent.name] = sec
+    if len(set(sections.values())) > 1:
+        texts = list(sections.values())
+        common = max(sorted(set(texts)), key=texts.count)
+        for name in sorted(sections):
+            if sections[name] != common:
+                print("%s: 'Where the page goes' differs from the other page skills" % name)
+                bad += 1
+    for f in files:
+        for e in check(f, names):
+            print("%s: %s" % (f.parent.name, e))
+            bad += 1
+    return 1 if bad else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

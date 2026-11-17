@@ -1,0 +1,184 @@
+{
+ "skill": "todos",
+ "tagline": "Tick off your to-do list on a page, and trust what's left",
+ "use_when": "You want to work through your project's to-do list by ticking items on a page, with finished work archived and anything claimed done actually checked first.",
+ "try_it": "Use the todos skill to publish my open to-do items as a page I can tick off.",
+ "sections": [
+  {
+   "title": "What you see",
+   "features": [
+    {
+     "id": "f1",
+     "label": "Your List, Tickable",
+     "sub": "Open items from TODO.md become a page you tick off",
+     "title": "Open items from TODO.md become a page you tick off",
+     "what": "Your to-do file's open items are turned into a published page with a tick box and a note field for each. You work the list by clicking, not by editing a file.",
+     "html": "<div class=\"col\"><div class=\"itm\"><span>1. Renew the payment key</span><span class=\"st mute\">&nbsp;&nbsp;&nbsp;</span></div><div class=\"itm\"><span>2. Choose a tax setting</span><span class=\"st ok\"><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg></span></div><div class=\"itm\"><span>3. Add search to the blog</span><span class=\"st mute\">&nbsp;&nbsp;&nbsp;</span></div></div>"
+    },
+    {
+     "id": "f2",
+     "label": "Five Clear Groups",
+     "sub": "Items sit under Yours, Decide, Build, Backlog and Ongoing",
+     "title": "Items sit under Yours, Decide, Build, Backlog and Ongoing",
+     "what": "Every item belongs to one of five groups: things only you can do, decisions you owe, work Claude can build, later work, and long-running items. The group decides how a tick is handled afterward.",
+     "html": "<div class=\"col\"><div class=\"row\"><b class=\"hd\">Yours</b><span class=\"tag\">2</span></div><div class=\"row\"><b class=\"hd\">Decide</b><span class=\"tag\">1</span></div><div class=\"row\"><b class=\"hd\">Build</b><span class=\"tag\">4</span></div><div class=\"row\"><b class=\"hd\">Backlog</b><span class=\"tag\">6</span></div><div class=\"row\"><b class=\"hd\">Ongoing</b><span class=\"tag\">1</span></div></div>"
+    },
+    {
+     "id": "f3",
+     "label": "A Count You Can Trust",
+     "sub": "Lines the page couldn't read are counted, not hidden",
+     "title": "Lines the page couldn't read are counted, not hidden",
+     "what": "The status bar reads like \"18 open · 3 unparsed\" when some lines in the file couldn't be read, and each one is named with its line number and the reason. A confident number never quietly drops real work.",
+     "html": "<div class=\"col\"><div class=\"itm\"><span>18 open · 3 unparsed</span></div><div class=\"why\"><b>Line 42:</b> finished item still in the list</div><div class=\"why\"><b>Line 57:</b> item outside any group</div></div>"
+    },
+    {
+     "id": "f4",
+     "label": "Copy From Anywhere",
+     "sub": "The copy button stays on screen as you scroll",
+     "title": "The copy button stays on screen as you scroll",
+     "what": "Copy my replies sits in the pinned status bar as well as at the bottom, so on a phone you never scroll the whole list to find it.",
+     "html": "<div class=\"bottom\"><span>3 of 14 ticked</span><span class=\"mb on sm acc\">Copy my replies</span></div>"
+    }
+   ]
+  },
+  {
+   "title": "How you mark it",
+   "features": [
+    {
+     "id": "f5",
+     "label": "Done, But…",
+     "sub": "Add a note to any item as you tick it",
+     "title": "Add a note to any item as you tick it",
+     "what": "Each item has an optional note, so an item can come back as \"done, but the old key still works until Friday\" rather than just a tick.",
+     "html": "<div class=\"col\"><div class=\"itm\"><span>1. Renew the payment key</span><span class=\"st ok\"><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg></span></div><div class=\"cbox\">done, old key works until Friday<span class=\"caret\"></span></div></div>"
+    },
+    {
+     "id": "f6",
+     "label": "Ticks Stay With Their Item",
+     "sub": "Ticks and notes follow the item, not its position",
+     "title": "Ticks and notes follow the item, not its position",
+     "what": "Ticks and notes are saved against each item's title, not its number. When the list is renumbered, nothing slides onto the wrong item. Rewording an item clears its tick, since it is usually a new item.",
+     "html": "<div class=\"col\"><div class=\"row flow\"><span class=\"st ok\">Renew the payment key</span><span class=\"arr\">was #3, now #1</span></div><div class=\"row flow\"><span class=\"st ok\">note kept</span><span class=\"arr\">same item</span></div></div>"
+    },
+    {
+     "id": "f7",
+     "label": "Same Link, Ticks Kept",
+     "sub": "The page updates at the link you already have",
+     "title": "The page updates at the link you already have",
+     "what": "The page is always republished to the same link, so your saved ticks and notes and your open tab stay put.",
+     "html": "<div class=\"row\"><span class=\"tag\">Monday</span><span class=\"note2\">→</span><span class=\"tag acc\">Friday</span><span class=\"link\">same link</span></div>"
+    }
+   ]
+  },
+  {
+   "title": "After you paste back",
+   "features": [
+    {
+     "id": "f8",
+     "label": "Your Word Is Final on Your Items",
+     "sub": "Ticks on things only you can do are archived as-is",
+     "title": "Ticks on things only you can do are archived as-is",
+     "what": "A tick on a Yours or Decide item, like revoking a key or answering a question, can't be checked from the code, so it goes straight to the archive with your note.",
+     "html": "<div class=\"col\"><div class=\"row flow\"><span class=\"st ok\">Yours · Renew key</span><span class=\"arr\">→ archived</span></div><div class=\"row flow\"><span class=\"st ok\">Decide · Tax setting</span><span class=\"arr\">→ archived</span></div></div>"
+    },
+    {
+     "id": "f9",
+     "label": "Code Claims Get Checked",
+     "sub": "Ticked build work is verified before it's archived",
+     "title": "Ticked build work is verified before it's archived",
+     "what": "A tick on Build, Backlog or Ongoing work starts a check against the actual code and history, like a matching commit, a file, a passing test or a merged change. Only what holds up gets archived, with the evidence.",
+     "html": "<div class=\"two mid\"><div class=\"opt\"><div class=\"row\"><span class=\"tag\">Build</span><span class=\"st ok\"><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg></span></div><b class=\"hd\">Add search to the blog</b></div><div class=\"col chk\"><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> commit found</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> test passes</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> change merged</span></div></div>"
+    },
+    {
+     "id": "f10",
+     "label": "Unproven Stays Open",
+     "sub": "If the work isn't there, the item stays open with a note",
+     "title": "If the work isn't there, the item stays open with a note",
+     "what": "If the work isn't really there, the item stays on the list exactly where it was, with a dated note saying what was found. Nothing is archived on a tick alone.",
+     "html": "<div class=\"col\"><div class=\"itm\"><span>3. Add search to the blog</span><span class=\"pill mid\">Still open</span></div><div class=\"why\">Checked Nov 2: not on main, branch still open.</div></div>"
+    },
+    {
+     "id": "f11",
+     "label": "No Guessing on Matches",
+     "sub": "If a reply could mean two items, you're asked which",
+     "title": "If a reply could mean two items, you're asked which",
+     "what": "Ticks are matched back to items by title. When a title could match more than one item, both are named and you choose, because archiving the wrong item can't be undone.",
+     "html": "<div class=\"col\"><div class=\"why\">\"Update the key\" matches two items:</div><div class=\"row\"><span class=\"mb\">1. Payment key</span><span class=\"mb\">5. Map key</span></div></div>"
+    },
+    {
+     "id": "f12",
+     "label": "Archived, Not Deleted",
+     "sub": "Finished items move to a monthly archive with the evidence",
+     "title": "Finished items move to a monthly archive with the evidence",
+     "what": "Done items leave the live list for a monthly archive file, word for word, with the date, your note and what proved them done. The reasoning behind past work stays searchable.",
+     "html": "<div class=\"col\"><span class=\"tag\">archive · this month</span><pre class=\"ex\">Renew the payment key\n  archived: Nov 2\n  note: old key works until Friday\n  evidence: ticked by you</pre></div>"
+    },
+    {
+     "id": "f13",
+     "label": "Findings Aren't Tasks",
+     "sub": "Notes and rules go to the docs, not the to-do list",
+     "title": "Notes and rules go to the docs, not the to-do list",
+     "what": "A root cause, a workaround or a standing rule is moved to the document that owns it instead of sitting in the list as fake work. What stays is real, open work.",
+     "html": "<div class=\"col\"><div class=\"row flow\"><span class=\"st mute\">Workaround for slow builds</span><span class=\"arr\">→ project notes</span></div><div class=\"row flow\"><span class=\"st ok\">Add search to the blog</span><span class=\"arr\">stays a task</span></div></div>"
+    },
+    {
+     "id": "f14",
+     "label": "Safe to Paste Twice",
+     "sub": "Pasting the same reply again changes nothing",
+     "title": "Pasting the same reply again changes nothing",
+     "what": "Anything a reply names is already gone from the list after the first paste, so pasting it a second time is harmless.",
+     "html": "<div class=\"col\"><div class=\"row flow\"><span class=\"st ok\">1st paste</span><span class=\"arr\">3 archived</span></div><div class=\"row flow\"><span class=\"st mute\">2nd paste</span><span class=\"arr\">nothing to do</span></div></div>"
+    }
+   ]
+  },
+  {
+   "title": "Getting started",
+   "features": [
+    {
+     "id": "f15",
+     "label": "Tame an Overgrown List",
+     "sub": "Turns a to-do file full of old history into a clean list",
+     "title": "Turns a to-do file full of old history into a clean list",
+     "what": "For a to-do file that has grown into a log of finished work, a one-time adopt step first reports how many items are done versus open before anything changes.",
+     "html": "<div class=\"col\"><div class=\"row\"><b class=\"hd\">Done</b><span class=\"tag\">214</span></div><div class=\"row\"><b class=\"hd\">Open</b><span class=\"tag\">19</span></div><div class=\"note2\">Reported before anything moves</div></div>"
+    },
+    {
+     "id": "f16",
+     "label": "Open Items Checked First",
+     "sub": "Every supposedly open item is checked against the code",
+     "title": "Every supposedly open item is checked against the code",
+     "what": "Before the list is rebuilt, each open item is checked to see whether it was quietly finished already. Items that turn out to be done go to the archive instead of staying on the list.",
+     "html": "<div class=\"col\"><div class=\"itm\"><span>19 open on paper</span></div><div class=\"row flow\"><span class=\"st ok\">7 already built</span><span class=\"arr\">→ archive</span></div><div class=\"row flow\"><span class=\"st mid\">12 really open</span><span class=\"arr\">→ list</span></div></div>"
+    },
+    {
+     "id": "f17",
+     "label": "History Moved Exactly",
+     "sub": "Old entries move to monthly files, proven identical",
+     "title": "Old entries move to monthly files, proven identical",
+     "what": "Past entries are split into monthly archive files by their own dates, and every section is compared byte for byte before anything is written. If one doesn't match, nothing is written at all.",
+     "html": "<div class=\"two mid\"><div class=\"col\"><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:80%;height:7px\"></i><i class=\"mk\" style=\"width:90%;height:7px\"></i></div><div class=\"col chk\"><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> Oct matches</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> Sep matches</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> Aug matches</span></div></div>"
+    },
+    {
+     "id": "f18",
+     "label": "Every Move Explained",
+     "sub": "You get a report of where each item went and why",
+     "title": "You get a report of where each item went and why",
+     "what": "The adopt step ends with a report of what was already built, what was really a note and moved to the docs, and which group each remaining item landed in.",
+     "html": "<div class=\"col\"><div class=\"row flow\"><span class=\"st ok\">7 items</span><span class=\"arr\">already built</span></div><div class=\"row flow\"><span class=\"st mute\">3 items</span><span class=\"arr\">moved to docs</span></div><div class=\"row flow\"><span class=\"st mid\">12 items</span><span class=\"arr\">sorted into groups</span></div></div>"
+    },
+    {
+     "id": "wp",
+     "label": "Where the Page Goes",
+     "sub": "A private link, a local file, or your Wi-Fi",
+     "title": "A private link, a local file, or your Wi-Fi",
+     "what": "Your project picks where review pages go: a private claude.ai link, an HTML file that opens in your browser, or that file served on your home Wi-Fi so a phone can open it. Nothing is ever uploaded or tunneled in the Wi-Fi mode, and the server stops when the review ends.",
+     "html": "<div class=\"col\"><div class=\"opt\"><span class=\"tag\">artifact</span><div class=\"row\" style=\"align-items:stretch\"><div class=\"phone\" style=\"max-width:112px;flex:none\"><i class=\"mk d\" style=\"width:100%;height:16px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i><span class=\"link\" style=\"font-size:9px;padding:2px 6px\">private link</span></div><div class=\"desk\" style=\"flex:1;min-width:0;display:grid;gap:5px;align-content:start\"><i class=\"mk d\" style=\"width:100%;height:24px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i><span class=\"link\" style=\"font-size:9px;padding:2px 6px\">private link</span></div></div></div><div class=\"opt\"><span class=\"tag\">file</span><div class=\"win\" style=\"max-width:240px\"><div class=\"wb\"><i></i><i></i><i></i><span>file</span></div><div class=\"wbody\"><i class=\"mk d\" style=\"width:100%;height:18px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i></div></div></div><div class=\"opt\"><span class=\"tag\">wifi</span><div class=\"row\"><div class=\"phone\" style=\"max-width:84px;flex:none\"><i class=\"mk d\" style=\"width:100%;height:16px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i></div><div class=\"col\" style=\"flex:1;min-width:0;justify-items:center;gap:3px\"><span class=\"note2\">same Wi-Fi</span><span style=\"display:block;width:100%;border-top:2px dashed var(--accent)\"></span></div><div class=\"desk\" style=\"flex:none;width:96px;display:grid;gap:5px;align-content:start\"><i class=\"mk d\" style=\"width:100%;height:18px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i></div></div></div></div>"
+    }
+   ]
+  }
+ ],
+ "promises": [
+  "Nothing is archived on a tick alone",
+  "Finished work is moved, never deleted"
+ ]
+}

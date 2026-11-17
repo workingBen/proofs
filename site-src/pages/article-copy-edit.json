@@ -1,0 +1,221 @@
+{
+ "skill": "article-copy-edit",
+ "tagline": "Review copy edits word by word, with a claims check first",
+ "use_when": "You have copy-edit feedback for an article or page and want to approve each change yourself, with risky claims flagged, before anything touches the file.",
+ "try_it": "Use the article-copy-edit skill to review these suggested edits to my pricing page before you apply any of them.",
+ "sections": [
+  {
+   "title": "Claims check first",
+   "features": [
+    {
+     "id": "f1",
+     "label": "Risky Claims, Checked First",
+     "sub": "A claims check is always the first section",
+     "title": "A claims check is always the first section",
+     "what": "Before your own feedback is touched, the whole page is read for claims that could get you in trouble, and the findings appear first. It runs every time, even when your feedback says nothing about claims.",
+     "html": "<div class=\"pg\"><div class=\"band\"><span class=\"num\">1</span><b class=\"hd\">Claims check</b></div><div class=\"band\"><span class=\"num\">2</span><i class=\"mk\" style=\"width:70%;height:7px\"></i></div><div class=\"band\"><span class=\"num\">3</span><i class=\"mk\" style=\"width:60%;height:7px\"></i></div></div>"
+    },
+    {
+     "id": "f2",
+     "label": "What's Risky in Your Field?",
+     "sub": "Claude asks which claims are risky in your line of work",
+     "title": "Claude asks which claims are risky in your line of work",
+     "what": "Risky claims depend on the business: health and wellness sites, product-safety claims, financial results and so on each have their own. Claude looks in your project notes, asks once if they don't say, and keeps the answer in the notes so it does not ask again. It checks for those claims on top of the general list.",
+     "html": "<div class=\"col\"><div class=\"bub\">What claims are risky in your field?</div><div class=\"cbox\">supplements: no cure or treatment claims<span class=\"caret\"></span></div></div>"
+    },
+    {
+     "id": "f3",
+     "label": "The Usual Suspects",
+     "sub": "Guarantees, cure claims, results without a caveat, risky headlines",
+     "title": "Guarantees, cure claims, results without a caveat, risky headlines",
+     "what": "The check always looks for guarantee language, claims to diagnose or cure, results or testimonials with no \"results vary\" note, and headlines that read as a claim on their own, since titles end up in tabs, search results and link previews.",
+     "html": "<div class=\"col\"><div class=\"row\"><span class=\"hd\"><s>guaranteed</s> results</span><span class=\"rec no\">Risky</span></div><div class=\"row\"><span class=\"hd\">Cures <s>back pain</s></span><span class=\"rec no\">Risky</span></div><div class=\"row\"><span class=\"hd\">Results vary by person</span><span class=\"rec yes\">Safe</span></div></div>"
+    },
+    {
+     "id": "f4",
+     "label": "Missing Affiliate Disclosures",
+     "sub": "Pages with affiliate links but no disclosure get flagged",
+     "title": "Pages with affiliate links but no disclosure get flagged",
+     "what": "If a page recommends products through affiliate links without the disclosure the FTC requires, it is flagged, even when fixing it is outside this review.",
+     "html": "<div class=\"col\"><div class=\"row\"><b class=\"hd\">Product picks</b><span class=\"rec no\">No disclosure</span></div><div class=\"why\">Affiliate links found, but no \"we may earn a commission\" note.</div></div>"
+    },
+    {
+     "id": "f5",
+     "label": "A Clean Check Still Shows",
+     "sub": "No findings is shown as a passed check, not a missing section",
+     "title": "No findings is shown as a passed check, not a missing section",
+     "what": "When nothing is found, the section still appears and says no concerns were found in this pass. You can see the check happened rather than wondering whether it was skipped.",
+     "html": "<div class=\"col\"><div class=\"row\"><b class=\"hd\">1 · Claims check</b><span class=\"pill ok\">Passed</span></div><div class=\"why\">No claims concerns found in this pass.</div></div>"
+    }
+   ]
+  },
+  {
+   "title": "What you see",
+   "features": [
+    {
+     "id": "f6",
+     "label": "The Exact Words",
+     "sub": "Before and after show the real text, never a summary",
+     "title": "Before and after show the real text, never a summary",
+     "what": "The Original and Edit panes always hold the exact sentence a reader would see, written out in full even when the feedback only described the change. You decide on real copy.",
+     "html": "<div class=\"two\"><div class=\"opt\"><span class=\"tag\">Original</span><span class=\"hd\">Our plans start at $9 a month.</span></div><div class=\"opt\"><span class=\"tag acc\">Edit</span><span class=\"hd\">Plans start at $9 a month.</span></div></div>"
+    },
+    {
+     "id": "f7",
+     "label": "See Exactly What Changed",
+     "sub": "Changed words are highlighted inside the sentence",
+     "title": "Changed words are highlighted inside the sentence",
+     "what": "Inside each pair, only the words that changed are marked, so a one-word fix in a long paragraph is easy to spot.",
+     "html": "<div class=\"opt\"><span class=\"hd\">Try it <s>for free</s> <b class=\"acc\">free for 14 days</b>, no card needed.</span></div>"
+    },
+    {
+     "id": "f8",
+     "label": "Looks Like Your Page",
+     "sub": "Uses your page's own type and before/after colors",
+     "title": "Uses your page's own type and before/after colors",
+     "what": "The review page borrows the real page's fonts and colors, including any before/after colors your site already uses, and works in light and dark mode. The edits read the way they will on the site.",
+     "html": "<div class=\"two mid\"><div class=\"opt\"><span class=\"tag\">Your page</span><i class=\"mk d\" style=\"width:100%;height:14px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i></div><div class=\"opt brand\"><span class=\"tag acc\">Review</span><i class=\"mk d\" style=\"width:100%;height:14px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i></div></div>"
+    },
+    {
+     "id": "f9",
+     "label": "Three Sections, Fixed Order",
+     "sub": "Claims check, then copy edits, then additions",
+     "title": "Claims check, then copy edits, then additions",
+     "what": "Items are grouped as Claims check, Copy Edits, and Additions and Recommendations, always in that order, each item numbered.",
+     "html": "<div class=\"col\"><div class=\"row\"><span class=\"num\">1</span><b class=\"hd\">Claims check</b></div><div class=\"row\"><span class=\"num\">2</span><b class=\"hd\">Copy edits</b></div><div class=\"row\"><span class=\"num\">3</span><b class=\"hd\">Additions</b></div></div>"
+    },
+    {
+     "id": "f10",
+     "label": "New Sections Say Where",
+     "sub": "Proposed additions show what's there now and where they'd go",
+     "title": "Proposed additions show what's there now and where they'd go",
+     "what": "A suggested new section or call to action shows what's there today, usually nothing, next to the proposed text and where on the page it would go.",
+     "html": "<div class=\"col\"><span class=\"tag\">Where: after the pricing table</span><div class=\"two\"><div class=\"opt\"><span class=\"tag\">Original</span><span class=\"hd\"><i>nothing here today</i></span></div><div class=\"opt\"><span class=\"tag acc\">Edit</span><span class=\"hd\">Questions? Book a 15-minute call.</span></div></div></div>"
+    },
+    {
+     "id": "f11",
+     "label": "Rivals Say So",
+     "sub": "Competing options each note that picking one replaces the other",
+     "title": "Competing options each note that picking one replaces the other",
+     "what": "When two suggestions compete, like two different titles, each appears as its own item and says that accepting it rules out the other.",
+     "html": "<div class=\"col\"><div class=\"opt\"><b class=\"hd\">Title A</b><div class=\"note2\">Replaces Title B if accepted</div></div><div class=\"opt\"><b class=\"hd\">Title B</b><div class=\"note2\">Replaces Title A if accepted</div></div></div>"
+    },
+    {
+     "id": "f12",
+     "label": "Behind-the-Scenes Text Too",
+     "sub": "Alt text and meta tags shown as code",
+     "title": "Alt text and meta tags shown as code",
+     "what": "Changes readers don't see directly, like image alt text or page descriptions, still get a card, shown as before and after code snippets.",
+     "html": "<div class=\"col\"><div class=\"code\"><span>alt=\"photo\"</span></div><div class=\"code\"><span>alt=\"Two mugs of tea on a table\"</span></div></div>"
+    },
+    {
+     "id": "f13",
+     "label": "An Honest Opinion",
+     "sub": "Every item has a reason and a recommendation",
+     "title": "Every item has a reason and a recommendation",
+     "what": "Each item says why the change is proposed and carries a Recommended or Not Recommended badge. Items Claude has doubts about are still shown, marked Not Recommended with the reason, so you can overrule it.",
+     "html": "<div class=\"col\"><div class=\"row\"><b class=\"hd\">4 · Shorter intro</b><span class=\"rec yes\">Recommended</span></div><div class=\"row\"><b class=\"hd\">5 · SEO title</b><span class=\"rec no\">Not recommended</span></div><div class=\"why\"><b>Reason:</b> the new title reads as a promise of results.</div></div>"
+    }
+   ]
+  },
+  {
+   "title": "How you decide",
+   "features": [
+    {
+     "id": "f14",
+     "label": "Four Clear Choices",
+     "sub": "Keep, use, approve with a comment, or ask for another try",
+     "title": "Keep, use, approve with a comment, or ask for another try",
+     "what": "Each item has Keep Original, Use Edit, Approve with Comment and Request Revision. Every item starts undecided, and only one choice can be active.",
+     "html": "<div class=\"row wrap\"><span class=\"mb\">Keep Original</span><span class=\"mb on\">Use Edit</span><span class=\"mb\">Approve with Comment</span><span class=\"mb\">Request Revision</span></div>"
+    },
+    {
+     "id": "f15",
+     "label": "Say It in Words",
+     "sub": "A comment box opens when your words matter",
+     "title": "A comment box opens when your words matter",
+     "what": "Approve with Comment and Request Revision open a comment box straight away, since the comment is the point. Keep Original and Use Edit allow an optional note.",
+     "html": "<div class=\"col\"><div class=\"row\"><span class=\"mb on\">Approve with Comment</span></div><div class=\"cbox\">yes, but say \"two weeks\"<span class=\"caret\"></span></div></div>"
+    },
+    {
+     "id": "f16",
+     "label": "Always Know Where You Are",
+     "sub": "A progress bar stays in view as you go",
+     "title": "A progress bar stays in view as you go",
+     "what": "A pinned bar shows how many items you've reviewed, a count for each decision, and the Copy My Decisions button.",
+     "html": "<div class=\"bottom\"><span>9 of 14 reviewed</span><span class=\"tally\"><b class=\"ok\">6</b><b class=\"mid\">2</b><b class=\"mute\">1</b></span><span class=\"mb on sm\">Copy</span></div>"
+    }
+   ]
+  },
+  {
+   "title": "After you decide",
+   "features": [
+    {
+     "id": "f17",
+     "label": "One Labeled Paste Back",
+     "sub": "Copy My Decisions sends every choice, headed with the page name",
+     "title": "Copy My Decisions sends every choice, headed with the page name",
+     "what": "One button copies a numbered summary of your decisions and comments. Its first line names the page under review, so it can't be mixed up with another review in progress.",
+     "html": "<div class=\"col\"><div class=\"row\"><span class=\"mb on acc\">Copy My Decisions</span></div><pre class=\"ex\">[Pricing page · Copy-edit review]\n3. Intro: ACCEPT\n5. SEO title: DENY (Keep Original)</pre></div>"
+    },
+    {
+     "id": "f18",
+     "label": "Only What You Approved",
+     "sub": "Accepted edits are applied, with your comments worked in",
+     "title": "Accepted edits are applied, with your comments worked in",
+     "what": "Accepted edits go into the file as shown. Approved-with-comment edits are rewritten to follow your comment first. Kept, revise and undecided items leave the file untouched.",
+     "html": "<div class=\"col\"><div class=\"row flow\"><span class=\"st ok\">Accept</span><span class=\"arr\">→ applied</span></div><div class=\"row flow\"><span class=\"st ok\">With comment</span><span class=\"arr\">→ adjusted, applied</span></div><div class=\"row flow\"><span class=\"st mid\">Revise</span><span class=\"arr\">untouched</span></div><div class=\"row flow\"><span class=\"st mute\">Keep</span><span class=\"arr\">untouched</span></div></div>"
+    },
+    {
+     "id": "f19",
+     "label": "Tested Before You See It",
+     "sub": "Every button is clicked before the page reaches you",
+     "title": "Every button is clicked before the page reaches you",
+     "what": "Before each publish, the page's script is syntax-checked and the page is loaded and clicked through automatically. You don't get a page that looks fine but shows no items.",
+     "html": "<div class=\"two mid\"><div class=\"opt\"><i class=\"mk d\" style=\"width:100%;height:14px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><div class=\"row\"><span class=\"mb\">Use</span><span class=\"mb\">Keep</span></div></div><div class=\"col chk\"><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> script runs</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> all items show</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> buttons work</span></div></div>"
+    }
+   ]
+  },
+  {
+   "title": "Rounds",
+   "features": [
+    {
+     "id": "f20",
+     "label": "Just the Revisions",
+     "sub": "The next round brings back only what's still open",
+     "title": "The next round brings back only what's still open",
+     "what": "Items you sent back come back in a new round at the same link, with new proposals. Anything already decided stays settled and isn't shown again.",
+     "html": "<div class=\"two mid\"><div class=\"col\"><span class=\"tag\">Round 1 · 14 items</span><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i></div><div class=\"col\"><span class=\"tag acc\">Round 2 · 3 items</span><i class=\"mk d\" style=\"width:100%;height:7px\"></i><span class=\"link\">same link</span></div></div>"
+    },
+    {
+     "id": "f21",
+     "label": "Nothing Undecided Gets Lost",
+     "sub": "Items you never got to are carried into the next round",
+     "title": "Items you never got to are carried into the next round",
+     "what": "An item you didn't decide on isn't dropped when the next round is built around your revisions. Every item without a final decision comes forward, so you always have a way to decide it.",
+     "html": "<div class=\"col\"><div class=\"row\"><span class=\"st mid\">Revise</span><b class=\"hd\">Item 4</b></div><div class=\"row\"><span class=\"st mute\">Pending</span><b class=\"hd\">Item 9</b></div><div class=\"note2\">Both carried into Round 2</div></div>"
+    },
+    {
+     "id": "f22",
+     "label": "Your Comment, Right There",
+     "sub": "Each revised item shows last round's version and what you said",
+     "title": "Each revised item shows last round's version and what you said",
+     "what": "A revised item shows the earlier proposal, labeled with its round, and your revision comment, above the new proposal. You don't have to scroll back through chat to remember what you asked for.",
+     "html": "<div class=\"col\"><div class=\"opt old\"><span class=\"tag\">Round 1 · revision requested</span><i class=\"mk\" style=\"width:80%;height:7px\"></i></div><div class=\"bub\">too salesy, keep it plain</div><div class=\"opt\"><span class=\"tag acc\">Round 2 proposal</span><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i></div></div>"
+    },
+    {
+     "id": "wp",
+     "label": "Where the Page Goes",
+     "sub": "A private link, a local file, or your Wi-Fi",
+     "title": "A private link, a local file, or your Wi-Fi",
+     "what": "Your project picks where review pages go: a private claude.ai link, an HTML file that opens in your browser, or that file served on your home Wi-Fi so a phone can open it. Nothing is ever uploaded or tunneled in the Wi-Fi mode, and the server stops when the review ends.",
+     "html": "<div class=\"col\"><div class=\"opt\"><span class=\"tag\">artifact</span><div class=\"row\" style=\"align-items:stretch\"><div class=\"phone\" style=\"max-width:112px;flex:none\"><i class=\"mk d\" style=\"width:100%;height:16px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i><span class=\"link\" style=\"font-size:9px;padding:2px 6px\">private link</span></div><div class=\"desk\" style=\"flex:1;min-width:0;display:grid;gap:5px;align-content:start\"><i class=\"mk d\" style=\"width:100%;height:24px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i><span class=\"link\" style=\"font-size:9px;padding:2px 6px\">private link</span></div></div></div><div class=\"opt\"><span class=\"tag\">file</span><div class=\"win\" style=\"max-width:240px\"><div class=\"wb\"><i></i><i></i><i></i><span>file</span></div><div class=\"wbody\"><i class=\"mk d\" style=\"width:100%;height:18px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i></div></div></div><div class=\"opt\"><span class=\"tag\">wifi</span><div class=\"row\"><div class=\"phone\" style=\"max-width:84px;flex:none\"><i class=\"mk d\" style=\"width:100%;height:16px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i></div><div class=\"col\" style=\"flex:1;min-width:0;justify-items:center;gap:3px\"><span class=\"note2\">same Wi-Fi</span><span style=\"display:block;width:100%;border-top:2px dashed var(--accent)\"></span></div><div class=\"desk\" style=\"flex:none;width:96px;display:grid;gap:5px;align-content:start\"><i class=\"mk d\" style=\"width:100%;height:18px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i></div></div></div></div>"
+    }
+   ]
+  }
+ ],
+ "promises": [
+  "No edit lands until you approve it",
+  "Risky claims are checked every time"
+ ]
+}

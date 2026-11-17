@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>proofs</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#f4efe6; --card:#fffdf9; --fg:#1d1b17; --muted:#6b6458; --line:#ddd5c6; --soft:#ece5d8; --sk:#e2dacb; --skd:#c9bfad;
+  --accent:#c2410c; --accent-soft:#fde4d6; --ok:#1a7f37; --ok-soft:#dcf5e3; --bad:#b42318; --bad-soft:#fde8e6;
+  --mid:#8a5a00; --mid-soft:#fbefd2; --ink:#1d1b17; --paper:#f4efe6;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#15130f; --card:#1e1b16; --fg:#efe8dc; --muted:#a69d8e; --line:#3a352c; --soft:#2a261f; --sk:#38332a; --skd:#524a3d;
+  --accent:#ff8a4c; --accent-soft:#3a2216; --ok:#4ac26b; --ok-soft:#14281a; --bad:#ff6b5e; --bad-soft:#341815;
+  --mid:#e0b14a; --mid-soft:#2f2612; --ink:#efe8dc; --paper:#15130f; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#15130f; --card:#1e1b16; --fg:#efe8dc; --muted:#a69d8e; --line:#3a352c; --soft:#2a261f; --sk:#38332a; --skd:#524a3d;
+  --accent:#ff8a4c; --accent-soft:#3a2216; --ok:#4ac26b; --ok-soft:#14281a; --bad:#ff6b5e; --bad-soft:#341815;
+  --mid:#e0b14a; --mid-soft:#2f2612; --ink:#efe8dc; --paper:#15130f; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{scroll-behavior:smooth;scroll-padding-top:24px}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+.in{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+a{color:inherit}
+.top{border-bottom:1px solid var(--line)}
+.top .in{display:flex;align-items:center;gap:10px;padding-block:14px;font:600 13px "JetBrains Mono",monospace;color:var(--muted)}
+.top .logo{color:var(--fg);font:400 22px "Instrument Serif",Georgia,serif;text-decoration:none}
+.top .logo i{color:var(--accent)}
+.hero .in{padding-block:48px 36px;display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+.eyebrow{font:600 12px/1 "JetBrains Mono",monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.hero h1{font:400 clamp(40px,7vw,76px)/1 "Instrument Serif",Georgia,serif;margin:0;letter-spacing:-.01em}
+.hero .tagline{font:400 clamp(22px,3vw,30px)/1.25 "Instrument Serif",Georgia,serif;margin:0;max-width:30em;text-wrap:balance}
+.hero .use{color:var(--muted);max-width:44em;margin:0}
+.try{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;max-width:760px;margin-top:6px}
+.try .lbl{font:600 11px "JetBrains Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.trybox{display:flex;gap:10px;align-items:center;background:var(--ink);color:var(--paper);border-radius:10px;padding:12px 12px 12px 16px}
+.trybox code{flex:1;min-width:0;font:14px/1.5 "JetBrains Mono",monospace}
+.trybox button{flex:none;font:700 13px -apple-system,sans-serif;padding:10px 14px;min-height:40px;border-radius:7px;border:0;background:var(--accent);color:#fff;cursor:pointer}
+.stats{display:flex;flex-wrap:wrap;gap:8px 20px;font:600 13px "JetBrains Mono",monospace;color:var(--muted)}
+.stats b{color:var(--fg)}
+.layout{display:grid;grid-template-columns:250px minmax(0,1fr);gap:40px;padding-block:24px 96px}
+nav.toc{position:sticky;top:20px;align-self:start;max-height:calc(100vh - 40px);overflow:auto;font-size:14px}
+.toc h2{font:600 11px "JetBrains Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+.toc ol{list-style:none;margin:0;padding:0}
+.toc > ol > li{margin-bottom:12px}
+.toc > ol > li > a{font-weight:700;text-decoration:none}
+.toc ol ol{margin-top:4px;border-left:2px solid var(--line);padding-left:10px;counter-reset:none}
+.toc ol ol a{display:block;padding:3px 0;color:var(--muted);text-decoration:none;line-height:1.35}
+.toc a:hover,.toc a.on{color:var(--accent)}
+.toc ol ol a.on{font-weight:600}
+.sec{display:grid;gap:18px;margin-bottom:48px}
+.sec h2{display:flex;gap:12px;align-items:baseline;font:400 40px/1.1 "Instrument Serif",Georgia,serif;margin:0 0 4px;border-bottom:1px solid var(--line);padding-bottom:12px}
+.sec h2 span{font:600 13px "JetBrains Mono",monospace;color:var(--accent)}
+.feat{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:28px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 24px}
+.fx{display:grid;gap:6px;min-width:0}
+.fn{font:600 12px "JetBrains Mono",monospace;color:var(--accent)}
+.fx h3{margin:0;font:400 34px/1.05 "Instrument Serif",Georgia,serif;text-wrap:balance}
+.fx .sub{margin:0 0 4px;font-size:18px;font-weight:650;line-height:1.35;text-wrap:balance}
+.fx p{margin:0;color:var(--muted)}
+.fx p.sub{color:var(--fg)}
+.fig{min-width:0;background:var(--soft);border-radius:12px;padding:16px;font-size:12px}
+/* drawing kit */
+.mk{display:block;background:var(--sk);border-radius:4px}
+.mk.d{background:var(--skd)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.two.mid{align-items:center}
+.three{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.four{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.col{display:grid;gap:7px;align-content:start}
+.row{display:flex;gap:6px;align-items:center}
+.row.wrap{flex-wrap:wrap}
+.opt{position:relative;background:var(--card);border:1.5px solid var(--line);border-radius:9px;padding:9px;display:grid;gap:5px;align-content:start}
+.opt.sm{padding:6px}
+.opt.sel{border:2px solid var(--accent)}
+.opt.old{opacity:.5;border-style:dashed}
+.opt.brand{border-color:var(--accent)}
+.ck{position:absolute;top:6px;right:6px;width:18px;height:18px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center}
+.tag{font:600 10px "JetBrains Mono",monospace;letter-spacing:.06em;color:var(--muted);text-transform:uppercase}
+.tag.acc,.acc{color:var(--accent)}
+.mb{font:600 11.5px -apple-system,sans-serif;padding:7px 9px;border-radius:7px;border:1px solid var(--line);background:var(--card);white-space:nowrap}
+.mb.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.mb.on.acc{background:var(--accent);border-color:var(--accent);color:#fff}
+.mb.sm{padding:5px 8px}
+.win{position:relative;background:var(--card);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.wb{display:flex;gap:4px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--line);font:600 10px "JetBrains Mono",monospace;color:var(--muted)}
+.wb i{width:7px;height:7px;border-radius:50%;background:var(--line)}
+.wb span{margin-left:6px}
+.wbody{padding:10px;display:grid;gap:7px}
+.cam{position:absolute;right:8px;bottom:8px;display:flex;gap:4px;align-items:center;font:600 10px "JetBrains Mono",monospace;background:var(--ink);color:var(--paper);padding:4px 7px;border-radius:999px}
+.sw{display:flex;gap:5px}
+.sw b{width:22px;height:22px;border-radius:5px;border:1px solid var(--line)}
+.aa{font:400 30px/1 "Instrument Serif",Georgia,serif}
+.aa small{font:600 10px "JetBrains Mono",monospace;color:var(--muted);margin-left:6px}
+.hl{font:600 12px -apple-system,sans-serif;display:flex;gap:4px;align-items:center}
+.hl.strike{text-decoration:line-through;color:var(--muted)}
+.hl.ok{color:var(--ok)}
+.pg{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:8px;display:grid;gap:6px;max-width:300px;margin:0 auto;width:100%}
+.band{display:flex;gap:8px;align-items:center;border:1px dashed var(--line);border-radius:6px;padding:8px}
+.num{flex:none;width:20px;height:20px;border-radius:50%;background:var(--accent);color:#fff;font:700 11px/20px -apple-system,sans-serif;text-align:center}
+.rec{font:600 10.5px "JetBrains Mono",monospace;padding:3px 7px;border-radius:999px;margin-left:auto}
+.rec.yes{background:var(--ok-soft);color:var(--ok)} .rec.no{background:var(--bad-soft);color:var(--bad)}
+.hd{font:600 12.5px -apple-system,sans-serif}
+.why{font-size:12px;background:var(--card);border:1px solid var(--line);border-radius:7px;padding:7px 9px}
+.phone{background:var(--card);border:1.5px solid var(--skd);border-radius:14px;padding:9px 7px;display:grid;gap:5px;max-width:84px;width:100%;justify-self:center}
+.desk{background:var(--card);border:1.5px solid var(--skd);border-radius:7px;padding:9px}
+.openi{display:flex;gap:7px;align-items:center;font:600 12px -apple-system,sans-serif;background:var(--card);border:1.5px solid var(--accent);border-radius:7px;padding:8px 10px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.recap{font:600 11px "JetBrains Mono",monospace;color:var(--muted);border:1px solid var(--line);border-radius:7px;padding:7px 10px}
+.cbox{position:relative;background:var(--card);border:1.5px solid var(--accent);border-radius:7px;padding:9px 10px;font:12.5px -apple-system,sans-serif}
+.caret{display:inline-block;width:1.5px;height:13px;background:var(--accent);vertical-align:-2px;margin-left:2px}
+.pill{font:600 10.5px "JetBrains Mono",monospace;padding:3px 8px;border-radius:999px;margin-left:auto}
+.pill.ok{background:var(--ok-soft);color:var(--ok)} .pill.mid{background:var(--mid-soft);color:var(--mid)} .pill.mute{background:var(--soft);color:var(--muted);border:1px solid var(--line)} .pill.line{border:1px solid var(--line);color:var(--muted);background:var(--card)}
+.itm{display:flex;gap:8px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:7px;padding:8px 10px;font:600 12px -apple-system,sans-serif}
+.itm span:first-child{flex:1}
+.itm small{font:600 10px "JetBrains Mono",monospace;color:var(--muted)}
+.tg{width:28px;height:16px;border-radius:9px;background:var(--line);position:relative}
+.tg b{position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:var(--card)}
+.tg.on{background:var(--ok)} .tg.on b{left:14px}
+.note2{font:600 10.5px "JetBrains Mono",monospace;color:var(--muted)}
+.bottom{display:flex;gap:10px;align-items:center;justify-content:space-between;background:var(--ink);color:var(--paper);border-radius:9px;padding:10px 12px;font:600 12px "JetBrains Mono",monospace}
+.tally{display:flex;gap:5px}
+.tally b{min-width:20px;text-align:center;border-radius:5px;padding:2px 5px;font-size:11px}
+.tally .ok{background:var(--ok);color:#fff}.tally .mid{background:var(--mid);color:#fff}.tally .mute{background:var(--muted);color:#fff}
+.ex{margin:0;font:11.5px/1.55 "JetBrains Mono",monospace;background:var(--card);border:1px solid var(--line);border-radius:7px;padding:10px;white-space:pre-wrap;word-break:break-word}
+.flow{background:var(--card);border:1px solid var(--line);border-radius:7px;padding:6px 8px}
+.st{font:600 11px -apple-system,sans-serif;padding:3px 8px;border-radius:999px}
+.st.ok{background:var(--ok-soft);color:var(--ok)}.st.mid{background:var(--mid-soft);color:var(--mid)}.st.mute{background:var(--soft);color:var(--muted)}
+.arr{margin-left:auto;font:600 11px "JetBrains Mono",monospace;color:var(--muted)}
+.ph{font:600 11px -apple-system,sans-serif;color:var(--muted);font-style:italic}
+.code{display:grid;gap:3px;background:var(--ink);color:var(--paper);border-radius:8px;padding:10px;font:11px/1.4 "JetBrains Mono",monospace}
+.chk span{display:flex;gap:6px;align-items:center;font:600 12px -apple-system,sans-serif;color:var(--ok)}
+.link{font:600 10.5px "JetBrains Mono",monospace;color:var(--accent);border:1px dashed var(--accent);border-radius:999px;padding:3px 8px;width:fit-content}
+.bub{background:var(--card);border:1px solid var(--line);border-radius:12px 12px 12px 3px;padding:8px 12px;font:italic 13px Georgia,serif;width:fit-content}
+.pn .in{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding-block:0 40px}
+.pn a{display:grid;gap:4px;text-decoration:none;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.pn a span{font:600 11px "JetBrains Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.pn a b{font:400 26px/1.1 "Instrument Serif",Georgia,serif}
+.pn a.nx{text-align:right}
+.foot{border-top:1px solid var(--line);color:var(--muted);font-size:14px}
+.foot .in{padding-block:28px;display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between}
+@media (max-width:900px){
+  .layout{grid-template-columns:1fr;gap:16px}
+  nav.toc{position:static;max-height:none;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .toc ol ol{display:none}
+  .toc > ol{display:flex;flex-wrap:wrap;gap:6px}
+  .toc > ol > li{margin:0}
+  .toc > ol > li > a{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:14px}
+  .feat{grid-template-columns:1fr;gap:16px;padding:18px}
+}
+@media (max-width:440px){.three{grid-template-columns:1fr 1fr}.three>.opt:nth-child(3){display:none}.four{grid-template-columns:1fr 1fr}.row.wrap .mb{font-size:11px}}
+
+.home h1{font-size:clamp(44px,8vw,92px)} .home h1 i{color:var(--accent)}
+.home .trybox code{white-space:pre;overflow-x:auto}
+.home .try{max-width:100%;min-width:0}
+.home .in{min-width:0}
+.chipset{display:flex;gap:6px;flex-wrap:wrap}
+.dchip{font:600 12px/1 "JetBrains Mono",monospace;padding:8px 11px;border-radius:999px;border:1.5px solid var(--fg)}
+.dchip.on{background:var(--fg);color:var(--bg)}
+.h2{font:400 40px/1.1 "Instrument Serif",Georgia,serif;margin:0 0 18px}
+.loopw .in{padding-block:8px 32px}
+.loop{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.step{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;display:grid;gap:4px}
+.step.you{background:var(--accent-soft);border-color:var(--accent)}
+.step .n{font:600 12px "JetBrains Mono",monospace;color:var(--accent)}
+.step b{font-size:17px} .step span{font-size:14.5px;color:var(--muted)}
+.grp{margin-bottom:36px}
+.grp h3{display:flex;gap:10px;align-items:baseline;font:650 20px/1.3 -apple-system,sans-serif;margin:0 0 12px}
+.grp h3 span{font:600 12px "JetBrains Mono",monospace;color:var(--accent)}
+.sk-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.sk-card{display:grid;gap:8px;align-content:start;text-decoration:none;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;transition:border-color .15s}
+a.sk-card:hover{border-color:var(--accent)}
+.sk-card.wait{opacity:.6}
+.sk-top{display:flex;gap:8px;align-items:baseline;justify-content:space-between}
+.sk-top b{font:400 28px/1.1 "Instrument Serif",Georgia,serif}
+.sk-top em{font:600 11px "JetBrains Mono",monospace;font-style:normal;color:var(--accent);white-space:nowrap}
+.sk-tag{margin:0;font-size:15.5px}
+.sk-chips{display:flex;flex-wrap:wrap;gap:5px}
+.sk-chips span{font:600 11.5px -apple-system,sans-serif;padding:4px 9px;border-radius:999px;background:var(--soft);color:var(--muted)}
+.sk-chips .more{background:none;border:1px dashed var(--line)}
+@media (max-width:800px){.loop{grid-template-columns:1fr 1fr}}
+@media (max-width:440px){.loop{grid-template-columns:1fr}.sk-grid{grid-template-columns:1fr}.top .in>span{display:none}
+ .home .trybox{flex-wrap:wrap;padding:12px}.home .trybox code{flex-basis:100%;font-size:12.5px;white-space:pre-wrap;overflow-wrap:anywhere;overflow-x:visible}.home .trybox button{width:100%}}
+
+/* before/after showcase */
+.ba{position:relative;width:100%;overflow:hidden;border-radius:12px;border:1px solid var(--line);background:var(--card);
+  touch-action:pan-y;user-select:none;-webkit-user-select:none;cursor:ew-resize;outline:none;box-shadow:0 1px 0 var(--line)}
+.ba:focus-visible{box-shadow:0 0 0 3px var(--accent)}
+.ba-img,.ba-img picture,.ba-img img{position:absolute;inset:0;width:100%;height:100%;display:block}
+.ba-img img{object-fit:cover;object-position:top;pointer-events:none}
+.ba-after{clip-path:inset(0 0 0 calc(var(--p) * 100%))}
+.ba-line{position:absolute;top:0;bottom:0;left:calc(var(--p) * 100%);width:2px;margin-left:-1px;background:#fff;
+  box-shadow:0 0 0 1px rgba(0,0,0,.25);pointer-events:none}
+.ba-knob{position:absolute;top:50%;left:50%;width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;
+  background:var(--accent);color:#fff;display:grid;place-items:center;box-shadow:0 2px 10px rgba(0,0,0,.3)}
+.ba-lbl{position:absolute;top:10px;font:600 11px/1 "JetBrains Mono",monospace;letter-spacing:.06em;text-transform:uppercase;
+  padding:6px 9px;border-radius:999px;background:rgba(20,18,15,.78);color:#fff;pointer-events:none;
+  max-width:calc(50% - 16px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:opacity .12s linear}
+.ba-lbl.l{left:10px} .ba-lbl.r{right:10px;background:var(--accent)} .st-img .ba-lbl.r{right:auto}
+.ba.v-phone,.steps.v-phone .st-stage{max-width:320px;margin-inline:auto}
+.steps{display:grid;gap:10px}
+.st-stage{position:relative;width:100%;overflow:hidden;border-radius:12px;border:1px solid var(--line);background:var(--card)}
+.st-img{position:absolute;inset:0;opacity:0;transition:opacity .6s ease}
+.st-img.on{opacity:1}
+.st-img picture,.st-img img{display:block;width:100%;height:100%}
+.st-img img{object-fit:cover;object-position:top}
+.st-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:6px}
+.st-b{position:relative;display:flex;gap:6px;align-items:baseline;text-align:left;overflow:hidden;font:600 13px/1.25 -apple-system,sans-serif;
+  color:var(--fg);background:var(--card);border:1px solid var(--line);border-radius:9px;padding:10px 10px 12px;min-height:44px;cursor:pointer}
+.st-b.on{border-color:var(--accent)}
+.st-n{font:600 11px "JetBrains Mono",monospace;color:var(--accent)}
+.st-bar{position:absolute;left:0;bottom:0;height:3px;width:0;background:var(--accent)}
+.st-b.on .st-bar{width:var(--t,100%)}
+.bx-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:start}
+.bx{margin:0;display:grid;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+.bx.v-phone{background:var(--soft)}
+.bx figcaption{display:grid;gap:4px;padding:0 4px 4px;min-width:0}
+.bx h3{margin:0;font:400 28px/1.08 "Instrument Serif",Georgia,serif;text-wrap:balance}
+.bx .sub{margin:0;color:var(--muted);font-size:16px;line-height:1.4}
+.bx-skill{display:inline-flex;gap:6px;align-items:center;width:fit-content;margin-top:4px;font:600 12.5px "JetBrains Mono",monospace;
+  color:var(--accent);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:5px 11px;min-height:32px}
+a.bx-skill:hover{border-color:var(--accent)}
+.showcase{padding-block:8px 40px}
+.showcase .lede{display:grid;gap:6px;margin-bottom:18px}
+.showcase .lede h2{font:400 40px/1.1 "Instrument Serif",Georgia,serif;margin:0}
+.showcase .lede p{margin:0;font-size:18px;font-weight:650;line-height:1.35;max-width:40em}
+@media (max-width:900px){.bx-grid{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:440px){.bx{padding:10px}.bx h3{font-size:25px}.ba-lbl{font-size:10px;padding:5px 7px}.st-b{font-size:12px;padding:8px 8px 11px}}
+@media (prefers-reduced-motion:reduce){.st-img{transition:none}}
+
+.home.has-ba .in{grid-template-columns:minmax(0,5fr) minmax(0,7fr);grid-template-areas:"eb ba" "h1 ba" "tl ba" "ch ba" "try ba";align-items:start;column-gap:44px;row-gap:14px;padding-block:36px 40px}
+.home.has-ba .eyebrow{grid-area:eb} .home.has-ba h1{grid-area:h1;font-size:clamp(44px,5.2vw,76px)}
+.home.has-ba .tagline{grid-area:tl;font-size:clamp(20px,2.1vw,26px)} .home.has-ba .chipset{grid-area:ch} .home.has-ba .try{grid-area:try}
+.hero-ba{grid-area:ba;margin:0;display:grid;gap:10px;align-self:center;min-width:0}
+.hero-ba figcaption{font-size:15px;color:var(--muted);line-height:1.45}
+.hero-ba figcaption b{color:var(--fg)} .hero-ba figcaption a{color:var(--accent);font:600 13px "JetBrains Mono",monospace}
+.pp{display:grid;grid-template-columns:minmax(0,4fr) minmax(0,7fr);gap:28px;align-items:center;margin:28px 0;padding:22px;background:var(--card);border:1px solid var(--line);border-radius:14px}
+.pp-txt{display:grid;gap:8px;align-content:start}
+.pp h2{font:400 40px/1.05 "Instrument Serif",Georgia,serif;margin:0;text-wrap:balance}
+.pp .sub{margin:0;font-size:18px;color:var(--muted);line-height:1.4}
+@media (max-width:960px){
+ .home.has-ba .in{grid-template-columns:minmax(0,1fr);grid-template-areas:"eb" "h1" "ba" "tl" "ch" "try";padding-block:24px 32px}
+ .home.has-ba h1{font-size:clamp(40px,10.5vw,64px)}
+ .pp{grid-template-columns:minmax(0,1fr);padding:14px;gap:16px}
+}
+</style>
+<header class="top"><div class="in"><a class="logo" href="index.html">pro<i>o</i>fs</a><span>/ skills for Claude Code</span><a href="#examples" style="margin-left:auto;text-decoration:none">Examples</a><a href="#skills" style="text-decoration:none">Skills ↓</a></div></header>
+<section class="hero home has-ba"><div class="in">
+  <div class="eyebrow">Skills for Claude Code · 10 skills · 231+ features</div>
+  <h1>Claude skills that <i>show</i> their work.</h1><figure class="hero-ba"><div class="ba big v-desktop" data-ba style="--p:.5;aspect-ratio:1200/844" role="slider" tabindex="0" aria-label="Retreat page hero: drag to compare before and after" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" aria-valuetext="50% after"><div class="ba-img"><picture><source type="image/webp" srcset="examples/c-retreat-look/before-480.webp 480w, examples/c-retreat-look/before-960.webp 960w" sizes="(min-width: 960px) 680px, 100vw"><img src="examples/c-retreat-look/before-960.jpg" srcset="examples/c-retreat-look/before-480.jpg 480w, examples/c-retreat-look/before-960.jpg 960w" sizes="(min-width: 960px) 680px, 100vw" width="1200" height="844" alt="Before · live page" loading="eager" fetchpriority="high" decoding="async" draggable="false"></picture></div><div class="ba-img ba-after"><picture><source type="image/webp" srcset="examples/c-retreat-look/after-480.webp 480w, examples/c-retreat-look/after-960.webp 960w" sizes="(min-width: 960px) 680px, 100vw"><img src="examples/c-retreat-look/after-960.jpg" srcset="examples/c-retreat-look/after-480.jpg 480w, examples/c-retreat-look/after-960.jpg 960w" sizes="(min-width: 960px) 680px, 100vw" width="1200" height="844" alt="After · look A" loading="eager" fetchpriority="high" decoding="async" draggable="false"></picture></div><span class="ba-lbl l">Before · live page</span><span class="ba-lbl r">After · look A</span><span class="ba-line" aria-hidden="true"><span class="ba-knob"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l-6 6 6 6M15 6l6 6-6 6"/></svg></span></span></div><figcaption><b>Retreat page hero.</b> A pale boxed card becomes a full-bleed sunset hero. <a href="design-review.html">design-review</a></figcaption></figure>
+  <p class="tagline">Stop reading walls of terminal text. Every skill here ends with a page you can look at, click through and decide on, then hand back to Claude in one paste.</p>
+  <div class="chipset"><span class="dchip">Keep original</span><span class="dchip on">Use selected</span><span class="dchip">Approve with comment</span><span class="dchip">Request revision</span></div>
+  <div class="try"><span class="lbl">Install in Claude Code</span><div class="trybox"><code id="tryc">/plugin marketplace add workingBen/proofs
+/plugin install proofs@proofs</code><button type="button" id="tryb">Copy</button></div></div>
+</div></section>
+<section class="in showcase" id="examples"><div class="lede"><div class="eyebrow">Real work, before and after</div><h2>See it work</h2><p>Each pair is a real page before and after one review. They slide on their own. Drag any of them.</p></div><div class="bx-grid"><figure class="bx v-desktop" id="ex-b-bed-map-report"><div class="ba v-desktop" data-ba style="--p:.5;aspect-ratio:900/560" role="slider" tabindex="0" aria-label="Bed map in the EMF report: drag to compare before and after" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" aria-valuetext="50% after"><div class="ba-img"><picture><source type="image/webp" srcset="examples/b-bed-map-report/before-480.webp 480w, examples/b-bed-map-report/before-900.webp 900w" sizes="(min-width: 900px) 560px, 100vw"><img src="examples/b-bed-map-report/before-900.jpg" srcset="examples/b-bed-map-report/before-480.jpg 480w, examples/b-bed-map-report/before-900.jpg 900w" sizes="(min-width: 900px) 560px, 100vw" width="900" height="560" alt="Before · readings table" loading="lazy" decoding="async" draggable="false"></picture></div><div class="ba-img ba-after"><picture><source type="image/webp" srcset="examples/b-bed-map-report/after-480.webp 480w, examples/b-bed-map-report/after-900.webp 900w" sizes="(min-width: 900px) 560px, 100vw"><img src="examples/b-bed-map-report/after-900.jpg" srcset="examples/b-bed-map-report/after-480.jpg 480w, examples/b-bed-map-report/after-900.jpg 900w" sizes="(min-width: 900px) 560px, 100vw" width="900" height="560" alt="After · bed maps" loading="lazy" decoding="async" draggable="false"></picture></div><span class="ba-lbl l">Before · readings table</span><span class="ba-lbl r">After · bed maps</span><span class="ba-line" aria-hidden="true"><span class="ba-knob"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l-6 6 6 6M15 6l6 6-6 6"/></svg></span></span></div><figcaption><span class="fn">01</span><h3>Bed map in the EMF report</h3><p class="sub">A table of readings becomes before-and-after bed heat maps.</p><a class="bx-skill" href="design-review.html">design-review<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a></figcaption></figure><figure class="bx v-phone" id="ex-d-movie-page"><div class="steps v-phone" data-steps><div class="st-stage" style="aspect-ratio:450/800" aria-live="polite"><div class="st-img on"><picture><source type="image/webp" srcset="examples/d-movie-page/before-450.webp 450w" sizes="(min-width: 960px) 680px, 100vw"><img src="examples/d-movie-page/before-450.jpg" srcset="examples/d-movie-page/before-450.jpg 450w" sizes="(min-width: 960px) 680px, 100vw" width="450" height="800" alt="Before · iPhone" loading="lazy" decoding="async" draggable="false"></picture><span class="ba-lbl l">Before · iPhone</span></div><div class="st-img"><picture><source type="image/webp" srcset="examples/d-movie-page/after-450.webp 450w" sizes="(min-width: 960px) 680px, 100vw"><img src="examples/d-movie-page/after-450.jpg" srcset="examples/d-movie-page/after-450.jpg 450w" sizes="(min-width: 960px) 680px, 100vw" width="450" height="800" alt="After · B (shipped)" loading="lazy" decoding="async" draggable="false"></picture><span class="ba-lbl l">After · B (shipped)</span></div><div class="st-img"><picture><source type="image/webp" srcset="examples/d-movie-page/after2-450.webp 450w" sizes="(min-width: 960px) 680px, 100vw"><img src="examples/d-movie-page/after2-450.jpg" srcset="examples/d-movie-page/after2-450.jpg 450w" sizes="(min-width: 960px) 680px, 100vw" width="450" height="800" alt="Variant C · banner" loading="lazy" decoding="async" draggable="false"></picture><span class="ba-lbl l r">Variant C · banner</span></div></div><div class="st-row" role="group" aria-label="Movie page on a phone: steps"><button type="button" class="st-b on" aria-pressed="true"><span class="st-n">01</span>Before · iPhone<i class="st-bar"></i></button><button type="button" class="st-b" aria-pressed="false"><span class="st-n">02</span>After · B (shipped)<i class="st-bar"></i></button><button type="button" class="st-b" aria-pressed="false"><span class="st-n">03</span>Variant C · banner<i class="st-bar"></i></button></div></div><figcaption><span class="fn">02</span><h3>Movie page on a phone</h3><p class="sub">A lonely cover becomes a header with the cover beside the title.</p><a class="bx-skill" href="design-review.html">design-review<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a></figcaption></figure><figure class="bx v-phone" id="ex-a-organ-table-to-gauges"><div class="ba v-phone" data-ba style="--p:.5;aspect-ratio:920/1300" role="slider" tabindex="0" aria-label="Organs table to range gauges: drag to compare before and after" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" aria-valuetext="50% after"><div class="ba-img"><picture><source type="image/webp" srcset="examples/a-organ-table-to-gauges/before-480.webp 480w, examples/a-organ-table-to-gauges/before-920.webp 920w" sizes="320px"><img src="examples/a-organ-table-to-gauges/before-920.jpg" srcset="examples/a-organ-table-to-gauges/before-480.jpg 480w, examples/a-organ-table-to-gauges/before-920.jpg 920w" sizes="320px" width="920" height="1300" alt="Before · report table" loading="lazy" decoding="async" draggable="false"></picture></div><div class="ba-img ba-after"><picture><source type="image/webp" srcset="examples/a-organ-table-to-gauges/after-480.webp 480w, examples/a-organ-table-to-gauges/after-920.webp 920w" sizes="320px"><img src="examples/a-organ-table-to-gauges/after-920.jpg" srcset="examples/a-organ-table-to-gauges/after-480.jpg 480w, examples/a-organ-table-to-gauges/after-920.jpg 920w" sizes="320px" width="920" height="1300" alt="After · range gauges" loading="lazy" decoding="async" draggable="false"></picture></div><span class="ba-lbl l">Before · report table</span><span class="ba-lbl r">After · range gauges</span><span class="ba-line" aria-hidden="true"><span class="ba-knob"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l-6 6 6 6M15 6l6 6-6 6"/></svg></span></span></div><figcaption><span class="fn">03</span><h3>Organs table to range gauges</h3><p class="sub">A dense readings table becomes seven colored range gauges.</p><a class="bx-skill" href="design-review.html">design-review<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a></figcaption></figure><figure class="bx v-desktop" id="ex-b-supplement-chart"><div class="ba v-desktop" data-ba style="--p:.5;aspect-ratio:900/560" role="slider" tabindex="0" aria-label="Supplement test sample chart: drag to compare before and after" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" aria-valuetext="50% after"><div class="ba-img"><picture><source type="image/webp" srcset="examples/b-supplement-chart/before-480.webp 480w, examples/b-supplement-chart/before-900.webp 900w" sizes="(min-width: 900px) 560px, 100vw"><img src="examples/b-supplement-chart/before-900.jpg" srcset="examples/b-supplement-chart/before-480.jpg 480w, examples/b-supplement-chart/before-900.jpg 900w" sizes="(min-width: 900px) 560px, 100vw" width="900" height="560" alt="Before · how it works" loading="lazy" decoding="async" draggable="false"></picture></div><div class="ba-img ba-after"><picture><source type="image/webp" srcset="examples/b-supplement-chart/after-480.webp 480w, examples/b-supplement-chart/after-900.webp 900w" sizes="(min-width: 900px) 560px, 100vw"><img src="examples/b-supplement-chart/after-900.jpg" srcset="examples/b-supplement-chart/after-480.jpg 480w, examples/b-supplement-chart/after-900.jpg 900w" sizes="(min-width: 900px) 560px, 100vw" width="900" height="560" alt="After · ranked bars" loading="lazy" decoding="async" draggable="false"></picture></div><span class="ba-lbl l">Before · how it works</span><span class="ba-lbl r">After · ranked bars</span><span class="ba-line" aria-hidden="true"><span class="ba-knob"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l-6 6 6 6M15 6l6 6-6 6"/></svg></span></span></div><figcaption><span class="fn">04</span><h3>Supplement test sample chart</h3><p class="sub">A text section gains a ranked green-to-red bar chart.</p><a class="bx-skill" href="design-review.html">design-review<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a></figcaption></figure><figure class="bx v-desktop" id="ex-d-book-cover-wall"><div class="ba v-desktop" data-ba style="--p:.5;aspect-ratio:900/450" role="slider" tabindex="0" aria-label="Medical library cover wall: drag to compare before and after" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" aria-valuetext="50% after"><div class="ba-img"><picture><source type="image/webp" srcset="examples/d-book-cover-wall/before-480.webp 480w, examples/d-book-cover-wall/before-900.webp 900w" sizes="(min-width: 900px) 560px, 100vw"><img src="examples/d-book-cover-wall/before-900.jpg" srcset="examples/d-book-cover-wall/before-480.jpg 480w, examples/d-book-cover-wall/before-900.jpg 900w" sizes="(min-width: 900px) 560px, 100vw" width="900" height="450" alt="Before · list" loading="lazy" decoding="async" draggable="false"></picture></div><div class="ba-img ba-after"><picture><source type="image/webp" srcset="examples/d-book-cover-wall/after-480.webp 480w, examples/d-book-cover-wall/after-900.webp 900w" sizes="(min-width: 900px) 560px, 100vw"><img src="examples/d-book-cover-wall/after-900.jpg" srcset="examples/d-book-cover-wall/after-480.jpg 480w, examples/d-book-cover-wall/after-900.jpg 900w" sizes="(min-width: 900px) 560px, 100vw" width="900" height="450" alt="After · cover wall" loading="lazy" decoding="async" draggable="false"></picture></div><span class="ba-lbl l">Before · list</span><span class="ba-lbl r">After · cover wall</span><span class="ba-line" aria-hidden="true"><span class="ba-knob"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l-6 6 6 6M15 6l6 6-6 6"/></svg></span></span></div><figcaption><span class="fn">05</span><h3>Medical library cover wall</h3><p class="sub">A text list becomes a wall of big book covers.</p><a class="bx-skill" href="design-review.html">design-review<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a></figcaption></figure><figure class="bx v-desktop" id="ex-a-report-stacks"><div class="ba v-desktop" data-ba style="--p:.5;aspect-ratio:1200/531" role="slider" tabindex="0" aria-label="Full reports as page stacks: drag to compare before and after" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" aria-valuetext="50% after"><div class="ba-img"><picture><source type="image/webp" srcset="examples/a-report-stacks/before-480.webp 480w, examples/a-report-stacks/before-960.webp 960w" sizes="(min-width: 900px) 560px, 100vw"><img src="examples/a-report-stacks/before-960.jpg" srcset="examples/a-report-stacks/before-480.jpg 480w, examples/a-report-stacks/before-960.jpg 960w" sizes="(min-width: 900px) 560px, 100vw" width="1200" height="531" alt="Before · plain links" loading="lazy" decoding="async" draggable="false"></picture></div><div class="ba-img ba-after"><picture><source type="image/webp" srcset="examples/a-report-stacks/after-480.webp 480w, examples/a-report-stacks/after-960.webp 960w" sizes="(min-width: 900px) 560px, 100vw"><img src="examples/a-report-stacks/after-960.jpg" srcset="examples/a-report-stacks/after-480.jpg 480w, examples/a-report-stacks/after-960.jpg 960w" sizes="(min-width: 900px) 560px, 100vw" width="1200" height="531" alt="After · report stacks" loading="lazy" decoding="async" draggable="false"></picture></div><span class="ba-lbl l">Before · plain links</span><span class="ba-lbl r">After · report stacks</span><span class="ba-line" aria-hidden="true"><span class="ba-knob"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l-6 6 6 6M15 6l6 6-6 6"/></svg></span></span></div><figcaption><span class="fn">06</span><h3>Full reports as page stacks</h3><p class="sub">Three plain links become fanned stacks of real report pages.</p><a class="bx-skill" href="design-review.html">design-review<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a></figcaption></figure></div><div class="pp"><div class="pp-txt"><div class="eyebrow">Three steps · photo-picker</div><h2>Hero photo, picked</h2><p class="sub">A hazy hero, a photo picker, then a lupine hero.</p><a class="bx-skill" href="photo-picker.html">photo-picker<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a></div><div class="steps v-desktop" data-steps><div class="st-stage" style="aspect-ratio:1200/771" aria-live="polite"><div class="st-img on"><picture><source type="image/webp" srcset="examples/c-hero-photos-3step/before-480.webp 480w, examples/c-hero-photos-3step/before-960.webp 960w" sizes="(min-width: 960px) 680px, 100vw"><img src="examples/c-hero-photos-3step/before-960.jpg" srcset="examples/c-hero-photos-3step/before-480.jpg 480w, examples/c-hero-photos-3step/before-960.jpg 960w" sizes="(min-width: 960px) 680px, 100vw" width="1200" height="771" alt="Before · old hero" loading="lazy" decoding="async" draggable="false"></picture><span class="ba-lbl l">Before · old hero</span></div><div class="st-img"><picture><source type="image/webp" srcset="examples/c-hero-photos-3step/picker-480.webp 480w, examples/c-hero-photos-3step/picker-960.webp 960w" sizes="(min-width: 960px) 680px, 100vw"><img src="examples/c-hero-photos-3step/picker-960.jpg" srcset="examples/c-hero-photos-3step/picker-480.jpg 480w, examples/c-hero-photos-3step/picker-960.jpg 960w" sizes="(min-width: 960px) 680px, 100vw" width="1200" height="771" alt="Photo picker" loading="lazy" decoding="async" draggable="false"></picture><span class="ba-lbl l">Photo picker</span></div><div class="st-img"><picture><source type="image/webp" srcset="examples/c-hero-photos-3step/after-480.webp 480w, examples/c-hero-photos-3step/after-960.webp 960w" sizes="(min-width: 960px) 680px, 100vw"><img src="examples/c-hero-photos-3step/after-960.jpg" srcset="examples/c-hero-photos-3step/after-480.jpg 480w, examples/c-hero-photos-3step/after-960.jpg 960w" sizes="(min-width: 960px) 680px, 100vw" width="1200" height="771" alt="After · rebuilt hero" loading="lazy" decoding="async" draggable="false"></picture><span class="ba-lbl l r">After · rebuilt hero</span></div></div><div class="st-row" role="group" aria-label="Hero photo, picked: steps"><button type="button" class="st-b on" aria-pressed="true"><span class="st-n">01</span>Before · old hero<i class="st-bar"></i></button><button type="button" class="st-b" aria-pressed="false"><span class="st-n">02</span>Photo picker<i class="st-bar"></i></button><button type="button" class="st-b" aria-pressed="false"><span class="st-n">03</span>After · rebuilt hero<i class="st-bar"></i></button></div></div></div><div class="bx-grid"><figure class="bx v-desktop" id="ex-b-nine-devices"><div class="ba v-desktop" data-ba style="--p:.5;aspect-ratio:900/460" role="slider" tabindex="0" aria-label="The nine devices: drag to compare before and after" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" aria-valuetext="50% after"><div class="ba-img"><picture><source type="image/webp" srcset="examples/b-nine-devices/before-480.webp 480w, examples/b-nine-devices/before-900.webp 900w" sizes="(min-width: 900px) 560px, 100vw"><img src="examples/b-nine-devices/before-900.jpg" srcset="examples/b-nine-devices/before-480.jpg 480w, examples/b-nine-devices/before-900.jpg 900w" sizes="(min-width: 900px) 560px, 100vw" width="900" height="460" alt="Before · emoji cards" loading="lazy" decoding="async" draggable="false"></picture></div><div class="ba-img ba-after"><picture><source type="image/webp" srcset="examples/b-nine-devices/after-480.webp 480w, examples/b-nine-devices/after-900.webp 900w" sizes="(min-width: 900px) 560px, 100vw"><img src="examples/b-nine-devices/after-900.jpg" srcset="examples/b-nine-devices/after-480.jpg 480w, examples/b-nine-devices/after-900.jpg 900w" sizes="(min-width: 900px) 560px, 100vw" width="900" height="460" alt="After · variant C" loading="lazy" decoding="async" draggable="false"></picture></div><span class="ba-lbl l">Before · emoji cards</span><span class="ba-lbl r">After · variant C</span><span class="ba-line" aria-hidden="true"><span class="ba-knob"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l-6 6 6 6M15 6l6 6-6 6"/></svg></span></span></div><figcaption><span class="fn">07</span><h3>The nine devices</h3><p class="sub">Emoji cards become a dark band with line icons.</p><a class="bx-skill" href="design-review.html">design-review<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a></figcaption></figure><figure class="bx v-phone" id="ex-e-card-back"><div class="steps v-phone" data-steps><div class="st-stage" style="aspect-ratio:660/792" aria-live="polite"><div class="st-img on"><picture><source type="image/webp" srcset="examples/e-card-back/before-480.webp 480w, examples/e-card-back/before-660.webp 660w" sizes="(min-width: 960px) 680px, 100vw"><img src="examples/e-card-back/before-660.jpg" srcset="examples/e-card-back/before-480.jpg 480w, examples/e-card-back/before-660.jpg 660w" sizes="(min-width: 960px) 680px, 100vw" width="660" height="792" alt="Before · v1" loading="lazy" decoding="async" draggable="false"></picture><span class="ba-lbl l">Before · v1</span></div><div class="st-img"><picture><source type="image/webp" srcset="examples/e-card-back/after-480.webp 480w, examples/e-card-back/after-660.webp 660w" sizes="(min-width: 960px) 680px, 100vw"><img src="examples/e-card-back/after-660.jpg" srcset="examples/e-card-back/after-480.jpg 480w, examples/e-card-back/after-660.jpg 660w" sizes="(min-width: 960px) 680px, 100vw" width="660" height="792" alt="After · flowers" loading="lazy" decoding="async" draggable="false"></picture><span class="ba-lbl l">After · flowers</span></div><div class="st-img"><picture><source type="image/webp" srcset="examples/e-card-back/after2-480.webp 480w, examples/e-card-back/after2-660.webp 660w" sizes="(min-width: 960px) 680px, 100vw"><img src="examples/e-card-back/after2-660.jpg" srcset="examples/e-card-back/after2-480.jpg 480w, examples/e-card-back/after2-660.jpg 660w" sizes="(min-width: 960px) 680px, 100vw" width="660" height="792" alt="Plum theme" loading="lazy" decoding="async" draggable="false"></picture><span class="ba-lbl l r">Plum theme</span></div></div><div class="st-row" role="group" aria-label="Card back: steps"><button type="button" class="st-b on" aria-pressed="true"><span class="st-n">01</span>Before · v1<i class="st-bar"></i></button><button type="button" class="st-b" aria-pressed="false"><span class="st-n">02</span>After · flowers<i class="st-bar"></i></button><button type="button" class="st-b" aria-pressed="false"><span class="st-n">03</span>Plum theme<i class="st-bar"></i></button></div></div><figcaption><span class="fn">08</span><h3>Card back</h3><p class="sub">A text-only card back becomes a wildflower-photo card.</p><a class="bx-skill" href="design-review.html">design-review<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a></figcaption></figure><figure class="bx v-desktop" id="ex-a-standards-scales"><div class="steps v-desktop" data-steps><div class="st-stage" style="aspect-ratio:600/560" aria-live="polite"><div class="st-img on"><picture><source type="image/webp" srcset="examples/a-standards-scales/before-480.webp 480w, examples/a-standards-scales/before-600.webp 600w" sizes="(min-width: 960px) 680px, 100vw"><img src="examples/a-standards-scales/before-600.jpg" srcset="examples/a-standards-scales/before-480.jpg 480w, examples/a-standards-scales/before-600.jpg 600w" sizes="(min-width: 960px) 680px, 100vw" width="600" height="560" alt="Before · four bars" loading="lazy" decoding="async" draggable="false"></picture><span class="ba-lbl l">Before · four bars</span></div><div class="st-img"><picture><source type="image/webp" srcset="examples/a-standards-scales/after-480.webp 480w, examples/a-standards-scales/after-600.webp 600w" sizes="(min-width: 960px) 680px, 100vw"><img src="examples/a-standards-scales/after-600.jpg" srcset="examples/a-standards-scales/after-480.jpg 480w, examples/a-standards-scales/after-600.jpg 600w" sizes="(min-width: 960px) 680px, 100vw" width="600" height="560" alt="After · one card" loading="lazy" decoding="async" draggable="false"></picture><span class="ba-lbl l">After · one card</span></div><div class="st-img"><picture><source type="image/webp" srcset="examples/a-standards-scales/after2-480.webp 480w, examples/a-standards-scales/after2-600.webp 600w" sizes="(min-width: 960px) 680px, 100vw"><img src="examples/a-standards-scales/after2-600.jpg" srcset="examples/a-standards-scales/after2-480.jpg 480w, examples/a-standards-scales/after2-600.jpg 600w" sizes="(min-width: 960px) 680px, 100vw" width="600" height="560" alt="Option C · rulers" loading="lazy" decoding="async" draggable="false"></picture><span class="ba-lbl l r">Option C · rulers</span></div></div><div class="st-row" role="group" aria-label="Standards: four bars to one card: steps"><button type="button" class="st-b on" aria-pressed="true"><span class="st-n">01</span>Before · four bars<i class="st-bar"></i></button><button type="button" class="st-b" aria-pressed="false"><span class="st-n">02</span>After · one card<i class="st-bar"></i></button><button type="button" class="st-b" aria-pressed="false"><span class="st-n">03</span>Option C · rulers<i class="st-bar"></i></button></div></div><figcaption><span class="fn">09</span><h3>Standards: four bars to one card</h3><p class="sub">Four look-alike bars become one evaluation card.</p><a class="bx-skill" href="design-review.html">design-review<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a></figcaption></figure><figure class="bx v-desktop" id="ex-a-biowell-table-to-chart"><div class="steps v-desktop" data-steps><div class="st-stage" style="aspect-ratio:1200/747" aria-live="polite"><div class="st-img on"><picture><source type="image/webp" srcset="examples/a-biowell-table-to-chart/before-480.webp 480w, examples/a-biowell-table-to-chart/before-960.webp 960w" sizes="(min-width: 960px) 680px, 100vw"><img src="examples/a-biowell-table-to-chart/before-960.jpg" srcset="examples/a-biowell-table-to-chart/before-480.jpg 480w, examples/a-biowell-table-to-chart/before-960.jpg 960w" sizes="(min-width: 960px) 680px, 100vw" width="1200" height="747" alt="Before · numbers table" loading="lazy" decoding="async" draggable="false"></picture><span class="ba-lbl l">Before · numbers table</span></div><div class="st-img"><picture><source type="image/webp" srcset="examples/a-biowell-table-to-chart/after-480.webp 480w, examples/a-biowell-table-to-chart/after-960.webp 960w" sizes="(min-width: 960px) 680px, 100vw"><img src="examples/a-biowell-table-to-chart/after-960.jpg" srcset="examples/a-biowell-table-to-chart/after-480.jpg 480w, examples/a-biowell-table-to-chart/after-960.jpg 960w" sizes="(min-width: 960px) 680px, 100vw" width="1200" height="747" alt="After · ledger" loading="lazy" decoding="async" draggable="false"></picture><span class="ba-lbl l">After · ledger</span></div><div class="st-img"><picture><source type="image/webp" srcset="examples/a-biowell-table-to-chart/after2-480.webp 480w, examples/a-biowell-table-to-chart/after2-960.webp 960w" sizes="(min-width: 960px) 680px, 100vw"><img src="examples/a-biowell-table-to-chart/after2-960.jpg" srcset="examples/a-biowell-table-to-chart/after2-480.jpg 480w, examples/a-biowell-table-to-chart/after2-960.jpg 960w" sizes="(min-width: 960px) 680px, 100vw" width="1200" height="747" alt="Variant B · cards" loading="lazy" decoding="async" draggable="false"></picture><span class="ba-lbl l r">Variant B · cards</span></div></div><div class="st-row" role="group" aria-label="Supplement table to dot chart: steps"><button type="button" class="st-b on" aria-pressed="true"><span class="st-n">01</span>Before · numbers table<i class="st-bar"></i></button><button type="button" class="st-b" aria-pressed="false"><span class="st-n">02</span>After · ledger<i class="st-bar"></i></button><button type="button" class="st-b" aria-pressed="false"><span class="st-n">03</span>Variant B · cards<i class="st-bar"></i></button></div></div><figcaption><span class="fn">10</span><h3>Supplement table to dot chart</h3><p class="sub">A dense table becomes a dot chart that flags good and bad.</p><a class="bx-skill" href="design-review.html">design-review<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a></figcaption></figure><figure class="bx v-desktop" id="ex-a-improvement-scale"><div class="ba v-desktop" data-ba style="--p:.5;aspect-ratio:1200/360" role="slider" tabindex="0" aria-label="Improvement line to a scale: drag to compare before and after" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" aria-valuetext="50% after"><div class="ba-img"><picture><source type="image/webp" srcset="examples/a-improvement-scale/before-480.webp 480w, examples/a-improvement-scale/before-960.webp 960w" sizes="(min-width: 900px) 560px, 100vw"><img src="examples/a-improvement-scale/before-960.jpg" srcset="examples/a-improvement-scale/before-480.jpg 480w, examples/a-improvement-scale/before-960.jpg 960w" sizes="(min-width: 900px) 560px, 100vw" width="1200" height="360" alt="Before · one line" loading="lazy" decoding="async" draggable="false"></picture></div><div class="ba-img ba-after"><picture><source type="image/webp" srcset="examples/a-improvement-scale/after-480.webp 480w, examples/a-improvement-scale/after-960.webp 960w" sizes="(min-width: 900px) 560px, 100vw"><img src="examples/a-improvement-scale/after-960.jpg" srcset="examples/a-improvement-scale/after-480.jpg 480w, examples/a-improvement-scale/after-960.jpg 960w" sizes="(min-width: 900px) 560px, 100vw" width="1200" height="360" alt="After · on the scale" loading="lazy" decoding="async" draggable="false"></picture></div><span class="ba-lbl l">Before · one line</span><span class="ba-lbl r">After · on the scale</span><span class="ba-line" aria-hidden="true"><span class="ba-knob"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l-6 6 6 6M15 6l6 6-6 6"/></svg></span></span></div><figcaption><span class="fn">11</span><h3>Improvement line to a scale</h3><p class="sub">One log-style line becomes readings plotted on a color scale.</p><a class="bx-skill" href="design-review.html">design-review<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a></figcaption></figure><figure class="bx v-desktop" id="ex-b-bbi-plan"><div class="ba v-desktop" data-ba style="--p:.5;aspect-ratio:900/520" role="slider" tabindex="0" aria-label="Study plan chart: drag to compare before and after" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" aria-valuetext="50% after"><div class="ba-img"><picture><source type="image/webp" srcset="examples/b-bbi-plan/before-480.webp 480w, examples/b-bbi-plan/before-900.webp 900w" sizes="(min-width: 900px) 560px, 100vw"><img src="examples/b-bbi-plan/before-900.jpg" srcset="examples/b-bbi-plan/before-480.jpg 480w, examples/b-bbi-plan/before-900.jpg 900w" sizes="(min-width: 900px) 560px, 100vw" width="900" height="520" alt="Before · Gantt list" loading="lazy" decoding="async" draggable="false"></picture></div><div class="ba-img ba-after"><picture><source type="image/webp" srcset="examples/b-bbi-plan/after-480.webp 480w, examples/b-bbi-plan/after-900.webp 900w" sizes="(min-width: 900px) 560px, 100vw"><img src="examples/b-bbi-plan/after-900.jpg" srcset="examples/b-bbi-plan/after-480.jpg 480w, examples/b-bbi-plan/after-900.jpg 900w" sizes="(min-width: 900px) 560px, 100vw" width="900" height="520" alt="After · two lanes" loading="lazy" decoding="async" draggable="false"></picture></div><span class="ba-lbl l">Before · Gantt list</span><span class="ba-lbl r">After · two lanes</span><span class="ba-line" aria-hidden="true"><span class="ba-knob"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l-6 6 6 6M15 6l6 6-6 6"/></svg></span></span></div><figcaption><span class="fn">12</span><h3>Study plan chart</h3><p class="sub">A long Gantt list becomes a two-lane timeline.</p><a class="bx-skill" href="design-review.html">design-review<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a></figcaption></figure><figure class="bx v-desktop" id="ex-d-booking-dates"><div class="ba v-desktop" data-ba style="--p:.5;aspect-ratio:900/560" role="slider" tabindex="0" aria-label="Booking dates step: drag to compare before and after" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" aria-valuetext="50% after"><div class="ba-img"><picture><source type="image/webp" srcset="examples/d-booking-dates/before-480.webp 480w, examples/d-booking-dates/before-900.webp 900w" sizes="(min-width: 900px) 560px, 100vw"><img src="examples/d-booking-dates/before-900.jpg" srcset="examples/d-booking-dates/before-480.jpg 480w, examples/d-booking-dates/before-900.jpg 900w" sizes="(min-width: 900px) 560px, 100vw" width="900" height="560" alt="Before" loading="lazy" decoding="async" draggable="false"></picture></div><div class="ba-img ba-after"><picture><source type="image/webp" srcset="examples/d-booking-dates/after-480.webp 480w, examples/d-booking-dates/after-900.webp 900w" sizes="(min-width: 900px) 560px, 100vw"><img src="examples/d-booking-dates/after-900.jpg" srcset="examples/d-booking-dates/after-480.jpg 480w, examples/d-booking-dates/after-900.jpg 900w" sizes="(min-width: 900px) 560px, 100vw" width="900" height="560" alt="After · variant B" loading="lazy" decoding="async" draggable="false"></picture></div><span class="ba-lbl l">Before</span><span class="ba-lbl r">After · variant B</span><span class="ba-line" aria-hidden="true"><span class="ba-knob"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l-6 6 6 6M15 6l6 6-6 6"/></svg></span></span></div><figcaption><span class="fn">13</span><h3>Booking dates step</h3><p class="sub">A bare date picker gains the room photo and a teal stay.</p><a class="bx-skill" href="design-review.html">design-review<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a></figcaption></figure><figure class="bx v-desktop" id="ex-x-copy-edit"><div class="ba v-desktop" data-ba style="--p:.5;aspect-ratio:842/612" role="slider" tabindex="0" aria-label="Copy edit with a claims check: drag to compare before and after" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" aria-valuetext="50% after"><div class="ba-img"><picture><source type="image/webp" srcset="examples/x-copy-edit/before-480.webp 480w, examples/x-copy-edit/before-842.webp 842w" sizes="(min-width: 900px) 560px, 100vw"><img src="examples/x-copy-edit/before-842.jpg" srcset="examples/x-copy-edit/before-480.jpg 480w, examples/x-copy-edit/before-842.jpg 842w" sizes="(min-width: 900px) 560px, 100vw" width="842" height="612" alt="Your draft" loading="lazy" decoding="async" draggable="false"></picture></div><div class="ba-img ba-after"><picture><source type="image/webp" srcset="examples/x-copy-edit/after-480.webp 480w, examples/x-copy-edit/after-842.webp 842w" sizes="(min-width: 900px) 560px, 100vw"><img src="examples/x-copy-edit/after-842.jpg" srcset="examples/x-copy-edit/after-480.jpg 480w, examples/x-copy-edit/after-842.jpg 842w" sizes="(min-width: 900px) 560px, 100vw" width="842" height="612" alt="The edit" loading="lazy" decoding="async" draggable="false"></picture></div><span class="ba-lbl l">Your draft</span><span class="ba-lbl r">The edit</span><span class="ba-line" aria-hidden="true"><span class="ba-knob"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l-6 6 6 6M15 6l6 6-6 6"/></svg></span></span></div><figcaption><span class="fn">14</span><h3>Copy edit with a claims check</h3><p class="sub">A plain sentence becomes a tracked edit with a claims check.</p><a class="bx-skill" href="article-copy-edit.html">article-copy-edit<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a></figcaption></figure><figure class="bx v-desktop" id="ex-e-flyer-photo"><div class="steps v-desktop" data-steps><div class="st-stage" style="aspect-ratio:840/512" aria-live="polite"><div class="st-img on"><picture><source type="image/webp" srcset="examples/e-flyer-photo/before-480.webp 480w, examples/e-flyer-photo/before-840.webp 840w" sizes="(min-width: 960px) 680px, 100vw"><img src="examples/e-flyer-photo/before-840.jpg" srcset="examples/e-flyer-photo/before-480.jpg 480w, examples/e-flyer-photo/before-840.jpg 840w" sizes="(min-width: 960px) 680px, 100vw" width="840" height="512" alt="Before · smart meter" loading="lazy" decoding="async" draggable="false"></picture><span class="ba-lbl l">Before · smart meter</span></div><div class="st-img"><picture><source type="image/webp" srcset="examples/e-flyer-photo/picker-480.webp 480w, examples/e-flyer-photo/picker-840.webp 840w" sizes="(min-width: 960px) 680px, 100vw"><img src="examples/e-flyer-photo/picker-840.jpg" srcset="examples/e-flyer-photo/picker-480.jpg 480w, examples/e-flyer-photo/picker-840.jpg 840w" sizes="(min-width: 960px) 680px, 100vw" width="840" height="512" alt="Picker · two options" loading="lazy" decoding="async" draggable="false"></picture><span class="ba-lbl l">Picker · two options</span></div><div class="st-img"><picture><source type="image/webp" srcset="examples/e-flyer-photo/after-480.webp 480w, examples/e-flyer-photo/after-840.webp 840w" sizes="(min-width: 960px) 680px, 100vw"><img src="examples/e-flyer-photo/after-840.jpg" srcset="examples/e-flyer-photo/after-480.jpg 480w, examples/e-flyer-photo/after-840.jpg 840w" sizes="(min-width: 960px) 680px, 100vw" width="840" height="512" alt="After · option A" loading="lazy" decoding="async" draggable="false"></picture><span class="ba-lbl l r">After · option A</span></div></div><div class="st-row" role="group" aria-label="Flyer photo swap: steps"><button type="button" class="st-b on" aria-pressed="true"><span class="st-n">01</span>Before · smart meter<i class="st-bar"></i></button><button type="button" class="st-b" aria-pressed="false"><span class="st-n">02</span>Picker · two options<i class="st-bar"></i></button><button type="button" class="st-b" aria-pressed="false"><span class="st-n">03</span>After · option A<i class="st-bar"></i></button></div></div><figcaption><span class="fn">15</span><h3>Flyer photo swap</h3><p class="sub">A gray smart-meter photo becomes towers at sunset.</p><a class="bx-skill" href="photo-picker.html">photo-picker<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a></figcaption></figure></div></section><section class="loopw"><div class="in"><h2 class="h2">How every skill works</h2><div class="loop">
+  <div class="step"><span class="n">01</span><b>Claude does the work</b><span>Screenshots, measurements, drafts, mockups.</span></div>
+  <div class="step"><span class="n">02</span><b>Publishes a page</b><span>A private review page, not a wall of chat.</span></div>
+  <div class="step you"><span class="n">03</span><b>You decide</b><span>Clear buttons on every item, and room for a comment. Works on a phone.</span></div>
+  <div class="step"><span class="n">04</span><b>Paste it back</b><span>One Copy button. Claude does exactly what you chose.</span></div>
+</div></div></section>
+<section class="in" id="skills" style="padding-block:24px 80px"><h2 class="h2">All skills</h2><section class="grp"><h3><span>01</span>Decide before it&#x27;s built</h3><div class="sk-grid"><a class="sk-card" href="design-review.html"><div class="sk-top"><b>design-review</b><em>23 features</em></div>
+<p class="sk-tag">See your live page beside real mockups, then approve what ships</p><div class="sk-chips"><span>Before Pictures</span><span>See Your Options</span><span>Your Look, Not Ours</span><span>The Words You Know</span><span class="more">+19 more</span></div></a><a class="sk-card" href="article-copy-edit.html"><div class="sk-top"><b>article-copy-edit</b><em>23 features</em></div>
+<p class="sk-tag">Review copy edits word by word, with a claims check first</p><div class="sk-chips"><span>Risky Claims, Checked First</span><span>What&#x27;s Risky in Your Field?</span><span>The Usual Suspects</span><span>Missing Affiliate Disclosures</span><span class="more">+19 more</span></div></a><a class="sk-card" href="photo-picker.html"><div class="sk-top"><b>photo-picker</b><em>23 features</em></div>
+<p class="sk-tag">Pick real photos for your pages from a gallery, not a guess</p><div class="sk-chips"><span>Spots That Need a Photo</span><span>Real Photos, Not Guesses</span><span>Checked by Eye First</span><span>Where It Came From</span><span class="more">+19 more</span></div></a><a class="sk-card" href="style-guide.html"><div class="sk-top"><b>style-guide</b><em>24 features</em></div>
+<p class="sk-tag">Agree on your site&#x27;s design rules once, then keep them</p><div class="sk-chips"><span>Starts From What&#x27;s Decided</span><span>The Whole Site at Once</span><span>Ratify What You Already Do</span><span>Settle the Real Splits</span><span class="more">+20 more</span></div></a></div></section><section class="grp"><h3><span>02</span>Check what&#x27;s built</h3><div class="sk-grid"><a class="sk-card" href="visual-qa.html"><div class="sk-top"><b>visual-qa</b><em>25 features</em></div>
+<p class="sk-tag">Measure your pages the way people see them, then fix what fails</p><div class="sk-chips"><span>Three Screen Sizes</span><span>No Sideways Scroll</span><span>Text You Can Read</span><span>Big Enough to Tap</span><span class="more">+21 more</span></div></a><a class="sk-card" href="pr-qa.html"><div class="sk-top"><b>pr-qa</b><em>24 features</em></div>
+<p class="sk-tag">See what each pull request really changed before you merge it</p><div class="sk-chips"><span>Every Open PR, Every Time</span><span>Nothing Goes Quiet</span><span>Runs It for Real</span><span>Before Shots Come First</span><span class="more">+20 more</span></div></a></div></section><section class="grp"><h3><span>03</span>Talk on a page, not in the terminal</h3><div class="sk-grid"><a class="sk-card" href="working-log.html"><div class="sk-top"><b>working-log</b><em>27 features</em></div>
+<p class="sk-tag">A page Claude talks to you through when the terminal fails you</p><div class="sk-chips"><span>Always Know Where You Are</span><span>Session Name First</span><span>Did My Reload Land?</span><span>Newest on Top</span><span class="more">+23 more</span></div></a><a class="sk-card" href="todos.html"><div class="sk-top"><b>todos</b><em>19 features</em></div>
+<p class="sk-tag">Tick off your to-do list on a page, and trust what&#x27;s left</p><div class="sk-chips"><span>Your List, Tickable</span><span>Five Clear Groups</span><span>A Count You Can Trust</span><span>Copy From Anywhere</span><span class="more">+15 more</span></div></a></div></section><section class="grp"><h3><span>04</span>Keep long sessions on track</h3><div class="sk-grid"><a class="sk-card" href="review-cycle.html"><div class="sk-top"><b>review-cycle</b><em>23 features</em></div>
+<p class="sk-tag">Hand over a stream of small fixes and watch each one ship</p><div class="sk-chips"><span>Hand It Over, Walk Away</span><span>Screenshots On by Default</span><span>A Live Page From Item One</span><span>The Before, Caught in Time</span><span class="more">+19 more</span></div></a><a class="sk-card" href="changelog.html"><div class="sk-top"><b>changelog</b><em>20 features</em></div>
+<p class="sk-tag">A signed-in What&#x27;s New page that gets a new entry every session</p><div class="sk-chips"><span>A What&#x27;s New Page</span><span>A Timeline, Not a Wall</span><span>This Month Up Front</span><span>Past Months, One Click</span><span class="more">+16 more</span></div></a></div></section></section>
+<footer class="foot"><div class="in"><span>proofs · Claude skills that show their work</span><span>MIT license</span></div></footer>
+<script>
+(function(){var b=document.getElementById('tryb'),c=document.getElementById('tryc');
+b.addEventListener('click',function(){try{navigator.clipboard.writeText(c.textContent).then(function(){b.textContent='Copied';setTimeout(function(){b.textContent='Copy'},1500)},function(){})}catch(_){}});})();
+</script>
+<script>
+(function(){
+  var RM = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var IO = 'IntersectionObserver' in window;
+  function ease(t){return t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2}
+  /* A label shows in full while its side fills most of the frame (FADE_HI or more)
+     and is gone by FADE_LO, so the label always names the picture you see. */
+  var FADE_LO=.35, FADE_HI=.65;
+  function fade(share){ var t=Math.max(0,Math.min(1,(share-FADE_LO)/(FADE_HI-FADE_LO))); return t*t*(3-2*t); }
+  /* Auto-sweep: hold on Before, sweep to After, hold, sweep back. */
+  var LO=.03, HI=.97, HOLD_B=1100, SWEEP=1700, HOLD_A=1500, CYCLE=HOLD_B+SWEEP+HOLD_A+SWEEP;
+  function at(t){
+    t%=CYCLE;
+    if(t<HOLD_B) return HI;
+    t-=HOLD_B; if(t<SWEEP) return HI-(HI-LO)*ease(t/SWEEP);
+    t-=SWEEP; if(t<HOLD_A) return LO;
+    t-=HOLD_A; return LO+(HI-LO)*ease(t/SWEEP);
+  }
+  [].forEach.call(document.querySelectorAll('[data-ba]'), function(el){
+    var l=el.querySelector('.ba-lbl.l'), r=el.querySelector('.ba-lbl.r');
+    var auto=!RM, seen=false, run=false, t0=0, phase=0, raf=0, cur=.5;
+    function set(p){
+      p=Math.max(0,Math.min(1,p)); cur=p;
+      el.style.setProperty('--p',p);
+      var v=Math.round((1-p)*100);
+      el.setAttribute('aria-valuenow',v); el.setAttribute('aria-valuetext',v+'% after');
+      l.style.opacity=fade(p); r.style.opacity=fade(1-p);
+    }
+    function tick(now){ if(!run) return; phase=now-t0; set(at(phase)); raf=requestAnimationFrame(tick); }
+    function start(){ if(!auto||run) return; run=true; if(!seen){seen=true; phase=0; set(HI);} t0=performance.now()-phase; raf=requestAnimationFrame(tick); }
+    function stop(){ run=false; cancelAnimationFrame(raf); }
+    function grab(){ auto=false; stop(); el.classList.add('held'); }
+    if(auto){
+      set(HI);
+      if(IO){ new IntersectionObserver(function(es){es.forEach(function(en){en.isIntersecting?start():stop()})},{threshold:.35}).observe(el); }
+      else start();
+    } else { set(.5); l.style.opacity=1; r.style.opacity=1; }
+    function fromX(x){ var b=el.getBoundingClientRect(); set((x-b.left)/b.width); }
+    var drag=false;
+    el.addEventListener('pointerdown',function(ev){ grab(); drag=true; try{el.setPointerCapture(ev.pointerId)}catch(_){} fromX(ev.clientX); });
+    el.addEventListener('pointermove',function(ev){ if(drag) fromX(ev.clientX); });
+    function up(){ drag=false; }
+    el.addEventListener('pointerup',up); el.addEventListener('pointercancel',up);
+    el.addEventListener('keydown',function(ev){
+      var p=cur, k=ev.key, step=null;
+      if(k==='ArrowLeft'||k==='ArrowDown') step=-.05; else if(k==='ArrowRight'||k==='ArrowUp') step=.05;
+      else if(k==='PageDown') step=-.2; else if(k==='PageUp') step=.2;
+      else if(k==='Home'){ grab(); set(1); ev.preventDefault(); return; }
+      else if(k==='End'){ grab(); set(0); ev.preventDefault(); return; }
+      if(step===null) return;
+      /* The value counts how much After shows, so Right or Up shows more of it. */
+      grab(); set(p-step); ev.preventDefault();
+    });
+  });
+  [].forEach.call(document.querySelectorAll('[data-steps]'), function(el){
+    var imgs=el.querySelectorAll('.st-img'), btns=el.querySelectorAll('.st-b'), n=imgs.length;
+    var i=0, auto=!RM, run=false, raf=0, t0=0, el0=0, STEP=2600;
+    function show(k){
+      i=(k+n)%n;
+      for(var j=0;j<n;j++){ imgs[j].classList.toggle('on',j===i); btns[j].classList.toggle('on',j===i); btns[j].setAttribute('aria-pressed',j===i?'true':'false'); btns[j].style.removeProperty('--t'); }
+    }
+    function tick(now){
+      if(!run) return; var d=now-t0;
+      if(d>=STEP){ show(i+1); t0=now; d=0; }
+      btns[i].style.setProperty('--t',(d/STEP*100)+'%'); el0=d;
+      raf=requestAnimationFrame(tick);
+    }
+    function start(){ if(!auto||run) return; run=true; t0=performance.now()-el0; raf=requestAnimationFrame(tick); }
+    function stop(){ run=false; cancelAnimationFrame(raf); }
+    [].forEach.call(btns,function(b,k){ b.addEventListener('click',function(){ auto=false; stop(); show(k); }); });
+    if(auto){
+      if(IO){ new IntersectionObserver(function(es){es.forEach(function(en){en.isIntersecting?start():stop()})},{threshold:.35}).observe(el); }
+      else start();
+    }
+  });
+})();
+</script>

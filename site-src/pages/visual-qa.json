@@ -1,0 +1,232 @@
+{
+ "skill": "visual-qa",
+ "tagline": "Measure your pages the way people see them, then fix what fails",
+ "use_when": "A page looks cramped, empty, too small or broken on a phone, or you are about to call a page done and want proof it holds up on real screens.",
+ "promises": [
+  "Measured at three screen sizes",
+  "Nothing is built until you approve it"
+ ],
+ "try_it": "Use the visual-qa skill to check /pricing and /account at desktop and phone sizes and propose fixes for anything that fails.",
+ "sections": [
+  {
+   "title": "What it measures",
+   "features": [
+    {
+     "id": "f1",
+     "label": "Three Screen Sizes",
+     "sub": "Every page is captured on two laptops and a phone",
+     "title": "Every page is captured on two laptops and a phone",
+     "what": "Each page is opened at 1440×900, 1280×800 and 390×844, the way a person would see it. A layout that only works on your own monitor gets caught.",
+     "html": "<div class=\"row\" style=\"gap:8px\"><div class=\"col\" style=\"width:44%\"><div class=\"desk\"><div class=\"col\" style=\"gap:4px\"><i class=\"mk d\" style=\"width:100%;height:10px\"></i><i class=\"mk\" style=\"height:6px\"></i><i class=\"mk\" style=\"height:6px\"></i><i class=\"mk\" style=\"height:6px\"></i></div></div><span class=\"tag\">1440×900</span></div><div class=\"col\" style=\"width:34%\"><div class=\"desk\"><div class=\"col\" style=\"gap:4px\"><i class=\"mk d\" style=\"width:100%;height:10px\"></i><i class=\"mk\" style=\"height:6px\"></i><i class=\"mk\" style=\"height:6px\"></i></div></div><span class=\"tag\">1280×800</span></div><div class=\"col\" style=\"width:22%\"><div class=\"phone\"><i class=\"mk d\" style=\"width:100%;height:10px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i></div><span class=\"tag\">390×844</span></div></div>"
+    },
+    {
+     "id": "f2",
+     "label": "No Sideways Scroll",
+     "sub": "Flags any page that scrolls sideways",
+     "title": "Flags any page that scrolls sideways",
+     "what": "A page that is wider than the screen fails, with the number of extra pixels. Wide tables are expected to scroll inside their own box instead of dragging the whole page.",
+     "html": "<div class=\"col\"><div class=\"win\"><div class=\"wb\"><i></i><i></i><i></i><span>390 · /pricing</span></div><div class=\"wbody\"><i class=\"mk d\" style=\"width:100%;height:14px\"></i><div class=\"two\"><i class=\"mk\" style=\"width:100%;height:26px\"></i><i class=\"mk\" style=\"width:100%;height:26px\"></i></div></div></div><div class=\"row flow\"><b class=\"hd\">Sideways scroll</b><span class=\"arr\">212 px</span><span class=\"st mid\">FAIL</span></div><div class=\"row flow\"><b class=\"hd\">Table scrolls in its box</b><span class=\"arr\">0 px</span><span class=\"st ok\">PASS</span></div></div>"
+    },
+    {
+     "id": "f3",
+     "label": "Text You Can Read",
+     "sub": "Flags text smaller than 16 px, even inside charts",
+     "title": "Flags text smaller than 16 px, even inside charts",
+     "what": "Every piece of visible text is measured, including chart labels at the size they actually render. The floor is 16 px by default, and you can raise it for an older audience.",
+     "html": "<div class=\"col\"><div class=\"row flow\"><b class=\"hd\">Body text</b><span class=\"arr\">18 px</span><span class=\"st ok\">PASS</span></div><div class=\"row flow\"><b class=\"hd\">Chart labels</b><span class=\"arr\">11 px</span><span class=\"st mid\">FAIL</span></div><div class=\"row flow\"><b class=\"hd\">Footnotes</b><span class=\"arr\">13 px</span><span class=\"st mid\">FAIL</span></div><div class=\"note2\">floor: 16 px · adjustable</div></div>"
+    },
+    {
+     "id": "f4",
+     "label": "Big Enough to Tap",
+     "sub": "Buttons and links under 44 px get flagged",
+     "title": "Buttons and links under 44 px get flagged",
+     "what": "Every button, link and form field is checked for a 44 px tap area both ways. Links inside a sentence are left alone, since nobody expects those to be big.",
+     "html": "<div class=\"two mid\"><div class=\"col\"><div class=\"row\"><span class=\"mb sm\">Edit</span><span class=\"mb sm\">Delete</span></div><span class=\"st mid\">32 × 26 · too small</span></div><div class=\"col\"><div class=\"row\"><span class=\"mb on\">Edit</span><span class=\"mb\">Delete</span></div><span class=\"st ok\">48 × 44 · OK</span></div></div>"
+    },
+    {
+     "id": "f5",
+     "label": "Nothing Cut Off",
+     "sub": "Catches text cut short while there's room beside it",
+     "title": "Catches text cut short while there's room beside it",
+     "what": "Titles that end in an ellipsis even though there is plenty of space next to them get flagged. You see the full name unless the screen truly has no room for it.",
+     "html": "<div class=\"col\"><div class=\"row\"><span class=\"itm\" style=\"width:58%\"><span>Wildflower Ho…</span></span><span class=\"link\">180 px free</span></div><div class=\"row flow\"><b class=\"hd\">Cut off with room</b><span class=\"arr\">1</span><span class=\"st mid\">FAIL</span></div></div>"
+    },
+    {
+     "id": "f6",
+     "label": "No Broken Words",
+     "sub": "Catches words split in the middle across two lines",
+     "title": "Catches words split in the middle across two lines",
+     "what": "A name that breaks into \"Wildflo\" on one line and \"wer\" on the next gets flagged, along with the CSS fix. Long names with slashes get a clean break point after the slash instead.",
+     "html": "<div class=\"two mid\"><div class=\"opt\"><span class=\"tag\">Before</span><b class=\"hd\">Wildflo<br>wer Honey</b><span class=\"st mid\">split word</span></div><div class=\"opt\"><span class=\"tag\">After</span><b class=\"hd\">Wildflower<br>Honey</b><span class=\"st ok\">whole words</span></div></div>"
+    },
+    {
+     "id": "f7",
+     "label": "How Much Fits",
+     "sub": "Counts how many items fit on the first screen",
+     "title": "Counts how many items fit on the first screen",
+     "what": "On lists, tables and stores, it counts what you see before scrolling and how much space the header takes first. Targets like six list lines on a laptop and three on a phone turn \"feels empty\" into a number.",
+     "html": "<div class=\"two mid\"><div class=\"col\"><span class=\"tag\">Before · 1 item</span><div class=\"desk\"><i class=\"mk d\" style=\"width:100%;height:10px\"></i><i class=\"mk\" style=\"width:100%;height:6px\"></i><i class=\"mk\" style=\"width:100%;height:52px\"></i></div></div><div class=\"col\"><span class=\"tag acc\">After · 8 items</span><div class=\"desk\"><div class=\"col\" style=\"gap:4px\"><i class=\"mk d\" style=\"width:100%;height:10px\"></i><i class=\"mk\" style=\"height:5px\"></i><i class=\"mk\" style=\"height:5px\"></i><i class=\"mk\" style=\"height:5px\"></i><i class=\"mk\" style=\"height:5px\"></i><i class=\"mk\" style=\"height:5px\"></i><i class=\"mk\" style=\"height:5px\"></i><i class=\"mk\" style=\"height:5px\"></i><i class=\"mk\" style=\"height:5px\"></i></div></div></div></div>"
+    },
+    {
+     "id": "f8",
+     "label": "Uses the Screen",
+     "sub": "Desktop content should fill at least 70% of the width",
+     "title": "Desktop content should fill at least 70% of the width",
+     "what": "A narrow column floating in a wide screen is flagged with how much of the width it uses. Content is expected to fill most of the screen, capped near 1200 px and centered.",
+     "html": "<div class=\"col\"><div class=\"desk\"><div class=\"col\" style=\"gap:4px\"><i class=\"mk d\" style=\"width:48%;height:10px\"></i><i class=\"mk\" style=\"width:48%;height:7px\"></i><i class=\"mk\" style=\"width:48%;height:7px\"></i><i class=\"mk\" style=\"width:48%;height:7px\"></i></div></div><div class=\"row flow\"><b class=\"hd\">Content width</b><span class=\"arr\">48%</span><span class=\"st mid\">FAIL</span></div><div class=\"note2\">target: at least 70%</div></div>"
+    }
+   ]
+  },
+  {
+   "title": "Real pages, real states",
+   "features": [
+    {
+     "id": "f9",
+     "label": "Every State, Not Just One",
+     "sub": "Full, empty, long text and missing values each get a look",
+     "title": "Full, empty, long text and missing values each get a look",
+     "what": "Each page is captured in every state a person can reach: full of data, empty, with very long names, with missing values, and as each kind of user. You list the pages and states in a small pages file (an example is bundled). The empty state is where layouts usually break.",
+     "html": "<div class=\"four\"><div class=\"opt sm\"><span class=\"tag\">Full</span><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i></div><div class=\"opt sm\"><span class=\"tag\">Empty</span><i class=\"mk\" style=\"width:60%;height:7px\"></i></div><div class=\"opt sm\"><span class=\"tag\">Long</span><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:80%;height:7px\"></i></div><div class=\"opt sm\"><span class=\"tag\">Missing</span><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:30%;height:7px\"></i></div></div>"
+    },
+    {
+     "id": "f10",
+     "label": "Open the Drawers",
+     "sub": "Sheets, dialogs and expanders are opened and measured",
+     "title": "Sheets, dialogs and expanders are opened and measured",
+     "what": "Anything that only appears after a click, like a slide-up sheet, a dialog or an expanding section, is opened the way a person would and measured as its own state.",
+     "html": "<div class=\"two mid\"><div class=\"col\"><span class=\"mb\">Add item</span><div class=\"note2\">clicked first</div></div><div class=\"opt sel\"><span class=\"tag acc\">Sheet open</span><i class=\"mk d\" style=\"width:100%;height:10px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i><span class=\"mb on\">Save</span></div></div>"
+    },
+    {
+     "id": "f11",
+     "label": "Signed In for Real",
+     "sub": "Signs in through your real form, password never shown",
+     "title": "Signs in through your real form, password never shown",
+     "what": "Pages behind a login are reached by signing in through the actual sign-in form, using a small sign-in hook you write (an example is bundled). The hook reads the password from an untracked env file and never prints it, and any secret on screen is blanked before the screenshot.",
+     "html": "<div class=\"col\"><div class=\"code\"><span>email: dev@example.com</span><span>password: read from your env file</span></div><div class=\"col chk\"><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> never printed</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> secrets blanked before capture</span></div></div>"
+    },
+    {
+     "id": "f12",
+     "label": "Realistic Data, Put Back After",
+     "sub": "Tests with lifelike data, then restores what was there",
+     "title": "Tests with lifelike data, then restores what was there",
+     "what": "Before capturing, the feature is filled with data shaped like real use: realistic counts, long names, blanks. The starting state is noted first and put back afterward.",
+     "html": "<div class=\"col\"><div class=\"row flow\"><span class=\"st mute\">Start · 3 items</span><span class=\"arr\">noted</span></div><div class=\"row flow\"><span class=\"st mid\">Seeded · 120 items</span><span class=\"arr\">long names, blanks</span></div><div class=\"row flow\"><span class=\"st ok\">Restored · 3 items</span><span class=\"arr\">put back</span></div></div>"
+    },
+    {
+     "id": "f13",
+     "label": "Every Page of the Feature",
+     "sub": "Checks every page your change touches, not just one",
+     "title": "Checks every page your change touches, not just one",
+     "what": "Point it at a few pages, or give it none and it checks every page the current branch changes. You don't find the next broken page yourself after it said the first one was fine.",
+     "html": "<div class=\"col\"><div class=\"code\"><span>/proofs:visual-qa</span></div><div class=\"col chk\"><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> /store</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> /store/item</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> /my/list</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> /my/orders</span></div></div>"
+    }
+   ]
+  },
+  {
+   "title": "What you get",
+   "features": [
+    {
+     "id": "f14",
+     "label": "A Summary Table",
+     "sub": "One line per page and size, with what failed",
+     "title": "One line per page and size, with what failed",
+     "what": "A short table lists every page, state and screen size with its failures and counts. You see at a glance which page breaks where.",
+     "html": "<pre class=\"ex\">store  1440  none\nstore   390  small taps: 6\nlist   1280  small text: 4\nlist    390  sideways: 212 px</pre>"
+    },
+    {
+     "id": "f15",
+     "label": "Screenshots at Every Size",
+     "sub": "A first-screen and a full-page picture of each",
+     "title": "A first-screen and a full-page picture of each",
+     "what": "Every page, state and size gets two screenshots, what you see before scrolling and the whole page, named so they line up. They become the evidence for every finding.",
+     "html": "<div class=\"col\"><div class=\"itm\"><span>store-full-1440.png</span><small>first screen</small></div><div class=\"itm\"><span>store-full-1440-full.png</span><small>whole page</small></div><div class=\"itm\"><span>store-full-390.png</span><small>phone</small></div></div>"
+    },
+    {
+     "id": "f16",
+     "label": "Looked At, Not Just Measured",
+     "sub": "Claude opens every screenshot itself",
+     "title": "Claude opens every screenshot itself",
+     "what": "Numbers miss things like a label sitting on a bar, two items both called \"Other\" or a missing way back. Every screenshot is looked at directly, plus the in-between tablet widths where layouts switch.",
+     "html": "<div class=\"two mid\"><div class=\"win\"><div class=\"wb\"><i></i><i></i><i></i><span>390 · /store</span></div><div class=\"wbody\"><i class=\"mk d\" style=\"width:100%;height:12px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i></div></div><div class=\"col\"><div class=\"bub\">label sits on the bar</div><div class=\"note2\">also checked at 768 and 1024</div></div></div>"
+    },
+    {
+     "id": "f17",
+     "label": "A Ranked Audit",
+     "sub": "Problems listed by how much they hurt",
+     "title": "Problems listed by how much they hurt",
+     "what": "The audit has a pass/fail table per page, then the problems ranked by how much they get in a person's way. Each one names the page, size, screenshot, number and a proposed fix.",
+     "html": "<div class=\"col\"><div class=\"band\"><span class=\"num\">1</span><b class=\"hd\">390 · buttons 32 px tall</b></div><div class=\"band\"><span class=\"num\">2</span><b class=\"hd\">1280 · 2 lines on first screen</b></div><div class=\"band\"><span class=\"num\">3</span><b class=\"hd\">1440 · footnotes at 13 px</b></div></div>"
+    },
+    {
+     "id": "f18",
+     "label": "Right Rules for the Page",
+     "sub": "Density targets for data pages, judgment for articles",
+     "title": "Density targets for data pages, judgment for articles",
+     "what": "Lists, tables, stores and dashboards get the item-count targets. Articles and landing pages keep the text, tap, scroll and cut-off checks, with density judged by eye.",
+     "html": "<div class=\"two mid\"><div class=\"opt\"><span class=\"tag\">Data page</span><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><div class=\"note2\">6+ lines on screen</div></div><div class=\"opt\"><span class=\"tag\">Article</span><i class=\"mk d\" style=\"width:100%;height:14px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:80%;height:7px\"></i><div class=\"note2\">judged by eye</div></div></div>"
+    }
+   ]
+  },
+  {
+   "title": "From problem to fix",
+   "features": [
+    {
+     "id": "f19",
+     "label": "Your Page as the Before",
+     "sub": "Each problem becomes a design review with a real screenshot",
+     "title": "Each problem becomes a design review with a real screenshot",
+     "what": "Every problem, or group of problems with one fix, becomes an item in a design review. The Before is the real screenshot, or the one you sent if you sent one.",
+     "html": "<div class=\"win\"><div class=\"wb\"><i></i><i></i><i></i><span>Before · 390 · /store</span></div><div class=\"wbody\"><i class=\"mk d\" style=\"width:100%;height:14px\"></i><i class=\"mk\" style=\"width:100%;height:40px\"></i><span class=\"st mid\">1 item on first screen</span></div></div>"
+    },
+    {
+     "id": "f20",
+     "label": "Mockups That Prove It",
+     "sub": "Each proposed fix visibly meets its target",
+     "title": "Each proposed fix visibly meets its target",
+     "what": "Mockups use your page's own fonts, colors and data, and are drawn to show the target being met: a laptop frame that really holds eight lines, a phone frame with 16 px text and 44 px buttons.",
+     "html": "<div class=\"two mid\"><div class=\"desk\"><div class=\"col\" style=\"gap:4px\"><i class=\"mk d\" style=\"width:100%;height:10px\"></i><i class=\"mk\" style=\"height:4px\"></i><i class=\"mk\" style=\"height:4px\"></i><i class=\"mk\" style=\"height:4px\"></i><i class=\"mk\" style=\"height:4px\"></i><i class=\"mk\" style=\"height:4px\"></i><i class=\"mk\" style=\"height:4px\"></i><i class=\"mk\" style=\"height:4px\"></i><i class=\"mk\" style=\"height:4px\"></i></div></div><div class=\"col\"><span class=\"tag acc\">1280 × 800</span><div class=\"col chk\"><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> 8 lines visible</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> 16 px text</span></div></div></div>"
+    },
+    {
+     "id": "f21",
+     "label": "The Number in the Reason",
+     "sub": "Every item states the failing number and the target",
+     "title": "Every item states the failing number and the target",
+     "what": "Each review item's reason gives the measured number next to the target it missed. You decide on facts, not on how a page feels.",
+     "html": "<div class=\"col\"><div class=\"row\"><b class=\"hd\">Store list</b><span class=\"rec yes\">Recommended</span></div><div class=\"why\"><b>Reason:</b> 2 lines on the first screen at 1280; target is 6 or more.</div></div>"
+    },
+    {
+     "id": "f22",
+     "label": "Your Call Stays Yours",
+     "sub": "Choices that aren't layout fixes become questions",
+     "title": "Choices that aren't layout fixes become questions",
+     "what": "Anything that is really your decision, like whether to hide sold-out items, is asked as a question rather than quietly decided as part of a layout fix.",
+     "html": "<div class=\"col\"><span class=\"tag\">Question item</span><div class=\"bub\">Hide sold-out items from the list?</div><div class=\"row\"><span class=\"mb\">Yes, hide them</span><span class=\"mb\">Keep showing</span></div></div>"
+    },
+    {
+     "id": "f23",
+     "label": "Before and After",
+     "sub": "Fixes are re-measured and shown side by side",
+     "title": "Fixes are re-measured and shown side by side",
+     "what": "After the approved fixes are built, the same pages are captured again with matching file names. You get Before and After screenshots side by side with the key numbers, before anything is merged.",
+     "html": "<div class=\"col\"><div class=\"two mid\"><div class=\"opt\"><span class=\"tag\">Before</span><i class=\"mk d\" style=\"width:100%;height:10px\"></i><i class=\"mk\" style=\"width:100%;height:34px\"></i></div><div class=\"opt\"><span class=\"tag acc\">After</span><i class=\"mk d\" style=\"width:100%;height:10px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i></div></div><pre class=\"ex\">lines on screen   1 → 8\ntap targets   32 → 48 px</pre></div>"
+    },
+    {
+     "id": "f24",
+     "label": "Locked In With a Test",
+     "sub": "Numbers worth keeping get pinned in a test",
+     "title": "Numbers worth keeping get pinned in a test",
+     "what": "A number that matters, like how many rows fit or how many database queries a page makes, can be pinned in an automated test so a later change can't quietly undo the fix.",
+     "html": "<div class=\"col\"><div class=\"code\"><span>test \"first screen holds 8 lines\"</span><span>&nbsp;&nbsp;assert visible_lines &gt;= 8</span></div><div class=\"col chk\"><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> fails if it regresses</span></div></div>"
+    },
+    {
+     "id": "wp",
+     "label": "Where the Page Goes",
+     "sub": "A private link, a local file, or your Wi-Fi",
+     "title": "A private link, a local file, or your Wi-Fi",
+     "what": "Your project picks where review pages go: a private claude.ai link, an HTML file that opens in your browser, or that file served on your home Wi-Fi so a phone can open it. Nothing is ever uploaded or tunneled in the Wi-Fi mode, and the server stops when the review ends.",
+     "html": "<div class=\"col\"><div class=\"opt\"><span class=\"tag\">artifact</span><div class=\"row\" style=\"align-items:stretch\"><div class=\"phone\" style=\"max-width:112px;flex:none\"><i class=\"mk d\" style=\"width:100%;height:16px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i><span class=\"link\" style=\"font-size:9px;padding:2px 6px\">private link</span></div><div class=\"desk\" style=\"flex:1;min-width:0;display:grid;gap:5px;align-content:start\"><i class=\"mk d\" style=\"width:100%;height:24px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i><span class=\"link\" style=\"font-size:9px;padding:2px 6px\">private link</span></div></div></div><div class=\"opt\"><span class=\"tag\">file</span><div class=\"win\" style=\"max-width:240px\"><div class=\"wb\"><i></i><i></i><i></i><span>file</span></div><div class=\"wbody\"><i class=\"mk d\" style=\"width:100%;height:18px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i></div></div></div><div class=\"opt\"><span class=\"tag\">wifi</span><div class=\"row\"><div class=\"phone\" style=\"max-width:84px;flex:none\"><i class=\"mk d\" style=\"width:100%;height:16px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i></div><div class=\"col\" style=\"flex:1;min-width:0;justify-items:center;gap:3px\"><span class=\"note2\">same Wi-Fi</span><span style=\"display:block;width:100%;border-top:2px dashed var(--accent)\"></span></div><div class=\"desk\" style=\"flex:none;width:96px;display:grid;gap:5px;align-content:start\"><i class=\"mk d\" style=\"width:100%;height:18px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i></div></div></div></div>"
+    }
+   ]
+  }
+ ]
+}

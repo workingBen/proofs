@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>proofs · todos</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#f4efe6; --card:#fffdf9; --fg:#1d1b17; --muted:#6b6458; --line:#ddd5c6; --soft:#ece5d8; --sk:#e2dacb; --skd:#c9bfad;
+  --accent:#c2410c; --accent-soft:#fde4d6; --ok:#1a7f37; --ok-soft:#dcf5e3; --bad:#b42318; --bad-soft:#fde8e6;
+  --mid:#8a5a00; --mid-soft:#fbefd2; --ink:#1d1b17; --paper:#f4efe6;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#15130f; --card:#1e1b16; --fg:#efe8dc; --muted:#a69d8e; --line:#3a352c; --soft:#2a261f; --sk:#38332a; --skd:#524a3d;
+  --accent:#ff8a4c; --accent-soft:#3a2216; --ok:#4ac26b; --ok-soft:#14281a; --bad:#ff6b5e; --bad-soft:#341815;
+  --mid:#e0b14a; --mid-soft:#2f2612; --ink:#efe8dc; --paper:#15130f; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#15130f; --card:#1e1b16; --fg:#efe8dc; --muted:#a69d8e; --line:#3a352c; --soft:#2a261f; --sk:#38332a; --skd:#524a3d;
+  --accent:#ff8a4c; --accent-soft:#3a2216; --ok:#4ac26b; --ok-soft:#14281a; --bad:#ff6b5e; --bad-soft:#341815;
+  --mid:#e0b14a; --mid-soft:#2f2612; --ink:#efe8dc; --paper:#15130f; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{scroll-behavior:smooth;scroll-padding-top:24px}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+.in{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+a{color:inherit}
+.top{border-bottom:1px solid var(--line)}
+.top .in{display:flex;align-items:center;gap:10px;padding-block:14px;font:600 13px "JetBrains Mono",monospace;color:var(--muted)}
+.top .logo{color:var(--fg);font:400 22px "Instrument Serif",Georgia,serif;text-decoration:none}
+.top .logo i{color:var(--accent)}
+.hero .in{padding-block:48px 36px;display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+.eyebrow{font:600 12px/1 "JetBrains Mono",monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.hero h1{font:400 clamp(40px,7vw,76px)/1 "Instrument Serif",Georgia,serif;margin:0;letter-spacing:-.01em}
+.hero .tagline{font:400 clamp(22px,3vw,30px)/1.25 "Instrument Serif",Georgia,serif;margin:0;max-width:30em;text-wrap:balance}
+.hero .use{color:var(--muted);max-width:44em;margin:0}
+.try{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;max-width:760px;margin-top:6px}
+.try .lbl{font:600 11px "JetBrains Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.trybox{display:flex;gap:10px;align-items:center;background:var(--ink);color:var(--paper);border-radius:10px;padding:12px 12px 12px 16px}
+.trybox code{flex:1;min-width:0;font:14px/1.5 "JetBrains Mono",monospace}
+.trybox button{flex:none;font:700 13px -apple-system,sans-serif;padding:10px 14px;min-height:40px;border-radius:7px;border:0;background:var(--accent);color:#fff;cursor:pointer}
+.stats{display:flex;flex-wrap:wrap;gap:8px 20px;font:600 13px "JetBrains Mono",monospace;color:var(--muted)}
+.stats b{color:var(--fg)}
+.layout{display:grid;grid-template-columns:250px minmax(0,1fr);gap:40px;padding-block:24px 96px}
+nav.toc{position:sticky;top:20px;align-self:start;max-height:calc(100vh - 40px);overflow:auto;font-size:14px}
+.toc h2{font:600 11px "JetBrains Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+.toc ol{list-style:none;margin:0;padding:0}
+.toc > ol > li{margin-bottom:12px}
+.toc > ol > li > a{font-weight:700;text-decoration:none}
+.toc ol ol{margin-top:4px;border-left:2px solid var(--line);padding-left:10px;counter-reset:none}
+.toc ol ol a{display:block;padding:3px 0;color:var(--muted);text-decoration:none;line-height:1.35}
+.toc a:hover,.toc a.on{color:var(--accent)}
+.toc ol ol a.on{font-weight:600}
+.sec{display:grid;gap:18px;margin-bottom:48px}
+.sec h2{display:flex;gap:12px;align-items:baseline;font:400 40px/1.1 "Instrument Serif",Georgia,serif;margin:0 0 4px;border-bottom:1px solid var(--line);padding-bottom:12px}
+.sec h2 span{font:600 13px "JetBrains Mono",monospace;color:var(--accent)}
+.feat{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:28px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 24px}
+.fx{display:grid;gap:6px;min-width:0}
+.fn{font:600 12px "JetBrains Mono",monospace;color:var(--accent)}
+.fx h3{margin:0;font:400 34px/1.05 "Instrument Serif",Georgia,serif;text-wrap:balance}
+.fx .sub{margin:0 0 4px;font-size:18px;font-weight:650;line-height:1.35;text-wrap:balance}
+.fx p{margin:0;color:var(--muted)}
+.fx p.sub{color:var(--fg)}
+.fig{min-width:0;background:var(--soft);border-radius:12px;padding:16px;font-size:12px}
+/* drawing kit */
+.mk{display:block;background:var(--sk);border-radius:4px}
+.mk.d{background:var(--skd)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.two.mid{align-items:center}
+.three{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.four{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.col{display:grid;gap:7px;align-content:start}
+.row{display:flex;gap:6px;align-items:center}
+.row.wrap{flex-wrap:wrap}
+.opt{position:relative;background:var(--card);border:1.5px solid var(--line);border-radius:9px;padding:9px;display:grid;gap:5px;align-content:start}
+.opt.sm{padding:6px}
+.opt.sel{border:2px solid var(--accent)}
+.opt.old{opacity:.5;border-style:dashed}
+.opt.brand{border-color:var(--accent)}
+.ck{position:absolute;top:6px;right:6px;width:18px;height:18px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center}
+.tag{font:600 10px "JetBrains Mono",monospace;letter-spacing:.06em;color:var(--muted);text-transform:uppercase}
+.tag.acc,.acc{color:var(--accent)}
+.mb{font:600 11.5px -apple-system,sans-serif;padding:7px 9px;border-radius:7px;border:1px solid var(--line);background:var(--card);white-space:nowrap}
+.mb.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.mb.on.acc{background:var(--accent);border-color:var(--accent);color:#fff}
+.mb.sm{padding:5px 8px}
+.win{position:relative;background:var(--card);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.wb{display:flex;gap:4px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--line);font:600 10px "JetBrains Mono",monospace;color:var(--muted)}
+.wb i{width:7px;height:7px;border-radius:50%;background:var(--line)}
+.wb span{margin-left:6px}
+.wbody{padding:10px;display:grid;gap:7px}
+.cam{position:absolute;right:8px;bottom:8px;display:flex;gap:4px;align-items:center;font:600 10px "JetBrains Mono",monospace;background:var(--ink);color:var(--paper);padding:4px 7px;border-radius:999px}
+.sw{display:flex;gap:5px}
+.sw b{width:22px;height:22px;border-radius:5px;border:1px solid var(--line)}
+.aa{font:400 30px/1 "Instrument Serif",Georgia,serif}
+.aa small{font:600 10px "JetBrains Mono",monospace;color:var(--muted);margin-left:6px}
+.hl{font:600 12px -apple-system,sans-serif;display:flex;gap:4px;align-items:center}
+.hl.strike{text-decoration:line-through;color:var(--muted)}
+.hl.ok{color:var(--ok)}
+.pg{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:8px;display:grid;gap:6px;max-width:300px;margin:0 auto;width:100%}
+.band{display:flex;gap:8px;align-items:center;border:1px dashed var(--line);border-radius:6px;padding:8px}
+.num{flex:none;width:20px;height:20px;border-radius:50%;background:var(--accent);color:#fff;font:700 11px/20px -apple-system,sans-serif;text-align:center}
+.rec{font:600 10.5px "JetBrains Mono",monospace;padding:3px 7px;border-radius:999px;margin-left:auto}
+.rec.yes{background:var(--ok-soft);color:var(--ok)} .rec.no{background:var(--bad-soft);color:var(--bad)}
+.hd{font:600 12.5px -apple-system,sans-serif}
+.why{font-size:12px;background:var(--card);border:1px solid var(--line);border-radius:7px;padding:7px 9px}
+.phone{background:var(--card);border:1.5px solid var(--skd);border-radius:14px;padding:9px 7px;display:grid;gap:5px;max-width:84px;width:100%;justify-self:center}
+.desk{background:var(--card);border:1.5px solid var(--skd);border-radius:7px;padding:9px}
+.openi{display:flex;gap:7px;align-items:center;font:600 12px -apple-system,sans-serif;background:var(--card);border:1.5px solid var(--accent);border-radius:7px;padding:8px 10px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.recap{font:600 11px "JetBrains Mono",monospace;color:var(--muted);border:1px solid var(--line);border-radius:7px;padding:7px 10px}
+.cbox{position:relative;background:var(--card);border:1.5px solid var(--accent);border-radius:7px;padding:9px 10px;font:12.5px -apple-system,sans-serif}
+.caret{display:inline-block;width:1.5px;height:13px;background:var(--accent);vertical-align:-2px;margin-left:2px}
+.pill{font:600 10.5px "JetBrains Mono",monospace;padding:3px 8px;border-radius:999px;margin-left:auto}
+.pill.ok{background:var(--ok-soft);color:var(--ok)} .pill.mid{background:var(--mid-soft);color:var(--mid)} .pill.mute{background:var(--soft);color:var(--muted);border:1px solid var(--line)} .pill.line{border:1px solid var(--line);color:var(--muted);background:var(--card)}
+.itm{display:flex;gap:8px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:7px;padding:8px 10px;font:600 12px -apple-system,sans-serif}
+.itm span:first-child{flex:1}
+.itm small{font:600 10px "JetBrains Mono",monospace;color:var(--muted)}
+.tg{width:28px;height:16px;border-radius:9px;background:var(--line);position:relative}
+.tg b{position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:var(--card)}
+.tg.on{background:var(--ok)} .tg.on b{left:14px}
+.note2{font:600 10.5px "JetBrains Mono",monospace;color:var(--muted)}
+.bottom{display:flex;gap:10px;align-items:center;justify-content:space-between;background:var(--ink);color:var(--paper);border-radius:9px;padding:10px 12px;font:600 12px "JetBrains Mono",monospace}
+.tally{display:flex;gap:5px}
+.tally b{min-width:20px;text-align:center;border-radius:5px;padding:2px 5px;font-size:11px}
+.tally .ok{background:var(--ok);color:#fff}.tally .mid{background:var(--mid);color:#fff}.tally .mute{background:var(--muted);color:#fff}
+.ex{margin:0;font:11.5px/1.55 "JetBrains Mono",monospace;background:var(--card);border:1px solid var(--line);border-radius:7px;padding:10px;white-space:pre-wrap;word-break:break-word}
+.flow{background:var(--card);border:1px solid var(--line);border-radius:7px;padding:6px 8px}
+.st{font:600 11px -apple-system,sans-serif;padding:3px 8px;border-radius:999px}
+.st.ok{background:var(--ok-soft);color:var(--ok)}.st.mid{background:var(--mid-soft);color:var(--mid)}.st.mute{background:var(--soft);color:var(--muted)}
+.arr{margin-left:auto;font:600 11px "JetBrains Mono",monospace;color:var(--muted)}
+.ph{font:600 11px -apple-system,sans-serif;color:var(--muted);font-style:italic}
+.code{display:grid;gap:3px;background:var(--ink);color:var(--paper);border-radius:8px;padding:10px;font:11px/1.4 "JetBrains Mono",monospace}
+.chk span{display:flex;gap:6px;align-items:center;font:600 12px -apple-system,sans-serif;color:var(--ok)}
+.link{font:600 10.5px "JetBrains Mono",monospace;color:var(--accent);border:1px dashed var(--accent);border-radius:999px;padding:3px 8px;width:fit-content}
+.bub{background:var(--card);border:1px solid var(--line);border-radius:12px 12px 12px 3px;padding:8px 12px;font:italic 13px Georgia,serif;width:fit-content}
+.pn .in{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding-block:0 40px}
+.pn a{display:grid;gap:4px;text-decoration:none;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.pn a span{font:600 11px "JetBrains Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.pn a b{font:400 26px/1.1 "Instrument Serif",Georgia,serif}
+.pn a.nx{text-align:right}
+.foot{border-top:1px solid var(--line);color:var(--muted);font-size:14px}
+.foot .in{padding-block:28px;display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between}
+@media (max-width:900px){
+  .layout{grid-template-columns:1fr;gap:16px}
+  nav.toc{position:static;max-height:none;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .toc ol ol{display:none}
+  .toc > ol{display:flex;flex-wrap:wrap;gap:6px}
+  .toc > ol > li{margin:0}
+  .toc > ol > li > a{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:14px}
+  .feat{grid-template-columns:1fr;gap:16px;padding:18px}
+}
+@media (max-width:440px){.three{grid-template-columns:1fr 1fr}.three>.opt:nth-child(3){display:none}.four{grid-template-columns:1fr 1fr}.row.wrap .mb{font-size:11px}}
+</style>
+
+<header class="top"><div class="in"><a class="logo" href="index.html">pro<i>o</i>fs</a><span>/ <a href="index.html#skills" style="text-decoration:none">skills</a> /</span><span style="color:var(--fg)">todos</span></div></header>
+<section class="hero"><div class="in">
+  <div class="eyebrow">Skill · Claude Code</div>
+  <h1>todos</h1>
+  <p class="tagline">Tick off your to-do list on a page, and trust what&#x27;s left</p>
+  <p class="use"><b style="color:var(--fg)">Use it when</b> You want to work through your project&#x27;s to-do list by ticking items on a page, with finished work archived and anything claimed done actually checked first.</p>
+  <div class="try"><span class="lbl">Try it: paste this into Claude Code</span><div class="trybox"><code id="tryc">Use the todos skill to publish my open to-do items as a page I can tick off.</code><button type="button" id="tryb">Copy</button></div></div>
+  <div class="stats"><span><b>19</b> features</span><span>Nothing is archived on a tick alone</span><span>Finished work is moved, never deleted</span></div>
+</div></section>
+<div class="in layout">
+  <nav class="toc" aria-label="Features"><h2>On this page</h2><ol><li><a href="#s1">What you see</a><ol><li><a href="#f1">Your List, Tickable</a></li><li><a href="#f2">Five Clear Groups</a></li><li><a href="#f3">A Count You Can Trust</a></li><li><a href="#f4">Copy From Anywhere</a></li></ol></li><li><a href="#s2">How you mark it</a><ol><li><a href="#f5">Done, But…</a></li><li><a href="#f6">Ticks Stay With Their Item</a></li><li><a href="#f7">Same Link, Ticks Kept</a></li></ol></li><li><a href="#s3">After you paste back</a><ol><li><a href="#f8">Your Word Is Final on Your Items</a></li><li><a href="#f9">Code Claims Get Checked</a></li><li><a href="#f10">Unproven Stays Open</a></li><li><a href="#f11">No Guessing on Matches</a></li><li><a href="#f12">Archived, Not Deleted</a></li><li><a href="#f13">Findings Aren&#x27;t Tasks</a></li><li><a href="#f14">Safe to Paste Twice</a></li></ol></li><li><a href="#s4">Getting started</a><ol><li><a href="#f15">Tame an Overgrown List</a></li><li><a href="#f16">Open Items Checked First</a></li><li><a href="#f17">History Moved Exactly</a></li><li><a href="#f18">Every Move Explained</a></li><li><a href="#wp">Where the Page Goes</a></li></ol></li></ol></nav>
+  <main><section class="sec" id="s1"><h2><span>1</span>What you see</h2><article class="feat" id="f1"><div class="fx"><span class="fn">01</span><h3>Your List, Tickable</h3><p class="sub">Open items from TODO.md become a page you tick off</p><p>Your to-do file&#x27;s open items are turned into a published page with a tick box and a note field for each. You work the list by clicking, not by editing a file.</p></div><div class="fig" aria-hidden="true"><div class="col"><div class="itm"><span>1. Renew the payment key</span><span class="st mute">&nbsp;&nbsp;&nbsp;</span></div><div class="itm"><span>2. Choose a tax setting</span><span class="st ok"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 8.5l3.2 3L13 4.5"/></svg></span></div><div class="itm"><span>3. Add search to the blog</span><span class="st mute">&nbsp;&nbsp;&nbsp;</span></div></div></div></article><article class="feat" id="f2"><div class="fx"><span class="fn">02</span><h3>Five Clear Groups</h3><p class="sub">Items sit under Yours, Decide, Build, Backlog and Ongoing</p><p>Every item belongs to one of five groups: things only you can do, decisions you owe, work Claude can build, later work, and long-running items. The group decides how a tick is handled afterward.</p></div><div class="fig" aria-hidden="true"><div class="col"><div class="row"><b class="hd">Yours</b><span class="tag">2</span></div><div class="row"><b class="hd">Decide</b><span class="tag">1</span></div><div class="row"><b class="hd">Build</b><span class="tag">4</span></div><div class="row"><b class="hd">Backlog</b><span class="tag">6</span></div><div class="row"><b class="hd">Ongoing</b><span class="tag">1</span></div></div></div></article><article class="feat" id="f3"><div class="fx"><span class="fn">03</span><h3>A Count You Can Trust</h3><p class="sub">Lines the page couldn&#x27;t read are counted, not hidden</p><p>The status bar reads like &quot;18 open · 3 unparsed&quot; when some lines in the file couldn&#x27;t be read, and each one is named with its line number and the reason. A confident number never quietly drops real work.</p></div><div class="fig" aria-hidden="true"><div class="col"><div class="itm"><span>18 open · 3 unparsed</span></div><div class="why"><b>Line 42:</b> finished item still in the list</div><div class="why"><b>Line 57:</b> item outside any group</div></div></div></article><article class="feat" id="f4"><div class="fx"><span class="fn">04</span><h3>Copy From Anywhere</h3><p class="sub">The copy button stays on screen as you scroll</p><p>Copy my replies sits in the pinned status bar as well as at the bottom, so on a phone you never scroll the whole list to find it.</p></div><div class="fig" aria-hidden="true"><div class="bottom"><span>3 of 14 ticked</span><span class="mb on sm acc">Copy my replies</span></div></div></article></section><section class="sec" id="s2"><h2><span>2</span>How you mark it</h2><article class="feat" id="f5"><div class="fx"><span class="fn">05</span><h3>Done, But…</h3><p class="sub">Add a note to any item as you tick it</p><p>Each item has an optional note, so an item can come back as &quot;done, but the old key still works until Friday&quot; rather than just a tick.</p></div><div class="fig" aria-hidden="true"><div class="col"><div class="itm"><span>1. Renew the payment key</span><span class="st ok"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 8.5l3.2 3L13 4.5"/></svg></span></div><div class="cbox">done, old key works until Friday<span class="caret"></span></div></div></div></article><article class="feat" id="f6"><div class="fx"><span class="fn">06</span><h3>Ticks Stay With Their Item</h3><p class="sub">Ticks and notes follow the item, not its position</p><p>Ticks and notes are saved against each item&#x27;s title, not its number. When the list is renumbered, nothing slides onto the wrong item. Rewording an item clears its tick, since it is usually a new item.</p></div><div class="fig" aria-hidden="true"><div class="col"><div class="row flow"><span class="st ok">Renew the payment key</span><span class="arr">was #3, now #1</span></div><div class="row flow"><span class="st ok">note kept</span><span class="arr">same item</span></div></div></div></article><article class="feat" id="f7"><div class="fx"><span class="fn">07</span><h3>Same Link, Ticks Kept</h3><p class="sub">The page updates at the link you already have</p><p>The page is always republished to the same link, so your saved ticks and notes and your open tab stay put.</p></div><div class="fig" aria-hidden="true"><div class="row"><span class="tag">Monday</span><span class="note2">→</span><span class="tag acc">Friday</span><span class="link">same link</span></div></div></article></section><section class="sec" id="s3"><h2><span>3</span>After you paste back</h2><article class="feat" id="f8"><div class="fx"><span class="fn">08</span><h3>Your Word Is Final on Your Items</h3><p class="sub">Ticks on things only you can do are archived as-is</p><p>A tick on a Yours or Decide item, like revoking a key or answering a question, can&#x27;t be checked from the code, so it goes straight to the archive with your note.</p></div><div class="fig" aria-hidden="true"><div class="col"><div class="row flow"><span class="st ok">Yours · Renew key</span><span class="arr">→ archived</span></div><div class="row flow"><span class="st ok">Decide · Tax setting</span><span class="arr">→ archived</span></div></div></div></article><article class="feat" id="f9"><div class="fx"><span class="fn">09</span><h3>Code Claims Get Checked</h3><p class="sub">Ticked build work is verified before it&#x27;s archived</p><p>A tick on Build, Backlog or Ongoing work starts a check against the actual code and history, like a matching commit, a file, a passing test or a merged change. Only what holds up gets archived, with the evidence.</p></div><div class="fig" aria-hidden="true"><div class="two mid"><div class="opt"><div class="row"><span class="tag">Build</span><span class="st ok"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 8.5l3.2 3L13 4.5"/></svg></span></div><b class="hd">Add search to the blog</b></div><div class="col chk"><span><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 8.5l3.2 3L13 4.5"/></svg> commit found</span><span><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 8.5l3.2 3L13 4.5"/></svg> test passes</span><span><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 8.5l3.2 3L13 4.5"/></svg> change merged</span></div></div></div></article><article class="feat" id="f10"><div class="fx"><span class="fn">10</span><h3>Unproven Stays Open</h3><p class="sub">If the work isn&#x27;t there, the item stays open with a note</p><p>If the work isn&#x27;t really there, the item stays on the list exactly where it was, with a dated note saying what was found. Nothing is archived on a tick alone.</p></div><div class="fig" aria-hidden="true"><div class="col"><div class="itm"><span>3. Add search to the blog</span><span class="pill mid">Still open</span></div><div class="why">Checked Nov 2: not on main, branch still open.</div></div></div></article><article class="feat" id="f11"><div class="fx"><span class="fn">11</span><h3>No Guessing on Matches</h3><p class="sub">If a reply could mean two items, you&#x27;re asked which</p><p>Ticks are matched back to items by title. When a title could match more than one item, both are named and you choose, because archiving the wrong item can&#x27;t be undone.</p></div><div class="fig" aria-hidden="true"><div class="col"><div class="why">"Update the key" matches two items:</div><div class="row"><span class="mb">1. Payment key</span><span class="mb">5. Map key</span></div></div></div></article><article class="feat" id="f12"><div class="fx"><span class="fn">12</span><h3>Archived, Not Deleted</h3><p class="sub">Finished items move to a monthly archive with the evidence</p><p>Done items leave the live list for a monthly archive file, word for word, with the date, your note and what proved them done. The reasoning behind past work stays searchable.</p></div><div class="fig" aria-hidden="true"><div class="col"><span class="tag">archive · this month</span><pre class="ex">Renew the payment key
+  archived: Nov 2
+  note: old key works until Friday
+  evidence: ticked by you</pre></div></div></article><article class="feat" id="f13"><div class="fx"><span class="fn">13</span><h3>Findings Aren&#x27;t Tasks</h3><p class="sub">Notes and rules go to the docs, not the to-do list</p><p>A root cause, a workaround or a standing rule is moved to the document that owns it instead of sitting in the list as fake work. What stays is real, open work.</p></div><div class="fig" aria-hidden="true"><div class="col"><div class="row flow"><span class="st mute">Workaround for slow builds</span><span class="arr">→ project notes</span></div><div class="row flow"><span class="st ok">Add search to the blog</span><span class="arr">stays a task</span></div></div></div></article><article class="feat" id="f14"><div class="fx"><span class="fn">14</span><h3>Safe to Paste Twice</h3><p class="sub">Pasting the same reply again changes nothing</p><p>Anything a reply names is already gone from the list after the first paste, so pasting it a second time is harmless.</p></div><div class="fig" aria-hidden="true"><div class="col"><div class="row flow"><span class="st ok">1st paste</span><span class="arr">3 archived</span></div><div class="row flow"><span class="st mute">2nd paste</span><span class="arr">nothing to do</span></div></div></div></article></section><section class="sec" id="s4"><h2><span>4</span>Getting started</h2><article class="feat" id="f15"><div class="fx"><span class="fn">15</span><h3>Tame an Overgrown List</h3><p class="sub">Turns a to-do file full of old history into a clean list</p><p>For a to-do file that has grown into a log of finished work, a one-time adopt step first reports how many items are done versus open before anything changes.</p></div><div class="fig" aria-hidden="true"><div class="col"><div class="row"><b class="hd">Done</b><span class="tag">214</span></div><div class="row"><b class="hd">Open</b><span class="tag">19</span></div><div class="note2">Reported before anything moves</div></div></div></article><article class="feat" id="f16"><div class="fx"><span class="fn">16</span><h3>Open Items Checked First</h3><p class="sub">Every supposedly open item is checked against the code</p><p>Before the list is rebuilt, each open item is checked to see whether it was quietly finished already. Items that turn out to be done go to the archive instead of staying on the list.</p></div><div class="fig" aria-hidden="true"><div class="col"><div class="itm"><span>19 open on paper</span></div><div class="row flow"><span class="st ok">7 already built</span><span class="arr">→ archive</span></div><div class="row flow"><span class="st mid">12 really open</span><span class="arr">→ list</span></div></div></div></article><article class="feat" id="f17"><div class="fx"><span class="fn">17</span><h3>History Moved Exactly</h3><p class="sub">Old entries move to monthly files, proven identical</p><p>Past entries are split into monthly archive files by their own dates, and every section is compared byte for byte before anything is written. If one doesn&#x27;t match, nothing is written at all.</p></div><div class="fig" aria-hidden="true"><div class="two mid"><div class="col"><i class="mk" style="width:100%;height:7px"></i><i class="mk" style="width:80%;height:7px"></i><i class="mk" style="width:90%;height:7px"></i></div><div class="col chk"><span><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 8.5l3.2 3L13 4.5"/></svg> Oct matches</span><span><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 8.5l3.2 3L13 4.5"/></svg> Sep matches</span><span><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 8.5l3.2 3L13 4.5"/></svg> Aug matches</span></div></div></div></article><article class="feat" id="f18"><div class="fx"><span class="fn">18</span><h3>Every Move Explained</h3><p class="sub">You get a report of where each item went and why</p><p>The adopt step ends with a report of what was already built, what was really a note and moved to the docs, and which group each remaining item landed in.</p></div><div class="fig" aria-hidden="true"><div class="col"><div class="row flow"><span class="st ok">7 items</span><span class="arr">already built</span></div><div class="row flow"><span class="st mute">3 items</span><span class="arr">moved to docs</span></div><div class="row flow"><span class="st mid">12 items</span><span class="arr">sorted into groups</span></div></div></div></article><article class="feat" id="wp"><div class="fx"><span class="fn">19</span><h3>Where the Page Goes</h3><p class="sub">A private link, a local file, or your Wi-Fi</p><p>Your project picks where review pages go: a private claude.ai link, an HTML file that opens in your browser, or that file served on your home Wi-Fi so a phone can open it. Nothing is ever uploaded or tunneled in the Wi-Fi mode, and the server stops when the review ends.</p></div><div class="fig" aria-hidden="true"><div class="col"><div class="opt"><span class="tag">artifact</span><div class="row" style="align-items:stretch"><div class="phone" style="max-width:112px;flex:none"><i class="mk d" style="width:100%;height:16px"></i><i class="mk" style="width:100%;height:7px"></i><i class="mk" style="width:70%;height:7px"></i><span class="link" style="font-size:9px;padding:2px 6px">private link</span></div><div class="desk" style="flex:1;min-width:0;display:grid;gap:5px;align-content:start"><i class="mk d" style="width:100%;height:24px"></i><i class="mk" style="width:100%;height:7px"></i><i class="mk" style="width:60%;height:7px"></i><span class="link" style="font-size:9px;padding:2px 6px">private link</span></div></div></div><div class="opt"><span class="tag">file</span><div class="win" style="max-width:240px"><div class="wb"><i></i><i></i><i></i><span>file</span></div><div class="wbody"><i class="mk d" style="width:100%;height:18px"></i><i class="mk" style="width:100%;height:7px"></i><i class="mk" style="width:70%;height:7px"></i></div></div></div><div class="opt"><span class="tag">wifi</span><div class="row"><div class="phone" style="max-width:84px;flex:none"><i class="mk d" style="width:100%;height:16px"></i><i class="mk" style="width:100%;height:7px"></i><i class="mk" style="width:70%;height:7px"></i></div><div class="col" style="flex:1;min-width:0;justify-items:center;gap:3px"><span class="note2">same Wi-Fi</span><span style="display:block;width:100%;border-top:2px dashed var(--accent)"></span></div><div class="desk" style="flex:none;width:96px;display:grid;gap:5px;align-content:start"><i class="mk d" style="width:100%;height:18px"></i><i class="mk" style="width:100%;height:7px"></i><i class="mk" style="width:60%;height:7px"></i></div></div></div></div></div></article></section></main>
+</div>
+<nav class="pn" aria-label="More skills"><div class="in"><a href="working-log.html"><span>Previous</span><b>working-log</b></a><a class="nx" href="review-cycle.html"><span>Next</span><b>review-cycle</b></a></div></nav>
+<footer class="foot"><div class="in"><span>proofs · Claude skills that show their work</span><span>MIT license</span></div></footer>
+<script>
+(function(){
+  var b=document.getElementById('tryb'),c=document.getElementById('tryc');
+  b.addEventListener('click',function(){
+    var done=function(){b.textContent='Copied';setTimeout(function(){b.textContent='Copy'},1500)};
+    try{navigator.clipboard.writeText(c.textContent).then(done,function(){var r=document.createRange();r.selectNodeContents(c);var s=getSelection();s.removeAllRanges();s.addRange(r)})}catch(_){}
+  });
+  var links=[].slice.call(document.querySelectorAll('.toc a')),map={};
+  links.forEach(function(a){map[a.getAttribute('href').slice(1)]=a});
+  if('IntersectionObserver' in window){
+    var io=new IntersectionObserver(function(es){es.forEach(function(en){if(en.isIntersecting){links.forEach(function(a){a.classList.remove('on')});var a=map[en.target.id];if(a)a.classList.add('on')}})},{rootMargin:'-30% 0px -60% 0px'});
+    document.querySelectorAll('.feat').forEach(function(f){io.observe(f)});
+  }
+})();
+</script>

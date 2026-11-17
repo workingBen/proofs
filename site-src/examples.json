@@ -1,0 +1,543 @@
+{
+ "generated_by": "site-src/import_examples.py",
+ "examples": [
+  {
+   "id": "c-retreat-look",
+   "title": "Retreat page hero",
+   "skill": "design-review",
+   "caption": "A pale boxed card becomes a full-bleed sunset hero.",
+   "use": "hero",
+   "view": "desktop",
+   "w": 1200,
+   "h": 844,
+   "frames": [
+    {
+     "name": "before",
+     "label": "Before · live page",
+     "widths": [
+      480,
+      960
+     ]
+    },
+    {
+     "name": "after",
+     "label": "After · look A",
+     "widths": [
+      480,
+      960
+     ]
+    }
+   ],
+   "gif": "assets/examples/c-retreat-look/wipe.gif"
+  },
+  {
+   "id": "c-hero-photos-3step",
+   "title": "Hero photo, picked",
+   "skill": "photo-picker",
+   "caption": "A hazy hero, a photo picker, then a lupine hero.",
+   "use": "hero",
+   "view": "desktop",
+   "w": 1200,
+   "h": 771,
+   "frames": [
+    {
+     "name": "before",
+     "label": "Before · old hero",
+     "widths": [
+      480,
+      960
+     ]
+    },
+    {
+     "name": "picker",
+     "label": "Photo picker",
+     "widths": [
+      480,
+      960
+     ]
+    },
+    {
+     "name": "after",
+     "label": "After · rebuilt hero",
+     "widths": [
+      480,
+      960
+     ]
+    }
+   ],
+   "gif": "assets/examples/c-hero-photos-3step/wipe.gif"
+  },
+  {
+   "id": "b-bed-map-report",
+   "title": "Bed map in the EMF report",
+   "skill": "design-review",
+   "caption": "A table of readings becomes before-and-after bed heat maps.",
+   "use": "featured",
+   "view": "desktop",
+   "w": 900,
+   "h": 560,
+   "frames": [
+    {
+     "name": "before",
+     "label": "Before · readings table",
+     "widths": [
+      480,
+      900
+     ]
+    },
+    {
+     "name": "after",
+     "label": "After · bed maps",
+     "widths": [
+      480,
+      900
+     ]
+    }
+   ],
+   "gif": "assets/examples/b-bed-map-report/wipe.gif"
+  },
+  {
+   "id": "d-movie-page",
+   "title": "Movie page on a phone",
+   "skill": "design-review",
+   "caption": "A lonely cover becomes a header with the cover beside the title.",
+   "use": "featured",
+   "view": "phone",
+   "w": 450,
+   "h": 800,
+   "frames": [
+    {
+     "name": "before",
+     "label": "Before · iPhone",
+     "widths": [
+      450
+     ]
+    },
+    {
+     "name": "after",
+     "label": "After · B (shipped)",
+     "widths": [
+      450
+     ]
+    },
+    {
+     "name": "after2",
+     "label": "Variant C · banner",
+     "widths": [
+      450
+     ]
+    }
+   ],
+   "gif": "assets/examples/d-movie-page/wipe.gif"
+  },
+  {
+   "id": "a-organ-table-to-gauges",
+   "title": "Organs table to range gauges",
+   "skill": "design-review",
+   "caption": "A dense readings table becomes seven colored range gauges.",
+   "use": "featured",
+   "view": "phone",
+   "w": 920,
+   "h": 1300,
+   "frames": [
+    {
+     "name": "before",
+     "label": "Before · report table",
+     "widths": [
+      480,
+      920
+     ]
+    },
+    {
+     "name": "after",
+     "label": "After · range gauges",
+     "widths": [
+      480,
+      920
+     ]
+    }
+   ],
+   "gif": "assets/examples/a-organ-table-to-gauges/wipe.gif"
+  },
+  {
+   "id": "b-supplement-chart",
+   "title": "Supplement test sample chart",
+   "skill": "design-review",
+   "caption": "A text section gains a ranked green-to-red bar chart.",
+   "use": "featured",
+   "view": "desktop",
+   "w": 900,
+   "h": 560,
+   "frames": [
+    {
+     "name": "before",
+     "label": "Before · how it works",
+     "widths": [
+      480,
+      900
+     ]
+    },
+    {
+     "name": "after",
+     "label": "After · ranked bars",
+     "widths": [
+      480,
+      900
+     ]
+    }
+   ],
+   "gif": "assets/examples/b-supplement-chart/wipe.gif"
+  },
+  {
+   "id": "d-book-cover-wall",
+   "title": "Medical library cover wall",
+   "skill": "design-review",
+   "caption": "A text list becomes a wall of big book covers.",
+   "use": "featured",
+   "view": "desktop",
+   "w": 900,
+   "h": 450,
+   "frames": [
+    {
+     "name": "before",
+     "label": "Before · list",
+     "widths": [
+      480,
+      900
+     ]
+    },
+    {
+     "name": "after",
+     "label": "After · cover wall",
+     "widths": [
+      480,
+      900
+     ]
+    }
+   ],
+   "gif": "assets/examples/d-book-cover-wall/wipe.gif"
+  },
+  {
+   "id": "a-report-stacks",
+   "title": "Full reports as page stacks",
+   "skill": "design-review",
+   "caption": "Three plain links become fanned stacks of real report pages.",
+   "use": "featured",
+   "view": "desktop",
+   "w": 1200,
+   "h": 531,
+   "frames": [
+    {
+     "name": "before",
+     "label": "Before · plain links",
+     "widths": [
+      480,
+      960
+     ]
+    },
+    {
+     "name": "after",
+     "label": "After · report stacks",
+     "widths": [
+      480,
+      960
+     ]
+    }
+   ],
+   "gif": "assets/examples/a-report-stacks/wipe.gif"
+  },
+  {
+   "id": "b-nine-devices",
+   "title": "The nine devices",
+   "skill": "design-review",
+   "caption": "Emoji cards become a dark band with line icons.",
+   "use": "featured",
+   "view": "desktop",
+   "w": 900,
+   "h": 460,
+   "frames": [
+    {
+     "name": "before",
+     "label": "Before · emoji cards",
+     "widths": [
+      480,
+      900
+     ]
+    },
+    {
+     "name": "after",
+     "label": "After · variant C",
+     "widths": [
+      480,
+      900
+     ]
+    }
+   ],
+   "gif": "assets/examples/b-nine-devices/wipe.gif"
+  },
+  {
+   "id": "e-card-back",
+   "title": "Card back",
+   "skill": "design-review",
+   "caption": "A text-only card back becomes a wildflower-photo card.",
+   "use": "featured",
+   "view": "phone",
+   "w": 660,
+   "h": 792,
+   "frames": [
+    {
+     "name": "before",
+     "label": "Before · v1",
+     "widths": [
+      480,
+      660
+     ]
+    },
+    {
+     "name": "after",
+     "label": "After · flowers",
+     "widths": [
+      480,
+      660
+     ]
+    },
+    {
+     "name": "after2",
+     "label": "Plum theme",
+     "widths": [
+      480,
+      660
+     ]
+    }
+   ],
+   "gif": "assets/examples/e-card-back/wipe.gif"
+  },
+  {
+   "id": "a-standards-scales",
+   "title": "Standards: four bars to one card",
+   "skill": "design-review",
+   "caption": "Four look-alike bars become one evaluation card.",
+   "use": "featured",
+   "view": "desktop",
+   "w": 600,
+   "h": 560,
+   "frames": [
+    {
+     "name": "before",
+     "label": "Before · four bars",
+     "widths": [
+      480,
+      600
+     ]
+    },
+    {
+     "name": "after",
+     "label": "After · one card",
+     "widths": [
+      480,
+      600
+     ]
+    },
+    {
+     "name": "after2",
+     "label": "Option C · rulers",
+     "widths": [
+      480,
+      600
+     ]
+    }
+   ],
+   "gif": "assets/examples/a-standards-scales/wipe.gif"
+  },
+  {
+   "id": "a-biowell-table-to-chart",
+   "title": "Supplement table to dot chart",
+   "skill": "design-review",
+   "caption": "A dense table becomes a dot chart that flags good and bad.",
+   "use": "featured",
+   "view": "desktop",
+   "w": 1200,
+   "h": 747,
+   "frames": [
+    {
+     "name": "before",
+     "label": "Before · numbers table",
+     "widths": [
+      480,
+      960
+     ]
+    },
+    {
+     "name": "after",
+     "label": "After · ledger",
+     "widths": [
+      480,
+      960
+     ]
+    },
+    {
+     "name": "after2",
+     "label": "Variant B · cards",
+     "widths": [
+      480,
+      960
+     ]
+    }
+   ],
+   "gif": "assets/examples/a-biowell-table-to-chart/wipe.gif"
+  },
+  {
+   "id": "a-improvement-scale",
+   "title": "Improvement line to a scale",
+   "skill": "design-review",
+   "caption": "One log-style line becomes readings plotted on a color scale.",
+   "use": "featured",
+   "view": "desktop",
+   "w": 1200,
+   "h": 360,
+   "frames": [
+    {
+     "name": "before",
+     "label": "Before · one line",
+     "widths": [
+      480,
+      960
+     ]
+    },
+    {
+     "name": "after",
+     "label": "After · on the scale",
+     "widths": [
+      480,
+      960
+     ]
+    }
+   ],
+   "gif": "assets/examples/a-improvement-scale/wipe.gif"
+  },
+  {
+   "id": "b-bbi-plan",
+   "title": "Study plan chart",
+   "skill": "design-review",
+   "caption": "A long Gantt list becomes a two-lane timeline.",
+   "use": "featured",
+   "view": "desktop",
+   "w": 900,
+   "h": 520,
+   "frames": [
+    {
+     "name": "before",
+     "label": "Before · Gantt list",
+     "widths": [
+      480,
+      900
+     ]
+    },
+    {
+     "name": "after",
+     "label": "After · two lanes",
+     "widths": [
+      480,
+      900
+     ]
+    }
+   ],
+   "gif": "assets/examples/b-bbi-plan/wipe.gif"
+  },
+  {
+   "id": "d-booking-dates",
+   "title": "Booking dates step",
+   "skill": "design-review",
+   "caption": "A bare date picker gains the room photo and a teal stay.",
+   "use": "featured",
+   "view": "desktop",
+   "w": 900,
+   "h": 560,
+   "frames": [
+    {
+     "name": "before",
+     "label": "Before",
+     "widths": [
+      480,
+      900
+     ]
+    },
+    {
+     "name": "after",
+     "label": "After · variant B",
+     "widths": [
+      480,
+      900
+     ]
+    }
+   ],
+   "gif": "assets/examples/d-booking-dates/wipe.gif"
+  },
+  {
+   "id": "x-copy-edit",
+   "title": "Copy edit with a claims check",
+   "skill": "article-copy-edit",
+   "caption": "A plain sentence becomes a tracked edit with a claims check.",
+   "use": "featured",
+   "view": "desktop",
+   "w": 842,
+   "h": 612,
+   "frames": [
+    {
+     "name": "before",
+     "label": "Your draft",
+     "widths": [
+      480,
+      842
+     ]
+    },
+    {
+     "name": "after",
+     "label": "The edit",
+     "widths": [
+      480,
+      842
+     ]
+    }
+   ],
+   "gif": "assets/examples/x-copy-edit/wipe.gif"
+  },
+  {
+   "id": "e-flyer-photo",
+   "title": "Flyer photo swap",
+   "skill": "photo-picker",
+   "caption": "A gray smart-meter photo becomes towers at sunset.",
+   "use": "featured",
+   "view": "desktop",
+   "w": 840,
+   "h": 512,
+   "frames": [
+    {
+     "name": "before",
+     "label": "Before · smart meter",
+     "widths": [
+      480,
+      840
+     ]
+    },
+    {
+     "name": "picker",
+     "label": "Picker · two options",
+     "widths": [
+      480,
+      840
+     ]
+    },
+    {
+     "name": "after",
+     "label": "After · option A",
+     "widths": [
+      480,
+      840
+     ]
+    }
+   ],
+   "gif": "assets/examples/e-flyer-photo/wipe.gif"
+  }
+ ]
+}

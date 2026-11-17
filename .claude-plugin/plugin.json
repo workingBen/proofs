@@ -1,0 +1,6 @@
+{
+  "name": "proofs",
+  "version": "1.0.0",
+  "description": "Claude Code skills that show their work: design reviews, visual QA, copy edits and decision pages you click through, then paste back to Claude.",
+  "license": "MIT"
+}

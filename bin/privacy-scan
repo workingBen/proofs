@@ -1,0 +1,196 @@
+#!/usr/bin/env python3
+"""Scan files for private words and patterns.
+
+Usage: privacy-scan [--all | --staged | --history] [--list PATH]
+
+Exit 0 clean, 1 findings, 2 deny-list missing or empty. Output is
+`path:line: <category>` and never the matched text. Binary and image files
+cannot be read, so they are listed for a human to check by eye.
+"""
+import argparse
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+BINARY_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".pdf", ".mp4", ".mov",
+              ".webm", ".mp3", ".wav", ".woff", ".woff2", ".ttf", ".otf", ".zip", ".gz"}
+
+EMAIL = re.compile(r"([\w.+-]+@([\w-]+(?:\.[\w-]+)+))")
+EMAIL_OK = {"example.com", "example.org", "users.noreply.github.com"}  # whole domains
+EMAIL_OK_ADDR = {"noreply@anthropic.com"}  # exact addresses only
+PATTERNS = [
+    ("phone", re.compile(r"(?<!\d)(?:\+?1[ .-])?\(?\d{3}\)?[ .-]\d{3}[ .-]\d{4}(?!\d)")),
+    ("user-path", re.compile(r"/Users/[A-Za-z0-9._-]+|/home/[A-Za-z0-9._-]+")),
+    ("artifact-id", re.compile(r"claude\.ai/(?:code/)?artifact/[A-Za-z0-9_-]{8,}")),
+    ("session-id", re.compile(r"claude\.ai/code/session_[A-Za-z0-9]+|\bsession_[A-Za-z0-9]{16,}")),
+    ("pr-number", re.compile(r"\bPRs?\s*#\d+|\bpull/\d+|\(#\d+\)|\bpull request\s*#\d+", re.I)),
+]
+ID22 = re.compile(r"(?<![A-Za-z0-9])[A-Za-z0-9]{22}(?![A-Za-z0-9])")
+
+
+class Deny:
+    def __init__(self, insensitive, sensitive):
+        self.rx = [r for r in (insensitive, sensitive) if r]
+
+    def search(self, line):
+        return any(r.search(line) for r in self.rx)
+
+
+def _alt(entries, flags):
+    if not entries:
+        return None
+    parts = [r"\s+".join(re.escape(w) for w in e.split()) for e in entries]
+    return re.compile(r"(?<!\w)(?:" + "|".join(parts) + r")(?!\w)", flags)
+
+
+def load_deny(path_arg):
+    path = path_arg or os.environ.get("PROOFS_DENY") or os.path.expanduser("~/.config/proofs/deny.txt")
+    try:
+        lines = Path(path).read_text().splitlines()
+    except OSError:
+        return None
+    entries = [l.strip() for l in lines if l.strip() and not l.strip().startswith("#")]
+    if not entries:
+        return None
+    sens = [e[5:].strip() for e in entries if e.startswith("case:")]
+    sens = [e for e in sens if e]
+    insens = [e for e in entries if not e.startswith("case:")]
+    if not sens and not insens:
+        return None
+    return Deny(_alt(insens, re.I), _alt(sens, 0))
+
+
+def categories(line, deny):
+    found = []
+    if deny.search(line):
+        found.append("deny-list")
+    if any(m.group(2).lower() not in EMAIL_OK and m.group(1).lower() not in EMAIL_OK_ADDR
+           for m in EMAIL.finditer(line)):
+        found.append("email")
+    for name, rx in PATTERNS:
+        if rx.search(line):
+            found.append(name)
+    if "artifact-id" not in found:
+        for m in ID22.finditer(line):
+            s = m.group(0)
+            if re.search(r"\d", s) and re.search(r"[a-z]", s) and re.search(r"[A-Z]", s):
+                found.append("artifact-id")
+                break
+    return found
+
+
+def git(*args, text=True):
+    r = subprocess.run(["git", *args], capture_output=True, text=text)
+    if r.returncode != 0:
+        sys.exit("privacy-scan: git %s failed" % " ".join(args))
+    return r.stdout
+
+
+def is_binary(path, data):
+    return Path(path).suffix.lower() in BINARY_EXT or b"\0" in data[:8192]
+
+
+def scan_blob(path, data, deny, findings, skipped, tag=""):
+    if is_binary(path, data):
+        skipped.append(path)
+        return
+    for n, line in enumerate(data.decode("utf-8", "replace").splitlines(), 1):
+        for c in categories(line, deny):
+            findings.append("%s%s:%d: %s" % (path, tag, n, c))
+
+
+def unquote(p):
+    p = p.rstrip("\t")
+    if len(p) > 1 and p[0] == '"' and p[-1] == '"':
+        p = bytes(p[1:-1], "utf-8").decode("unicode_escape").encode("latin-1").decode("utf-8", "replace")
+    return p
+
+
+def scan_history(deny, findings, skipped):
+    out = subprocess.run(
+        ["git", "-c", "core.quotepath=off", "log", "--all", "--no-renames", "-p", "-U0",
+         "--format=@@commit %h"], capture_output=True).stdout.decode("utf-8", "replace")
+    sha = path = None
+    state = "none"  # none | header | hunk
+    n = 0
+    for line in out.split("\n"):
+        if line.startswith("@@commit "):
+            sha, path, state = line.split()[1], None, "none"
+        elif line.startswith("diff --git "):
+            path, state = None, "header"
+        elif state == "header":
+            if line.startswith("+++ "):
+                p = unquote(line[4:])
+                path = p[2:] if p.startswith("b/") else None
+            elif line.startswith("Binary files"):
+                m = re.search(r" and (?:b/)?(.*?)\t? differ", line)
+                if m:
+                    skipped.append(unquote(m.group(1)))
+            elif line.startswith("@@ "):
+                state = "hunk"
+        if state == "hunk" or line.startswith("@@ "):
+            state = "hunk"
+            if line.startswith("@@ "):
+                m = re.search(r"\+(\d+)", line)
+                n = int(m.group(1)) - 1 if m else 0
+            elif path and line.startswith("+"):
+                n += 1
+                for c in categories(line[1:], deny):
+                    findings.append("%s@%s:%d: %s" % (path, sha, n, c))
+    meta = subprocess.run(
+        ["git", "log", "--all", "-z", "--format=%h%x1f%an%x1f%ae%x1f%cn%x1f%ce%x1f%B"],
+        capture_output=True).stdout.decode("utf-8", "replace")
+    for rec in meta.split("\0"):
+        rec = rec.strip("\n")
+        if not rec:
+            continue
+        sha, _, rest = rec.partition("\x1f")
+        cats = []
+        for field in rest.replace("\x1f", "\n").splitlines():
+            for c in categories(field, deny):
+                if c not in cats:
+                    cats.append(c)
+        for c in cats:
+            findings.append("commit %s: %s" % (sha, c))
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    mode = ap.add_mutually_exclusive_group()
+    mode.add_argument("--all", action="store_true", help="every tracked or untracked, non-ignored file (default)")
+    mode.add_argument("--staged", action="store_true", help="staged content only")
+    mode.add_argument("--history", action="store_true", help="every line ever added, all branches")
+    ap.add_argument("--list", help="deny-list path")
+    a = ap.parse_args()
+
+    deny = load_deny(a.list)
+    if deny is None:
+        print("privacy-scan: deny-list missing or empty (--list, $PROOFS_DENY, ~/.config/proofs/deny.txt). "
+              "Refusing to pass without it.", file=sys.stderr)
+        return 2
+
+    os.chdir(git("rev-parse", "--show-toplevel").strip())
+    findings, skipped = [], []
+    if a.history:
+        scan_history(deny, findings, skipped)
+    elif a.staged:
+        for p in git("diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z").split("\0"):
+            if p:
+                blob = subprocess.run(["git", "show", ":" + p], capture_output=True).stdout
+                scan_blob(p, blob, deny, findings, skipped)
+    else:
+        for p in git("ls-files", "-co", "--exclude-standard", "-z").split("\0"):
+            if p and Path(p).is_file():
+                scan_blob(p, Path(p).read_bytes(), deny, findings, skipped)
+
+    for f in findings:
+        print(f)
+    for s in sorted(set(skipped)):
+        print("skipped (check by eye): %s" % s)
+    return 1 if findings else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

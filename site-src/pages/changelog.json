@@ -1,0 +1,192 @@
+{
+ "skill": "changelog",
+ "promises": [
+  "Plain files you can edit by hand",
+  "Visible only to signed-in users"
+ ],
+ "tagline": "A signed-in What's New page that gets a new entry every session",
+ "use_when": "You want signed-in users to see what changed in your app, written from plain files, and want Claude to add an entry whenever it ships something they would notice.",
+ "try_it": "Use the changelog skill to add a signed-in /changelog page to this app and log what we shipped today.",
+ "sections": [
+  {
+   "title": "What your users see",
+   "features": [
+    {
+     "id": "f1",
+     "label": "A What's New Page",
+     "sub": "A changelog page inside your app",
+     "title": "A changelog page inside your app",
+     "what": "Signed-in users get a /changelog page listing what changed and when. The skill is a spec, not a package: Claude builds the page in your own language and framework from its file format, parsing rules and behavior. People learn about new features from the app itself instead of an email they skipped.",
+     "html": "<div class=\"win\"><div class=\"wb\"><i></i><i></i><i></i><span>yourapp.com/changelog</span></div><div class=\"wbody\"><b class=\"hd\">Changelog</b><div class=\"col\"><b class=\"hd\">March 14</b><div class=\"row\" style=\"gap:8px\"><i class=\"mk d\" style=\"width:2px;height:32px\"></i><div class=\"col\" style=\"gap:4px\"><div class=\"row\"><span class=\"dot\"></span><span class=\"hd\">Saved searches</span></div><div class=\"row\"><span class=\"dot\"></span><span class=\"hd\">Faster checkout</span></div></div></div></div></div></div>"
+    },
+    {
+     "id": "f2",
+     "label": "A Timeline, Not a Wall",
+     "sub": "Entries hang off a timeline, one heading per day",
+     "title": "Entries hang off a timeline, one heading per day",
+     "what": "Each day is a heading with a line running down its entries, one dot per change. Readers can scan the dates and stop where they last left off.",
+     "html": "<div class=\"col\"><b class=\"hd\">March 14</b><div class=\"row\" style=\"gap:8px\"><i class=\"mk d\" style=\"width:2px;height:32px\"></i><div class=\"col\" style=\"gap:4px\"><div class=\"row\"><span class=\"dot\"></span><span class=\"hd\">Saved searches</span></div><div class=\"row\"><span class=\"dot\"></span><span class=\"hd\">Dark mode for receipts</span></div></div></div><b class=\"hd\">March 9</b><div class=\"row\" style=\"gap:8px\"><i class=\"mk d\" style=\"width:2px;height:18px\"></i><div class=\"col\" style=\"gap:4px\"><div class=\"row\"><span class=\"dot\"></span><span class=\"hd\">Fixed duplicate emails</span></div></div></div></div>"
+    },
+    {
+     "id": "f3",
+     "label": "This Month Up Front",
+     "sub": "The main page shows only the current month",
+     "title": "The main page shows only the current month",
+     "what": "Older months move off the main page automatically as the calendar turns. The page stays short no matter how long you have been shipping.",
+     "html": "<div class=\"col\"><span class=\"tag acc\">March · this month</span><div class=\"col\"><b class=\"hd\">March 14</b><div class=\"row\" style=\"gap:8px\"><i class=\"mk d\" style=\"width:2px;height:18px\"></i><div class=\"col\" style=\"gap:4px\"><div class=\"row\"><span class=\"dot\"></span><span class=\"hd\">Saved searches</span></div></div></div></div><div class=\"recap\">Archive · 4 past months ▸</div></div>"
+    },
+    {
+     "id": "f4",
+     "label": "Past Months, One Click",
+     "sub": "Each earlier month is a link with a count",
+     "title": "Each earlier month is a link with a count",
+     "what": "Below the timeline, every past month appears as a link with how many entries it holds. You can see how busy each month was before opening it.",
+     "html": "<div class=\"col\"><span class=\"tag\">Archive</span><div class=\"row wrap\"><span class=\"link\">February · 9</span><span class=\"link\">January · 4</span><span class=\"link\">December · 12</span></div></div>"
+    },
+    {
+     "id": "f5",
+     "label": "Back to Now",
+     "sub": "Each month page links back to the current one",
+     "title": "Each month page links back to the current one",
+     "what": "Opening a past month shows only that month's entries, with a link back to the latest. Nobody gets lost in the archive.",
+     "html": "<div class=\"win\"><div class=\"wb\"><i></i><i></i><i></i><span>/changelog/2025/02</span></div><div class=\"wbody\"><span class=\"note2\">← Back to Changelog</span><b class=\"hd\">Changelog: February</b><div class=\"col\"><b class=\"hd\">February 27</b><div class=\"row\" style=\"gap:8px\"><i class=\"mk d\" style=\"width:2px;height:18px\"></i><div class=\"col\" style=\"gap:4px\"><div class=\"row\"><span class=\"dot\"></span><span class=\"hd\">New export button</span></div></div></div></div></div></div>"
+    },
+    {
+     "id": "f6",
+     "label": "Members Only",
+     "sub": "Signed-out visitors sign in, then land on the page",
+     "title": "Signed-out visitors sign in, then land on the page",
+     "what": "The page sits behind your existing sign-in. Someone signed out is sent to sign in and then taken straight to the changelog they asked for.",
+     "html": "<div class=\"col\"><div class=\"row flow\"><span class=\"st mute\">Visitor opens /changelog</span><span class=\"arr\">→</span></div><div class=\"row flow\"><span class=\"st mid\">Sign in</span><span class=\"arr\">→</span></div><div class=\"row flow\"><span class=\"st ok\">Back on /changelog</span><span class=\"arr\">done</span></div></div>"
+    },
+    {
+     "id": "f7",
+     "label": "Rich Text in Entries",
+     "sub": "Bold text and links work inside an entry",
+     "title": "Bold text and links work inside an entry",
+     "what": "Each bullet is written in markdown, so an entry can bold a feature name or link to its help page. Plain text works too.",
+     "html": "<div class=\"two mid\"><pre class=\"ex\">- **Saved searches**:\n  see [the guide](/help)</pre><div class=\"col\"><div class=\"row\"><span class=\"dot\"></span><span class=\"hd\"><b>Saved searches</b>: see <u>the guide</u></span></div></div></div>"
+    },
+    {
+     "id": "f8",
+     "label": "One Per App",
+     "sub": "Each part of your app can have its own changelog",
+     "title": "Each part of your app can have its own changelog",
+     "what": "If your product has separate areas, each gets its own changelog at its own address and its own accent color. Shop customers don't wade through admin changes.",
+     "html": "<div class=\"two\"><div class=\"opt\"><span class=\"tag\">Main app</span><span class=\"hd\">/changelog</span><i class=\"mk\" style=\"width:80%;height:7px\"></i></div><div class=\"opt brand\"><span class=\"tag acc\">Shop</span><span class=\"hd\">/shop/changelog</span><i class=\"mk\" style=\"width:70%;height:7px\"></i></div></div>"
+    },
+    {
+     "id": "f9",
+     "label": "Graceful When Empty",
+     "sub": "A new app shows a calm 'nothing yet' message",
+     "title": "A new app shows a calm 'nothing yet' message",
+     "what": "Before the first entry exists, the page says Nothing here yet instead of an error. You can add the page on day one and fill it as you ship.",
+     "html": "<div class=\"win\"><div class=\"wb\"><i></i><i></i><i></i><span>/changelog</span></div><div class=\"wbody\"><b class=\"hd\">Changelog</b><span class=\"ph\">Nothing here yet.</span></div></div>"
+    }
+   ]
+  },
+  {
+   "title": "Plain files behind it",
+   "features": [
+    {
+     "id": "f10",
+     "label": "Plain Markdown Files",
+     "sub": "One plain text file per app, newest first",
+     "title": "One plain text file per app, newest first",
+     "what": "Entries live in one markdown file per app, checked into your repo next to your code. Anyone can read, edit or review a change to it like any other file.",
+     "html": "<pre class=\"ex\">## 2025-03-14\n- Added saved searches\n- Faster checkout\n\n## 2025-03-09\n- Fixed duplicate emails</pre>"
+    },
+    {
+     "id": "f11",
+     "label": "Nothing Gets Moved",
+     "sub": "Months are worked out when the page loads",
+     "title": "Months are worked out when the page loads",
+     "what": "The page sorts entries into months each time it renders, so nothing is ever moved to a separate archive file. There is no archive step to forget and no file that can quietly go missing.",
+     "html": "<div class=\"two mid\"><div class=\"opt\"><span class=\"tag\">shop.md</span><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i></div><div class=\"col\"><span class=\"st ok\">March</span><span class=\"st mute\">February</span><span class=\"st mute\">January</span></div></div>"
+    },
+    {
+     "id": "f12",
+     "label": "A Bad Heading Won't Break It",
+     "sub": "An undated heading lands in its own Undated group",
+     "title": "An undated heading lands in its own Undated group",
+     "what": "If someone writes a heading like Unreleased instead of a date, those entries show up under Undated rather than taking the page down.",
+     "html": "<div class=\"two mid\"><pre class=\"ex\">## Unreleased\n- Bulk edit</pre><div class=\"col\"><span class=\"tag\">Archive</span><span class=\"pill line\">Undated · 1</span></div></div>"
+    },
+    {
+     "id": "f13",
+     "label": "Know What It Skips",
+     "sub": "The format is spelled out so nothing vanishes",
+     "title": "The format is spelled out so nothing vanishes",
+     "what": "Only date headings and top-level dash bullets are read. The skill says plainly that subheadings, nested bullets and intro text are skipped, so you know before an entry goes missing.",
+     "html": "<div class=\"col\"><div class=\"row flow\"><span class=\"hd\">## 2025-03-14</span><span class=\"pill ok\">read</span></div><div class=\"row flow\"><span class=\"hd\">- Saved searches</span><span class=\"pill ok\">read</span></div><div class=\"row flow\"><span class=\"hd\">### Details</span><span class=\"pill mute\">skipped</span></div><div class=\"row flow\"><span class=\"hd\">  - nested point</span><span class=\"pill mute\">skipped</span></div></div>"
+    }
+   ]
+  },
+  {
+   "title": "The habit",
+   "features": [
+    {
+     "id": "f14",
+     "label": "An Entry Each Session",
+     "sub": "Claude adds a dated entry when it ships something",
+     "title": "Claude adds a dated entry when it ships something",
+     "what": "At the end of any session that shipped something users would notice, Claude adds an entry under today's date without being asked. The changelog stays current because nobody has to remember it.",
+     "html": "<div class=\"col\"><div class=\"row flow\"><span class=\"st ok\">Feature shipped</span><span class=\"arr\">→</span></div><div class=\"row flow\"><span class=\"st ok\">Entry added under today</span><span class=\"arr\">→</span></div><div class=\"row flow\"><span class=\"st mute\">Page updated</span><span class=\"arr\">automatic</span></div></div>"
+    },
+    {
+     "id": "f15",
+     "label": "Only What Users Notice",
+     "sub": "Features and real fixes, not tidy-up work",
+     "title": "Features and real fixes, not tidy-up work",
+     "what": "New features, redesigns and real bug fixes get an entry. Lint, refactors and typo fixes don't, so the page stays worth reading.",
+     "html": "<div class=\"col\"><div class=\"row\"><b class=\"hd\">New saved searches</b><span class=\"pill ok\">Logged</span></div><div class=\"row\"><b class=\"hd\">Fixed double emails</b><span class=\"pill ok\">Logged</span></div><div class=\"row\"><b class=\"hd\">Renamed a variable</b><span class=\"pill mute\">Skipped</span></div><div class=\"row\"><b class=\"hd\">Typo in a comment</b><span class=\"pill mute\">Skipped</span></div></div>"
+    },
+    {
+     "id": "f16",
+     "label": "A Few Plain Bullets",
+     "sub": "One to three plain-language lines per day",
+     "title": "One to three plain-language lines per day",
+     "what": "Entries are short and written for users, not developers. If today already has a heading, Claude adds to it instead of starting a second one.",
+     "html": "<pre class=\"ex\">## 2025-03-14\n- Added saved searches\n+ Checkout is faster on phones</pre>"
+    },
+    {
+     "id": "f17",
+     "label": "The Habit Is Written Down",
+     "sub": "A note in your project keeps future sessions on it",
+     "title": "A note in your project keeps future sessions on it",
+     "what": "Setup adds a short section to your project's instructions file pointing at the changelog. Every future Claude session sees it and keeps the habit going.",
+     "html": "<pre class=\"ex\">## Changelog\n/changelog is backed by\ndocs/changelog/*.md. After\nshipping, add a dated entry.</pre>"
+    }
+   ]
+  },
+  {
+   "title": "Built to last",
+   "features": [
+    {
+     "id": "f18",
+     "label": "Tests for the Quiet Bugs",
+     "sub": "Tests catch the bugs that fail without errors",
+     "title": "Tests catch the bugs that fail without errors",
+     "what": "Setup includes tests for the page, the sign-in gate, the month archive and the file parser, including a bad heading and text rendering outside its bullet. Those bugs would otherwise fail silently.",
+     "html": "<div class=\"col chk\"><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> Signed-out visitors redirected</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> Past months become links</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> Undated heading doesn't crash</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> Entry stays inside its bullet</span></div>"
+    },
+    {
+     "id": "f19",
+     "label": "Colors That Survive the Build",
+     "sub": "Theme colors are spelled out so a CSS build keeps them",
+     "title": "Theme colors are spelled out so CSS keeps them",
+     "what": "If your CSS tooling scans source files for complete class names, each color theme is written out as full class names rather than pieced together. A build that strips unused styles can then see them, so the timeline doesn't lose its colors in production.",
+     "html": "<div class=\"two\"><div class=\"opt old\"><span class=\"tag\">pieced together</span><pre class=\"ex\">\"bg-#{color}-200\"</pre></div><div class=\"opt sel\"><span class=\"ck\"><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg></span><span class=\"tag acc\">spelled out</span><pre class=\"ex\">\"bg-teal-200\"</pre></div></div>"
+    },
+    {
+     "id": "f20",
+     "label": "Fits Your Stack",
+     "sub": "Swap in your own sign-in check and markdown tool",
+     "title": "Swap in your own sign-in check and markdown tool",
+     "what": "The page uses whatever sign-in check and markdown renderer your app already has, in whatever language it is written. Nothing new to adopt just for a changelog.",
+     "html": "<div class=\"col\"><div class=\"row flow\"><span class=\"hd\">Sign-in check</span><span class=\"arr\">yours</span></div><div class=\"row flow\"><span class=\"hd\">Markdown renderer</span><span class=\"arr\">yours</span></div><div class=\"row flow\"><span class=\"hd\">Changelog files</span><span class=\"arr\">added</span></div></div>"
+    }
+   ]
+  }
+ ]
+}

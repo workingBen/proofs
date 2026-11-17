@@ -1,0 +1,216 @@
+{
+ "skill": "design-review",
+ "tagline": "See your live page beside real mockups, then approve what ships",
+ "use_when": "You want to change how a page looks or is laid out and would rather pick from rendered options than read a description or get a redesign built blind.",
+ "try_it": "Use the design-review skill to propose two or three layout options for the header and article cards on my /articles page.",
+ "sections": [
+  {
+   "title": "What you see",
+   "features": [
+    {
+     "id": "f1",
+     "title": "A real screenshot as the Before",
+     "what": "Each item opens with an actual screenshot of your page as it renders today, not a written description of it. You judge every proposal against what is really there.",
+     "picture": "A browser-window frame labeled \"Before\" holding a small page screenshot with a camera icon in its corner.",
+     "label": "Before Pictures",
+     "sub": "A real screenshot shows the page before the change"
+    },
+    {
+     "id": "f2",
+     "title": "Up to three working mockups per section",
+     "what": "Each proposal is built as real HTML and CSS, not an AI image or a text diff, with one to three options per section. You see the actual layout, spacing and type, not an impression of them.",
+     "picture": "Three small side-by-side cards labeled A, B and C, each showing a slightly different page layout drawn as gray blocks.",
+     "label": "See Your Options",
+     "sub": "Up to three working designs for each section"
+    },
+    {
+     "id": "f3",
+     "title": "Mockups use your site's own style",
+     "what": "Mockups are drawn with your page's real fonts, colors and spacing, with the fonts and images packed into the page so nothing falls back to a generic look. If your site has light and dark themes, mockups work in both.",
+     "picture": "A mockup card next to a little palette strip of color swatches and an \"Aa\" font sample, with arrows from the swatches into the mockup.",
+     "label": "Your Look, Not Ours",
+     "sub": "Mockups use your site's own fonts, colors and spacing"
+    },
+    {
+     "id": "f4",
+     "title": "The Before matches what visitors see",
+     "what": "When the text on your live site differs from your local copy, the live wording is pulled in before the screenshot is taken. The Before pane shows the page you know, not stale sample text.",
+     "picture": "Two page thumbnails, one tagged \"live\" and one tagged \"local\", with an arrow copying a headline from live to local and a check mark.",
+     "label": "The Words You Know",
+     "sub": "The Before shows your live text, not sample copy"
+    },
+    {
+     "id": "f5",
+     "title": "One numbered item per section",
+     "what": "Even a whole-page redesign is split into numbered items, one for each section or component. You can approve the header and send back the footer instead of taking or rejecting everything at once.",
+     "picture": "A tall page outline divided into three horizontal bands, each with a numbered circle 1, 2, 3 on its left edge.",
+     "label": "One Piece at a Time",
+     "sub": "Every section is its own numbered item"
+    },
+    {
+     "id": "f6",
+     "title": "A reason and an honest recommendation",
+     "what": "Every item explains why the change is proposed and carries a Recommended or Not Recommended badge. Readability or accessibility concerns show up right there in the reason.",
+     "picture": "An item header with a green \"Recommended\" badge and a gray \"Not Recommended\" badge below it, plus a short \"Reason\" text block.",
+     "label": "An Honest Opinion",
+     "sub": "Each item comes with a reason and a recommendation"
+    },
+    {
+     "id": "f7",
+     "title": "Phone and desktop widths side by side",
+     "what": "Mockups can be shown in a fixed-width phone frame and a desktop frame next to each other. You check both sizes at a glance without toggling anything, and the review page itself never scrolls sideways.",
+     "picture": "A narrow phone outline and a wide desktop outline next to each other, both showing the same layout rearranged for its width.",
+     "label": "Phone and Desktop",
+     "sub": "Both screen sizes side by side, no toggling"
+    },
+    {
+     "id": "f8",
+     "title": "Open decisions at the top",
+     "what": "Whatever still needs your call this round sits at the top of the page, above any recap or settled material. You never scroll past things you have already read to reach the next decision.",
+     "picture": "A page with two highlighted \"Open\" items stacked at the top and a collapsed \"Recap\" bar below them.",
+     "label": "What Needs You, First",
+     "sub": "Open decisions sit at the top of the page"
+    }
+   ]
+  },
+  {
+   "title": "How you decide",
+   "features": [
+    {
+     "id": "f9",
+     "title": "Click an option to select it",
+     "what": "Clicking a mockup card selects it, marked with a border and a check rather than a colored fill, so the selection never covers up the design you are judging. The decision buttons then apply to whichever option is selected.",
+     "picture": "Three option cards where card B has a thick outline and a small check badge in its corner, while its mockup stays fully visible.",
+     "label": "Pick a Favorite",
+     "sub": "Click an option to select it, marked with a border and a check"
+    },
+    {
+     "id": "f10",
+     "title": "Four clear decision buttons",
+     "what": "Each item has Keep Original, Use Selected, Approve with Comment and Request Revision. They cover rejecting it, shipping it as shown, shipping it with changes, or asking for another try.",
+     "picture": "A row of four buttons: \"Keep Original\" with an X, \"Use Selected\" with a check, \"Approve with Comment\" with a check, and \"Request Revision\" with a circular arrow.",
+     "label": "Four Clear Choices",
+     "sub": "Keep, use, approve with a comment, or ask for another try"
+    },
+    {
+     "id": "f11",
+     "title": "\"Use Proposed\" when there is one option",
+     "what": "When an item has only one mockup, the accept button reads Use Proposed instead of Use Selected. You don't hunt for a choice that doesn't exist or wonder whether your approval registered.",
+     "picture": "A single mockup card with no selection controls and an accept button reading \"Use Proposed\".",
+     "label": "One Option, One Button",
+     "sub": "\"Use Proposed\" when there's only one design"
+    },
+    {
+     "id": "f12",
+     "title": "Comment box where words matter",
+     "what": "Approve with Comment and Request Revision open a comment box for what to change or try instead. The other two buttons allow an optional note.",
+     "picture": "The \"Request Revision\" button pressed, with a text box sliding open beneath it containing \"try less white space\".",
+     "label": "Say It in Words",
+     "sub": "A comment box opens when your words matter"
+    },
+    {
+     "id": "f13",
+     "title": "Status pill on every item",
+     "what": "Each item shows its current state at a glance, from pending to accepted, commented, revise or kept original. You can scan the page and see what you have and haven't decided.",
+     "picture": "A column of item headers, each ending in a small rounded pill: \"Pending\", \"Accepted\", \"Revise\", \"Kept\".",
+     "label": "Status at a Glance",
+     "sub": "Every item shows where it stands"
+    },
+    {
+     "id": "f14",
+     "title": "A \"Mark as read\" switch per item",
+     "what": "Each item has its own Mark as read switch, separate from the decision buttons. Items you have finished with are left out of the next round entirely.",
+     "picture": "An item card with a small toggle switch labeled \"Mark as read\" in the on position next to the decision buttons.",
+     "label": "Done With It",
+     "sub": "A Mark as read switch drops an item from the next round"
+    },
+    {
+     "id": "f15",
+     "title": "Progress bar that stays in view",
+     "what": "A bar pinned to the bottom of the page shows how many items you've reviewed and a count for each decision. You always know how far along you are.",
+     "picture": "A bottom bar reading \"3 of 5 reviewed\" with small tallies for each state and a button on the right.",
+     "label": "Always Know Where You Are",
+     "sub": "A progress bar stays in view as you go"
+    }
+   ]
+  },
+  {
+   "title": "After you decide",
+   "features": [
+    {
+     "id": "f16",
+     "title": "Copy My Decisions, paste it back",
+     "what": "One button copies a plain-text summary of every decision, headed with the name of the page under review and listing the chosen option letter and any comments. You paste it into chat, and it can't be mixed up with another review in progress.",
+     "picture": "A \"Copy My Decisions\" button with an arrow to a text snippet: \"[Articles Index - Design Review] 1. Card layout - ACCEPT (Variant B)\".",
+     "label": "One Paste Back",
+     "sub": "Copy My Decisions sends every choice to Claude"
+    },
+    {
+     "id": "f17",
+     "title": "Only approved items get built",
+     "what": "Items you accept are built and nothing else is touched. Kept-original, revise and unreviewed items leave the page exactly as it is.",
+     "picture": "Four item rows where only the two with green checks have arrows into a code file, and the others have a lock icon.",
+     "label": "Only What You Approved",
+     "sub": "Nothing else on the page gets touched"
+    },
+    {
+     "id": "f18",
+     "title": "Mockups become real working pages",
+     "what": "An approved mockup is rebuilt in your actual page template, wired to your real data and images instead of the sample content shown in the review. The finished page then gets the same checks as any other change.",
+     "picture": "A mockup card with placeholder text on the left, an arrow, and a page template on the right showing a list of real cards repeated from data.",
+     "label": "From Mockup to Real Page",
+     "sub": "Approved designs are rebuilt in your real templates and data"
+    },
+    {
+     "id": "f19",
+     "title": "Tested before you see it",
+     "what": "Before each publish, the review page is loaded and clicked through automatically to confirm every button works, the export reads correctly, and no mockup overlaps or scrolls sideways. You don't get a page that looks fine but does nothing when clicked.",
+     "picture": "A review page thumbnail with a checklist beside it: \"buttons work\", \"export correct\", \"no sideways scroll\", each with a check mark.",
+     "label": "Tested Before You See It",
+     "sub": "Every button is clicked before the page reaches you"
+    }
+   ]
+  },
+  {
+   "title": "Rounds",
+   "features": [
+    {
+     "id": "f20",
+     "title": "Follow-up rounds for revisions only",
+     "what": "The next round shows only the items you sent back, with new options shaped by your comments. It goes up at the same link, so the page you already have open just updates.",
+     "picture": "A five-item page labeled \"Round 1\" with an arrow to a one-item page labeled \"Round 2\", both under the same link icon.",
+     "label": "Just the Revisions",
+     "sub": "The next round brings back only what you sent back"
+    },
+    {
+     "id": "f21",
+     "title": "Earlier proposals stay for comparison",
+     "what": "On a revised item, the option you turned down is carried forward, dimmed with a dashed border and labeled with its round. You can see what changed without it competing with the new choices.",
+     "picture": "A card with a faded, dashed-outline mockup tagged \"Round 1\" beside two bright new mockups tagged \"Round 2\".",
+     "label": "Compare With Last Time",
+     "sub": "The option you turned down stays, dimmed, for comparison"
+    },
+    {
+     "id": "f22",
+     "title": "\"Show me a few\" is a valid request",
+     "what": "You don't need to know what you want before you start. Ask for a revision with a vague comment and the next round brings several genuinely different options instead of one tweaked guess.",
+     "picture": "A comment bubble reading \"not sure, show me a few\" with an arrow to four distinct option cards labeled A through D.",
+     "label": "Not Sure? Show Me a Few",
+     "sub": "A vague comment brings several real alternatives"
+    },
+    {
+     "id": "wp",
+     "label": "Where the Page Goes",
+     "sub": "A private link, a local file, or your Wi-Fi",
+     "title": "A private link, a local file, or your Wi-Fi",
+     "what": "Your project picks where review pages go: a private claude.ai link, an HTML file that opens in your browser, or that file served on your home Wi-Fi so a phone can open it. Nothing is ever uploaded or tunneled in the Wi-Fi mode, and the server stops when the review ends.",
+     "html": "<div class=\"col\"><div class=\"opt\"><span class=\"tag\">artifact</span><div class=\"row\" style=\"align-items:stretch\"><div class=\"phone\" style=\"max-width:112px;flex:none\"><i class=\"mk d\" style=\"width:100%;height:16px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i><span class=\"link\" style=\"font-size:9px;padding:2px 6px\">private link</span></div><div class=\"desk\" style=\"flex:1;min-width:0;display:grid;gap:5px;align-content:start\"><i class=\"mk d\" style=\"width:100%;height:24px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i><span class=\"link\" style=\"font-size:9px;padding:2px 6px\">private link</span></div></div></div><div class=\"opt\"><span class=\"tag\">file</span><div class=\"win\" style=\"max-width:240px\"><div class=\"wb\"><i></i><i></i><i></i><span>file</span></div><div class=\"wbody\"><i class=\"mk d\" style=\"width:100%;height:18px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i></div></div></div><div class=\"opt\"><span class=\"tag\">wifi</span><div class=\"row\"><div class=\"phone\" style=\"max-width:84px;flex:none\"><i class=\"mk d\" style=\"width:100%;height:16px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i></div><div class=\"col\" style=\"flex:1;min-width:0;justify-items:center;gap:3px\"><span class=\"note2\">same Wi-Fi</span><span style=\"display:block;width:100%;border-top:2px dashed var(--accent)\"></span></div><div class=\"desk\" style=\"flex:none;width:96px;display:grid;gap:5px;align-content:start\"><i class=\"mk d\" style=\"width:100%;height:18px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i></div></div></div></div>"
+    }
+   ]
+  }
+ ],
+ "promises": [
+  "Works on phone and desktop",
+  "Nothing ships until you approve it"
+ ]
+}

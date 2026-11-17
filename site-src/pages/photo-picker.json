@@ -1,0 +1,216 @@
+{
+ "skill": "photo-picker",
+ "tagline": "Pick real photos for your pages from a gallery, not a guess",
+ "use_when": "An article or page needs photos and you want to choose from real, properly licensed candidates instead of having one picked and dropped in for you.",
+ "promises": [
+  "Every candidate checked by eye first",
+  "Nothing is added until you pick it"
+ ],
+ "try_it": "Use the photo-picker skill to find two or three photo options for each section of my /articles/herb-garden page.",
+ "sections": [
+  {
+   "title": "What you see",
+   "features": [
+    {
+     "id": "f1",
+     "label": "Spots That Need a Photo",
+     "sub": "Each place on the page that needs a picture is a slot",
+     "title": "Each place on the page that needs a picture is a slot",
+     "what": "The page is broken into slots, one per spot that needs a photo, each with a note on what it should illustrate. You decide slot by slot instead of all or nothing.",
+     "html": "<div class=\"win\"><div class=\"wb\"><i></i><i></i><i></i><span>Herb garden article</span></div><div class=\"wbody\"><div class=\"band\"><span class=\"num\">1</span><b class=\"hd\">Intro</b></div><div class=\"band\"><span class=\"num\">2</span><b class=\"hd\">Soil section</b></div><div class=\"band\"><span class=\"num\">3</span><b class=\"hd\">Harvest tips</b></div></div></div>"
+    },
+    {
+     "id": "f2",
+     "label": "Real Photos, Not Guesses",
+     "sub": "Real, properly licensed candidates for every slot",
+     "title": "Real, properly licensed candidates for every slot",
+     "what": "Candidates are real photographs from free-license stock libraries, or official cover images for books. You choose between actual images, not descriptions of them.",
+     "html": "<div class=\"three\"><div class=\"opt\"><span class=\"tag\">A · stock</span><i class=\"mk d\" style=\"width:100%;height:40px\"></i></div><div class=\"opt sel\"><span class=\"tag\">B · stock</span><i class=\"mk d\" style=\"width:100%;height:40px\"></i></div><div class=\"opt\"><span class=\"tag\">C · stock</span><i class=\"mk d\" style=\"width:100%;height:40px\"></i></div></div>"
+    },
+    {
+     "id": "f3",
+     "label": "Checked by Eye First",
+     "sub": "Every candidate is opened and looked at before you see it",
+     "title": "Every candidate is opened and looked at before you see it",
+     "what": "Each image is downloaded and looked at before it is offered: the right subject, the right book edition, the right orientation, not a broken placeholder. A link that loads is not taken as proof.",
+     "html": "<div class=\"two mid\"><div class=\"opt\"><span class=\"tag\">Option A</span><i class=\"mk d\" style=\"width:100%;height:40px\"></i></div><div class=\"col chk\"><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> right subject</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> right orientation</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> not a placeholder</span></div></div>"
+    },
+    {
+     "id": "f4",
+     "label": "Where It Came From",
+     "sub": "Every candidate shows its source and license",
+     "title": "Every candidate shows its source and license",
+     "what": "Each card notes where the image came from and why it fits. You know what you are allowed to use before you pick it.",
+     "html": "<div class=\"two mid\"><div class=\"opt\"><span class=\"tag\">Option B</span><i class=\"mk d\" style=\"width:100%;height:40px\"></i></div><div class=\"col\"><span class=\"pill line\">free license</span><div class=\"note2\">from a stock library · close-up fits a narrow column</div></div></div>"
+    },
+    {
+     "id": "f5",
+     "label": "Reuse What You Have",
+     "sub": "Photos already on your site are offered first",
+     "title": "Photos already on your site are offered first",
+     "what": "If your site already has a photo of the same subject, it is offered as a candidate with an Already on site badge. Pages stay consistent and you avoid two different photos of the same thing.",
+     "html": "<div class=\"two mid\"><div class=\"opt\"><span class=\"tag\">Option A</span><i class=\"mk d\" style=\"width:100%;height:40px\"></i><span class=\"st ok\">Already on site</span></div><div class=\"opt\"><span class=\"tag\">Option B</span><i class=\"mk d\" style=\"width:100%;height:40px\"></i><span class=\"st mute\">New · stock</span></div></div>"
+    },
+    {
+     "id": "f6",
+     "label": "Only Real Contenders",
+     "sub": "One to three options, never padded",
+     "title": "One to three options, never padded",
+     "what": "Most slots get one to three candidates. If only one image truly fits, you see just that one rather than filler added to make a set.",
+     "html": "<div class=\"two mid\"><div class=\"opt\"><span class=\"tag\">Only option</span><i class=\"mk d\" style=\"width:100%;height:40px\"></i></div><div class=\"note2\">one real match · no filler</div></div>"
+    },
+    {
+     "id": "f7",
+     "label": "Your Site's Look",
+     "sub": "The gallery uses your page's own fonts and colors",
+     "title": "The gallery uses your page's own fonts and colors",
+     "what": "The review page borrows the palette and type of the page the photos are for, so you judge each photo in a setting close to where it will live.",
+     "html": "<div class=\"win\"><div class=\"wb\"><i></i><i></i><i></i><span>Photo picker · your look</span></div><div class=\"wbody\"><b class=\"hd\">Soil section</b><div class=\"three\"><div class=\"opt\"><i class=\"mk d\" style=\"width:100%;height:28px\"></i></div><div class=\"opt\"><i class=\"mk d\" style=\"width:100%;height:28px\"></i></div><div class=\"opt\"><i class=\"mk d\" style=\"width:100%;height:28px\"></i></div></div></div></div>"
+    }
+   ]
+  },
+  {
+   "title": "How you decide",
+   "features": [
+    {
+     "id": "f8",
+     "label": "Click to Pick",
+     "sub": "Click a photo to select it",
+     "title": "Click a photo to select it",
+     "what": "Clicking a card selects it with a border, and the decision buttons apply to whichever photo is selected.",
+     "html": "<div class=\"three\"><div class=\"opt\"><span class=\"tag\">A</span><i class=\"mk d\" style=\"width:100%;height:40px\"></i></div><div class=\"opt sel\"><span class=\"tag acc\">B · selected</span><i class=\"mk d\" style=\"width:100%;height:40px\"></i></div><div class=\"opt\"><span class=\"tag\">C</span><i class=\"mk d\" style=\"width:100%;height:40px\"></i></div></div>"
+    },
+    {
+     "id": "f9",
+     "label": "Four Clear Choices",
+     "sub": "Keep none, use it, use it with changes, or search again",
+     "title": "Keep none, use it, use it with changes, or search again",
+     "what": "Each slot has Keep None, Use Selected, Approve with Comment and Request Revision. That covers no photo here, this photo as is, this photo adjusted, or none of these.",
+     "html": "<div class=\"row wrap\"><span class=\"mb\">Keep None</span><span class=\"mb on\">Use Selected</span><span class=\"mb\">Approve with Comment</span><span class=\"mb\">Request Revision</span></div>"
+    },
+    {
+     "id": "f10",
+     "label": "Say How to Use It",
+     "sub": "Ask for a crop, caption or different placement",
+     "title": "Ask for a crop, caption or different placement",
+     "what": "Approve with Comment opens a box for how the photo should be used, like a tighter crop, a caption or a different position on the page.",
+     "html": "<div class=\"col\"><div class=\"row\"><span class=\"mb on\">Approve with Comment</span></div><div class=\"cbox\">crop tighter, add a caption<span class=\"caret\"></span></div></div>"
+    },
+    {
+     "id": "f11",
+     "label": "Search Again",
+     "sub": "None of these? Say what to look for instead",
+     "title": "None of these? Say what to look for instead",
+     "what": "Request Revision means start over for that slot, in a different direction. Your comment says what to try: another subject, mood or source.",
+     "html": "<div class=\"col\"><div class=\"row\"><span class=\"mb on\">Request Revision</span></div><div class=\"cbox\">too staged, try something outdoors<span class=\"caret\"></span></div></div>"
+    },
+    {
+     "id": "f12",
+     "label": "Readable in Both Themes",
+     "sub": "Comment boxes and status colors work in light and dark",
+     "title": "Comment boxes and status colors work in light and dark",
+     "what": "Every status color has its own dark-mode version, so your own notes stay readable whichever theme your device uses.",
+     "html": "<div class=\"two mid\"><div class=\"code\"><span>REVISE</span><span>try something outdoors</span></div><div class=\"col chk\"><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> light</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> dark</span></div></div>"
+    },
+    {
+     "id": "f13",
+     "label": "Always Know Where You Are",
+     "sub": "A progress bar stays in view as you go",
+     "title": "A progress bar stays in view as you go",
+     "what": "A bar pinned to the bottom shows how many slots you've reviewed and a count for each decision.",
+     "html": "<div class=\"bottom\"><span>5 of 8 slots</span><span class=\"tally\"><b class=\"ok\">3</b><b class=\"mid\">1</b><b class=\"mute\">1</b></span><span class=\"mb on sm\">Copy</span></div>"
+    },
+    {
+     "id": "f14",
+     "label": "One Paste Back",
+     "sub": "Copy My Decisions sends every pick to Claude",
+     "title": "Copy My Decisions sends every pick to Claude",
+     "what": "One button copies a plain summary headed with the gallery's name, listing each slot's decision, chosen option and comments. You paste it into chat and it can't be confused with another review.",
+     "html": "<div class=\"col\"><div class=\"row\"><span class=\"mb on acc\">Copy My Decisions</span></div><pre class=\"ex\">[Garden Articles · Photo Picker]\n1. Intro · ACCEPT (Option B)\n2. Soil · REVISE: \"less staged\"</pre></div>"
+    }
+   ]
+  },
+  {
+   "title": "After you decide",
+   "features": [
+    {
+     "id": "f15",
+     "label": "Uploaded to Your Image Host",
+     "sub": "The chosen photo goes to your image host and onto the page",
+     "title": "The chosen photo is uploaded and placed on the page",
+     "what": "Each accepted photo is uploaded to your image host, following the folder and naming your project notes describe, and its address is wired into the page at the right spot. If the project has no image host yet, Claude asks where images should live before uploading anything.",
+     "html": "<div class=\"two mid\"><div class=\"opt sel\"><span class=\"tag\">Option B</span><i class=\"mk d\" style=\"width:100%;height:40px\"></i></div><div class=\"col\"><div class=\"note2\">→ your image host</div><div class=\"code\"><span>&lt;img src=\"…/basil.jpg\"&gt;</span></div></div></div>"
+    },
+    {
+     "id": "f16",
+     "label": "Your Changes Applied",
+     "sub": "Crops, captions and alt text from your comments",
+     "title": "Crops, captions and alt text from your comments",
+     "what": "If you approved with a comment, the photo is adjusted before it goes in: cropped, captioned, given alt text or moved, as you asked.",
+     "html": "<div class=\"two mid\"><div class=\"opt\"><span class=\"tag acc\">Cropped</span><i class=\"mk d\" style=\"width:100%;height:40px\"></i></div><div class=\"col chk\"><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> crop</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> caption</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> alt text</span></div></div>"
+    },
+    {
+     "id": "f17",
+     "label": "Only What You Picked",
+     "sub": "Nothing else on the page gets touched",
+     "title": "Nothing else on the page gets touched",
+     "what": "Only accepted slots get a photo. Kept-empty slots stay empty and slots sent back for another search are left alone until the next round.",
+     "html": "<div class=\"col\"><div class=\"row flow\"><span class=\"st ok\">1 · Accepted</span><span class=\"arr\">→ photo added</span></div><div class=\"row flow\"><span class=\"st mid\">2 · Revise</span><span class=\"arr\">untouched</span></div><div class=\"row flow\"><span class=\"st mute\">3 · Keep None</span><span class=\"arr\">stays empty</span></div></div>"
+    },
+    {
+     "id": "f18",
+     "label": "No Blank Boxes",
+     "sub": "Every image is confirmed to load before you see the page",
+     "title": "Every image is confirmed to load before you see the page",
+     "what": "A broken image fails silently as an empty box, so every image on the review page is checked to have actually loaded before it is published to you.",
+     "html": "<div class=\"two mid\"><div class=\"opt\"><span class=\"tag\">Loaded</span><i class=\"mk d\" style=\"width:100%;height:40px\"></i><span class=\"st ok\">OK</span></div><div class=\"opt old\"><span class=\"tag\">Blank box</span><i class=\"mk\" style=\"width:100%;height:40px\"></i><span class=\"st mid\">caught</span></div></div>"
+    },
+    {
+     "id": "f19",
+     "label": "Tested Before You See It",
+     "sub": "Every button is clicked before the page reaches you",
+     "title": "Every button is clicked before the page reaches you",
+     "what": "Before each publish, the gallery is loaded and clicked through automatically, including selecting a photo and making a decision, to confirm it all works.",
+     "html": "<div class=\"two mid\"><div class=\"opt\"><i class=\"mk d\" style=\"width:100%;height:28px\"></i><div class=\"row\"><span class=\"mb\">Use</span><span class=\"mb\">Keep None</span></div></div><div class=\"col chk\"><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> selection works</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> buttons work</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> no errors</span></div></div>"
+    }
+   ]
+  },
+  {
+   "title": "Rounds",
+   "features": [
+    {
+     "id": "f20",
+     "label": "Just the Open Slots",
+     "sub": "The next round brings back only what's still open",
+     "title": "The next round brings back only what's still open",
+     "what": "A follow-up round shows only the slots you haven't settled, with fresh candidates shaped by your comments, at the same link.",
+     "html": "<div class=\"two mid\"><div class=\"col\"><span class=\"tag\">Round 1 · 8 slots</span><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i></div><div class=\"col\"><span class=\"tag acc\">Round 2 · 2 slots</span><i class=\"mk d\" style=\"width:100%;height:7px\"></i><span class=\"link\">same link</span></div></div>"
+    },
+    {
+     "id": "f21",
+     "label": "Compare With Last Time",
+     "sub": "Turned-down photos stay beside the new ones",
+     "title": "Turned-down photos stay beside the new ones",
+     "what": "Photos you passed on are carried forward, labeled Round 1, next to the new Round 2 candidates, so you can see what changed.",
+     "html": "<div class=\"three\"><div class=\"opt old\"><span class=\"tag\">Round 1</span><i class=\"mk d\" style=\"width:100%;height:40px\"></i></div><div class=\"opt\"><span class=\"tag acc\">Round 2 · A</span><i class=\"mk d\" style=\"width:100%;height:40px\"></i></div><div class=\"opt\"><span class=\"tag acc\">Round 2 · B</span><i class=\"mk d\" style=\"width:100%;height:40px\"></i></div></div>"
+    },
+    {
+     "id": "f22",
+     "label": "Several Pages, One Gallery",
+     "sub": "Pick photos for a group of articles in one place",
+     "title": "Pick photos for a group of articles in one place",
+     "what": "One gallery can cover slots across several related articles, each slot labeled with its article. You settle a whole batch of pages in one sitting.",
+     "html": "<div class=\"col\"><span class=\"tag\">Herb garden</span><div class=\"band\"><span class=\"num\">1</span><b class=\"hd\">Intro</b></div><span class=\"tag\">Composting</span><div class=\"band\"><span class=\"num\">2</span><b class=\"hd\">Bin setup</b></div><div class=\"band\"><span class=\"num\">3</span><b class=\"hd\">Finished soil</b></div></div>"
+    },
+    {
+     "id": "wp",
+     "label": "Where the Page Goes",
+     "sub": "A private link, a local file, or your Wi-Fi",
+     "title": "A private link, a local file, or your Wi-Fi",
+     "what": "Your project picks where review pages go: a private claude.ai link, an HTML file that opens in your browser, or that file served on your home Wi-Fi so a phone can open it. Nothing is ever uploaded or tunneled in the Wi-Fi mode, and the server stops when the review ends.",
+     "html": "<div class=\"col\"><div class=\"opt\"><span class=\"tag\">artifact</span><div class=\"row\" style=\"align-items:stretch\"><div class=\"phone\" style=\"max-width:112px;flex:none\"><i class=\"mk d\" style=\"width:100%;height:16px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i><span class=\"link\" style=\"font-size:9px;padding:2px 6px\">private link</span></div><div class=\"desk\" style=\"flex:1;min-width:0;display:grid;gap:5px;align-content:start\"><i class=\"mk d\" style=\"width:100%;height:24px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i><span class=\"link\" style=\"font-size:9px;padding:2px 6px\">private link</span></div></div></div><div class=\"opt\"><span class=\"tag\">file</span><div class=\"win\" style=\"max-width:240px\"><div class=\"wb\"><i></i><i></i><i></i><span>file</span></div><div class=\"wbody\"><i class=\"mk d\" style=\"width:100%;height:18px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i></div></div></div><div class=\"opt\"><span class=\"tag\">wifi</span><div class=\"row\"><div class=\"phone\" style=\"max-width:84px;flex:none\"><i class=\"mk d\" style=\"width:100%;height:16px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i></div><div class=\"col\" style=\"flex:1;min-width:0;justify-items:center;gap:3px\"><span class=\"note2\">same Wi-Fi</span><span style=\"display:block;width:100%;border-top:2px dashed var(--accent)\"></span></div><div class=\"desk\" style=\"flex:none;width:96px;display:grid;gap:5px;align-content:start\"><i class=\"mk d\" style=\"width:100%;height:18px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i></div></div></div></div>"
+    }
+   ]
+  }
+ ]
+}

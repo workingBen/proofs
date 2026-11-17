@@ -1,0 +1,13 @@
+{
+  "name": "proofs",
+  "owner": {
+    "name": "workingBen"
+  },
+  "plugins": [
+    {
+      "name": "proofs",
+      "source": "./",
+      "description": "Claude Code skills that show their work: design reviews, visual QA, copy edits and decision pages you click through, then paste back to Claude."
+    }
+  ]
+}

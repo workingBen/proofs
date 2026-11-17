@@ -1,0 +1,229 @@
+{
+ "skill": "style-guide",
+ "tagline": "Agree on your site's design rules once, then keep them",
+ "use_when": "The same kind of inconsistency keeps turning up across pages, like three heading sizes or two card styles, and you want one site-wide rule instead of fixing it page by page.",
+ "promises": [
+  "Real rendered examples, never descriptions",
+  "Nothing changes until you approve it"
+ ],
+ "try_it": "Use the style-guide skill to audit my whole site for inconsistent headings, spacing, colors and card styles, and propose rules.",
+ "sections": [
+  {
+   "title": "What it audits",
+   "features": [
+    {
+     "id": "f1",
+     "label": "Starts From What's Decided",
+     "sub": "Reads your existing rules first and never re-asks",
+     "title": "Reads your existing rules first and never re-asks",
+     "what": "If your project already has a written style guide, or rules saved from an earlier run, those count as decided. Run it again anytime and it only proposes what is new or still inconsistent, so the guide grows over time.",
+     "html": "<div class=\"col\"><div class=\"itm\"><span>Your written style guide</span><small>decided</small></div><div class=\"itm\"><span>Saved rules · 12</span><small>decided</small></div><div class=\"note2\">only new items get proposed</div></div>"
+    },
+    {
+     "id": "f2",
+     "label": "The Whole Site at Once",
+     "sub": "Type, spacing, color and components across every page",
+     "title": "Type, spacing, color and components across every page",
+     "what": "It scans all your pages for headings, body and small-print sizes, spacing on phone and desktop, color use, repeated components like cards and headers, disclaimers and dark mode. Anything already scheduled on your to-do list is left alone.",
+     "html": "<div class=\"win\"><div class=\"wb\"><i></i><i></i><i></i><span>Audit · 48 pages</span></div><div class=\"wbody\"><div class=\"row flow\"><span class=\"st mid\">Headings</span><span class=\"arr\">3 sizes found</span></div><div class=\"row flow\"><span class=\"st mid\">Card padding</span><span class=\"arr\">phone = desktop</span></div><div class=\"row flow\"><span class=\"st ok\">Link color</span><span class=\"arr\">consistent</span></div></div></div>"
+    },
+    {
+     "id": "f3",
+     "label": "Ratify What You Already Do",
+     "sub": "Patterns you've settled on become official rules",
+     "title": "Patterns you've settled on become official rules",
+     "what": "When the site already does something one way in practice, it is shown once with its exact code, so you can confirm it as the official rule rather than leave it as habit.",
+     "html": "<div class=\"opt\"><div class=\"row\"><span class=\"tag\">Already in use</span><span class=\"rec yes\">Recommended</span></div><i class=\"mk d\" style=\"width:70%;height:14px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><div class=\"code\"><span>text-2xl font-semibold</span></div></div>"
+    },
+    {
+     "id": "f4",
+     "label": "Settle the Real Splits",
+     "sub": "A recommended option and alternatives for open questions",
+     "title": "A recommended option and alternatives for open questions",
+     "what": "Where pages genuinely disagree with no clear winner, you get a recommended option plus one or two alternatives to choose from, each one rendered.",
+     "html": "<div class=\"three\"><div class=\"opt sel\"><span class=\"tag acc\">A · rec</span><i class=\"mk d\" style=\"width:80%;height:14px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i></div><div class=\"opt\"><span class=\"tag\">B</span><i class=\"mk d\" style=\"width:80%;height:10px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i></div><div class=\"opt\"><span class=\"tag\">C</span><i class=\"mk d\" style=\"width:80%;height:18px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i></div></div>"
+    }
+   ]
+  },
+  {
+   "title": "What you see",
+   "features": [
+    {
+     "id": "f5",
+     "label": "Seen, Not Described",
+     "sub": "Every option rendered at its real size, side by side",
+     "title": "Every option rendered at its real size, side by side",
+     "what": "Each item shows the actual compared styles at their real size, color and weight, with representative text from your site. You choose between two things you can see, never between two class names.",
+     "html": "<div class=\"two mid\"><div class=\"opt\"><span class=\"tag\">Current</span><i class=\"mk\" style=\"width:90%;height:5px\"></i><i class=\"mk\" style=\"width:70%;height:5px\"></i><i class=\"mk\" style=\"width:80%;height:5px\"></i></div><div class=\"opt\"><span class=\"tag acc\">Proposed</span><i class=\"mk d\" style=\"width:90%;height:9px\"></i><i class=\"mk d\" style=\"width:70%;height:9px\"></i><i class=\"mk d\" style=\"width:80%;height:9px\"></i></div></div>"
+    },
+    {
+     "id": "f6",
+     "label": "The Recipe Beside It",
+     "sub": "The exact code for each style, ready to reuse",
+     "title": "The exact code for each style, ready to reuse",
+     "what": "Next to each example sits the exact markup or classes that produce it. Once a rule is accepted, the recipe is what everyone copies.",
+     "html": "<div class=\"two mid\"><div class=\"opt\"><i class=\"mk d\" style=\"width:60%;height:12px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:80%;height:7px\"></i></div><div class=\"code\"><span>rounded-2xl</span><span>p-6 border</span><span>shadow-sm</span></div></div>"
+    },
+    {
+     "id": "f7",
+     "label": "Jump to a Category",
+     "sub": "Filter tabs with a count for each category",
+     "title": "Filter tabs with a count for each category",
+     "what": "A big audit gets clickable tabs, one per category with its item count, so you can work through color without scrolling past every typography item. Only categories with items this round appear.",
+     "html": "<div class=\"row wrap\"><span class=\"mb on\">All 14</span><span class=\"mb\">Type 4</span><span class=\"mb\">Color 3</span><span class=\"mb\">Spacing 5</span><span class=\"mb\">Cards 2</span></div>"
+    },
+    {
+     "id": "f8",
+     "label": "Color-Coded Categories",
+     "sub": "Each category has its own colored chip",
+     "title": "Each category has its own colored chip",
+     "what": "Every item carries a chip in its category's color, matching its filter tab. Scanning a long page by eye gets much faster.",
+     "html": "<div class=\"col\"><div class=\"row flow\"><b class=\"hd\">1 · Heading sizes</b><span class=\"arr\"></span><span class=\"st ok\">Type</span></div><div class=\"row flow\"><b class=\"hd\">2 · Card padding</b><span class=\"arr\"></span><span class=\"st mid\">Spacing</span></div><div class=\"row flow\"><b class=\"hd\">3 · Link color</b><span class=\"arr\"></span><span class=\"st mute\">Color</span></div></div>"
+    },
+    {
+     "id": "f9",
+     "label": "A Key to the Colors",
+     "sub": "One legend explains the decision colors",
+     "title": "One legend explains the decision colors",
+     "what": "A small key near the top maps each decision color to its meaning, so the progress bar and button states make sense without rereading every button row.",
+     "html": "<div class=\"col\"><div class=\"row\"><span class=\"st mute\">Deny</span><span class=\"note2\">nothing changes</span></div><div class=\"row\"><span class=\"st mid\">Revise</span><span class=\"note2\">try again next round</span></div><div class=\"row\"><span class=\"st ok\">Accept now</span><span class=\"note2\">fix every page now</span></div><div class=\"row\"><span class=\"st ok\">Accept later</span><span class=\"note2\">rule now, fixes on a to-do</span></div></div>"
+    },
+    {
+     "id": "f10",
+     "label": "Light and Dark Preview",
+     "sub": "Flip every example between your light and dark looks",
+     "title": "Flip every example between your light and dark looks",
+     "what": "If your site has both themes, one switch shows every example in either one, separately from the review page's own theme. A contrast problem that only appears in dark mode is visible before you approve.",
+     "html": "<div class=\"col\"><div class=\"row\"><span class=\"tg on\"><b></b></span><span class=\"note2\">Preview dark</span></div><div class=\"two mid\"><div class=\"opt\"><span class=\"tag\">Light</span><i class=\"mk d\" style=\"width:70%;height:10px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i></div><div class=\"code\"><span>Card title</span><span>muted text</span></div></div></div>"
+    },
+    {
+     "id": "f11",
+     "label": "An Honest Opinion",
+     "sub": "Each item comes with a reason and a recommendation",
+     "title": "Each item comes with a reason and a recommendation",
+     "what": "Every item explains why it is proposed and carries a Recommended or Not Recommended badge, so you know where Claude stands before you decide.",
+     "html": "<div class=\"col\"><div class=\"row\"><b class=\"hd\">Heading sizes</b><span class=\"rec yes\">Recommended</span></div><div class=\"row\"><b class=\"hd\">Hero color</b><span class=\"rec no\">Not recommended</span></div><div class=\"why\"><b>Reason:</b> three heading sizes for the same kind of section.</div></div>"
+    }
+   ]
+  },
+  {
+   "title": "How you decide",
+   "features": [
+    {
+     "id": "f12",
+     "label": "Four Clear Choices",
+     "sub": "Deny, revise, fix everywhere now, or record for later",
+     "title": "Deny, revise, fix everywhere now, or record for later",
+     "what": "Each item has Deny, Request Revision, Accept – Apply Everywhere Now and Accept – Record for Later. You decide both whether the rule stands and when existing pages catch up.",
+     "html": "<div class=\"row wrap\"><span class=\"mb\">Deny</span><span class=\"mb\">Request Revision</span><span class=\"mb on\">Accept – Apply Everywhere Now</span><span class=\"mb\">Accept – Record for Later</span></div>"
+    },
+    {
+     "id": "f13",
+     "label": "Works as Designed",
+     "sub": "Say no and still record why the difference is on purpose",
+     "title": "Say no and still record why the difference is on purpose",
+     "what": "A Works as Designed checkbox on Deny records the current state as the rule, with your comment as the reason. Two things that look inconsistent but are meant to differ get documented instead of flagged again next time.",
+     "html": "<div class=\"col\"><div class=\"row\"><span class=\"mb on\">Deny</span><span class=\"tg on\"><b></b></span><span class=\"note2\">Works as Designed</span></div><div class=\"cbox\">admins get a denser layout on purpose<span class=\"caret\"></span></div></div>"
+    },
+    {
+     "id": "f14",
+     "label": "A Note on Anything",
+     "sub": "An optional comment box on every decision",
+     "title": "An optional comment box on every decision",
+     "what": "All four choices take an optional comment. On an Accept it adjusts the rule and the fix, so you never need a separate approve-with-changes button.",
+     "html": "<div class=\"col\"><div class=\"row\"><span class=\"mb on\">Accept – Record for Later</span></div><div class=\"cbox\">also use this on the checkout page<span class=\"caret\"></span></div></div>"
+    },
+    {
+     "id": "f15",
+     "label": "One Paste Back",
+     "sub": "A progress bar and Copy My Decisions stay in view",
+     "title": "A progress bar and Copy My Decisions stay in view",
+     "what": "A bar pinned to the bottom shows how many items you've reviewed and a count per decision. One button copies a plain summary that you paste back into chat.",
+     "html": "<div class=\"col\"><div class=\"bottom\"><span>9 of 14</span><span class=\"tally\"><b class=\"ok\">6</b><b class=\"mid\">2</b><b class=\"mute\">1</b></span><span class=\"mb on sm\">Copy</span></div><pre class=\"ex\">[Style Guide Audit]\n1. Heading sizes · ACCEPT (Apply Everywhere Now)\n2. Card density · DENY (Works as Designed)</pre></div>"
+    }
+   ]
+  },
+  {
+   "title": "After you decide",
+   "features": [
+    {
+     "id": "f16",
+     "label": "Fix It Everywhere Now",
+     "sub": "Accepted rules can be applied to every page at once",
+     "title": "Accepted rules can be applied to every page at once",
+     "what": "Choose Apply Everywhere Now and every page that does it differently is updated to match, in the same pass, with your comment folded in.",
+     "html": "<div class=\"col\"><div class=\"row flow\"><span class=\"st ok\">/about</span><span class=\"arr\">updated</span></div><div class=\"row flow\"><span class=\"st ok\">/pricing</span><span class=\"arr\">updated</span></div><div class=\"row flow\"><span class=\"st ok\">/blog</span><span class=\"arr\">updated</span></div></div>"
+    },
+    {
+     "id": "f17",
+     "label": "Or Record It for Later",
+     "sub": "The rule is saved now and the cleanup goes on your to-do list",
+     "title": "The rule is saved now and the cleanup goes on your to-do list",
+     "what": "Choose Record for Later and the rule is written down immediately, while updating the existing pages becomes a to-do entry naming which pages and what the rule is. It doesn't get lost.",
+     "html": "<div class=\"col\"><div class=\"col chk\"><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> Rule saved</span></div><div class=\"itm\"><span>To-do: update 6 pages to new card padding</span></div></div>"
+    },
+    {
+     "id": "f18",
+     "label": "A Living Style Guide",
+     "sub": "Accepted rules collect in one guide page you keep",
+     "title": "Accepted rules collect in one guide page you keep",
+     "what": "Every accepted rule lands in a style guide page in your project, sorted by category, each with its example, its code and a one-line rule. It is republished to the same link every time.",
+     "html": "<div class=\"two mid\"><div class=\"win\"><div class=\"wb\"><i></i><i></i><i></i><span>Style guide</span></div><div class=\"wbody\"><b class=\"hd\">Typography</b><i class=\"mk d\" style=\"width:70%;height:12px\"></i><b class=\"hd\">Cards</b><i class=\"mk\" style=\"width:100%;height:7px\"></i></div></div><div class=\"col\"><span class=\"tag acc\">3 rules added</span><span class=\"link\">same link</span></div></div>"
+    },
+    {
+     "id": "f19",
+     "label": "Future Sessions Follow It",
+     "sub": "Your project instructions point new work at the guide",
+     "title": "Your project instructions point new work at the guide",
+     "what": "It checks that your project's instructions for Claude point at the style guide, and if they don't, proposes adding the pointer and waits for your go-ahead, since that file is yours. Later work starts from your rules instead of reinventing them.",
+     "html": "<div class=\"col\"><div class=\"code\"><span>Project instructions</span><span>&nbsp;&nbsp;→ follow the style guide</span></div><div class=\"col chk\"><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> pointer in place</span></div></div>"
+    },
+    {
+     "id": "f20",
+     "label": "Optional: A Hidden Address",
+     "sub": "Opt-in only: served on your site after you approve",
+     "title": "Opt-in only: served on your site after you approve",
+     "what": "If you want it, the guide can also be served at an unlinked address on your own site, like /styleguide, always showing the saved version. This is optional and opt-in, and it is never set up without your explicit approval.",
+     "html": "<div class=\"col\"><div class=\"itm\"><span>yoursite.com/styleguide</span><span class=\"tg\"><b></b></span></div><div class=\"why\"><b>Opt-in:</b> only with your explicit OK. Not linked from any menu.</div></div>"
+    },
+    {
+     "id": "f21",
+     "label": "Tested Before You See It",
+     "sub": "Every button is clicked before the page reaches you",
+     "title": "Every button is clicked before the page reaches you",
+     "what": "Before each publish, the review page is loaded and clicked through automatically, including picking an option, to confirm the buttons work and nothing scrolls sideways.",
+     "html": "<div class=\"two mid\"><div class=\"opt\"><i class=\"mk d\" style=\"width:100%;height:14px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><div class=\"row\"><span class=\"mb\">Deny</span><span class=\"mb\">Accept</span></div></div><div class=\"col chk\"><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> buttons work</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> no errors</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> no sideways scroll</span></div></div>"
+    }
+   ]
+  },
+  {
+   "title": "Rounds",
+   "features": [
+    {
+     "id": "f22",
+     "label": "Just What's Still Open",
+     "sub": "The next round brings back only undecided items",
+     "title": "The next round brings back only undecided items",
+     "what": "A follow-up round shows every item without a final decision, with last round's proposal carried forward and labeled. It goes up at the same link.",
+     "html": "<div class=\"two mid\"><div class=\"col\"><span class=\"tag\">Round 1 · 14 items</span><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i></div><div class=\"col\"><span class=\"tag acc\">Round 2 · 3 items</span><i class=\"mk d\" style=\"width:100%;height:7px\"></i><span class=\"link\">same link</span></div></div>"
+    },
+    {
+     "id": "f23",
+     "label": "Settled Items, Dimmed",
+     "sub": "Related decided items stay visible for context",
+     "title": "Related decided items stay visible for context",
+     "what": "When a settled item helps explain a new one, it stays on the page, dimmed, so you see the connection without being asked to decide it again.",
+     "html": "<div class=\"two mid\"><div class=\"opt old\"><span class=\"tag\">Settled</span><i class=\"mk d\" style=\"width:70%;height:10px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i></div><div class=\"opt\"><span class=\"tag acc\">Open · Round 2</span><i class=\"mk d\" style=\"width:70%;height:10px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i></div></div>"
+    },
+    {
+     "id": "wp",
+     "label": "Where the Page Goes",
+     "sub": "A private link, a local file, or your Wi-Fi",
+     "title": "A private link, a local file, or your Wi-Fi",
+     "what": "Your project picks where review pages go: a private claude.ai link, an HTML file that opens in your browser, or that file served on your home Wi-Fi so a phone can open it. Nothing is ever uploaded or tunneled in the Wi-Fi mode, and the server stops when the review ends.",
+     "html": "<div class=\"col\"><div class=\"opt\"><span class=\"tag\">artifact</span><div class=\"row\" style=\"align-items:stretch\"><div class=\"phone\" style=\"max-width:112px;flex:none\"><i class=\"mk d\" style=\"width:100%;height:16px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i><span class=\"link\" style=\"font-size:9px;padding:2px 6px\">private link</span></div><div class=\"desk\" style=\"flex:1;min-width:0;display:grid;gap:5px;align-content:start\"><i class=\"mk d\" style=\"width:100%;height:24px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i><span class=\"link\" style=\"font-size:9px;padding:2px 6px\">private link</span></div></div></div><div class=\"opt\"><span class=\"tag\">file</span><div class=\"win\" style=\"max-width:240px\"><div class=\"wb\"><i></i><i></i><i></i><span>file</span></div><div class=\"wbody\"><i class=\"mk d\" style=\"width:100%;height:18px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i></div></div></div><div class=\"opt\"><span class=\"tag\">wifi</span><div class=\"row\"><div class=\"phone\" style=\"max-width:84px;flex:none\"><i class=\"mk d\" style=\"width:100%;height:16px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i></div><div class=\"col\" style=\"flex:1;min-width:0;justify-items:center;gap:3px\"><span class=\"note2\">same Wi-Fi</span><span style=\"display:block;width:100%;border-top:2px dashed var(--accent)\"></span></div><div class=\"desk\" style=\"flex:none;width:96px;display:grid;gap:5px;align-content:start\"><i class=\"mk d\" style=\"width:100%;height:18px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i></div></div></div></div>"
+    }
+   ]
+  }
+ ]
+}

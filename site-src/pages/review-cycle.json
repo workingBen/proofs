@@ -70,11 +70,27 @@
     },
     {
      "id": "rc8",
-     "label": "Hard Calls Wait for You",
-     "sub": "Design choices and risky changes are flagged, not guessed",
-     "title": "Design choices and risky changes are flagged, not guessed",
-     "what": "If an item is a matter of taste, could destroy data, is too big for a quick fix, or is unclear, it is logged for you instead of decided alone. Writing down the guess it would have made does not count as asking.",
-     "html": "<div class=\"col\"><div class=\"row\"><b class=\"hd\">Redesign pricing table</b><span class=\"pill mid\">Flagged</span></div><div class=\"why\"><b>Reason:</b> several good designs exist; this is your call.</div></div>"
+     "label": "Every Request Finds Its Lane",
+     "sub": "Each item is triaged before anything is built",
+     "title": "Each item is triaged before anything is built",
+     "what": "Small bugs and big feature ideas can arrive in the same stream. Each one is sorted into a lane first: a fix to build now, a design call, a page that looks wrong, a copy edit, a photo, a style rule, a feature to save for later, or a question only you can answer.",
+     "html": "<div class=\"col\"><div class=\"row\"><b class=\"hd\">Typo in footer</b><span class=\"pill ok\">Fix</span></div><div class=\"row\"><b class=\"hd\">Nicer pricing table</b><span class=\"pill mid\">Design review</span></div><div class=\"row\"><b class=\"hd\">Booking calendar</b><span class=\"pill line\">To-do</span></div></div>"
+    },
+    {
+     "id": "rc24",
+     "label": "Design Reviews Start Themselves",
+     "sub": "A taste call gets its own design review, unasked",
+     "title": "A taste call gets its own design review, unasked",
+     "what": "When an item has more than one good answer, the design-review skill runs for it on its own: a before screenshot, real mockups, a page to pick from. A page that looks wrong gets visual-qa, copy gets article-copy-edit, a missing picture gets photo-picker. You never have to ask for one, and the queue keeps moving while you decide.",
+     "html": "<div class=\"col\"><div class=\"row\"><b class=\"hd\">4 · Pricing header</b><span class=\"pill mid\">In design review</span></div><div class=\"why\">design-review started · 3 mockups · your pick</div></div>"
+    },
+    {
+     "id": "rc25",
+     "label": "Big Ideas Become To-dos",
+     "sub": "A real feature is saved, not half-built",
+     "title": "A real feature is saved, not half-built",
+     "what": "A request that needs its own plan is saved to your to-do list in your words, with a one-line scope and its open questions, instead of being started inside a session of quick fixes.",
+     "html": "<pre class=\"ex\">[3/9] Booking calendar: saved as a to-do.\n      6 remaining.</pre>"
     },
     {
      "id": "rc9",
@@ -89,7 +105,7 @@
      "label": "A Line Per Item",
      "sub": "A short progress line after every item",
      "title": "A short progress line after every item",
-     "what": "After each item you get one line: what it was, whether it shipped or was flagged, and how many are left. It is there for you to glance at and needs no reply.",
+     "what": "After each item you get one line: what it was, whether it shipped, went to a design review, was saved as a to-do or was flagged, and how many are left. It is there for you to glance at and needs no reply.",
      "html": "<pre class=\"ex\">[3/7] Footer link: shipped.\n      4 remaining.\n[4/7] Pricing table: flagged.\n      3 remaining.</pre>"
     },
     {
@@ -110,7 +126,7 @@
      "label": "Redirect It Before It’s Built",
      "sub": "Every card has a status and a note box",
      "title": "Every card has a status and a note box",
-     "what": "Each card shows where it stands: Reported, In progress, Shipped or Flagged. A note box is there from the start, so you can add detail, change the request or drop it before any work begins.",
+     "what": "Each card shows where it stands: Reported, In progress, Shipped, In design review, Saved as a to-do or Flagged. A note box is there from the start, so you can add detail, change the request or drop it before any work begins.",
      "html": "<div class=\"opt\"><div class=\"row\"><b class=\"hd\">4 · Sort by date</b><span class=\"pill line\">Reported</span></div><div class=\"cbox\">also sort by name<span class=\"caret\"></span></div></div>"
     },
     {

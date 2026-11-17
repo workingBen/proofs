@@ -1,12 +1,12 @@
 ---
 name: review-cycle
-version: 1.10.2
-description: Use when the user opens a review session and feeds a stream of small bug reports or feature requests one at a time (often from a phone), wanting each worked to completion without stopping for questions, with anything too ambiguous, risky, or large flagged for later discussion instead of decided alone.
+version: 1.11.0
+description: Use when the user opens a review session and feeds a stream of requests, from small bug reports to big feature ideas, one at a time or in a batch (often from a phone), wanting each one triaged and handled without stopping for questions: easy fixes shipped, design calls sent to a design review, large features saved as to-dos, and risky or unclear ones flagged instead of decided alone.
 ---
 
 # Review Cycle Tool
 
-A queue-processing workflow for a live review session: the user reports issues one at a time or in a batch; each is worked to completion (investigate, implement, test, commit, open a pull request, merge it) without stopping to ask questions, because the user isn't available for synchronous back-and-forth during the session. Sibling tool to `article-copy-edit`/`design-review`/`style-guide`, but there's no interactive review step mid-session: items either ship autonomously or get logged for a later in-person discussion. The user reviews once, on a tracking page that is built as the session runs.
+A queue-processing workflow for a live review session: the user reports issues one at a time or in a batch; each is worked to completion (investigate, implement, test, commit, open a pull request, merge it) without stopping to ask questions, because the user isn't available for synchronous back-and-forth during the session. Every item is **triaged first** (see Triage below): easy fixes ship autonomously, and an item that needs a sibling skill in this plugin (`design-review`, `visual-qa`, `article-copy-edit`, `photo-picker`, `style-guide`, `todos`) gets that skill started for it automatically, without the user asking. There's still no blocking review step mid-session: a design review is published and waits for the user's picks while the queue keeps moving. The user reviews once, on a tracking page that is built as the session runs.
 
 **Test first.** If the superpowers plugin is installed, use `superpowers:test-driven-development` for each item's implementation; otherwise write the failing test first yourself, watch it fail, then make it pass.
 **Debugging.** If the superpowers plugin is installed, use `superpowers:systematic-debugging` when a test failure's cause isn't immediately obvious; otherwise debug systematically: reproduce, form one hypothesis, test it, repeat.
@@ -15,7 +15,7 @@ A queue-processing workflow for a live review session: the user reports issues o
 
 - The user explicitly opens a session (e.g. "starting a review cycle," "let's do a review pass").
 - Not for a single one-off request made in normal conversation; just handle it directly.
-- Not for work that genuinely needs `design-review`, `style-guide`, `article-copy-edit`, or a full `brainstorming` cycle: route that to the escape hatch below instead of forcing it through this lightweight loop.
+- Items that need `design-review`, `visual-qa`, `article-copy-edit`, `photo-picker` or `style-guide` belong in the session too: triage routes them to that skill (below). Only a whole project that needs a full `brainstorming` cycle is out of scope; it is saved as a to-do.
 
 ## Lifecycle
 
@@ -23,18 +23,13 @@ A queue-processing workflow for a live review session: the user reports issues o
 2. **Set up the session's working copy once, at open** (see Per-Item Workflow, step 3). Then **the moment the first batch of items is in hand, publish the tracking page** (see The Tracking Page below): one card per reported item with its *before* evidence, before the first fix ships. It is republished after every item, and it is the same page the end-of-session summary lands on.
 3. Every message after that is one or more queue items. **Start working them immediately and advance automatically.** The user does NOT need to say "start," "go," "next," or "continue" between items. When one item finishes, pick up the next queued one on your own. The only thing that ends the loop is the user saying they're done (or going quiet after the last item). A checkpoint (below) **pauses** the loop across a cleared conversation and is not an end.
 4. An item arriving mid-item queues behind the current one. Never interrupt in-flight work to jump to something new.
-5. **Drain the no-input queue first, then batch the input questions.** Within the queue, fully complete every item you can finish **without the user's input** (autonomous fixes, investigations, bug debugging, questions you can answer from the code) before surfacing anything that genuinely needs the user. Items that hit the escape hatch (below) still get logged the moment you encounter them, but you do **not** stop to ask about them inline: collect their questions and present them **as a single batch at the end**, once nothing autonomous is left. One consolidated round of design and decision questions beats a scattered interruption per flagged item. A **bug or investigation is not an escape-hatch item** just because it's hard: debug it autonomously (see systematic-debugging), and defer it only if, after real investigation, it turns out to need a specific decision or piece of information only the user has. Then defer just that specific question to the end batch.
+5. **Drain the no-input queue first, then batch the input questions.** Within the queue, fully complete every item you can finish **without the user's input** (autonomous fixes, investigations, bug debugging, questions you can answer from the code) before surfacing anything that genuinely needs the user. Items triaged to **Needs input** (below) still get logged the moment you encounter them, but you do **not** stop to ask about them inline: collect their questions and present them **as a single batch at the end**, once nothing autonomous is left, together with the links to every design review started this session. One consolidated round beats a scattered interruption per item. A **bug or investigation is not a Needs input item** just because it's hard: debug it autonomously (see systematic-debugging), and defer it only if, after real investigation, it turns out to need a specific decision or piece of information only the user has. Then defer just that specific question to the end batch.
 
 ## Per-Item Workflow
 
 1. **Investigate**: read the report, grep and read the relevant code, scope it before deciding anything.
-2. **Escape-hatch check**: log the item and skip to the next one, without attempting an implementation, whenever it is:
-   - An **ambiguous UX/design call**: multiple reasonable designs exist and picking one is a matter of taste. Even if you *can* make a defensible choice, don't. This is exactly the kind of call that normally goes through `design-review`/`style-guide` with the user. Documenting the assumption you'd have made is not a substitute for flagging.
-   - **Irreversible or destructive**: data migrations, deleting user data, hard-to-roll-back schema changes, risky payments or auth changes.
-   - **Large or multi-system**: scope that would normally get its own `brainstorming` + plan cycle, not a small fix.
-   - **Unclear or underspecified** in a way you can't resolve with a low-risk default.
-   - Anything else you'd want a second opinion on, for any reason. This discretion is intentionally unbounded.
-3. **Otherwise, build it autonomously:**
+2. **Triage it into one lane** (see Triage below). Only the **Fix** lane continues to step 3. Every other lane is handled the way its row says, logged (step 4) and shown on the tracking page, and then you move on to the next item without waiting.
+3. **Fix lane: build it autonomously:**
    - Resolve any remaining ambiguity yourself with the lowest-risk default; record the assumption in the backlog entry (below). Never stop to ask.
    - TDD: test first, then implementation.
    - Run the relevant test suite; confirm it's green.
@@ -49,7 +44,7 @@ A queue-processing workflow for a live review session: the user reports issues o
      gh pr merge <n> --merge                           # NOT --delete-branch; see below
      git push origin --delete <branch>
      ```
-   - **You open the PR and you merge it. The PR is a record and a CI gate, not an approval gate.** If an item passed the escape-hatch check, it ships in the same turn; do not park it awaiting review. The user opened a review cycle so they would not have to approve things one by one. Merge once the local suite is green; if CI is broken or unavailable for reasons unrelated to the item, say so in the progress line and merge anyway.
+   - **You open the PR and you merge it. The PR is a record and a CI gate, not an approval gate.** If triage put an item in the Fix lane, it ships in the same turn; do not park it awaiting review. The user opened a review cycle so they would not have to approve things one by one. Merge once the local suite is green; if CI is broken or unavailable for reasons unrelated to the item, say so in the progress line and merge anyway.
    - **Work the whole session in one worktree** (a separate working copy of the repository, made with `git worktree add`), created once at session open off a freshly fetched `origin/main`. It keeps the session's edits from colliding with anything else happening in the checkout. The per-item branches are cut inside it. Don't create a worktree per item: that is per-item overhead the loop can't afford.
    - Combine items into one PR **only** when they touch the same code and would conflict or read as nonsense apart. Two fixes to the same partial in the same sitting are one PR; two unrelated fixes are never one PR just because they arrived together.
    - Each PR carries its own docs, backlog edit and screenshots, never a follow-up PR for those.
@@ -60,6 +55,16 @@ A queue-processing workflow for a live review session: the user reports issues o
    Flagged:
    ```
    - [NEEDS INPUT] <short title> — <one-line reason for flag>
+   ```
+
+   Sent to another skill:
+   ```
+   - [IN REVIEW] <short title> — <skill>: <page link>
+   ```
+
+   Saved for later:
+   ```
+   - [TO-DO] <short title> — saved to <to-do list>: <one-line scope>
    ```
 
    Autonomous, at intake:
@@ -82,6 +87,8 @@ A queue-processing workflow for a live review session: the user reports issues o
    ```
    [N/M] <short title> — shipped (PR #<n>, merged). <count> remaining.
    [N/M] <short title> — flagged [NEEDS INPUT]: <reason>. <count> remaining.
+   [N/M] <short title> — <skill> started (<page link>). <count> remaining.
+   [N/M] <short title> — saved as a to-do (<where>). <count> remaining.
    ```
    `M` is the count of items received so far in the session; it grows if the user adds more mid-session.
 7. **Checkpoint check.** If a trigger in Checkpoints (below) has fired, checkpoint now, at this boundary, before starting anything else.
@@ -90,6 +97,34 @@ A queue-processing workflow for a live review session: the user reports issues o
    - The only legitimate reasons to stop mid-queue: the queue is empty; every remaining item is blocked on a flagged decision; or something genuinely destructive needs confirming. The user saying they're done also ends it.
    - "The turn is getting long" is NOT a reason to stop. Neither is "the user might want to redirect me": they will say so if they do.
    - This applies to work you discover as well as work you were handed: if finishing an item reveals the next one is unblocked, start it.
+
+## Triage — every item gets a lane, and a lane can start another skill
+
+The user hands over a mixed stream on purpose: a typo, a broken button, "this page feels cramped on my phone", "we need a booking calendar". **Sort each item into exactly one lane before doing anything else, and start the skill its lane names on your own.** The user should never have to say "do a design review for that one": recognizing that an item needs one is this skill's job.
+
+| Lane | When | What happens | Card state |
+|---|---|---|---|
+| **Fix** | Clear, small, reversible; one reasonable outcome | Build, test, PR, merge (Per-Item Workflow, step 3) | Reported → In progress → Shipped |
+| **Design review** | More than one reasonable design, or a matter of taste: a new section, a layout change, "make this nicer" | Run `design-review` for it: before screenshot, 1–3 coded mockups, its own published page. Link that page from the item's card | In design review |
+| **Visual QA** | A page "looks wrong", cramped, too small or broken at some width, without a specific fix named | Run `visual-qa` on the page(s). It measures, then hands its fixes to `design-review` | In design review |
+| **Copy edit** | Rewording an article or page copy beyond a typo, or anything that makes a claim | Run `article-copy-edit` on the text | In design review |
+| **Photo** | A spot needs a new or better picture | Run `photo-picker` for that spot | In design review |
+| **Style rule** | The same look is inconsistent across many pages, or the user names a rule | Run `style-guide` | In design review |
+| **To-do** | A real feature or multi-system change: its own `brainstorming` and plan cycle | Save it to the project's to-do list (use `todos` if the project has it) with the user's words, a one-line scope and the open questions. Don't build it | Saved as a to-do |
+| **Needs input** | Irreversible or destructive (data migrations, deleting data, payments, auth), or unclear in a way no low-risk default resolves, or anything else you'd want a second opinion on (this discretion is intentionally unbounded) | Bank one specific question for the end batch | Flagged |
+
+**A bug is a Fix even when it is hard.** Debug it autonomously; it becomes Needs input only if real investigation shows that a decision or fact only the user has is missing.
+
+**Started skills never block the queue.** Publish the design-review (or visual-qa, copy-edit, photo-picker, style-guide) page, put its link on the item's card, and move straight to the next item. The user decides on that page whenever they like. When their export comes back, the picks are a new **Fix** item at the front of the queue, built the usual way. One page per item; several design items from the same session may share one review page as separate items.
+
+**When you are unsure between Fix and Design review, choose Design review.** Making a taste call yourself and noting what you would have asked is not a substitute: the user opened the session so the calls that are theirs reach them as a page they can look at.
+
+**Say the lane in the progress line** so the stream stays readable:
+
+```
+[3/9] Booking calendar: saved as a to-do (TODO.md, "Booking calendar"). 6 remaining.
+[4/9] Pricing page header: design review started (<page link>). 5 remaining.
+```
 
 ## Checkpoints — Handoff and Clear Between Features
 
@@ -179,6 +214,8 @@ The session's artifact is its record **from the first item, not the last**. A us
    | **Reported** | queued, not started | a note: add detail, change the ask, drop it |
    | **In progress** | being worked now | the same note: it reaches you before the fix lands |
    | **Shipped** | built, verified, before/after shown | Looks right / Comment / Request revision / Revert it, plus a note |
+   | **In design review** | sent to `design-review` or another sibling skill | a link to that skill's page, where the user decides |
+   | **Saved as a to-do** | too big for the session | where it was saved, and a note to change its scope |
    | **Flagged** | needs the user's input | the banked question, and a note answering it |
 
    **No button on a shipped card is pre-selected.** A card nobody has touched exports as "(no decision yet)", never as approval: a pre-selected default makes a skipped card look like a considered yes, and the page can't tell the difference. An untouched card is not a reason to revert or revise anything.
@@ -202,7 +239,9 @@ When the user says they're done, or goes quiet after the last item, do two thing
    - Header: date, item counts (shipped / flagged / total).
    - **Shipped** section: one card per item: title, one-line summary of the fix, commit SHA linked to the repository's commit URL if the remote is a known host (GitHub or GitLab), and the before/after screenshots if screenshot capture applied to that item.
      - **Mobile/Desktop toggle:** when an item has screenshots at both viewports, show a small segmented control (Mobile / Desktop) on that card that switches which before/after pair is shown, **mobile selected by default**, since these reports usually originate from a phone. Don't show both viewports stacked at once; that is what causes mismatched mobile-before/desktop-after comparisons. If only one viewport has a screenshot for that item, show it directly with a small label naming the viewport, no toggle.
-   - **Flagged for discussion** section: one card per item: title, the reason it was escalated, and which follow-up path it was routed to (`design-review`, `style-guide`, `brainstorming`, or "needs your decision" for anything else).
+   - **Sent to review** section: one card per item routed to a sibling skill, with that page's link and whether the user has decided yet.
+   - **Saved as to-dos** section: one card per item, with where it was saved.
+   - **Flagged for discussion** section: one card per item: title and the banked question.
    - **Left mid-queue** section (only if the session ended before an item finished): what state it's in and what's needed to pick it back up.
    - **A decision per shipped item, and an export.** Seeing a before/after with nowhere to say "not quite" makes the page a dead end. Each shipped card carries four buttons, **none of them pre-selected**:
 
@@ -226,7 +265,10 @@ When the user says they're done, or goes quiet after the last item, do two thing
 | Giving the docked bar `position: fixed` | It intercepts clicks on the controls beneath it, so a decision button at the page foot stops working, silently. Use `position: sticky; top: 0`. |
 | Setting the page's bottom padding on a bare type selector (`main { padding-block: ... }`) | A class on the same element (`.wrap { padding: 0 20px }`) wins on specificity and zeroes it, so the bar lands on top of the last card. Use `main.wrap`, and verify by clicking the last control in a headless browser. |
 | Publishing a fresh artifact each time instead of republishing the tracked URL | A new page against the tab the user already has open is invisible to them. Republish the recorded URL; recover it from where the project records published pages if a clear lost it. |
-| "This UX call is ambiguous, but I can make a reasonable choice and just note what I'd have asked" | Documenting the assumption doesn't substitute for flagging. Ambiguous UX/design decisions always escalate, full stop. |
+| "This UX call is ambiguous, but I can make a reasonable choice and just note what I'd have asked" | Documenting the assumption doesn't substitute for asking. Ambiguous UX/design decisions always go to `design-review`, started by you, full stop. |
+| "I'll flag this design item and let the user ask for a design review later" | Starting the review is your job. Triage puts it in the Design review lane and you run `design-review` now, publish its page, link it from the card, and keep going. |
+| "This feature is big, so I'll start building the first piece" | A feature that needs its own plan is a To-do. Save it with the user's words and a scope line; don't half-build it inside a review cycle. |
+| Waiting on a design review's picks before starting the next item | Started skills never block the queue. Publish, link, move on; the picks come back as a new Fix item. |
 | "I'll open the PR and leave it for them to review" | The PR is a record, not an approval gate. You open it and you merge it, same turn, once the suite is green. |
 | "These all arrived in one session, so they're one PR" | One item, one branch, one PR. Combine only when the items touch the same code and would conflict or read as nonsense apart. |
 | "I'll branch off the previous item's branch; it's already checked out" | Every item branches off a freshly fetched `origin/main`. Stacking makes each PR carry the one before it. |
@@ -237,7 +279,7 @@ When the user says they're done, or goes quiet after the last item, do two thing
 | "I'll report what I've shipped and let them tell me to keep going" | A progress line is not a pause. Start the next item in the same turn; the user handed over a queue so they wouldn't have to keep saying "continue." |
 | "This turn is very long, I'll wrap up and continue next turn" | Length is not a stopping condition. Only an empty queue, an all-blocked queue, or a destructive action needing confirmation is. |
 | Interrupting the flow to ask about each design/decision item as you hit it | Log it, keep draining everything you can finish without the user, and present all the input-needed questions as one consolidated batch at the end. |
-| Flagging a bug to the batch just because it's hard to debug | Bugs and investigations aren't escape-hatch items. Debug them autonomously; defer only a specific decision or fact the user alone holds, and only after real investigation. |
+| Flagging a bug to the batch just because it's hard to debug | Bugs and investigations aren't Needs input items. Debug them autonomously; defer only a specific decision or fact the user alone holds, and only after real investigation. |
 | "Clearing would lose context I need" | The context you're afraid to lose is exactly what the checkpoint writes down. What a clear actually loses is item 1's diffs and test output, which you are paying for on every turn. |
 | "I'll checkpoint when the context actually gets tight" | A long session can stop with no warning it could act on. Checkpoint on the trigger (major + unrelated, five items, half spent), not on a feeling. |
 | Stopping at a checkpoint to wait for the user to clear the conversation | A paused loop is worse than a long context: the queue stops moving and the user has to restart it. Announce the checkpoint in one line and start the next item in the same turn. |
@@ -267,6 +309,7 @@ If `artifact` is chosen but publishing fails or is not available, fall back to `
 
 ## Changelog
 
+- **1.11.0** (2026-11-17): Triage. Every item gets one lane (Fix, Design review, Visual QA, Copy edit, Photo, Style rule, To-do, Needs input), and the lane starts the matching skill in this plugin automatically: a design call becomes a published design review, a big feature becomes a to-do. Two new card states: In design review, Saved as a to-do.
 - **1.10.2** (2026-11-17): Copy buttons now fall back to a selectable text box when the clipboard is unavailable (as on a Wi-Fi-served page), and `wifi` mode is limited to a private network you trust. The superpowers skills are optional, with a plain fallback when they are not installed.
 - **1.10.1** (2026-11-16): New section "Where the page goes": a project can choose an artifact, a local file, or a file served on its own Wi-Fi.
 - **1.10.0** (2026-11-16): Merged into proofs: generic, no project-specific steps.

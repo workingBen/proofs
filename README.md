@@ -187,7 +187,7 @@ Review pages are published as Claude artifacts when you have them, and open in y
 
 <br>
 
-The skills were built on Rails sites, but each one asks your project how it builds, tests and deploys instead of assuming.
+Any stack. The pages are plain HTML, and each skill asks your project how it starts, tests and deploys instead of assuming. They were built and tested on Rails sites, so reports from other stacks are welcome.
 
 </details>
 

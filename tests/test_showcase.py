@@ -137,6 +137,18 @@ class ReadmeGridTests(unittest.TestCase):
         self.assertLess(rows.index("Caption herox."), rows.index("Caption alpha."))
         self.assertNotIn("examples/alpha/wipe.gif", rows)
 
+    def test_rows_past_the_first_two_fold_away(self):
+        sys.path.insert(0, os.path.dirname(IMPORT))
+        import import_examples
+        exs = [{"id": f"e{i}", "title": f"T{i}", "skill": "design-review", "caption": f"Cap {i}.", "use": "featured",
+                "gif": f"assets/examples/e{i}/wipe.gif"} for i in range(8)]
+        md = import_examples.readme_block(exs, [f"assets/examples/rows/row-{n}.gif" for n in range(1, 5)])
+        top, fold = md.split("<details>")
+        self.assertIn("row-2.gif", top)
+        self.assertNotIn("row-3.gif", top)
+        self.assertIn("<summary><b>More examples (4)</b></summary>", fold)
+        self.assertIn("row-4.gif", fold)
+
 
 class ShowcaseBuildTests(unittest.TestCase):
     @classmethod

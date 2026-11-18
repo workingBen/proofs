@@ -90,8 +90,14 @@ ARROW = ('<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="cu
          'aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg>')
 
 
-def gallery(items, start=1, link=True):
-    return '<div class="bx-grid">' + "".join(card(x, start + i, link) for i, x in enumerate(items)) + "</div>"
+def gallery(items, start=1, link=True, shown=4):
+    """With shown, only the first `shown` cards are open; a button (added by the script) reveals the rest.
+    Without the script every card shows, so nothing is ever unreachable."""
+    grid = "".join(card(x, start + i, link) for i, x in enumerate(items))
+    if shown and len(items) > shown:
+        return (f'<div class="bx-grid" data-shown="{shown}">{grid}</div>'
+                f'<button type="button" class="bx-more" hidden>Show all {len(items)} examples</button>')
+    return f'<div class="bx-grid">{grid}</div>'
 
 
 CSS = '''
@@ -134,6 +140,8 @@ CSS = '''
 .bx-skill{display:inline-flex;gap:6px;align-items:center;width:fit-content;margin-top:4px;font:600 12.5px "JetBrains Mono",monospace;
   color:var(--accent);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:5px 11px;min-height:32px}
 a.bx-skill:hover{border-color:var(--accent)}
+.bx-more{display:block;margin:4px auto 0;font:700 16px -apple-system,sans-serif;padding:14px 22px;min-height:48px;border-radius:999px;border:1px solid var(--accent);background:var(--card);color:var(--accent);cursor:pointer}
+.bx-more:hover{background:var(--accent);color:#fff}
 .showcase{padding-block:8px 40px}
 .showcase .lede{display:grid;gap:6px;margin-bottom:18px}
 .showcase .lede h2{font:400 40px/1.1 "Instrument Serif",Georgia,serif;margin:0}
@@ -199,6 +207,13 @@ JS = r'''
       /* The value counts how much After shows, so Right or Up shows more of it. */
       grab(); set(p-step); ev.preventDefault();
     });
+  });
+  /* Show the first few examples; one button opens the rest in place, and closes them again. */
+  [].forEach.call(document.querySelectorAll('[data-shown]'), function(g){
+    var n=+g.getAttribute('data-shown'), btn=g.nextElementSibling, kids=[].slice.call(g.children), all=btn.textContent, open=false;
+    function paint(){ kids.forEach(function(k,i){ k.hidden=!open&&i>=n; }); btn.textContent=open?'Show fewer':all; btn.setAttribute('aria-expanded',open?'true':'false'); }
+    btn.hidden=false; btn.addEventListener('click',function(){ open=!open; paint(); if(!open) g.scrollIntoView({block:'start'}); });
+    paint();
   });
   [].forEach.call(document.querySelectorAll('[data-steps]'), function(el){
     var imgs=el.querySelectorAll('.st-img'), btns=el.querySelectorAll('.st-b'), n=imgs.length;

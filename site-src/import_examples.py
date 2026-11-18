@@ -35,6 +35,7 @@ SITE = "https://workingben.github.io/proofs/"
 WIDTHS = (480, 960)
 JPG_Q, WEBP_Q = "78", "74"
 README_GRID = 8
+README_SHOWN = 2  # rows open on the page; the rest sit in a "More examples" fold-out
 CAPTION_MAX = 90
 
 # Best first. Ids not listed keep their manifest order, after these.
@@ -153,26 +154,33 @@ def row_gif(root, pair, n):
 
 def readme_block(examples, rows=None):
     """The README's See it work grid. The hero example leads it; the 30-second tour is the README's top picture.
-    With rows (one combined gif per pair, from row_gif), each pair plays in step; without, one gif per cell."""
+    With rows (one combined gif per pair, from row_gif), each pair plays in step; without, one gif per cell.
+    The first README_SHOWN rows are open; the rest sit in a <details> fold-out (GitHub runs no scripts)."""
     grid = readme_grid(examples)
-    body = ""
+    rows_md = []
     for n, i in enumerate(range(0, len(grid), 2)):
         pair = grid[i:i + 2]
         caps = "".join(f'<td width="50%" valign="top"><b><a href="{SITE}{x["skill"]}.html">{x["skill"]}</a></b> · '
                        f'{esc(x["caption"])}</td>' for x in pair)
         if rows:
             alt = " Right: ".join(f'{esc(x["title"])}, before and after' for x in pair)
-            body += (f'<tr><td colspan="2"><img src="{rows[n]}" width="100%" alt="Left: {alt}."></td></tr>\n'
-                     f"<tr>{caps}</tr>\n")
+            rows_md.append(f'<tr><td colspan="2"><img src="{rows[n]}" width="100%" alt="Left: {alt}."></td></tr>\n'
+                           f"<tr>{caps}</tr>\n")
         else:
             cells = "".join(f'<td width="50%" valign="top"><img src="{x["gif"]}" width="100%" '
                             f'alt="{esc(x["title"])}: before and after."><br>'
                             f'<b><a href="{SITE}{x["skill"]}.html">{x["skill"]}</a></b> · {esc(x["caption"])}</td>' for x in pair)
-            body += f"<tr>{cells}</tr>\n"
-    if not body:
+            rows_md.append(f"<tr>{cells}</tr>\n")
+    if not rows_md:
         return ""
-    return ("## See it work\n\nReal pages, before and after one review. "
-            f"[See all of them, as sliders]({SITE}).\n\n<table>\n{body}</table>")
+    out = ("## See it work\n\nReal pages, before and after one review. "
+           f"[See all of them, as sliders]({SITE}).\n\n<table>\n{''.join(rows_md[:README_SHOWN])}</table>")
+    more = rows_md[README_SHOWN:]
+    if more:
+        n_more = len(grid) - 2 * README_SHOWN
+        out += (f"\n\n<details>\n<summary><b>More examples ({n_more})</b></summary>\n\n"
+                f"<table>\n{''.join(more)}</table>\n</details>")
+    return out
 
 
 def esc(s):

@@ -38,11 +38,18 @@ Real pages, before and after one review. [See all of them, as sliders](https://w
 <tr><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A pale boxed card becomes a full-bleed sunset hero.</td><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/photo-picker.html">photo-picker</a></b> · A hazy hero, a photo picker, then a lupine hero.</td></tr>
 <tr><td colspan="2"><img src="assets/examples/rows/row-2.gif" width="100%" alt="Left: EMF readings table to bed heat maps, before and after Right: Movie page layout fixes, before and after."></td></tr>
 <tr><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A table of readings becomes before-and-after bed heat maps.</td><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A lonely cover becomes a header with the cover beside the title.</td></tr>
+</table>
+
+<details>
+<summary><b>More examples (4)</b></summary>
+
+<table>
 <tr><td colspan="2"><img src="assets/examples/rows/row-3.gif" width="100%" alt="Left: Biofield measurement table to range gauges, before and after Right: Supplement test text to a ranked bar chart, before and after."></td></tr>
 <tr><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A dense readings table becomes seven colored range gauges.</td><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A text section gains a ranked green-to-red bar chart.</td></tr>
 <tr><td colspan="2"><img src="assets/examples/rows/row-4.gif" width="100%" alt="Left: Book list to a wall of covers, before and after Right: Plain report links to page stacks, before and after."></td></tr>
 <tr><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A text list becomes a wall of big book covers.</td><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · Three plain links become fanned stacks of real report pages.</td></tr>
 </table>
+</details>
 <!-- examples:grid:end -->
 
 ## After installing

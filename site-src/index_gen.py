@@ -46,7 +46,7 @@ if hero:
              + "".join(f'<button type="button" class="dchip{" on" if k == "accept" else ""}" aria-pressed="{"true" if k == "accept" else "false"}" '
                        f'data-line="{e("1. " + hero["title"] + " — " + x + ("" if k in ("deny", "revise") else " (Use Selected: " + pick + ")"))}">{e(l)}</button>'
                        for k, l, x in DECIDE)
-             + '<p class="dline" aria-live="polite" hidden>You’d paste back: <b></b></p>')
+             + '<p class="dline" aria-live="polite"><span>You’d paste back: <b></b></span></p>')
     hero_ba = (f'<figure class="hero-ba">{showcase.slider(hero, big=True, eager=True)}'
                f'<figcaption><b>{e(hero["title"])}.</b> {e(hero["caption"])} '
                f'<a href="{e(hero["skill"])}.html">{e(hero["skill"])}</a></figcaption></figure>')
@@ -75,6 +75,47 @@ HERO_CSS = """
  .pp{grid-template-columns:minmax(0,1fr);padding:14px;gap:16px}
 }
 """
+# The chips play a short demo on their own: Use selected, then Approve with comment with a comment typed
+# in, then again. Only the chips and the line change, and the line's space is held, so nothing below moves.
+# The first real click, tap or key press in the hero stops it and hands the chips to the reader.
+HERO_JS = r"""
+<script>
+(function(){
+  var hero=document.querySelector('.hero'), ds=[].slice.call(document.querySelectorAll('button.dchip')), dl=document.querySelector('.dline'),
+      db=dl&&dl.querySelector('b'), lbl=document.querySelector('.dlbl');
+  if(!hero||!dl||!ds.length) return;
+  var NOTE='make the sunset photo warmer', LBL=lbl.textContent, TRY='Playing a demo. Click anything to take over.';
+  function pick(d, extra){ ds.forEach(function(x){ x.classList.toggle('on',x===d); x.setAttribute('aria-pressed',x===d?'true':'false'); });
+    dl.classList.add('on'); db.textContent=d.getAttribute('data-line')+(extra||''); }
+  /* Hold the tallest line the demo will show, at this width, so the hero never changes height. */
+  function hold(){ var keep=db.textContent, on=dl.classList.contains('on'); dl.style.minHeight=''; dl.classList.add('on');
+    db.textContent=ds[2].getAttribute('data-line')+' — COMMENT: '+NOTE; dl.style.minHeight=dl.offsetHeight+'px';
+    db.textContent=keep; dl.classList.toggle('on',on);
+    var t=lbl.textContent; lbl.style.minHeight=''; lbl.textContent=TRY; lbl.style.minHeight=lbl.offsetHeight+'px'; lbl.textContent=t; }
+  hold(); addEventListener('resize',hold);
+  if(document.fonts&&document.fonts.ready) document.fonts.ready.then(hold);  /* the web fonts change the line breaks */
+  var live=true;
+  function stop(){ if(!live) return; live=false; lbl.textContent=LBL; hero.classList.remove('demo'); }
+  ds.forEach(function(d){ d.addEventListener('click',function(){ stop(); pick(d); }); });
+  hero.addEventListener('pointerdown',function(ev){ if(ev.isTrusted) stop(); },true);
+  hero.addEventListener('keydown',function(ev){ if(ev.isTrusted) stop(); },true);
+  if(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches){ live=false; return; }
+  var vis=!('IntersectionObserver' in window);
+  if(!vis) new IntersectionObserver(function(es){ vis=es[0].isIntersecting; },{threshold:.2}).observe(hero);
+  lbl.textContent=TRY; hero.classList.add('demo');
+  /* A pause that only counts down while the hero is on screen. */
+  function wait(ms){ return new Promise(function(r){ var left=ms, last=performance.now();
+    (function f(now){ if(!live) return; if(vis) left-=now-last; last=now; if(left<=0) r(); else requestAnimationFrame(f); })(last); }); }
+  (async function run(){
+    while(live){
+      pick(ds[1]); await wait(3000); if(!live) break;
+      pick(ds[2]); await wait(700);
+      for(var i=1;i<=NOTE.length&&live;i++){ db.textContent=ds[2].getAttribute('data-line')+' — COMMENT: '+NOTE.slice(0,i); await wait(55); }
+      await wait(2600);
+    }
+  })();
+})();
+</script>"""
 body = f'''<header class="top"><div class="in"><a class="logo" href="index.html">pro<i>o</i>fs</a><span>/ skills for Claude Code</span>{"<a href=\"#examples\" style=\"margin-left:auto;text-decoration:none\">Examples</a><a href=\"#skills\" style=\"text-decoration:none\">Skills ↓</a>" if (feat or steps) else "<a href=\"#skills\" style=\"margin-left:auto;text-decoration:none\">All skills ↓</a>"}</div></header>
 <section class="hero home{" has-ba" if hero else ""}"><div class="in">
   <div class="eyebrow">Skills for Claude Code · {len([s for _, g in GROUPS for s in g])} skills · {total_f}+ features</div>
@@ -94,10 +135,8 @@ body = f'''<header class="top"><div class="in"><a class="logo" href="index.html"
 <footer class="foot"><div class="in"><span>proofs · Claude skills that show their work</span><span>MIT license</span></div></footer>
 <script>
 (function(){{var b=document.getElementById('tryb'),c=document.getElementById('tryc');
-b.addEventListener('click',function(){{try{{navigator.clipboard.writeText(c.textContent).then(function(){{b.textContent='Copied';setTimeout(function(){{b.textContent='Copy'}},1500)}},function(){{}})}}catch(_){{}}}});
-var ds=document.querySelectorAll('button.dchip'),dl=document.querySelector('.dline');
-[].forEach.call(ds,function(d){{d.addEventListener('click',function(){{[].forEach.call(ds,function(x){{x.classList.toggle('on',x===d);x.setAttribute('aria-pressed',x===d?'true':'false')}});dl.hidden=false;dl.querySelector('b').textContent=d.getAttribute('data-line')}})}});}})();
-</script>''' + (showcase.JS if exs else '')
+b.addEventListener('click',function(){{try{{navigator.clipboard.writeText(c.textContent).then(function(){{b.textContent='Copied';setTimeout(function(){{b.textContent='Copy'}},1500)}},function(){{}})}}catch(_){{}}}});}})();
+</script>''' + (HERO_JS if hero else '') + (showcase.JS if exs else '')
 extra = '''
 .home h1{font-size:clamp(44px,8vw,92px)} .home h1 i{color:var(--accent)}
 .home .trybox code{white-space:pre;overflow-x:auto}
@@ -107,8 +146,8 @@ extra = '''
 .dchip{font:600 12px/1 "JetBrains Mono",monospace;padding:8px 11px;border-radius:999px;border:1.5px solid var(--fg)}
 .dchip.on{background:var(--fg);color:var(--bg)}
 button.dchip{background:none;color:var(--fg);cursor:pointer;min-height:36px} button.dchip.on{background:var(--fg);color:var(--bg)} button.dchip:hover{border-color:var(--accent)}
-.dlbl{flex-basis:100%;font:600 12px "JetBrains Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
-.dline{flex-basis:100%;margin:4px 0 0;padding:4px 0 4px 10px;border-left:2px solid var(--accent);font:13px/1.5 "JetBrains Mono",monospace;color:var(--muted)} .dline b{color:var(--fg);font-weight:600}
+.dlbl{display:block;flex-basis:100%;font:600 12px "JetBrains Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.dline{flex-basis:100%;margin:4px 0 0;visibility:hidden;padding:4px 0 4px 10px;border-left:2px solid var(--accent);font:13px/1.5 "JetBrains Mono",monospace;color:var(--muted)} .dline b{color:var(--fg);font-weight:600} .dline.on{visibility:visible} .demo .dlbl{color:var(--accent)}
 .h2{font:400 40px/1.1 "Instrument Serif",Georgia,serif;margin:0 0 18px}
 .loopw .in{padding-block:8px 32px}
 .loop{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}

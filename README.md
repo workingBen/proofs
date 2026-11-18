@@ -111,15 +111,15 @@ Opens every page at desktop, laptop and phone sizes and measures it: text too sm
 
 [Read the visual-qa page](https://workingben.github.io/proofs/visual-qa.html)
 
-### working-log: a page Claude talks to you through when the terminal fails you
+### working-log: never scroll endless terminal output again
 
-<img src="docs/cards/working-log.jpg" width="100%" alt="A log entry asking a question, with the reason and two answers.">
+<img src="docs/cards/working-log.jpg" width="100%" alt="A working log: a session bar with a Copy my replies button, the newest entry asking whether to ship the refund flow with answer buttons, a background entry ticked as read, and settled items folded to the side.">
 
-A newest-first log that Claude republishes as it works. Questions come with buttons, every entry has a read tick, and one Copy button sends your answers back.
+Claude keeps one page up to date while it works. The newest news sits on top, every question comes with answer buttons, and each entry has a read tick. Tap your answers, press Copy, paste. Check it from the couch on your phone, and nothing you need is buried 400 lines up.
 
-- Nothing gets lost in the terminal
-- Read it from your phone
-- Answered items move to a Settled list
+- Questions you answer with a tap
+- Read it on your phone, anywhere
+- Settled items fold out of the way
 
 [Read the working-log page](https://workingben.github.io/proofs/working-log.html)
 

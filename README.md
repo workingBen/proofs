@@ -34,20 +34,20 @@ In Claude Code:
 Real pages, before and after one review. [See all of them, as sliders](https://workingben.github.io/proofs/).
 
 <table>
-<tr><td colspan="2"><img src="assets/examples/rows/row-1.gif" width="100%" alt="Left: Retreat page hero, before and after Right: Emoji device cards to line icons, before and after."></td></tr>
-<tr><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A pale boxed card becomes a full-bleed sunset hero.</td><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · Emoji cards become a dark band with line icons.</td></tr>
-<tr><td colspan="2"><img src="assets/examples/rows/row-2.gif" width="100%" alt="Left: Bare date picker to a room-and-dates step, before and after Right: Hero photo, picked, before and after."></td></tr>
-<tr><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A bare date picker gains the room photo and a teal stay.</td><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/photo-picker.html">photo-picker</a></b> · A hazy hero, a photo picker, then a lupine hero.</td></tr>
+<tr><td colspan="2"><img src="assets/examples/rows/row-1.gif" width="100%" alt="Left: Retreat page hero, before and after Right: Bare date picker to a room-and-dates step, before and after."></td></tr>
+<tr><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A pale boxed card becomes a full-bleed sunset hero.</td><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A bare date picker gains the room photo and a teal stay.</td></tr>
+<tr><td colspan="2"><img src="assets/examples/rows/row-2.gif" width="100%" alt="Left: Plain sentence to an edit with a claims check, before and after Right: Plain report links to page stacks, before and after."></td></tr>
+<tr><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/article-copy-edit.html">article-copy-edit</a></b> · A plain sentence becomes a tracked edit with a claims check.</td><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · Three plain links become fanned stacks of real report pages.</td></tr>
 </table>
 
 <details>
 <summary><b>More examples (4)</b></summary>
 
 <table>
-<tr><td colspan="2"><img src="assets/examples/rows/row-3.gif" width="100%" alt="Left: Plain sentence to an edit with a claims check, before and after Right: Book list to a wall of covers, before and after."></td></tr>
-<tr><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/article-copy-edit.html">article-copy-edit</a></b> · A plain sentence becomes a tracked edit with a claims check.</td><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A text list becomes a wall of big book covers.</td></tr>
-<tr><td colspan="2"><img src="assets/examples/rows/row-4.gif" width="100%" alt="Left: EMF readings table to bed heat maps, before and after Right: Movie page layout fixes, before and after."></td></tr>
-<tr><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A table of readings becomes before-and-after bed heat maps.</td><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A lonely cover becomes a header with the cover beside the title.</td></tr>
+<tr><td colspan="2"><img src="assets/examples/rows/row-3.gif" width="100%" alt="Left: Text-only marketing flier to a photo card, before and after Right: Supplement test text to a ranked bar chart, before and after."></td></tr>
+<tr><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A text-only card back becomes a wildflower-photo card.</td><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A text section gains a ranked green-to-red bar chart.</td></tr>
+<tr><td colspan="2"><img src="assets/examples/rows/row-4.gif" width="100%" alt="Left: Biofield measurement table to range gauges, before and after Right: Gantt list to a two-lane study plan, before and after."></td></tr>
+<tr><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A dense readings table becomes seven colored range gauges.</td><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A long Gantt list becomes a two-lane timeline.</td></tr>
 </table>
 </details>
 <!-- examples:grid:end -->

@@ -40,10 +40,10 @@ CAPTION_MAX = 90
 
 # Best first. Ids not listed keep their manifest order, after these.
 ORDER = [
-    "c-retreat-look", "b-nine-devices", "d-booking-dates", "c-hero-photos-3step",
-    "x-copy-edit", "d-book-cover-wall", "b-bed-map-report", "d-movie-page",
-    "a-report-stacks", "e-card-back", "b-supplement-chart", "a-organ-table-to-gauges",
-    "a-biowell-table-to-chart", "b-bbi-plan",
+    "c-retreat-look", "d-booking-dates", "x-copy-edit", "a-report-stacks",
+    "e-card-back", "b-supplement-chart", "a-organ-table-to-gauges", "b-bbi-plan",
+    "a-biowell-table-to-chart", "b-nine-devices", "d-book-cover-wall", "b-bed-map-report",
+    "d-movie-page", "c-hero-photos-3step",
     "d-collection-slideshow",
 ]
 # Left out of the site even when the manifest lists them. To bring one back, delete it

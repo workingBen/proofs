@@ -8,7 +8,7 @@ style = re.search(r"<style>(.*?)</style>", tpl, re.S).group(1).replace("%%EXCSS%
 links = tpl[:tpl.index("<style>")].replace("<title>proofs · %%SKILL%%</title>", "<title>proofs</title>")
 
 # Top picks: a "Top pick" tag on the left, a ribbon on the right.
-TOP = {"design-review": "Start here", "pr-qa": "Start here", "working-log": "Most used"}
+TOP = {"design-review": "Start here", "pr-qa": "Critical for UI changes", "working-log": "Most used"}
 STAR = ('<svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor" aria-hidden="true">'
         '<path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3 6.1 20.6l1.3-6.6L2.5 9.4l6.6-.8z"/></svg>')
 cards, total_f, n_sk = "", 0, 0

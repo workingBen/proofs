@@ -100,6 +100,17 @@ def gallery(items, start=1, link=True, shown=4):
     return f'<div class="bx-grid">{grid}</div>'
 
 
+def featured(items, start=1):
+    """The home page gallery. On a laptop: every title in a list beside one big example, which moves on
+    to the next on its own until someone clicks, drags or presses a key. On a phone it is the plain
+    gallery() stack, and the list is never shown."""
+    picks = "".join(f'<button type="button" class="fx-pick{" on" if i == 0 else ""}" role="tab" '
+                    f'aria-selected="{"true" if i == 0 else "false"}" data-i="{i}"><b>{e(x["title"])}</b>'
+                    f'<span>{e(x["caption"])}</span><i class="fx-bar"></i></button>' for i, x in enumerate(items))
+    return (f'<div class="fx" data-fx><div class="fx-list" role="tablist" aria-label="Examples">{picks}</div>'
+            f'<div class="fx-stage">{gallery(items, start)}</div></div>')
+
+
 CSS = '''
 /* before/after showcase */
 .ba{position:relative;width:100%;overflow:hidden;border-radius:12px;border:1px solid var(--line);background:var(--card);
@@ -147,6 +158,24 @@ a.bx-skill:hover{border-color:var(--accent)}
 .showcase .lede h2{font:400 40px/1.1 "Instrument Serif",Georgia,serif;margin:0}
 .showcase .lede p{margin:0;font-size:18px;font-weight:650;line-height:1.35;max-width:40em}
 @media (max-width:900px){.bx-grid{columns:1}}
+.fx-list{display:none}
+@media (min-width:901px){
+ .fx.fx-on{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2.4fr);gap:28px;align-items:start}
+ .fx.fx-on .fx-list{display:flex;flex-direction:column;border-top:1px solid var(--line)}
+ .fx-pick{position:relative;overflow:hidden;text-align:left;cursor:pointer;padding:10px 14px;background:none;border:0;border-bottom:1px solid var(--line);border-left:3px solid transparent;font:15px/1.35 -apple-system,sans-serif;color:var(--muted)}
+ .fx-pick b{display:block;font:400 20px/1.15 "Instrument Serif",Georgia,serif;color:var(--fg)}
+ .fx-pick span{display:none} .fx-pick:hover b{color:var(--accent)}
+ .fx-pick.on{border-left-color:var(--accent);background:var(--card)} .fx-pick.on span{display:block;margin-top:4px}
+ .fx-pick:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+ .fx-bar{position:absolute;left:0;bottom:0;height:3px;width:0;background:var(--accent)}
+ .fx.auto .fx-pick.on .fx-bar{width:calc(var(--t,0) * 100%)}
+ .fx.fx-on .bx-grid{columns:auto}
+ .fx.fx-on .bx-grid>.bx{display:none;margin:0}
+ .fx.fx-on .bx-grid>.bx.on{display:grid}
+ .fx.fx-on .bx .fn,.fx.fx-on .bx h3,.fx.fx-on .bx .sub{display:none}
+ .fx.fx-on .bx-more{display:none!important}
+}
+
 @media (max-width:440px){.bx{padding:10px}.bx h3{font-size:25px}.ba-lbl{font-size:10px;padding:5px 7px}.st-b{font-size:12px;padding:8px 8px 11px}}
 @media (prefers-reduced-motion:reduce){.st-img{transition:none}}
 '''
@@ -235,6 +264,33 @@ JS = r'''
       if(IO){ new IntersectionObserver(function(es){es.forEach(function(en){en.isIntersecting?start():stop()})},{threshold:.35}).observe(el); }
       else start();
     }
+  });
+  /* Home gallery on a laptop: one example at a time beside the list of titles. It moves on by
+     itself, always on a slider's Before hold, until someone clicks, drags or presses a key in it. */
+  [].forEach.call(document.querySelectorAll('[data-fx]'), function(g){
+    var picks=[].slice.call(g.querySelectorAll('.fx-pick')), cards=[].slice.call(g.querySelectorAll('.bx-grid>.bx'));
+    var DESK=window.matchMedia?matchMedia('(min-width:901px)'):{matches:true};
+    var cur=0, auto=!RM, vis=!IO, t0=0, due=0;
+    function sel(k){ cur=k;
+      picks.forEach(function(b,j){ b.classList.toggle('on',j===k); b.setAttribute('aria-selected',j===k?'true':'false'); });
+      cards.forEach(function(c,j){ c.classList.toggle('on',j===k); }); }
+    function dwell(k){ var st=cards[k].querySelector('[data-steps]'); return st?st.querySelectorAll('.st-img').length*2600:CYCLE; }
+    function plan(now){ t0=now; due=Math.ceil((now+dwell(cur)-3000)/CYCLE)*CYCLE; }
+    function stop(){ auto=false; g.classList.remove('auto'); }
+    picks.forEach(function(b,j){ b.addEventListener('click',function(){ stop(); sel(j); }); });
+    g.addEventListener('pointerdown',stop); g.addEventListener('keydown',stop);
+    g.classList.add('fx-on'); sel(0);
+    if(!auto) return;
+    g.classList.add('auto');
+    if(IO) new IntersectionObserver(function(es){ vis=es[0].isIntersecting; },{threshold:.3}).observe(g);
+    function tick(now){
+      if(!auto) return;
+      if(!DESK.matches||!vis||!due) plan(now);
+      else if(now>=due){ sel((cur+1)%picks.length); plan(now); }
+      g.style.setProperty('--t',Math.min(1,(now-t0)/Math.max(1,due-t0)));
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
   });
 })();
 </script>

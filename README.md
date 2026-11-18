@@ -129,6 +129,8 @@ A newest-first log that Claude republishes as it works. Questions come with butt
 
 Shows the edits on a page styled like your real article. A claims check comes first, and nothing changes in your files until you have decided.
 
+The claims check is set up for your field: medical and wellness promises, financial guarantees, legal outcomes, product-safety or environmental claims, and more. It asks once what's risky for you, remembers the answer, and also catches what every site gets wrong: guarantees, "results vary" left off, and missing affiliate disclosures.
+
 - Keep, use, comment or revise, per edit
 - A reason on every suggestion
 - Risky claims flagged before anything else

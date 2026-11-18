@@ -111,18 +111,6 @@ Opens every page at desktop, laptop and phone sizes and measures it: text too sm
 
 [Read the visual-qa page](https://workingben.github.io/proofs/visual-qa.html)
 
-### article-copy-edit: review copy edits word by word, with a claims check first
-
-<img src="docs/cards/article-copy-edit.jpg" width="100%" alt="A tracked edit with a claims check flagging a medical promise.">
-
-Shows the edits on a page styled like your real article. A claims check comes first, and nothing changes in your files until you have decided.
-
-- Keep, use, comment or revise, per edit
-- A reason on every suggestion
-- Risky claims flagged before anything else
-
-[Read the article-copy-edit page](https://workingben.github.io/proofs/article-copy-edit.html)
-
 ### working-log: a page Claude talks to you through when the terminal fails you
 
 <img src="docs/cards/working-log.jpg" width="100%" alt="A log entry asking a question, with the reason and two answers.">
@@ -134,6 +122,18 @@ A newest-first log that Claude republishes as it works. Questions come with butt
 - Answered items move to a Settled list
 
 [Read the working-log page](https://workingben.github.io/proofs/working-log.html)
+
+### article-copy-edit: review copy edits word by word, with a claims check first
+
+<img src="docs/cards/article-copy-edit.jpg" width="100%" alt="A tracked edit with a claims check flagging a medical promise.">
+
+Shows the edits on a page styled like your real article. A claims check comes first, and nothing changes in your files until you have decided.
+
+- Keep, use, comment or revise, per edit
+- A reason on every suggestion
+- Risky claims flagged before anything else
+
+[Read the article-copy-edit page](https://workingben.github.io/proofs/article-copy-edit.html)
 
 ## All 10 skills
 

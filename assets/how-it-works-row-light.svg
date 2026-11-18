@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 230" width="960" height="230" role="img" aria-labelledby="t d">
+<title id="t">How every skill works</title><desc id="d">Four steps: 1 Claude shows you first. 2 Publishes a page. 3 You decide visually (highlighted). 4 Paste it back.</desc>
+<rect width="960" height="230" rx="16" fill="#f4efe6"/>
+<rect x="20" y="20" width="210" height="190" rx="12" fill="#fffdf9" stroke="#ddd5c6" stroke-width="1.5"/>
+<text x="38" y="54" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="20" font-weight="700" fill="#c2410c">01</text>
+<text x="38" y="94" font-family="Georgia, 'Times New Roman', serif" font-size="27" fill="#1d1b17">Claude shows</text><text x="38" y="126" font-family="Georgia, 'Times New Roman', serif" font-size="27" fill="#1d1b17">you first</text>
+<text x="38" y="162" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" fill="#6b6458">Mockups and drafts,</text><text x="38" y="186" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" fill="#6b6458">before it changes.</text>
+<path d="M236 115 h18 m-7 -7 l7 7 l-7 7" fill="none" stroke="#c2410c" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="260" y="20" width="210" height="190" rx="12" fill="#fffdf9" stroke="#ddd5c6" stroke-width="1.5"/>
+<text x="278" y="54" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="20" font-weight="700" fill="#c2410c">02</text>
+<text x="278" y="94" font-family="Georgia, 'Times New Roman', serif" font-size="27" fill="#1d1b17">Publishes</text><text x="278" y="126" font-family="Georgia, 'Times New Roman', serif" font-size="27" fill="#1d1b17">a page</text>
+<text x="278" y="162" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" fill="#6b6458">A private review</text><text x="278" y="186" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" fill="#6b6458">page, not chat.</text>
+<path d="M476 115 h18 m-7 -7 l7 7 l-7 7" fill="none" stroke="#c2410c" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="500" y="20" width="210" height="190" rx="12" fill="#fde4d6" stroke="#c2410c" stroke-width="2.5"/>
+<text x="518" y="54" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="20" font-weight="700" fill="#c2410c">03</text>
+<text x="518" y="94" font-family="Georgia, 'Times New Roman', serif" font-size="27" fill="#1d1b17">You decide</text><text x="518" y="126" font-family="Georgia, 'Times New Roman', serif" font-size="27" fill="#1d1b17">visually</text>
+<text x="518" y="162" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" fill="#6b6458">Clear buttons and</text><text x="518" y="186" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" fill="#6b6458">room for a comment.</text>
+<path d="M716 115 h18 m-7 -7 l7 7 l-7 7" fill="none" stroke="#c2410c" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="740" y="20" width="210" height="190" rx="12" fill="#fffdf9" stroke="#ddd5c6" stroke-width="1.5"/>
+<text x="758" y="54" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="20" font-weight="700" fill="#c2410c">04</text>
+<text x="758" y="94" font-family="Georgia, 'Times New Roman', serif" font-size="27" fill="#1d1b17">Paste it</text><text x="758" y="126" font-family="Georgia, 'Times New Roman', serif" font-size="27" fill="#1d1b17">back</text>
+<text x="758" y="162" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" fill="#6b6458">One Copy button.</text><text x="758" y="186" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" fill="#6b6458">Claude does the rest.</text>
+</svg>

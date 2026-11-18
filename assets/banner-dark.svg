@@ -1,10 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 196" width="720" height="196" role="img" aria-labelledby="t d">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 140" width="720" height="140" role="img" aria-labelledby="t d">
 <title id="t">Claude skills that show their work.</title>
-<desc id="d">Skills for Claude Code. Design reviews, visual QA and copy edits you decide on a page.</desc>
-<rect width="720" height="196" rx="16" fill="#15130f"/>
-<rect x="0.5" y="0.5" width="719" height="195" rx="16" fill="none" stroke="#3a352c"/>
+<desc id="d">Skills for Claude Code.</desc>
+<rect width="720" height="140" rx="16" fill="#15130f"/>
+<rect x="0.5" y="0.5" width="719" height="139" rx="16" fill="none" stroke="#3a352c"/>
 <rect x="40" y="38" width="9" height="9" rx="2" fill="#ff8a4c"/>
 <text x="60" y="47" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15" letter-spacing="2" fill="#a69d8e">SKILLS FOR CLAUDE CODE</text>
-<text x="40" y="106" font-family="Georgia, 'Times New Roman', serif" font-size="38" fill="#efe8dc">Claude skills that <tspan font-style="italic" fill="#ff8a4c">show</tspan> their work.</text>
-<text x="40" y="154" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="20" fill="#c9c0b1">Design reviews, visual QA and copy edits you decide on a page.</text>
+<text x="40" y="104" font-family="Georgia, 'Times New Roman', serif" font-size="38" fill="#efe8dc">Claude skills that <tspan font-style="italic" fill="#ff8a4c">show</tspan> their work.</text>
 </svg>

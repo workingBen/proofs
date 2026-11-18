@@ -24,7 +24,7 @@ In Claude Code:
 
 **[Browse the site](https://workingben.github.io/proofs/)** for all 10 skills and 230+ features, each with a short write-up.
 
-<p align="center"><a href="assets/clips/proofs-30s.mp4"><img src="assets/clips/proofs-30s.gif" width="100%" alt="The 30-second proofs tour: real pages wipe from before to after under short captions, from Done? Prove it. to Tap. Paste. Done., ending on the two install commands."></a></p>
+<p align="center"><a href="assets/clips/proofs-30s.mp4"><img src="assets/clips/proofs-30s.gif" width="100%" alt="The 30-second Proofs tour: real pages wipe from before to after under short captions, from Done? Prove it. to Tap. Paste. Done., ending on the two install commands."></a></p>
 
 <p align="center"><sub>The 30-second tour. Every picture is a real page, before and after. <a href="assets/clips/proofs-30s.mp4">Full-size MP4</a> (1920x1080, silent).</sub></p>
 
@@ -75,15 +75,15 @@ Because your agents keep working while you decide, and you can decide from anywh
 
 | | Agents keep working while you decide | Decide on your phone | Server on your computer |
 | --- | --- | --- | --- |
-| **proofs** (one paste) | Yes | Yes, any device | None (a private claude.ai link) |
+| **Proofs** (one paste) | Yes | Yes, any device | None (a private claude.ai link) |
 | [Lavish](https://github.com/kunchenguid/lavish-axi) | No, it waits for your feedback | With Tailscale | Yes |
 | [make-pages-interactive](https://github.com/paraschopra/make-pages-interactive) | Yes, it watches an inbox | Not stated | Yes |
 
-Both are good tools, and the right choice if you'd rather skip the paste.
+Both are good tools, and neither replaces our visual communication skills.
 
 ## Works with Superpowers
 
-[Superpowers](https://github.com/obra/superpowers) is the best-known workflow skill set for Claude Code (brainstorming, plans, writing tests first, subagents), and it is excellent. It works as text in the terminal. proofs sits next to it as the visual decision layer, not a rival: use Superpowers to plan and build, and proofs to see and decide. The two are independent projects, and this one has no affiliation with or endorsement from Superpowers.
+[Superpowers](https://github.com/obra/superpowers) is the best-known workflow skill set for Claude Code (brainstorming, plans, writing tests first, subagents), and it is excellent. It works as text in the terminal. Proofs sits next to it as the visual decision layer, not a rival: use Superpowers to plan and build, and Proofs to see and decide. This project has no affiliation with or endorsement from Superpowers.
 
 ## Four skills up close
 
@@ -95,7 +95,7 @@ Claude puts a real screenshot of your page next to one to three working mockups 
 
 - A real screenshot as the Before
 - Mockups drawn in your site's own fonts, colors and spacing
-- Four decisions per item, then one paste back
+- One decision per item, then one paste back
 
 [Read the design-review page](https://workingben.github.io/proofs/design-review.html)
 

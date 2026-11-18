@@ -40,11 +40,11 @@ CAPTION_MAX = 90
 
 # Best first. Ids not listed keep their manifest order, after these.
 ORDER = [
-    "c-retreat-look", "c-hero-photos-3step",
-    "b-bed-map-report", "d-movie-page", "a-organ-table-to-gauges", "b-supplement-chart",
-    "d-book-cover-wall", "a-report-stacks", "b-nine-devices", "e-card-back",
+    "c-retreat-look", "b-nine-devices", "d-booking-dates", "c-hero-photos-3step",
+    "x-copy-edit", "d-book-cover-wall", "b-bed-map-report", "d-movie-page",
+    "a-report-stacks", "e-card-back", "b-supplement-chart", "a-organ-table-to-gauges",
     "a-biowell-table-to-chart", "b-bbi-plan",
-    "d-booking-dates", "d-collection-slideshow", "x-copy-edit",
+    "d-collection-slideshow",
 ]
 # Left out of the site even when the manifest lists them. To bring one back, delete it
 # here and put its id in ORDER where it should appear.
@@ -116,9 +116,8 @@ def resize(tool, src, dst, width, quality):
 
 
 def readme_grid(examples):
-    """The examples the README grid shows, in order: the hero example first."""
+    """The examples the README grid shows, in the examples' own order (ORDER puts the best first)."""
     gifs = [x for x in examples if x["gif"]]
-    gifs.sort(key=lambda x: x["use"] != "hero")
     return [x for x in gifs if x["use"] != "skill"][:README_GRID]
 
 

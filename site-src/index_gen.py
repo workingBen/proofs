@@ -41,8 +41,8 @@ if hero:
                f'<a href="{e(hero["skill"])}.html">{e(hero["skill"])}</a></figcaption></figure>')
 show = ""
 if feat or steps:
-    # The three-step example is an ordinary card, the same width as the rest, after the first six.
-    items = feat[:6] + ([steps] if steps else []) + feat[6:]
+    # Every example except the one in the top slider, in ORDER, so the best come first.
+    items = [x for x in exs if x is not hero and x["use"] != "skill"]
     show = ('<section class="in showcase" id="examples"><div class="lede"><div class="eyebrow">Real work, before and after</div>'
             '<h2>See it work</h2><p>Each pair is a real page before and after one review. They slide on their own. Drag any of them.</p></div>'
             + showcase.gallery(items))

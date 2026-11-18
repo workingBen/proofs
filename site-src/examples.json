@@ -31,6 +31,64 @@
    "gif": "assets/examples/c-retreat-look/wipe.gif"
   },
   {
+   "id": "b-nine-devices",
+   "title": "Emoji device cards to line icons",
+   "skill": "design-review",
+   "caption": "Emoji cards become a dark band with line icons.",
+   "use": "featured",
+   "view": "desktop",
+   "w": 900,
+   "h": 460,
+   "frames": [
+    {
+     "name": "before",
+     "label": "Before · emoji cards",
+     "widths": [
+      480,
+      900
+     ]
+    },
+    {
+     "name": "after",
+     "label": "After · variant C",
+     "widths": [
+      480,
+      900
+     ]
+    }
+   ],
+   "gif": "assets/examples/b-nine-devices/wipe.gif"
+  },
+  {
+   "id": "d-booking-dates",
+   "title": "Bare date picker to a room-and-dates step",
+   "skill": "design-review",
+   "caption": "A bare date picker gains the room photo and a teal stay.",
+   "use": "featured",
+   "view": "desktop",
+   "w": 900,
+   "h": 560,
+   "frames": [
+    {
+     "name": "before",
+     "label": "Before",
+     "widths": [
+      480,
+      900
+     ]
+    },
+    {
+     "name": "after",
+     "label": "After · variant B",
+     "widths": [
+      480,
+      900
+     ]
+    }
+   ],
+   "gif": "assets/examples/d-booking-dates/wipe.gif"
+  },
+  {
    "id": "c-hero-photos-3step",
    "title": "Hero photo, picked",
    "skill": "photo-picker",
@@ -66,6 +124,64 @@
     }
    ],
    "gif": "assets/examples/c-hero-photos-3step/wipe.gif"
+  },
+  {
+   "id": "x-copy-edit",
+   "title": "Plain sentence to an edit with a claims check",
+   "skill": "article-copy-edit",
+   "caption": "A plain sentence becomes a tracked edit with a claims check.",
+   "use": "featured",
+   "view": "desktop",
+   "w": 842,
+   "h": 612,
+   "frames": [
+    {
+     "name": "before",
+     "label": "Your draft",
+     "widths": [
+      480,
+      842
+     ]
+    },
+    {
+     "name": "after",
+     "label": "The edit",
+     "widths": [
+      480,
+      842
+     ]
+    }
+   ],
+   "gif": "assets/examples/x-copy-edit/wipe.gif"
+  },
+  {
+   "id": "d-book-cover-wall",
+   "title": "Book list to a wall of covers",
+   "skill": "design-review",
+   "caption": "A text list becomes a wall of big book covers.",
+   "use": "featured",
+   "view": "desktop",
+   "w": 900,
+   "h": 450,
+   "frames": [
+    {
+     "name": "before",
+     "label": "Before · list",
+     "widths": [
+      480,
+      900
+     ]
+    },
+    {
+     "name": "after",
+     "label": "After · cover wall",
+     "widths": [
+      480,
+      900
+     ]
+    }
+   ],
+   "gif": "assets/examples/d-book-cover-wall/wipe.gif"
   },
   {
    "id": "b-bed-map-report",
@@ -131,93 +247,6 @@
    "gif": "assets/examples/d-movie-page/wipe.gif"
   },
   {
-   "id": "a-organ-table-to-gauges",
-   "title": "Biofield measurement table to range gauges",
-   "skill": "design-review",
-   "caption": "A dense readings table becomes seven colored range gauges.",
-   "use": "featured",
-   "view": "phone",
-   "w": 920,
-   "h": 1300,
-   "frames": [
-    {
-     "name": "before",
-     "label": "Before · report table",
-     "widths": [
-      480,
-      920
-     ]
-    },
-    {
-     "name": "after",
-     "label": "After · range gauges",
-     "widths": [
-      480,
-      920
-     ]
-    }
-   ],
-   "gif": "assets/examples/a-organ-table-to-gauges/wipe.gif"
-  },
-  {
-   "id": "b-supplement-chart",
-   "title": "Supplement test text to a ranked bar chart",
-   "skill": "design-review",
-   "caption": "A text section gains a ranked green-to-red bar chart.",
-   "use": "featured",
-   "view": "desktop",
-   "w": 900,
-   "h": 560,
-   "frames": [
-    {
-     "name": "before",
-     "label": "Before · how it works",
-     "widths": [
-      480,
-      900
-     ]
-    },
-    {
-     "name": "after",
-     "label": "After · ranked bars",
-     "widths": [
-      480,
-      900
-     ]
-    }
-   ],
-   "gif": "assets/examples/b-supplement-chart/wipe.gif"
-  },
-  {
-   "id": "d-book-cover-wall",
-   "title": "Book list to a wall of covers",
-   "skill": "design-review",
-   "caption": "A text list becomes a wall of big book covers.",
-   "use": "featured",
-   "view": "desktop",
-   "w": 900,
-   "h": 450,
-   "frames": [
-    {
-     "name": "before",
-     "label": "Before · list",
-     "widths": [
-      480,
-      900
-     ]
-    },
-    {
-     "name": "after",
-     "label": "After · cover wall",
-     "widths": [
-      480,
-      900
-     ]
-    }
-   ],
-   "gif": "assets/examples/d-book-cover-wall/wipe.gif"
-  },
-  {
    "id": "a-report-stacks",
    "title": "Plain report links to page stacks",
    "skill": "design-review",
@@ -245,35 +274,6 @@
     }
    ],
    "gif": "assets/examples/a-report-stacks/wipe.gif"
-  },
-  {
-   "id": "b-nine-devices",
-   "title": "Emoji device cards to line icons",
-   "skill": "design-review",
-   "caption": "Emoji cards become a dark band with line icons.",
-   "use": "featured",
-   "view": "desktop",
-   "w": 900,
-   "h": 460,
-   "frames": [
-    {
-     "name": "before",
-     "label": "Before · emoji cards",
-     "widths": [
-      480,
-      900
-     ]
-    },
-    {
-     "name": "after",
-     "label": "After · variant C",
-     "widths": [
-      480,
-      900
-     ]
-    }
-   ],
-   "gif": "assets/examples/b-nine-devices/wipe.gif"
   },
   {
    "id": "e-card-back",
@@ -311,6 +311,64 @@
     }
    ],
    "gif": "assets/examples/e-card-back/wipe.gif"
+  },
+  {
+   "id": "b-supplement-chart",
+   "title": "Supplement test text to a ranked bar chart",
+   "skill": "design-review",
+   "caption": "A text section gains a ranked green-to-red bar chart.",
+   "use": "featured",
+   "view": "desktop",
+   "w": 900,
+   "h": 560,
+   "frames": [
+    {
+     "name": "before",
+     "label": "Before · how it works",
+     "widths": [
+      480,
+      900
+     ]
+    },
+    {
+     "name": "after",
+     "label": "After · ranked bars",
+     "widths": [
+      480,
+      900
+     ]
+    }
+   ],
+   "gif": "assets/examples/b-supplement-chart/wipe.gif"
+  },
+  {
+   "id": "a-organ-table-to-gauges",
+   "title": "Biofield measurement table to range gauges",
+   "skill": "design-review",
+   "caption": "A dense readings table becomes seven colored range gauges.",
+   "use": "featured",
+   "view": "phone",
+   "w": 920,
+   "h": 1300,
+   "frames": [
+    {
+     "name": "before",
+     "label": "Before · report table",
+     "widths": [
+      480,
+      920
+     ]
+    },
+    {
+     "name": "after",
+     "label": "After · range gauges",
+     "widths": [
+      480,
+      920
+     ]
+    }
+   ],
+   "gif": "assets/examples/a-organ-table-to-gauges/wipe.gif"
   },
   {
    "id": "a-biowell-table-to-chart",
@@ -377,64 +435,6 @@
     }
    ],
    "gif": "assets/examples/b-bbi-plan/wipe.gif"
-  },
-  {
-   "id": "d-booking-dates",
-   "title": "Bare date picker to a room-and-dates step",
-   "skill": "design-review",
-   "caption": "A bare date picker gains the room photo and a teal stay.",
-   "use": "featured",
-   "view": "desktop",
-   "w": 900,
-   "h": 560,
-   "frames": [
-    {
-     "name": "before",
-     "label": "Before",
-     "widths": [
-      480,
-      900
-     ]
-    },
-    {
-     "name": "after",
-     "label": "After · variant B",
-     "widths": [
-      480,
-      900
-     ]
-    }
-   ],
-   "gif": "assets/examples/d-booking-dates/wipe.gif"
-  },
-  {
-   "id": "x-copy-edit",
-   "title": "Plain sentence to an edit with a claims check",
-   "skill": "article-copy-edit",
-   "caption": "A plain sentence becomes a tracked edit with a claims check.",
-   "use": "featured",
-   "view": "desktop",
-   "w": 842,
-   "h": 612,
-   "frames": [
-    {
-     "name": "before",
-     "label": "Your draft",
-     "widths": [
-      480,
-      842
-     ]
-    },
-    {
-     "name": "after",
-     "label": "The edit",
-     "widths": [
-      480,
-      842
-     ]
-    }
-   ],
-   "gif": "assets/examples/x-copy-edit/wipe.gif"
   }
  ]
 }

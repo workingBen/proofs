@@ -34,20 +34,20 @@ In Claude Code:
 Real pages, before and after one review. [See all of them, as sliders](https://workingben.github.io/proofs/).
 
 <table>
-<tr><td colspan="2"><img src="assets/examples/rows/row-1.gif" width="100%" alt="Left: Retreat page hero, before and after Right: Hero photo, picked, before and after."></td></tr>
-<tr><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A pale boxed card becomes a full-bleed sunset hero.</td><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/photo-picker.html">photo-picker</a></b> · A hazy hero, a photo picker, then a lupine hero.</td></tr>
-<tr><td colspan="2"><img src="assets/examples/rows/row-2.gif" width="100%" alt="Left: EMF readings table to bed heat maps, before and after Right: Movie page layout fixes, before and after."></td></tr>
-<tr><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A table of readings becomes before-and-after bed heat maps.</td><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A lonely cover becomes a header with the cover beside the title.</td></tr>
+<tr><td colspan="2"><img src="assets/examples/rows/row-1.gif" width="100%" alt="Left: Retreat page hero, before and after Right: Emoji device cards to line icons, before and after."></td></tr>
+<tr><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A pale boxed card becomes a full-bleed sunset hero.</td><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · Emoji cards become a dark band with line icons.</td></tr>
+<tr><td colspan="2"><img src="assets/examples/rows/row-2.gif" width="100%" alt="Left: Bare date picker to a room-and-dates step, before and after Right: Hero photo, picked, before and after."></td></tr>
+<tr><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A bare date picker gains the room photo and a teal stay.</td><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/photo-picker.html">photo-picker</a></b> · A hazy hero, a photo picker, then a lupine hero.</td></tr>
 </table>
 
 <details>
 <summary><b>More examples (4)</b></summary>
 
 <table>
-<tr><td colspan="2"><img src="assets/examples/rows/row-3.gif" width="100%" alt="Left: Biofield measurement table to range gauges, before and after Right: Supplement test text to a ranked bar chart, before and after."></td></tr>
-<tr><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A dense readings table becomes seven colored range gauges.</td><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A text section gains a ranked green-to-red bar chart.</td></tr>
-<tr><td colspan="2"><img src="assets/examples/rows/row-4.gif" width="100%" alt="Left: Book list to a wall of covers, before and after Right: Plain report links to page stacks, before and after."></td></tr>
-<tr><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A text list becomes a wall of big book covers.</td><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · Three plain links become fanned stacks of real report pages.</td></tr>
+<tr><td colspan="2"><img src="assets/examples/rows/row-3.gif" width="100%" alt="Left: Plain sentence to an edit with a claims check, before and after Right: Book list to a wall of covers, before and after."></td></tr>
+<tr><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/article-copy-edit.html">article-copy-edit</a></b> · A plain sentence becomes a tracked edit with a claims check.</td><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A text list becomes a wall of big book covers.</td></tr>
+<tr><td colspan="2"><img src="assets/examples/rows/row-4.gif" width="100%" alt="Left: EMF readings table to bed heat maps, before and after Right: Movie page layout fixes, before and after."></td></tr>
+<tr><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A table of readings becomes before-and-after bed heat maps.</td><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A lonely cover becomes a header with the cover beside the title.</td></tr>
 </table>
 </details>
 <!-- examples:grid:end -->
@@ -161,7 +161,7 @@ Grouped by what you are trying to do. Each name links to that skill's page.
 **Keep long sessions on track**
 
 <table>
-<tr><td width="50%" valign="top"><a href="https://workingben.github.io/proofs/review-cycle.html"><img src="docs/cards/review-cycle.jpg" width="100%" alt="review-cycle"></a><br><b><a href="https://workingben.github.io/proofs/review-cycle.html">review-cycle</a></b><br>Send small bugs one at a time, often from your phone. Each one is finished before the next.</td><td width="50%" valign="top"><a href="https://workingben.github.io/proofs/changelog.html"><img src="docs/cards/changelog.jpg" width="100%" alt="changelog"></a><br><b><a href="https://workingben.github.io/proofs/changelog.html">changelog</a></b><br>A "What's new" page split by month, updated at the end of every session that ships something.</td></tr>
+<tr><td width="50%" valign="top"><a href="https://workingben.github.io/proofs/review-cycle.html"><img src="docs/cards/review-cycle.jpg" width="100%" alt="review-cycle"></a><br><b><a href="https://workingben.github.io/proofs/review-cycle.html">review-cycle</a></b><br>Report bugs and ideas as they come; each is fixed, reviewed or saved for later.</td><td width="50%" valign="top"><a href="https://workingben.github.io/proofs/changelog.html"><img src="docs/cards/changelog.jpg" width="100%" alt="changelog"></a><br><b><a href="https://workingben.github.io/proofs/changelog.html">changelog</a></b><br>A "What's new" page split by month, updated at the end of every session that ships something.</td></tr>
 </table>
 
 ## FAQ

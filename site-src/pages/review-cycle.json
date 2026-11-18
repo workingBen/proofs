@@ -1,6 +1,6 @@
 {
  "skill": "review-cycle",
- "tagline": "Hand over a stream of small fixes and watch each one ship",
+ "tagline": "Report bugs and ideas as they come; each is fixed, reviewed or saved for later.",
  "use_when": "You have a pile of small bugs or requests to report one at a time, often from your phone, and want each one built and merged without being asked questions mid-stream.",
  "try_it": "Start a review cycle. First item: the header overlaps the logo on my phone.",
  "sections": [

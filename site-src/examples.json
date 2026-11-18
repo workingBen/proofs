@@ -132,7 +132,7 @@
   },
   {
    "id": "a-organ-table-to-gauges",
-   "title": "Organs table to range gauges",
+   "title": "Biofield measurement table to range gauges",
    "skill": "design-review",
    "caption": "A dense readings table becomes seven colored range gauges.",
    "use": "featured",
@@ -348,35 +348,6 @@
     }
    ],
    "gif": "assets/examples/a-biowell-table-to-chart/wipe.gif"
-  },
-  {
-   "id": "a-improvement-scale",
-   "title": "Improvement line to a scale",
-   "skill": "design-review",
-   "caption": "One log-style line becomes readings plotted on a color scale.",
-   "use": "featured",
-   "view": "desktop",
-   "w": 1200,
-   "h": 360,
-   "frames": [
-    {
-     "name": "before",
-     "label": "Before · one line",
-     "widths": [
-      480,
-      960
-     ]
-    },
-    {
-     "name": "after",
-     "label": "After · on the scale",
-     "widths": [
-      480,
-      960
-     ]
-    }
-   ],
-   "gif": "assets/examples/a-improvement-scale/wipe.gif"
   },
   {
    "id": "b-bbi-plan",

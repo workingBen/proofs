@@ -69,7 +69,7 @@
   },
   {
    "id": "b-bed-map-report",
-   "title": "Bed map in the EMF report",
+   "title": "EMF readings table to bed heat maps",
    "skill": "design-review",
    "caption": "A table of readings becomes before-and-after bed heat maps.",
    "use": "featured",
@@ -98,7 +98,7 @@
   },
   {
    "id": "d-movie-page",
-   "title": "Movie page on a phone",
+   "title": "Movie page layout fixes",
    "skill": "design-review",
    "caption": "A lonely cover becomes a header with the cover beside the title.",
    "use": "featured",
@@ -161,7 +161,7 @@
   },
   {
    "id": "b-supplement-chart",
-   "title": "Supplement test sample chart",
+   "title": "Supplement test text to a ranked bar chart",
    "skill": "design-review",
    "caption": "A text section gains a ranked green-to-red bar chart.",
    "use": "featured",
@@ -190,7 +190,7 @@
   },
   {
    "id": "d-book-cover-wall",
-   "title": "Medical library cover wall",
+   "title": "Book list to a wall of covers",
    "skill": "design-review",
    "caption": "A text list becomes a wall of big book covers.",
    "use": "featured",
@@ -219,7 +219,7 @@
   },
   {
    "id": "a-report-stacks",
-   "title": "Full reports as page stacks",
+   "title": "Plain report links to page stacks",
    "skill": "design-review",
    "caption": "Three plain links become fanned stacks of real report pages.",
    "use": "featured",
@@ -248,7 +248,7 @@
   },
   {
    "id": "b-nine-devices",
-   "title": "The nine devices",
+   "title": "Emoji device cards to line icons",
    "skill": "design-review",
    "caption": "Emoji cards become a dark band with line icons.",
    "use": "featured",
@@ -277,7 +277,7 @@
   },
   {
    "id": "e-card-back",
-   "title": "Card back",
+   "title": "Text-only marketing flier to a photo card",
    "skill": "design-review",
    "caption": "A text-only card back becomes a wildflower-photo card.",
    "use": "featured",
@@ -351,7 +351,7 @@
   },
   {
    "id": "b-bbi-plan",
-   "title": "Study plan chart",
+   "title": "Gantt list to a two-lane study plan",
    "skill": "design-review",
    "caption": "A long Gantt list becomes a two-lane timeline.",
    "use": "featured",
@@ -380,7 +380,7 @@
   },
   {
    "id": "d-booking-dates",
-   "title": "Booking dates step",
+   "title": "Bare date picker to a room-and-dates step",
    "skill": "design-review",
    "caption": "A bare date picker gains the room photo and a teal stay.",
    "use": "featured",
@@ -409,7 +409,7 @@
   },
   {
    "id": "x-copy-edit",
-   "title": "Copy edit with a claims check",
+   "title": "Plain sentence to an edit with a claims check",
    "skill": "article-copy-edit",
    "caption": "A plain sentence becomes a tracked edit with a claims check.",
    "use": "featured",

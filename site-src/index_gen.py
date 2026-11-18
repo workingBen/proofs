@@ -35,7 +35,18 @@ hero = next((x for x in exs if x["use"] == "hero" and len(x["frames"]) == 2), No
 steps = next((x for x in exs if x["use"] == "hero" and len(x["frames"]) > 2), None)
 feat = [x for x in exs if x["use"] == "featured"]
 hero_ba = ""
+# The four decisions under the tagline work on the hero slider: pick one and see the line you'd paste back.
+DECIDE = [("deny", "Keep original", "DENY (Keep Original)"), ("accept", "Use selected", "ACCEPT"),
+          ("accept-comment", "Approve with comment", "ACCEPT WITH COMMENT"), ("revise", "Request revision", "REVISE")]
+chips = "".join(f'<span class="dchip{" on" if k == "accept" else ""}">{e(l)}</span>' for k, l, _ in DECIDE)
 if hero:
+    pick = (showcase._frame(hero, "after") or hero["frames"][-1])["label"].split("·")[-1].strip()
+    pick = pick[:1].upper() + pick[1:]
+    chips = ('<span class="dlbl">Try it: decide on the slider</span>'
+             + "".join(f'<button type="button" class="dchip{" on" if k == "accept" else ""}" aria-pressed="{"true" if k == "accept" else "false"}" '
+                       f'data-line="{e("1. " + hero["title"] + " — " + x + ("" if k in ("deny", "revise") else " (Use Selected: " + pick + ")"))}">{e(l)}</button>'
+                       for k, l, x in DECIDE)
+             + '<p class="dline" aria-live="polite" hidden>You’d paste back: <b></b></p>')
     hero_ba = (f'<figure class="hero-ba">{showcase.slider(hero, big=True, eager=True)}'
                f'<figcaption><b>{e(hero["title"])}.</b> {e(hero["caption"])} '
                f'<a href="{e(hero["skill"])}.html">{e(hero["skill"])}</a></figcaption></figure>')
@@ -45,7 +56,7 @@ if feat or steps:
     items = [x for x in exs if x is not hero and x["use"] != "skill"]
     show = ('<section class="in showcase" id="examples"><div class="lede"><div class="eyebrow">Real work, before and after</div>'
             '<h2>See it work</h2><p>Each pair is a real page before and after one review. They slide on their own. Drag any of them.</p></div>'
-            + showcase.gallery(items))
+            + showcase.featured(items))
     show += "</section>"
 HERO_CSS = """
 .home.has-ba .in{grid-template-columns:minmax(0,5fr) minmax(0,7fr);grid-template-areas:"eb ba" "h1 ba" "tl ba" "ch ba" "try ba";align-items:start;column-gap:44px;row-gap:14px;padding-block:36px 40px}
@@ -69,7 +80,7 @@ body = f'''<header class="top"><div class="in"><a class="logo" href="index.html"
   <div class="eyebrow">Skills for Claude Code · {len([s for _, g in GROUPS for s in g])} skills · {total_f}+ features</div>
   <h1>Claude skills that <i>show</i> their work.</h1>{hero_ba}
   <p class="tagline">Stop reading walls of terminal text. Every skill here includes a page you can look at, click through and decide on, then hand back to Claude in one paste.</p>
-  <div class="chipset"><span class="dchip">Keep original</span><span class="dchip on">Use selected</span><span class="dchip">Approve with comment</span><span class="dchip">Request revision</span></div>
+  <div class="chipset">{chips}</div>
   <div class="try"><span class="lbl">Install in Claude Code</span><div class="trybox"><code id="tryc">/plugin marketplace add workingBen/proofs
 /plugin install proofs@proofs</code><button type="button" id="tryb">Copy</button></div></div>
 </div></section>
@@ -83,7 +94,9 @@ body = f'''<header class="top"><div class="in"><a class="logo" href="index.html"
 <footer class="foot"><div class="in"><span>proofs · Claude skills that show their work</span><span>MIT license</span></div></footer>
 <script>
 (function(){{var b=document.getElementById('tryb'),c=document.getElementById('tryc');
-b.addEventListener('click',function(){{try{{navigator.clipboard.writeText(c.textContent).then(function(){{b.textContent='Copied';setTimeout(function(){{b.textContent='Copy'}},1500)}},function(){{}})}}catch(_){{}}}});}})();
+b.addEventListener('click',function(){{try{{navigator.clipboard.writeText(c.textContent).then(function(){{b.textContent='Copied';setTimeout(function(){{b.textContent='Copy'}},1500)}},function(){{}})}}catch(_){{}}}});
+var ds=document.querySelectorAll('button.dchip'),dl=document.querySelector('.dline');
+[].forEach.call(ds,function(d){{d.addEventListener('click',function(){{[].forEach.call(ds,function(x){{x.classList.toggle('on',x===d);x.setAttribute('aria-pressed',x===d?'true':'false')}});dl.hidden=false;dl.querySelector('b').textContent=d.getAttribute('data-line')}})}});}})();
 </script>''' + (showcase.JS if exs else '')
 extra = '''
 .home h1{font-size:clamp(44px,8vw,92px)} .home h1 i{color:var(--accent)}
@@ -93,6 +106,9 @@ extra = '''
 .chipset{display:flex;gap:6px;flex-wrap:wrap}
 .dchip{font:600 12px/1 "JetBrains Mono",monospace;padding:8px 11px;border-radius:999px;border:1.5px solid var(--fg)}
 .dchip.on{background:var(--fg);color:var(--bg)}
+button.dchip{background:none;color:var(--fg);cursor:pointer;min-height:36px} button.dchip.on{background:var(--fg);color:var(--bg)} button.dchip:hover{border-color:var(--accent)}
+.dlbl{flex-basis:100%;font:600 12px "JetBrains Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.dline{flex-basis:100%;margin:4px 0 0;padding:4px 0 4px 10px;border-left:2px solid var(--accent);font:13px/1.5 "JetBrains Mono",monospace;color:var(--muted)} .dline b{color:var(--fg);font-weight:600}
 .h2{font:400 40px/1.1 "Instrument Serif",Georgia,serif;margin:0 0 18px}
 .loopw .in{padding-block:8px 32px}
 .loop{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
@@ -103,7 +119,8 @@ extra = '''
 .grp{margin-bottom:36px}
 .grp h3{display:flex;gap:10px;align-items:baseline;font:650 20px/1.3 -apple-system,sans-serif;margin:0 0 12px}
 .grp h3 span{font:600 12px "JetBrains Mono",monospace;color:var(--accent)}
-.sk-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.sk-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+@media (min-width:760px){.sk-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .sk-card{display:grid;gap:8px;align-content:start;text-decoration:none;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;transition:border-color .15s}
 a.sk-card:hover{border-color:var(--accent)}
 .sk-card.wait{opacity:.6}

@@ -313,43 +313,6 @@
    "gif": "assets/examples/e-card-back/wipe.gif"
   },
   {
-   "id": "a-standards-scales",
-   "title": "Standards: four bars to one card",
-   "skill": "design-review",
-   "caption": "Four look-alike bars become one evaluation card.",
-   "use": "featured",
-   "view": "desktop",
-   "w": 600,
-   "h": 560,
-   "frames": [
-    {
-     "name": "before",
-     "label": "Before · four bars",
-     "widths": [
-      480,
-      600
-     ]
-    },
-    {
-     "name": "after",
-     "label": "After · one card",
-     "widths": [
-      480,
-      600
-     ]
-    },
-    {
-     "name": "after2",
-     "label": "Option C · rulers",
-     "widths": [
-      480,
-      600
-     ]
-    }
-   ],
-   "gif": "assets/examples/a-standards-scales/wipe.gif"
-  },
-  {
    "id": "a-biowell-table-to-chart",
    "title": "Supplement table to dot chart",
    "skill": "design-review",

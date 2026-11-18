@@ -42,7 +42,7 @@ ORDER = [
     "c-retreat-look", "c-hero-photos-3step",
     "b-bed-map-report", "d-movie-page", "a-organ-table-to-gauges", "b-supplement-chart",
     "d-book-cover-wall", "a-report-stacks", "b-nine-devices", "e-card-back",
-    "a-standards-scales", "a-biowell-table-to-chart", "a-improvement-scale", "b-bbi-plan",
+    "a-biowell-table-to-chart", "a-improvement-scale", "b-bbi-plan",
     "d-booking-dates", "d-collection-slideshow", "x-copy-edit",
 ]
 # Left out of the site even when the manifest lists them. To bring one back, delete it

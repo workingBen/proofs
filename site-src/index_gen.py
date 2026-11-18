@@ -41,17 +41,11 @@ if hero:
                f'<a href="{e(hero["skill"])}.html">{e(hero["skill"])}</a></figcaption></figure>')
 show = ""
 if feat or steps:
-    first, rest = feat[:6], feat[6:]
+    # The three-step example is an ordinary card, the same width as the rest, after the first six.
+    items = feat[:6] + ([steps] if steps else []) + feat[6:]
     show = ('<section class="in showcase" id="examples"><div class="lede"><div class="eyebrow">Real work, before and after</div>'
             '<h2>See it work</h2><p>Each pair is a real page before and after one review. They slide on their own. Drag any of them.</p></div>'
-            + (showcase.gallery(first) if first else ""))
-    if steps:
-        show += (f'<div class="pp"><div class="pp-txt"><div class="eyebrow">Three steps · {e(steps["skill"])}</div>'
-                 f'<h2>{e(steps["title"])}</h2><p class="sub">{e(steps["caption"])}</p>'
-                 f'<a class="bx-skill" href="{e(steps["skill"])}.html">{e(steps["skill"])}{showcase.ARROW}</a></div>'
-                 f'{showcase.stepper(steps)}</div>')
-    if rest:
-        show += showcase.gallery(rest, start=len(first) + 1)
+            + showcase.gallery(items))
     show += "</section>"
 HERO_CSS = """
 .home.has-ba .in{grid-template-columns:minmax(0,5fr) minmax(0,7fr);grid-template-areas:"eb ba" "h1 ba" "tl ba" "ch ba" "try ba";align-items:start;column-gap:44px;row-gap:14px;padding-block:36px 40px}

@@ -14,7 +14,7 @@ STAR = ('<svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor" ari
 cards, total_f, n_sk = "", 0, 0
 for gi, (gname, skills) in enumerate(GROUPS):
     items = ""
-    for s in skills:
+    for s in sorted(skills, key=lambda k: k not in TOP):  # top picks lead their section
         p = os.path.join(HERE, "pages", f"{s}.json")
         if not os.path.exists(p):
             items += f'<div class="sk-card wait"><b>{e(s)}</b><span>Page coming</span></div>'

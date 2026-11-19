@@ -172,6 +172,7 @@ a.bx-skill:hover{border-color:var(--accent)}
  .fx.fx-on .bx-grid{columns:auto}
  .fx.fx-on .bx-grid>.bx{display:none;margin:0}
  .fx.fx-on .bx-grid>.bx.on{display:grid}
+ .fx.fx-on .bx-grid>.bx.on[hidden]{display:grid!important} /* the phone show-more hides 5+; the desktop gallery shows any one */
  .fx.fx-on .bx .fn,.fx.fx-on .bx h3,.fx.fx-on .bx .sub{display:none}
  .fx.fx-on .bx-more{display:none!important}
 }

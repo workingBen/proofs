@@ -151,7 +151,19 @@ ins.rp-ins, .rp-panes ins { background:color-mix(in srgb, var(--rp-accept) 18%, 
 .rp-facts dt { font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--rp-faint); }
 .rp-facts dd { margin:0; font-weight:600; }
 .rp-entry { background:var(--rp-card); border:1px solid var(--rp-rule); border-radius:12px; padding:20px 22px; margin:0 0 18px; }
-.rp-entry.rp-is-read { opacity:.6; }
+/* A read entry folds to one line under "Read" at the bottom of the log; unticking
+   brings the full card (and its note) back. Flex order moves it without moving the DOM. */
+.rp-kind-log { display:flex; flex-direction:column; }
+.rp-kind-log > * { order:0; }
+.rp-read-head { order:1; margin:18px 0 8px; font-size:14px; text-transform:uppercase; letter-spacing:.08em; color:var(--rp-faint); }
+.rp-read-head[hidden] { display:none; }
+.rp-entry.rp-is-read { order:2; display:flex; align-items:center; gap:12px; padding:8px 16px; margin:0 0 6px; color:var(--rp-soft); }
+.rp-entry.rp-is-read .rp-entry-head { flex:1 1 auto; min-width:0; flex-wrap:nowrap; margin:0; }
+.rp-entry.rp-is-read .rp-entry-head h3 { font-size:16px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+.rp-entry.rp-is-read .rp-status { margin-left:auto; flex:none; }
+.rp-entry.rp-is-read .rp-lede, .rp-entry.rp-is-read .rp-detail, .rp-entry.rp-is-read .rp-opts,
+.rp-entry.rp-is-read .rp-note-label { display:none; }
+.rp-entry.rp-is-read .rp-entry-foot { margin:0; flex:none; }
 .rp-status { margin-left:auto; color:var(--rp-soft); }
 .rp-status-your-move { color:var(--rp-revise); }
 .rp-status-done { color:var(--rp-accept); }
@@ -272,6 +284,9 @@ body.rp-mode-questions, :root[data-theme] body.rp-mode-questions {
   .rp-main { padding:20px 16px 120px; }
   .rp-bar, .rp-projectbar, .rp-statusbar { padding-left:16px; padding-right:16px; }
   .rp-item, .rp-entry { padding:16px; }
+  .rp-entry.rp-is-read { padding:8px 12px; gap:8px; }
+  .rp-entry.rp-is-read .rp-status { display:none; }
+  .rp-entry.rp-is-read .rp-tick-l { display:none; }
   .rp-read { margin-left:0; }
   .rp-mode-questions .rp-main { padding:28px 16px 96px; }
   .rp-mode-session .rp-kind-questions, .rp-mode-session .rp-kind-links { padding:14px 12px 2px; }

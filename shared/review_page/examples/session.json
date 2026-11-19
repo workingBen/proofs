@@ -1,0 +1,39 @@
+{
+  "mode": "session",
+  "title": "invoice-export · Acme Widgets session",
+  "project": {"name": "Acme Widgets", "session": "invoice-export", "repo": "acme/widgets", "round": 2,
+              "artifact": "(the published URL of this page)"},
+  "version": "v4", "updated": "2026-03-14",
+  "details": [["page", "v4"], ["branch", "invoice-export"]],
+  "heading": "About this page",
+  "intro_html": "<p>Answer what is waiting on you, run the checks, tick the log entries you have read, then <b>Copy my replies</b> and paste the text into chat.</p><p><b>To reopen:</b> the link in your artifact list titled <i>invoice-export · Acme Widgets session</i>.</p>",
+  "facts": [["Branch", "invoice-export"], ["Tests", "212 passing"], ["Live", "nothing new"]],
+  "questions": [
+    {"qid": "csv-dates", "ask": "Which date format should the CSV export use?",
+     "why_html": "<p>Your accountant's import tool rejected the last file. Both formats below open in a spreadsheet.</p>",
+     "options": [
+       {"label": "ISO dates (2026-03-14)", "recommended": true, "note_html": "Sorts correctly everywhere; what most import tools expect."},
+       {"label": "US dates (03/14/2026)", "note_html": "Matches what people read on the invoice, but sorts wrong as text."}
+     ]},
+    {"qid": "push-fix", "round": 1, "ask": "Can I push the settings fix to the branch?",
+     "options": [{"label": "Yes - push it"}, {"label": "Not yet - see my note"}]}
+  ],
+  "links": [
+    {"label": "Design review", "status": "3 decisions open", "url": "https://example.com/invoice-design-review"}
+  ],
+  "qa": [
+    {"qaid": "qa-export-file", "check": "Export last month's invoices and open the file",
+     "why_html": "<b>Expected:</b> one row per invoice, totals match the screen. I could not open a real spreadsheet here.",
+     "notes_label": "If it failed, paste the first row"}
+  ],
+  "entries": [
+    {"id": "M6", "title": "Found it — the config change was never being used", "status": "Done",
+     "lede": "The setting was read from the wrong file; fixed on the branch.", "detail_html": "<p>Commit <code>1a2b3c4</code>.</p>"},
+    {"id": "M5", "title": "Why the new setting changed nothing", "status": "Background",
+     "lede": "Investigating; no action needed."}
+  ],
+  "decided": [
+    {"id": "csv-columns", "title": "Which columns the export carries", "decision": "Invoice number, date, customer, total", "when": "round 1"},
+    {"id": "M1–M4", "title": "Export format", "decision": "Plain CSV, one file per month"}
+  ]
+}

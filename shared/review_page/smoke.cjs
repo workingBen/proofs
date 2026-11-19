@@ -1,6 +1,7 @@
 // Click through a built review page in headless Chromium and report what broke.
 // Usage: node smoke.cjs <playwright package dir> <page.html>
-// Prints one JSON line: { mode, items, export, problems: [...] }. Run through
+// Prints one JSON line: { mode, items, export, problems: [...] }. Exercises the
+// first item of the first section of each kind the page's frame uses. Run through
 // review_page.py --smoke rather than directly.
 const path = require("path");
 const { chromium } = require(process.argv[2]);
@@ -23,10 +24,12 @@ const file = "file://" + path.resolve(process.argv[3]);
   const S = await page.evaluate(() => JSON.parse(document.getElementById("rp-spec").textContent));
   const out = { mode: S.mode };
 
+  const items = (kind) => S.sections.filter((s) => s.kind === kind).flatMap((s) => s.items.map((it) => [s, it]));
   if (S.mode === "review") {
+    const all = items("review");
     out.items = await page.locator(".rp-item").count();
-    if (out.items !== S.items.length) problems.push(`rendered ${out.items} items, spec has ${S.items.length}`);
-    const first = S.items[0];
+    if (out.items !== all.length) problems.push(`rendered ${out.items} items, spec has ${all.length}`);
+    const [sec, first] = all[0] || [];
     if (first) {
       const card = page.locator(`.rp-item[data-id="${first.id}"]`);
       if (first.variants.length > 1) {
@@ -35,14 +38,14 @@ const file = "file://" + path.resolve(process.argv[3]);
         if ((await card.locator(`.rp-variant[data-variant="${v}"]`).getAttribute("aria-pressed")) !== "true")
           problems.push("choosing a variant did not move the selection");
       }
-      for (const b of S.decisions.buttons) {
+      for (const b of sec.decisions.buttons) {
         await card.locator(`.rp-btn[data-choice="${b.state}"]`).click();
         if ((await card.getAttribute("data-state")) !== b.state) problems.push(`button ${b.state} did not set the state`);
         if (b.comment === "required" && !(await card.locator(".rp-comment").isVisible()))
           problems.push(`button ${b.state} did not open the comment box`);
       }
       await card.locator(".rp-comment textarea").fill("smoke comment");
-      if (S.decisions.mark_read) await card.locator("[data-read]").check();
+      if (sec.decisions.mark_read) await card.locator("[data-read]").check();
     }
   } else if (S.mode === "questions") {
     out.items = await page.locator("[data-qid], [data-qaid]").count();
@@ -54,7 +57,7 @@ const file = "file://" + path.resolve(process.argv[3]);
     if (await note.count()) await note.fill("smoke note");
   } else {
     out.items = await page.locator("[data-entry]").count();
-    if (out.items !== S.entries.length) problems.push(`rendered ${out.items} entries, spec has ${S.entries.length}`);
+    if (out.items !== items("log").length) problems.push(`rendered ${out.items} entries, spec has ${items("log").length}`);
     const tick = page.locator("[data-tick]").first();
     if (await tick.count()) await tick.check();
     const opt = page.locator(".rp-opts input[type=radio]").first();

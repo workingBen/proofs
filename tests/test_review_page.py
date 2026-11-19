@@ -29,7 +29,10 @@ const spec = JSON.parse(html.match(/<script type="application\/json" id="rp-spec
 const code = html.match(/<script>\n([\s\S]*?)\n<\/script>/)[1];
 const m = { exports: {} };
 new Function("module", code)(m);
-const state = JSON.parse(process.argv[3]);
+// Tests write a flat state; each section's exporter reads only its own ids.
+const flat = JSON.parse(process.argv[3]);
+const state = { sec: {}, extra: flat.extra };
+spec.sections.forEach((s) => { state.sec[s.id] = flat; });
 process.stdout.write(m.exports.exportText(spec, state, new Date(Date.UTC(2026, 2, 14, 18, 53))));
 """
 
@@ -167,6 +170,35 @@ class ExportText(unittest.TestCase):
                                "anything else:\n"
                                "ship it\n")
 
+    def export_spec(self, spec, state):
+        p = Path(self._tmp.name) / "spec.json"
+        p.write_text(json.dumps(spec))
+        page = Path(self._tmp.name) / "spec.html"
+        r = subprocess.run([sys.executable, str(BUILD), str(p), "--out", str(page)], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        r = subprocess.run([NODE, str(self.driver), str(page), json.dumps(state)],
+                           capture_output=True, text=True, env=dict(os.environ, TZ="UTC"))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return r.stdout
+
+    def test_sections_list_matches_flat_shorthand(self):
+        spec = json.loads((EXAMPLES / "questions.json").read_text())
+        spec["sections"] = [{"kind": "questions", "items": spec.pop("questions")},
+                            {"kind": "qa", "items": spec.pop("qa")}]
+        state = {"ans": {"spec-approval": "Not yet - see my note", "qa-delete-item": "FAIL"}}
+        self.assertEqual(self.export_spec(spec, state), self.export("questions", state))
+
+    def test_mixed_kinds_each_add_their_block(self):
+        spec = {"mode": "log", "title": "s1 · P log", "project": {"name": "P", "session": "s1"},
+                "sections": [
+                    {"kind": "log", "items": [{"id": "M1", "title": "One"}]},
+                    {"kind": "review", "decisions": "design-review", "items": [{"label": "Card"}]},
+                    {"kind": "qa", "items": [{"qaid": "qa-x", "check": "Open it"}]}]}
+        text = self.export_spec(spec, {"items": {"1": {"s": "accept"}}, "ans": {"qa-x": "PASS"}})
+        self.assertEqual(text.split("\n\n", 1)[1],
+                         "M1  [unread]  One\n1. Card — ACCEPT (Use Proposed)\n--- QA results ---\n\n"
+                         "QA qa-x | Open it\n  -> PASS\n\n")
+
     def test_log_unanswered_group(self):
         self.assertIn("M6  [unread]  Found it — the config change was never being used\n      answer: (unanswered)\n",
                       self.export("log", {}))
@@ -195,7 +227,12 @@ class BuildAndCheck(unittest.TestCase):
                ({"title": "x", "items": [{"id": "1"}]}, "label"),
                ({"mode": "log", "title": "x", "project": {"name": "p"}}, "session"),
                ({"mode": "questions", "title": "x", "project": {"name": "p", "stream": "s"},
-                 "questions": [{"qid": "a"}, {"qid": "a"}]}, "qid")]
+                 "questions": [{"qid": "a"}, {"qid": "a"}]}, "qid"),
+               ({"title": "x", "sections": [{"kind": "nope"}]}, "kind"),
+               ({"title": "x", "sections": [{"id": "a", "items": [{"label": "a"}]}, {"id": "a"}]}, "section id"),
+               ({"mode": "questions", "title": "x", "project": {"name": "p", "stream": "s"},
+                 "sections": [{"kind": "questions", "items": [{"qid": "a"}]},
+                              {"kind": "qa", "items": [{"qaid": "a"}]}]}, "unique on the page")]
         for spec, word in bad:
             p = self.tmp / "s.json"
             p.write_text(json.dumps(spec))

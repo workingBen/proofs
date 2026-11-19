@@ -1,6 +1,12 @@
 /* Review page engine (proofs, shared/review_page). Built into every page by
-   review_page.py; do not hand-edit a built page's copy. The export functions
-   are pure so the tests can run them under plain node. */
+   review_page.py; do not hand-edit a built page's copy.
+
+   A page is a frame (S.mode: its chrome, tally and export header) around a
+   list of sections (S.sections), each with a kind: review, questions, qa or
+   log. Each kind renders its own items, keeps its own state under
+   st.sec[<section id>], and contributes its own block to the export, so one
+   page can mix kinds. The export functions are pure so the tests can run them
+   under plain node. */
 (function () {
   "use strict";
 
@@ -17,21 +23,26 @@
     var t = trimmed(s);
     return t ? t.split("\n").map(function (l) { return prefix + l; }) : [];
   }
-  function buttonFor(S, state) {
-    return S.decisions.buttons.filter(function (b) { return b.state === state; })[0];
+  function buttonFor(sec, state) {
+    return sec.decisions.buttons.filter(function (b) { return b.state === state; })[0];
   }
   function variantOf(item, key) {
     var vs = item.variants || [];
     return vs.filter(function (v) { return v.key === key; })[0] || vs.filter(function (v) { return v.key === item.selected; })[0] || vs[0];
   }
+  function secState(st, sec) {
+    st.sec = st.sec || {};
+    return (st.sec[sec.id] = st.sec[sec.id] || {});
+  }
 
-  function reviewLine(S, item, rec) {
-    var D = S.decisions, tag;
+  /* ------------------------------------------------- export, per section kind */
+  function reviewLine(sec, item, rec) {
+    var D = sec.decisions, tag;
     if (!rec.s) {
       if (D.pending === null || D.pending === undefined) return null;
       tag = D.pending;
     } else {
-      var b = buttonFor(S, rec.s);
+      var b = buttonFor(sec, rec.s);
       if (!b) return null;
       var hasV = (item.variants || []).length > 0;
       tag = hasV && b.export_variant ? b.export_variant : b.export;
@@ -48,73 +59,89 @@
     return line;
   }
 
-  function reviewExport(S, st) {
-    var lines = [S.header];
-    S.items.forEach(function (item) {
-      var l = reviewLine(S, item, (st.items || {})[item.id] || {});
-      if (l !== null) lines.push(l);
-    });
-    return lines.join("\n");
-  }
-
-  function questionsExport(S, st, now) {
-    var ans = st.ans || {}, notes = st.notes || {};
-    var lines = ["[" + S.format + " — answers]", "project: " + S.project, "stream:  " + S.stream,
-      "round:   " + S.round, "artifact: " + S.artifact, "sent:    " + utcStamp(now), ""];
-    (S.questions || []).forEach(function (q) {
-      lines.push("Q " + q.qid + " (raised r" + q.round + ") | " + q.ask);
-      lines.push("  -> " + (ans[q.qid] || "(UNANSWERED)"));
-      lines.push.apply(lines, noteLines("  note: ", notes[q.qid]));
-      lines.push("");
-    });
-    if ((S.qa || []).length) {
-      lines.push("--- QA results ---", "");
-      S.qa.forEach(function (c) {
+  var BLOCK = {
+    review: function (sec, ss) {
+      var recs = ss.items || {};
+      return sec.items.map(function (it) { return reviewLine(sec, it, recs[it.id] || {}); })
+        .filter(function (l) { return l !== null; });
+    },
+    questions: function (sec, ss) {
+      var ans = ss.ans || {}, notes = ss.notes || {}, lines = [];
+      sec.items.forEach(function (q) {
+        lines.push("Q " + q.qid + " (raised r" + q.round + ") | " + q.ask);
+        lines.push("  -> " + (ans[q.qid] || "(UNANSWERED)"));
+        lines.push.apply(lines, noteLines("  note: ", notes[q.qid]));
+        lines.push("");
+      });
+      return lines;
+    },
+    qa: function (sec, ss) {
+      var ans = ss.ans || {}, notes = ss.notes || {};
+      if (!sec.items.length) return [];
+      var lines = ["--- QA results ---", ""];
+      sec.items.forEach(function (c) {
         lines.push("QA " + c.qaid + " | " + c.check);
         lines.push("  -> " + (ans[c.qaid] || "(NOT CHECKED)"));
         lines.push.apply(lines, noteLines("  note: ", notes[c.qaid]));
         lines.push("");
       });
-    }
-    return lines.join("\n").replace(/\n+$/, "\n");
-  }
-
-  function logExport(S, st, now) {
-    var read = st.read || {}, ans = st.ans || {}, notes = st.notes || {};
-    var lines = ["WORKING LOG — my replies", "project: " + S.project, "session: " + S.session];
-    if (S.repo) lines.push("repo: " + S.repo);
-    (S.details || []).forEach(function (kv) { lines.push(kv[0] + ": " + kv[1]); });
-    lines.push("exported: " + localStamp(now), "");
-    S.entries.forEach(function (e) {
-      lines.push(e.id + "  [" + (read[e.id] ? "read" : "unread") + "]  " + e.title);
-      e.groups.forEach(function (q) {
-        var a = ans[e.id + "::" + q] || "(unanswered)";
-        lines.push("      answer" + (e.groups.length > 1 ? " (" + q + ")" : "") + ": " + a);
+      return lines;
+    },
+    log: function (sec, ss) {
+      var read = ss.read || {}, ans = ss.ans || {}, notes = ss.notes || {}, lines = [];
+      sec.items.forEach(function (e) {
+        lines.push(e.id + "  [" + (read[e.id] ? "read" : "unread") + "]  " + e.title);
+        e.groups.forEach(function (q) {
+          lines.push("      answer" + (e.groups.length > 1 ? " (" + q + ")" : "") + ": " + (ans[e.id + "::" + q] || "(unanswered)"));
+        });
+        lines.push.apply(lines, noteLines("      note: ", notes[e.id]));
       });
-      lines.push.apply(lines, noteLines("      note: ", notes[e.id]));
+      return lines;
+    }
+  };
+
+  function blocks(S, st) {
+    var out = [];
+    S.sections.forEach(function (sec) {
+      out.push.apply(out, BLOCK[sec.kind](sec, ((st.sec || {})[sec.id]) || {}));
     });
-    var extra = trimmed(st.extra);
-    if (extra) lines.push("", "anything else:", extra);
-    return lines.join("\n") + "\n";
+    return out;
   }
 
-  function exportText(S, st, now) {
-    now = now || new Date();
-    if (S.mode === "review") return reviewExport(S, st);
-    if (S.mode === "questions") return questionsExport(S, st, now);
-    return logExport(S, st, now);
-  }
+  /* ------------------------------------------------- export, per frame */
+  var FRAME = {
+    review: function (S, st) { return [S.header].concat(blocks(S, st)).join("\n"); },
+    questions: function (S, st, now) {
+      var lines = ["[" + S.format + " — answers]", "project: " + S.project, "stream:  " + S.stream,
+        "round:   " + S.round, "artifact: " + S.artifact, "sent:    " + utcStamp(now), ""];
+      return lines.concat(blocks(S, st)).join("\n").replace(/\n+$/, "\n");
+    },
+    log: function (S, st, now) {
+      var lines = ["WORKING LOG — my replies", "project: " + S.project, "session: " + S.session];
+      if (S.repo) lines.push("repo: " + S.repo);
+      (S.details || []).forEach(function (kv) { lines.push(kv[0] + ": " + kv[1]); });
+      lines.push("exported: " + localStamp(now), "");
+      lines = lines.concat(blocks(S, st));
+      var extra = trimmed(st.extra);
+      if (extra) lines.push("", "anything else:", extra);
+      return lines.join("\n") + "\n";
+    }
+  };
+
+  function exportText(S, st, now) { return FRAME[S.mode](S, st || {}, now || new Date()); }
 
   if (typeof module !== "undefined" && module.exports) module.exports = { exportText: exportText };
   if (typeof document === "undefined") return;
 
-  /* ------------------------------------------------------------ the page */
+  /* ------------------------------------------------- the page */
   var S = JSON.parse(document.getElementById("rp-spec").textContent);
   var st = {};
   try { st = JSON.parse(localStorage.getItem(S.key) || "{}") || {}; } catch (e) { st = {}; }
   function save() { try { localStorage.setItem(S.key, JSON.stringify(st)); } catch (e) { /* private window */ } }
   function all(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
   function one(sel, root) { return (root || document).querySelector(sel); }
+  function rootOf(sec) { return one('[data-section="' + sec.id + '"]'); }
+  function ofKind(kind) { return S.sections.filter(function (s) { return s.kind === kind; }); }
 
   var flashTimer;
   function flash() {
@@ -131,7 +158,6 @@
     ta.select();
   }
   function copyText(text) {
-    window.__rpLastExport = text;
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(flash, function () { fallback(text); });
@@ -146,166 +172,203 @@
   });
   window.rpExport = function () { return exportText(S, st, new Date()); };
 
-  /* ------------------------------------------------------------ review */
-  function setupReview() {
-    st.items = st.items || {};
-    var D = S.decisions;
-    function rec(id) { return (st.items[id] = st.items[id] || {}); }
-    function itemSpec(id) { return S.items.filter(function (i) { return i.id === id; })[0]; }
-
-    function paintItem(card) {
-      var id = card.dataset.id, r = rec(id), it = itemSpec(id);
-      all(".rp-btn", card).forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.choice === r.s)); });
-      var v = (it.variants || []).length ? variantOf(it, r.v).key : null;
-      all(".rp-variant", card).forEach(function (el) { el.setAttribute("aria-pressed", String(el.dataset.variant === v)); });
-      var b = r.s ? buttonFor(S, r.s) : null;
-      card.dataset.state = r.s || "";
-      one("[data-pill]", card).textContent = b ? b.label.replace(/^[^A-Za-z]+/, "") : "Pending";
-      var box = one(".rp-comment", card), ta = one("textarea", box);
-      if (ta.value !== (r.c || "")) ta.value = r.c || "";
-      if (!D.comment_always) box.hidden = !((b && b.comment === "required") || trimmed(r.c));
-      var wad = one(".rp-wad", card);
-      if (wad) { wad.hidden = r.s !== "deny"; one("input", wad).checked = !!r.w; }
-      var read = one("[data-read]", card);
-      if (read) { read.checked = !!r.r; card.classList.toggle("rp-is-read", !!r.r); }
-    }
-    function paintBar() {
-      var total = S.items.length, counts = {}, done = 0;
-      S.items.forEach(function (it) {
-        var s = rec(it.id).s;
+  /* ------------------------------------------------- tallies, per frame */
+  function reviewStats() {
+    var total = 0, done = 0, counts = {}, buttons = [];
+    ofKind("review").forEach(function (sec) {
+      var recs = secState(st, sec).items || {};
+      sec.decisions.buttons.forEach(function (b) {
+        if (!buttons.some(function (x) { return x.state === b.state; })) buttons.push(b);
+      });
+      sec.items.forEach(function (it) {
+        total++;
+        var s = (recs[it.id] || {}).s;
         if (s) { done++; counts[s] = (counts[s] || 0) + 1; }
       });
-      var parts = ["<b>" + done + "</b> of " + total + " reviewed"];
-      D.buttons.forEach(function (b) {
-        parts.push('<span class="rp-tally-st rp-st-' + b.state + '">' + b.label.replace(/^[^A-Za-z]+/, "") + " " + (counts[b.state] || 0) + "</span>");
+    });
+    return { total: total, done: done, counts: counts, buttons: buttons };
+  }
+  function answered(kind) {
+    var total = 0, done = 0;
+    ofKind(kind).forEach(function (sec) {
+      var ans = secState(st, sec).ans || {};
+      sec.items.forEach(function (it) { total++; if (ans[it.qid || it.qaid]) done++; });
+    });
+    return { total: total, done: done };
+  }
+  var TALLY = {
+    review: function () {
+      var r = reviewStats();
+      var parts = ["<b>" + r.done + "</b> of " + r.total + " reviewed"];
+      r.buttons.forEach(function (b) {
+        parts.push('<span class="rp-tally-st rp-st-' + b.state + '">' + b.label.replace(/^[^A-Za-z]+/, "") + " " + (r.counts[b.state] || 0) + "</span>");
       });
       one("#rp-tally").innerHTML = parts.join(" · ");
       var prog = one(".rp-progress");
       if (prog) {
-        prog.innerHTML = D.buttons.map(function (b) {
-          return '<span class="rp-st-' + b.state + '" style="flex:' + (counts[b.state] || 0) + '"></span>';
-        }).join("") + '<span class="rp-prog-rest" style="flex:' + (total - done) + '"></span>';
+        prog.innerHTML = r.buttons.map(function (b) {
+          return '<span class="rp-st-' + b.state + '" style="flex:' + (r.counts[b.state] || 0) + '"></span>';
+        }).join("") + '<span class="rp-prog-rest" style="flex:' + (r.total - r.done) + '"></span>';
       }
       all("[data-count]").forEach(function (el) {
-        var c = el.dataset.count;
-        var open = S.items.filter(function (it) { return (!c || it.category === c) && !rec(it.id).s; }).length;
+        var c = el.dataset.count, open = 0;
+        ofKind("review").forEach(function (sec) {
+          var recs = secState(st, sec).items || {};
+          sec.items.forEach(function (it) { if ((!c || it.category === c) && !(recs[it.id] || {}).s) open++; });
+        });
         el.textContent = "· " + open + " open";
       });
-    }
-    function paint() { all(".rp-item").forEach(paintItem); paintBar(); }
-
-    all(".rp-item").forEach(function (card) {
-      var id = card.dataset.id;
-      all(".rp-btn", card).forEach(function (b) {
-        b.addEventListener("click", function () {
-          var r = rec(id);
-          r.s = r.s === b.dataset.choice ? null : b.dataset.choice;
-          save(); paint();
-          var bt = r.s ? buttonFor(S, r.s) : null;
-          if (bt && bt.comment === "required") one("textarea", card).focus();
-        });
-      });
-      all(".rp-variant", card).forEach(function (el) {
-        function pick() { rec(id).v = el.dataset.variant; save(); paint(); }
-        el.addEventListener("click", function (e) { if (!e.target.closest("a,input,textarea,select")) pick(); });
-        el.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
-      });
-      one("textarea", card).addEventListener("input", function (e) { rec(id).c = e.target.value; save(); paintBar(); });
-      var wad = one("[data-wad]", card);
-      if (wad) wad.addEventListener("change", function () { rec(id).w = wad.checked; save(); });
-      var read = one("[data-read]", card);
-      if (read) read.addEventListener("change", function () { rec(id).r = read.checked; save(); paint(); });
-    });
-    all("[data-filter]").forEach(function (b) {
-      b.addEventListener("click", function () {
-        var c = b.dataset.filter;
-        all("[data-filter]").forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); });
-        all(".rp-item").forEach(function (card) { card.hidden = !!c && card.dataset.category !== c; });
-        all(".rp-section").forEach(function (sec) {
-          var cards = all(".rp-item", sec);
-          sec.hidden = cards.length > 0 && cards.every(function (x) { return x.hidden; });
-        });
-      });
-    });
-    all("[data-preview-set]").forEach(function (b) {
-      b.addEventListener("click", function () {
-        one(".rp-main").dataset.preview = b.dataset.previewSet;
-        all("[data-preview-set]").forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); });
-      });
-    });
-    paint();
-  }
-
-  /* ------------------------------------------------------------ questions */
-  function setupQuestions() {
-    st.ans = st.ans || {}; st.notes = st.notes || {};
-    function restore() {
-      all("input[type=radio]").forEach(function (r) { r.checked = st.ans[r.name] === r.value; });
-      all("[data-note]").forEach(function (t) { t.value = st.notes[t.dataset.note] || ""; });
-    }
-    function paint() {
-      function tally(sel) {
-        var cards = all(sel);
-        return { total: cards.length, done: cards.filter(function (c) { return st.ans[c.dataset.qid || c.dataset.qaid]; }).length };
-      }
-      var q = tally("[data-qid]"), qa = tally("[data-qaid]"), parts = [];
+    },
+    questions: function () {
+      var q = answered("questions"), qa = answered("qa"), parts = [];
       if (q.total) parts.push(q.done === q.total ? "all " + q.total + " answered" : "<b>" + q.done + "</b> of " + q.total + " answered");
       if (qa.total) parts.push(qa.done === qa.total ? "QA all " + qa.total + " checked" : "QA <b>" + qa.done + "</b> of " + qa.total);
       one("#rp-tally").innerHTML = parts.join(" · ");
-      all(".q").forEach(function (c) { c.classList.toggle("answered", !!st.ans[c.dataset.qid]); });
-      all(".qa").forEach(function (c) {
-        var v = st.ans[c.dataset.qaid];
+    },
+    log: function () {
+      var n = 0, total = 0;
+      ofKind("log").forEach(function (sec) {
+        var read = secState(st, sec).read || {};
+        sec.items.forEach(function (e) { total++; if (read[e.id]) n++; });
+      });
+      one("#rp-tally").innerHTML = "<b>" + n + "</b> / " + total + " read";
+    }
+  };
+  function tally() { TALLY[S.mode](); }
+
+  /* ------------------------------------------------- behavior, per section kind */
+  var SETUP = {
+    review: function (sec, root, ss) {
+      ss.items = ss.items || {};
+      var D = sec.decisions;
+      function rec(id) { return (ss.items[id] = ss.items[id] || {}); }
+      function itemSpec(id) { return sec.items.filter(function (i) { return i.id === id; })[0]; }
+      function paintItem(card) {
+        var id = card.dataset.id, r = rec(id), it = itemSpec(id);
+        all(".rp-btn", card).forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.choice === r.s)); });
+        var v = (it.variants || []).length ? variantOf(it, r.v).key : null;
+        all(".rp-variant", card).forEach(function (el) { el.setAttribute("aria-pressed", String(el.dataset.variant === v)); });
+        var b = r.s ? buttonFor(sec, r.s) : null;
+        card.dataset.state = r.s || "";
+        one("[data-pill]", card).textContent = b ? b.label.replace(/^[^A-Za-z]+/, "") : "Pending";
+        var box = one(".rp-comment", card), ta = one("textarea", box);
+        if (ta.value !== (r.c || "")) ta.value = r.c || "";
+        if (!D.comment_always) box.hidden = !((b && b.comment === "required") || trimmed(r.c));
+        var wad = one(".rp-wad", card);
+        if (wad) { wad.hidden = r.s !== "deny"; one("input", wad).checked = !!r.w; }
+        var read = one("[data-read]", card);
+        if (read) { read.checked = !!r.r; card.classList.toggle("rp-is-read", !!r.r); }
+      }
+      function paint() { all(".rp-item", root).forEach(paintItem); tally(); }
+      all(".rp-item", root).forEach(function (card) {
+        var id = card.dataset.id;
+        all(".rp-btn", card).forEach(function (b) {
+          b.addEventListener("click", function () {
+            var r = rec(id);
+            r.s = r.s === b.dataset.choice ? null : b.dataset.choice;
+            save(); paint();
+            var bt = r.s ? buttonFor(sec, r.s) : null;
+            if (bt && bt.comment === "required") one("textarea", card).focus();
+          });
+        });
+        all(".rp-variant", card).forEach(function (el) {
+          function pick() { rec(id).v = el.dataset.variant; save(); paint(); }
+          el.addEventListener("click", function (e) { if (!e.target.closest("a,input,textarea,select")) pick(); });
+          el.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
+        });
+        one("textarea", card).addEventListener("input", function (e) { rec(id).c = e.target.value; save(); tally(); });
+        var wad = one("[data-wad]", card);
+        if (wad) wad.addEventListener("change", function () { rec(id).w = wad.checked; save(); });
+        var read = one("[data-read]", card);
+        if (read) read.addEventListener("change", function () { rec(id).r = read.checked; save(); paint(); });
+      });
+      all(".rp-item", root).forEach(paintItem);
+    },
+    questions: answerable,
+    qa: answerable,
+    log: function (sec, root, ss) {
+      ss.read = ss.read || {}; ss.ans = ss.ans || {}; ss.notes = ss.notes || {};
+      function paint() {
+        all("[data-entry]", root).forEach(function (c) { c.classList.toggle("rp-is-read", !!ss.read[c.dataset.entry]); });
+        tally();
+      }
+      all("input[type=radio]", root).forEach(function (r) { r.checked = ss.ans[r.name] === r.value; });
+      all("[data-note]", root).forEach(function (t) { t.value = ss.notes[t.dataset.note] || ""; });
+      all("[data-tick]", root).forEach(function (t) { t.checked = !!ss.read[t.dataset.tick]; });
+      root.addEventListener("change", function (e) {
+        var t = e.target;
+        if (t.type === "radio") ss.ans[t.name] = t.value;
+        else if (t.dataset && t.dataset.tick) ss.read[t.dataset.tick] = t.checked;
+        else return;
+        save(); paint();
+      });
+      root.addEventListener("input", function (e) {
+        if (e.target.dataset && e.target.dataset.note) { ss.notes[e.target.dataset.note] = e.target.value; save(); }
+      });
+      paint();
+    }
+  };
+
+  // questions and qa: radio answers plus a note per item, keyed by qid / qaid.
+  function answerable(sec, root, ss) {
+    ss.ans = ss.ans || {}; ss.notes = ss.notes || {};
+    function restore() {
+      all("input[type=radio]", root).forEach(function (r) { r.checked = ss.ans[r.name] === r.value; });
+      all("[data-note]", root).forEach(function (t) { t.value = ss.notes[t.dataset.note] || ""; });
+    }
+    function paint() {
+      all(".q", root).forEach(function (c) { c.classList.toggle("answered", !!ss.ans[c.dataset.qid]); });
+      all(".qa", root).forEach(function (c) {
+        var v = ss.ans[c.dataset.qaid];
         c.classList.toggle("pass", v === "PASS");
         c.classList.toggle("fail", v === "FAIL");
         c.classList.toggle("skip", v === "COULDN'T TEST");
       });
+      tally();
     }
-    document.addEventListener("change", function (e) {
-      if (e.target.type === "radio") { st.ans[e.target.name] = e.target.value; save(); paint(); }
+    root.addEventListener("change", function (e) {
+      if (e.target.type === "radio") { ss.ans[e.target.name] = e.target.value; save(); paint(); }
     });
-    document.addEventListener("input", function (e) {
-      if (e.target.dataset && e.target.dataset.note) { st.notes[e.target.dataset.note] = e.target.value; save(); }
+    root.addEventListener("input", function (e) {
+      if (e.target.dataset && e.target.dataset.note) { ss.notes[e.target.dataset.note] = e.target.value; save(); }
     });
-    one("#rp-clear").addEventListener("click", function () {
-      if (!window.confirm("Clear every answer and note on this page?")) return;
-      st = { ans: {}, notes: {} }; save(); restore(); paint();
-    });
+    root.__rpReset = function () { ss.ans = {}; ss.notes = {}; restore(); paint(); };
     restore(); paint();
   }
 
-  /* ------------------------------------------------------------ log */
-  function setupLog() {
-    st.read = st.read || {}; st.ans = st.ans || {}; st.notes = st.notes || {};
-    function paint() {
-      var cards = all("[data-entry]"), n = 0;
-      cards.forEach(function (c) {
-        var r = !!st.read[c.dataset.entry];
-        if (r) n++;
-        c.classList.toggle("rp-is-read", r);
-      });
-      one("#rp-tally").innerHTML = "<b>" + n + "</b> / " + cards.length + " read";
-    }
-    all("input[type=radio]").forEach(function (r) { r.checked = st.ans[r.name] === r.value; });
-    all("[data-note]").forEach(function (t) { t.value = st.notes[t.dataset.note] || ""; });
-    all("[data-tick]").forEach(function (t) { t.checked = !!st.read[t.dataset.tick]; });
-    var extra = one("[data-extra]");
-    if (extra) extra.value = st.extra || "";
-    document.addEventListener("change", function (e) {
-      var t = e.target;
-      if (t.type === "radio") st.ans[t.name] = t.value;
-      else if (t.dataset && t.dataset.tick) st.read[t.dataset.tick] = t.checked;
-      else return;
-      save(); paint();
-    });
-    document.addEventListener("input", function (e) {
-      var t = e.target;
-      if (t.dataset && t.dataset.note) st.notes[t.dataset.note] = t.value;
-      else if (t.dataset && t.dataset.extra !== undefined) st.extra = t.value;
-      else return;
-      save();
-    });
-    paint();
-  }
+  S.sections.forEach(function (sec) {
+    var root = rootOf(sec);
+    if (root) SETUP[sec.kind](sec, root, secState(st, sec));
+  });
 
-  ({ review: setupReview, questions: setupQuestions, log: setupLog })[S.mode]();
+  /* ------------------------------------------------- page-level controls */
+  all("[data-filter]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var c = b.dataset.filter;
+      all("[data-filter]").forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); });
+      all(".rp-item").forEach(function (card) { card.hidden = !!c && card.dataset.category !== c; });
+      all(".rp-section").forEach(function (sec) {
+        var cards = all(".rp-item", sec);
+        sec.hidden = cards.length > 0 && cards.every(function (x) { return x.hidden; });
+      });
+    });
+  });
+  all("[data-preview-set]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      one(".rp-main").dataset.preview = b.dataset.previewSet;
+      all("[data-preview-set]").forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); });
+    });
+  });
+  var extra = one("[data-extra]");
+  if (extra) {
+    extra.value = st.extra || "";
+    extra.addEventListener("input", function () { st.extra = extra.value; save(); });
+  }
+  var clear = one("#rp-clear");
+  if (clear) clear.addEventListener("click", function () {
+    if (!window.confirm("Clear every answer and note on this page?")) return;
+    all("[data-section]").forEach(function (r) { if (r.__rpReset) r.__rpReset(); });
+    save();
+  });
+  tally();
 })();

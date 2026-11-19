@@ -50,6 +50,25 @@ Common fields:
 | `assets` | `{"name": "path/to/file.png"}`: embedded once as `--asset-name` on `:root`, and `{{asset:name}}` anywhere in the HTML becomes its `data:` URI |
 | `storage_key` | the `localStorage` key, if the default is not stable enough |
 
+### Frame and sections
+
+A page is a **frame** around a list of **sections**. The frame is `mode`: it sets
+the chrome, the tally and the export's header. Each section has a `kind` and
+contributes its own block to the export, in page order:
+
+| `kind` | Items | Export block |
+|---|---|---|
+| `review` | decision items (below) | one `N. label — DECISION…` line per item |
+| `questions` | questions with radio options | `Q qid (raised rN) \| ask` blocks |
+| `qa` | PASS / FAIL / COULDN'T TEST checks | `--- QA results ---` then `QA qaid \| check` blocks |
+| `log` | log entries | `M6  [read]  title` lines with answers and notes |
+
+Every section takes `id` (default `s1`, `s2`, …), `kind` (default: the mode's own
+kind), `title`, `intro_html`, `items`, and a `review` section its own `decisions`
+(default: the page's). Ids of items must be unique across the whole page. Kinds
+can be mixed on one page. The flat shorthands below (`items`, `questions` + `qa`,
+`entries`) are the same thing with one section per kind.
+
 Any string value written as `"@file:relative/path.html"` is replaced by that file's
 contents, so long item HTML can live in its own files. Fields ending in `_html` are
 inserted as written; every other text field is escaped.
@@ -73,8 +92,8 @@ Override keys: `buttons` (each `state`, `label`, `label_variant`, `export`,
 Export line: `N. label — DECISION[ — READ][ — COMMENT: text]`, the comment on one
 line, no comment suffix when the box is empty.
 
-Items go in `sections` (`title`, `intro_html`, `empty_html` shown when the section
-has no items, `items`) or a flat `items` list. Item fields:
+Items go in `review` sections (`empty_html` is shown when one has no items) or a
+flat `items` list. Item fields:
 
 | Field | Meaning |
 |---|---|
@@ -101,6 +120,8 @@ word-level diffs.
 `project`: `name`, `stream`, `round`, `artifact` (the published URL). `format`
 defaults to `working-log questions v1.2`. `bar_title_html` sets the sticky bar.
 
+`questions` and `qa` sections, or the flat `questions` and `qa` lists:
+
 - `questions`: `[{qid, round, ask, why_html, mockups_html, options: [{label, value, note_html, recommended}], notes_label}]`. `value` (the exported text) defaults to `label`; write the full option text.
 - `qa`: `[{qaid, check, why_html, notes_label}]`, answered PASS / FAIL / COULDN'T TEST.
 
@@ -117,7 +138,7 @@ status bar's version marker. `details`: `[[key, value], …]` printed after proj
 session and repo in the export. `facts`: `[[label, html], …]`. Make `title` lead
 with the session: `SESSION · PROJECT log`.
 
-`entries`, newest first: `[{id, title, status, lede, detail_html, questions: [{q, label, options: [text, …]}]}]`.
+A `log` section, or the flat `entries` list, newest first: `[{id, title, status, lede, detail_html, questions: [{q, label, options: [text, …]}]}]`.
 Each entry gets a note field and a "Read this" tick; the page ends with an
 "Anything else" box. The export is `WORKING LOG — my replies`, the details block,
 `exported:` (local time), then `M6  [read]  title` per entry with `answer:` per

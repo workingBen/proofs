@@ -13,6 +13,8 @@
   <img src="https://img.shields.io/badge/Claude_Code-plugin-c2410c" alt="Claude Code plugin">
   <img src="https://img.shields.io/badge/skills-12-1d1b17" alt="12 skills">
   <img src="https://img.shields.io/badge/license-MIT-6b6458" alt="MIT license">
+  <a href="https://github.com/workingBen/proofs/actions/workflows/tests.yml"><img src="https://github.com/workingBen/proofs/actions/workflows/tests.yml/badge.svg" alt="tests"></a>
+  <a href="evals/"><img src="https://img.shields.io/badge/trigger_evals-108%2F108_clear_%C2%B7_42%2F42_ambiguous-2f6b3a" alt="Trigger evals: 108 of 108 on clear requests, 42 of 42 on ambiguous ones"></a>
 </p>
 
 Stop reading walls of terminal text. Every skill here includes a page you can look at, click through and decide on, then hand back to Claude in one paste. Design reviews, visual QA, copy edits and decision pages for [Claude Code](https://claude.com/claude-code): Claude builds the review, you choose from real options, and Claude builds what you chose.
@@ -94,6 +96,22 @@ Because your agents keep working while you decide, and you can decide from anywh
 | Server on your computer | **None** | Yes | Yes |
 
 Both are good tools, and neither replaces our visual communication skills.
+
+## How it's built
+
+Proofs is a small, tested codebase, not just a folder of prompts.
+
+**One page builder for every skill.** Design reviews, copy edits, photo picks, style audits, questions, QA checklists and the working log all come from one builder (`shared/review_page/`). A skill writes the content as a JSON spec, and the builder makes a single self-contained page with every mechanic built in: decision buttons, variant galleries, a sticky tally, saved progress, light and dark themes, and a Copy button that falls back to a selectable text box when the clipboard is blocked. Every page is checked before it's published, and can be clicked through in a real browser (`--smoke`).
+
+**Questions come first.** Anything waiting on you is at the top of the page, above every recap and log entry. The builder enforces it: a page that puts anything above the open questions fails its check.
+
+**Tests and evals.**
+- 97 unit and browser tests cover the builder, the exports, the site and the README tiles (`python3 -m unittest discover -s tests`).
+- 50 trigger evals check that the right skill fires for a real request, that its nearest sibling doesn't, and that a plain coding request fires none (`claude plugin eval . --ablation none`). The latest run passed 108 of 108 on everyday requests and 42 of 42 on deliberately ambiguous ones.
+
+**Repo checks.**
+- `bin/check-skills` holds every skill to the same rules: a description that says when to use it, a version and a changelog.
+- `bin/privacy-scan` blocks private names and details from ever reaching a public commit, since the examples come from real projects.
 
 ## Works with Superpowers
 

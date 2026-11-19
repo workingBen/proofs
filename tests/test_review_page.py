@@ -359,6 +359,14 @@ class BuildAndCheck(unittest.TestCase):
         self.assertLess(text.index('<section class="rp-section rp-kind-qa"'), text.index('<div class="rp-context">'))
         self.assertLess(text.index('<div class="rp-context">'), text.index('<section class="rp-section rp-kind-log"'))
 
+    def test_log_has_a_hidden_read_heading_for_folded_entries(self):
+        text = self.page_text(dict(self.SESSION, entries=[{"id": "M1", "title": "One"}]))
+        log = text[text.index('<section class="rp-section rp-kind-log"'):]
+        # the engine unhides it once an entry is ticked; read entries fold under it
+        self.assertIn('<h3 class="rp-read-head" hidden>Read</h3>', log)
+        self.assertLess(log.index("rp-read-head"), log.index('data-entry="M1"'))
+        self.assertIn('<span class="rp-tick-l">Read this</span>', log)
+
     def test_session_shows_only_sections_with_content(self):
         spec = dict(self.SESSION, questions=[], qa=[], links=[], decided=[],
                     entries=[{"id": "M1", "title": "One"}])

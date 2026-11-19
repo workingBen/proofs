@@ -321,7 +321,17 @@
     log: function (sec, root, ss) {
       ss.read = ss.read || {}; ss.ans = ss.ans || {}; ss.notes = ss.notes || {};
       function paint() {
-        all("[data-entry]", root).forEach(function (c) { c.classList.toggle("rp-is-read", !!ss.read[c.dataset.entry]); });
+        var anyRead = false;
+        all("[data-entry]", root).forEach(function (c) {
+          // fold only when read AND every option group is answered: a folded card
+          // must never hide a question still waiting on the reader
+          var open = all("[data-q]", c).some(function (g) { return !ss.ans[c.dataset.entry + "::" + g.dataset.q]; });
+          var r = !!ss.read[c.dataset.entry] && !open;
+          c.classList.toggle("rp-is-read", r);
+          anyRead = anyRead || r;
+        });
+        var head = one(".rp-read-head", root);
+        if (head) head.hidden = !anyRead;
         tally();
       }
       all("input[type=radio]", root).forEach(function (r) { r.checked = ss.ans[r.name] === r.value; });

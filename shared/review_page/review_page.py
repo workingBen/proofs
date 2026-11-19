@@ -427,7 +427,7 @@ def render_qa(sec, ctx):
 
 
 def render_log(sec, ctx):
-    out, items = [], []
+    out, items = ['<h3 class="rp-read-head" hidden>Read</h3>'], []
     for e in sec["items"]:
         eid = e.get("id")
         ctx.claim(eid, "entry id")
@@ -457,7 +457,7 @@ def render_log(sec, ctx):
                            % (esc(eid), esc(q), esc(o), esc(o)))
             out.append("</fieldset>")
         out.append('<div class="rp-entry-foot"><label class="rp-note-label">Note<textarea data-note="%s" rows="2"></textarea></label>'
-                   '<label class="rp-tick"><input type="checkbox" data-tick="%s"> Read this</label></div></article>'
+                   '<label class="rp-tick"><input type="checkbox" data-tick="%s"> <span class="rp-tick-l">Read this</span></label></div></article>'
                    % (esc(eid), esc(eid)))
         items.append({"id": eid, "title": e.get("title", ""), "groups": qnames})
     return out, {"items": items}

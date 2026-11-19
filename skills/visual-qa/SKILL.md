@@ -1,7 +1,7 @@
 ---
 name: visual-qa
-version: 1.1.3
-description: Use when pointed at one or more whole pages to find what is wrong with how they look and propose fixes; before saying any user-facing page or feature is done; and whenever the user says a layout looks wrong, cramped, empty, too small or broken on a phone. Different from design-review (options for a change already decided) and pr-qa (checking a PR's diff): this skill finds the problems.
+version: 1.1.4
+description: Use when pointed at whole pages to find what is wrong with how they look, before saying any user-facing page is done, and when the user says a layout looks wrong, cramped, empty, too small or broken on a phone. Differs from design-review (options for a change already decided) and pr-qa (a PR's diff), since this finds the problems.
 ---
 
 # Visual QA → design fixes

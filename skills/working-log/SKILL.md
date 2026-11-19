@@ -1,7 +1,7 @@
 ---
 name: working-log
-version: 1.6.0
-description: Use when the user cannot reliably read terminal output, says your questions get lost in terminal or console output, simply prefers a durable page over chat scrollback, asks to answer several questions at once rather than one at a time, wants a link to work through at their own pace and paste answers back from, asks for open decisions to live somewhere reviewable asynchronously, or is answering from a phone — publishes a newest-first message log as an Artifact, with a read tick per entry, option buttons where you are asking something, a questions-for-you mode that batches many open questions into one answerable page, and a copy-back export they paste into chat. Invoke as /proofs:working-log to create or update it.
+version: 1.6.1
+description: Use when the user cannot reliably read terminal output, says your questions get lost in terminal output, prefers a durable page over chat scrollback, is answering from a phone, asks to answer several questions at once, wants a link to work through and paste answers back from, or wants open decisions reviewable asynchronously. Invoke as /proofs:working-log.
 ---
 
 # Working Log

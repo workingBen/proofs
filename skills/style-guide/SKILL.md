@@ -1,7 +1,7 @@
 ---
 name: style-guide
-version: 1.6.0
-description: Use when the user wants to review and codify design/style consistency across the whole site (type scale, spacing, color, icon-header layout, card style, hero headers, disclaimer placement) rather than one page at a time — audits pages/templates for existing and candidate conventions, builds an interactive Artifact review with a 4-state decision model (Deny / Request Revision / Accept - Apply Everywhere Now / Accept - Record for Later), and persists accepted rules into a committed, re-publishable docs/style-guide.html that both the user and future Claude sessions consult.
+version: 1.6.1
+description: Use when the user wants site-wide design rules settled (type scale, spacing, color, card style, disclaimer placement), names a rule, or points out the same inconsistency across many pages. Differs from design-review, which changes one page; this audits the whole site and records accepted rules in docs/style-guide.html.
 ---
 
 # Style Guide Tool

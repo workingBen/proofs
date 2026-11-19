@@ -1,7 +1,7 @@
 ---
 name: changelog
-version: 1.3.1
-description: Use when the user wants a signed-in-only changelog page for their app (or one per sub-app), backed by plain markdown files and a vertical-timeline UI, with entries automatically broken up by calendar month and past months reachable as archive links — and use at the end of any session where something changelog-worthy shipped, to add a dated entry.
+version: 1.3.2
+description: Use when the user wants a signed-in changelog page for their app (or one per sub-app) backed by markdown files, and at the end of any session that shipped something a user would notice, to add a dated entry. Differs from todos; it records what shipped, not open work.
 ---
 
 # Changelog Skill

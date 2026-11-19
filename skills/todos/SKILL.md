@@ -1,7 +1,7 @@
 ---
 name: todos
-version: 1.1.3
-description: Use when the user wants to see and work their open to-do list — publishes TODO.md's open items as a tickable Artifact with a note per item and a copy-back export, then applies the result: archiving what is done with its evidence, verifying repo work before believing it, and leaving anything unproven open. Also use to adopt the convention in a repo whose TODO.md has grown into a decision log.
+version: 1.1.4
+description: Use when the user wants to see and work their open to-do list ("show my todos", "what's still open"), tick items off and archive the done ones with evidence, or adopt the convention in a repo whose TODO.md has grown into a decision log. Differs from review-cycle; it closes existing items, not a stream of new requests.
 ---
 
 # Todos

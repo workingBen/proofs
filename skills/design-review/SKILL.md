@@ -1,7 +1,7 @@
 ---
 name: design-review
-version: 1.4.0
-description: Use when the user wants to review a visual/layout design change to a page before it's built — builds an interactive Artifact showing the current live page (real screenshot) against 1-3 coded mockup variants per section, with the same four decision states as article-copy-edit (Keep Original / Use Selected / Approve with Comment / Request Revision), a Reason and Recommended/Not Recommended badge on every item, and a "Copy My Decisions" export the user pastes back to drive translating the approved mockup into the real view.
+version: 1.4.1
+description: Use when the user wants to see and choose between rendered options for a visual or layout change before it is built, such as a redesign, a layout bug or "make this section nicer". Differs from visual-qa, which finds what is wrong, and article-copy-edit, which reviews wording; this compares coded mockups with the current page.
 ---
 
 # Design Review Tool

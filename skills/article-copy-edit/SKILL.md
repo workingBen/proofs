@@ -1,7 +1,7 @@
 ---
 name: article-copy-edit
-version: 1.3.0
-description: Use when the user gives copy-edit feedback (line edits, recommendations) for an article or page and wants to review it human-in-the-loop before anything is applied to the file — builds an interactive Artifact styled like the real page, with a mandatory Claims & Compliance audit as its own first section, four explicit decision states per change (Keep Original / Use Edit / Approve with Comment / Request Revision), a Reason and Recommended/Not Recommended label on every item, a "Copy My Decisions" export the user pastes back to drive the actual file edits, and a scoped follow-up-round pattern for anything marked Request Revision.
+version: 1.3.1
+description: Use when the user hands you copy-edit feedback or proposed line edits for an article or page and wants to approve each change before the file is touched, or asks to go through copy together. Differs from design-review; this judges words and claims, with a standing compliance audit, not layout.
 ---
 
 # Article Copy-Edit Review Tool

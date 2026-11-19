@@ -1,7 +1,7 @@
 ---
 name: review-cycle
-version: 1.11.2
-description: Use when the user opens a review session and feeds a stream of requests, from small bug reports to big feature ideas, one at a time or in a batch (often from a phone), wanting each one triaged and handled without stopping for questions: easy fixes shipped, design calls sent to a design review, large features saved as to-dos, and risky or unclear ones flagged instead of decided alone.
+version: 1.11.3
+description: Use when the user opens a review session ("starting a review cycle", "let's do a review pass") and feeds a stream of bug reports and requests, often from a phone, to be triaged and handled without questions; fixes ship, design calls go to design-review, big features become to-dos. Not for a single one-off request.
 ---
 
 # Review Cycle Tool

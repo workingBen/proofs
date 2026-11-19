@@ -1,7 +1,7 @@
 ---
 name: pr-qa
-version: 1.4.3
-description: Use when open pull requests — especially ones an AI agent produced unattended — need checking before they are merged, and the user wants to see what changed rather than read a diff. Builds an interactive Artifact with real before/after screenshots of each PR at desktop and phone sizes, a findings list per PR, and one decision per PR (merge and push / merge and hold / send it back / wait) that the user exports and pastes back for you to act on. Also use when the user asks to "QA the PRs", "check the agent's work", or wants screenshots of a change before approving it.
+version: 1.4.4
+description: Use when open pull requests, especially ones an AI agent made unattended, need checking before merge and the user wants to see the change rather than read a diff, such as "QA the PRs", "check the agent's work" or screenshots before approving. Differs from visual-qa; it shows a PR's before and after, not a live page's problems.
 ---
 
 # PR QA

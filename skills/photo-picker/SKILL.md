@@ -1,7 +1,7 @@
 ---
 name: photo-picker
-version: 1.1.0
-description: Use when the user wants to source and add real photos to an article/page and review candidates before anything is applied — builds an interactive Artifact gallery of real, appropriately-licensed candidate images per "slot" (a spot in the content that needs a photo), with the same four decision states as article-copy-edit and design-review (Keep None / Use Selected / Approve with Comment / Request Revision, where Revision means "search again, different direction"), a "Copy My Decisions" export, and an apply step that uploads the winning image to your image host and wires the URL into the real page.
+version: 1.1.1
+description: Use when the user wants real photos found for an article or page and wants to pick from candidates before any is added, such as "find some photos for this" or "show me options for the hero image". Differs from design-review; it compares sourced, licensed photographs for one spot, not coded layouts, then uploads the winner.
 ---
 
 # Photo Picker Tool

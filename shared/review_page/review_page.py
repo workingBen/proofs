@@ -6,9 +6,10 @@ Usage:
   review_page.py --check PAGE.html                        node --check + structure
   review_page.py --smoke PAGE.html [--playwright DIR]     click through in Chromium
 
-Three modes share one engine: "review" (decision buttons per item: design-review,
-article-copy-edit, photo-picker, style-guide), "questions" (working-log questions
-and QA checks) and "log" (the working log itself). The spec format is documented
+Four modes share one engine: "review" (decision buttons per item: design-review,
+article-copy-edit, photo-picker, style-guide), "questions" (a standalone questions
+or QA checklist page), "session" (working-log's session page: questions, checks,
+log and decided on one URL) and "log" (a log-only page). The spec format is documented
 in reference/review-page.md at the plugin root. Python 3 stdlib only; node is
 needed for --check and --smoke, Playwright only for --smoke.
 """
@@ -79,7 +80,7 @@ PRESETS = {
         ]},
 }
 CATEGORY_COLORS = ["#2563eb", "#b45309", "#047857", "#9333ea", "#be123c", "#0e7490", "#4d7c0f", "#c2410c"]
-MODES = ("review", "questions", "log")
+MODES = ("review", "questions", "log", "session")
 
 
 class SpecError(Exception):
@@ -159,35 +160,63 @@ def decisions_for(d):
 # of sections. Each section has a kind, renders its own items and contributes its
 # own block to the export, so one page can mix kinds.
 
-KINDS = ("review", "questions", "qa", "log")
-DEFAULT_KIND = {"review": "review", "questions": "questions", "log": "log"}
-DEFAULT_TITLE = {"questions": "Open — needs you", "qa": "QA after deploy — check these off"}
+KINDS = ("review", "questions", "links", "qa", "log", "decided")
+DEFAULT_KIND = {"review": "review", "questions": "questions", "log": "log", "session": "log"}
+DEFAULT_TITLE = {"questions": "Open — needs you", "qa": "QA after deploy — check these off",
+                 "links": "Other pages waiting on you", "decided": "Decided"}
+SESSION_TITLE = {"questions": "Waiting on you", "links": "Other pages waiting on you", "qa": "Checks for you",
+                 "log": "Log", "decided": "Decided"}
+# The session page's fixed order. Open questions come first, directly under the
+# sticky bar: the reader must never scroll past reports to find what needs them.
+SESSION_ORDER = ("questions", "links", "qa", "log", "decided")
+# Kinds that ask the reader to act; on question and session pages they render
+# before the heading, intro and facts.
+ACTION_KINDS = ("questions", "links", "qa")
+READ_ONLY_KINDS = ("links", "decided")
+
+
+def flat_sections(spec):
+    mode, secs = spec["mode"], []
+    if mode == "review":
+        return [{"items": spec.get("items", [])}]
+    if spec.get("questions"):
+        secs.append({"kind": "questions", "title": spec.get("questions_heading"), "items": spec["questions"]})
+    if spec.get("links"):
+        secs.append({"kind": "links", "title": spec.get("links_heading"), "items": spec["links"]})
+    if spec.get("qa"):
+        secs.append({"kind": "qa", "title": spec.get("qa_heading"), "intro_html": spec.get("qa_intro_html"),
+                     "items": spec["qa"]})
+    if mode in ("log", "session"):
+        secs.append({"kind": "log", "title": spec.get("log_heading"), "items": spec.get("entries", [])})
+    if spec.get("decided"):
+        secs.append({"kind": "decided", "title": spec.get("decided_heading"), "items": spec["decided"]})
+    return secs
 
 
 def sections_of(spec):
     mode, secs = spec["mode"], spec.get("sections")
     if secs is None:  # flat shorthands
-        if mode == "review":
-            secs = [{"items": spec.get("items", [])}]
-        elif mode == "questions":
-            secs = []
-            if spec.get("questions"):
-                secs.append({"kind": "questions", "title": spec.get("questions_heading"), "items": spec["questions"]})
-            if spec.get("qa"):
-                secs.append({"kind": "qa", "title": spec.get("qa_heading"), "intro_html": spec.get("qa_intro_html"),
-                             "items": spec["qa"]})
-        else:
-            secs = [{"kind": "log", "items": spec.get("entries", [])}]
+        secs = flat_sections(spec)
     ids = set()
     for i, sec in enumerate(secs):
         sec.setdefault("kind", DEFAULT_KIND[mode])
         if sec["kind"] not in KINDS:
             raise SpecError("section kind must be one of %s" % ", ".join(KINDS))
+        if mode == "session" and sec["kind"] == "review":
+            raise SpecError("a session page holds no review sections: design reviews and copy edits stay "
+                            "their own page, linked from the session page with `links`")
         sec["id"] = str(sec.get("id") or "s%d" % (i + 1))
         if sec["id"] in ids:
             raise SpecError("duplicate section id %r" % sec["id"])
         ids.add(sec["id"])
         sec["items"] = sec.get("items") or []
+        if mode == "session":
+            sec["title"] = sec.get("title") or SESSION_TITLE[sec["kind"]]
+    # Enforce the order (a stable sort, so sections of one kind keep theirs).
+    if mode == "session":
+        secs = sorted(secs, key=lambda s: SESSION_ORDER.index(s["kind"]))
+    elif mode == "questions":
+        secs = sorted(secs, key=lambda s: s["kind"] != "questions")
     return secs
 
 
@@ -299,6 +328,9 @@ def render_log(sec, ctx):
         if e.get("detail_html"):
             out.append('<div class="rp-detail">%s</div>' % e["detail_html"])
         qnames = []
+        if ctx.spec["mode"] == "session" and e.get("questions"):
+            raise SpecError("entry %s: on a session page a question goes in `questions`, so it sits at the top "
+                            "under Waiting on you, not inside a log entry" % eid)
         for g in e.get("questions") or []:
             q = g.get("q")
             if not q or q in qnames:
@@ -318,13 +350,41 @@ def render_log(sec, ctx):
     return out, {"items": items}
 
 
-RENDER = {"review": render_review, "questions": render_questions, "qa": render_qa, "log": render_log}
+def render_links(sec, ctx):
+    out = ['<ul class="rp-links">']
+    for ln in sec["items"]:
+        if not ln.get("label") or not ln.get("url"):
+            raise SpecError("every link needs a label and a url")
+        status = ': <span class="rp-link-status">%s</span>' % esc(ln["status"]) if ln.get("status") else ""
+        out.append('<li><b>%s</b>%s <a href="%s" target="_blank" rel="noopener">%s</a></li>'
+                   % (esc(ln["label"]), status, esc(ln["url"]), esc(ln.get("link_text", "Open it"))))
+    out.append("</ul>")
+    return out, {"items": []}
+
+
+def render_decided(sec, ctx):
+    n = len(sec["items"])
+    out = ['<details class="rp-decided"%s><summary>%d settled — show them</summary><ul>'
+           % (" open" if sec.get("open") else "", n)]
+    for d in sec["items"]:
+        ident = '<span class="rp-num">%s</span> ' % esc(d["id"]) if d.get("id") else ""
+        what = esc(d.get("title", ""))
+        dec = ' — <span class="rp-decided-what">%s</span>' % esc(d["decision"]) if d.get("decision") else ""
+        when = ' <span class="rp-decided-when">%s</span>' % esc(d["when"]) if d.get("when") else ""
+        out.append("<li>%s%s%s%s</li>" % (ident, what, dec, when))
+    out.append("</ul></details>")
+    return out, {"items": []}
+
+
+RENDER = {"review": render_review, "questions": render_questions, "qa": render_qa, "log": render_log,
+          "links": render_links, "decided": render_decided}
 
 
 def render_sections(spec):
+    """Return (preamble html, [(kind, section html)], js sections)."""
     secs = sections_of(spec)
     ctx = Ctx(spec, secs)
-    out, js = [], []
+    out, js, chunks = [], [], []
     first_dec = next((s["_dec"] for s in secs if s["kind"] == "review"), None)
     if first_dec and first_dec.get("legend"):
         out.append('<div class="rp-legend" aria-label="What each decision means">')
@@ -343,24 +403,32 @@ def render_sections(spec):
             out.append('<button type="button" class="rp-chip-btn" data-filter="%s" aria-pressed="false" style="--cat:%s">%s <span data-count="%s"></span></button>'
                        % (esc(c), esc(ctx.colors[c]), esc(c), esc(c)))
         out.append("</nav>")
+    mode = spec["mode"]
     for sec in secs:
         kind = sec["kind"]
         body, sjs = RENDER[kind](sec, ctx)
-        if kind in ("questions", "qa") and not sec["items"] and not sec.get("title"):
-            continue
-        out.append('<section class="rp-section rp-kind-%s" data-section="%s">' % (kind, esc(sec["id"])))
+        if not sec["items"] and (mode == "session" or kind in READ_ONLY_KINDS
+                                 or (kind in ("questions", "qa") and not sec.get("title"))):
+            continue  # a section shows only when it has content
+        h = ['<section class="rp-section rp-kind-%s" data-section="%s">' % (kind, esc(sec["id"]))]
         title = sec.get("title") or DEFAULT_TITLE.get(kind)
         if title:
-            out.append("<h2>%s</h2>" % esc(title))
+            count = ""
+            if mode == "session" and kind in ("questions", "qa"):
+                n = len(sec["items"])
+                count = ' <span class="rp-count">%d %s</span>' % (n, ("question" if kind == "questions" else "check")
+                                                                 + ("" if n == 1 else "s"))
+            h.append("<h2>%s%s</h2>" % (esc(title), count))
         if sec.get("intro_html"):
-            out.append('<div class="rp-section-intro">%s</div>' % sec["intro_html"])
+            h.append('<div class="rp-section-intro">%s</div>' % sec["intro_html"])
         if not sec["items"] and kind == "review":
-            out.append('<p class="rp-empty">%s</p>' % (sec.get("empty_html") or "Nothing in this section."))
-        out.extend(body)
-        out.append("</section>")
+            h.append('<p class="rp-empty">%s</p>' % (sec.get("empty_html") or "Nothing in this section."))
+        h.extend(body)
+        h.append("</section>")
+        chunks.append((kind, "\n".join(h)))
         sjs.update({"id": sec["id"], "kind": kind})
         js.append(sjs)
-    return "\n".join(out), js
+    return "\n".join(out), chunks, js
 
 
 def frame_js(spec):
@@ -371,14 +439,20 @@ def frame_js(spec):
         for k in ("name", "stream"):
             if not proj.get(k):
                 raise SpecError("questions mode needs project.%s" % k)
-        return {"format": spec.get("format", "working-log questions v1.2"), "project": proj.get("name"),
+        asks = bool(spec.get("questions")) or any(s.get("kind") == "questions" and s.get("items")
+                                                  for s in spec.get("sections") or [])
+        return {"format": spec.get("format", "questions v1.3" if asks else "qa-checklist v1.0"),
+                "verb": "answers" if asks else "results", "project": proj.get("name"),
                 "stream": proj.get("stream"), "round": proj.get("round", "?"),
                 "artifact": proj.get("artifact", "(the published URL of this page)")}
     for k in ("name", "session"):
         if not proj.get(k):
-            raise SpecError("log mode needs project.%s" % k)
-    return {"project": proj.get("name"), "session": proj.get("session"), "repo": proj.get("repo"),
-            "details": spec.get("details") or []}
+            raise SpecError("%s mode needs project.%s" % (mode, k))
+    out = {"project": proj.get("name"), "session": proj.get("session"), "repo": proj.get("repo"),
+           "details": spec.get("details") or []}
+    if mode == "session":
+        out["artifact"] = proj.get("artifact")
+    return out
 
 
 # --------------------------------------------------------------------- page
@@ -386,7 +460,7 @@ def frame_js(spec):
 def page(spec):
     mode = spec["mode"]
     js = frame_js(spec)
-    body, js["sections"] = render_sections(spec)
+    preamble, chunks, js["sections"] = render_sections(spec)
     js["mode"] = mode
     proj = spec.get("project") or {}
     js["key"] = spec.get("storage_key") or "proofs:%s:%s" % (mode, slug("%s %s %s" % (
@@ -398,34 +472,45 @@ def page(spec):
                 "<title>%s</title>" % esc(spec["title"]), spec.get("head_html", ""),
                 "<style>\n%s\n:root{%s%s}\n%s\n</style>" % (STYLE.read_text(), css_vars, assets, spec.get("css", "")),
                 "</head>", '<body class="rp rp-mode-%s">' % mode]
-    if mode == "log":
+    if mode in ("log", "session"):
         repo = ' · <span>%s</span>' % esc(proj["repo"]) if proj.get("repo") else ""
         first = next((s["items"][0] for s in js["sections"] if s["kind"] == "log" and s["items"]), None)
         marker = spec.get("marker") or " · ".join(x for x in (
             spec.get("version") and '<b>%s</b>' % esc(spec["version"]),
             spec.get("updated") and "updated %s" % esc(spec["updated"]),
             first and "entry %s" % esc(first["id"])) if x)
-        html_out.append('<div class="rp-projectbar">%s · <b class="rp-session">%s</b>%s · Working log</div>'
-                        % (esc(proj["name"]), esc(proj["session"]), repo))
+        html_out.append('<div class="rp-topbars"><div class="rp-projectbar"><span class="rp-pb-x">%s · </span><b class="rp-session">%s</b><span class="rp-pb-x">%s · %s</span></div>'
+                        % (esc(proj["name"]), esc(proj["session"]), repo,
+                           "Session page" if mode == "session" else "Working log"))
         html_out.append('<div class="rp-statusbar"><span id="rp-tally"></span><span class="rp-marker">%s</span>'
-                        '<button type="button" class="rp-copy" data-copy>Copy my replies</button></div>' % marker)
+                        '<button type="button" class="rp-copy" data-copy>Copy<span class="rp-copy-x"> my replies</span></button></div></div>' % marker)
     elif mode == "questions":
         html_out.append('<div class="bar"><div class="bar-title">%s</div><div class="tally" id="rp-tally">—</div>'
                         '<button class="ghost" id="rp-clear" type="button">Clear</button>'
                         '<button class="copy" type="button" data-copy>%s</button></div>'
                         % (spec.get("bar_title_html") or esc(proj["name"]), esc(spec.get("copy_label", "Copy my answers"))))
     html_out.append('<main class="rp-main" data-preview="light">')
+    context = []
     if spec.get("heading"):
-        html_out.append('<h1 class="rp-h1">%s</h1>' % esc(spec["heading"]))
+        context.append('<h1 class="rp-h1">%s</h1>' % esc(spec["heading"]))
     if spec.get("intro_html"):
-        html_out.append('<div class="rp-intro">%s</div>' % spec["intro_html"])
-    if mode == "log" and spec.get("facts"):
-        html_out.append('<dl class="rp-facts">%s</dl>' % "".join(
+        context.append('<div class="rp-intro">%s</div>' % spec["intro_html"])
+    if mode in ("log", "session") and spec.get("facts"):
+        context.append('<dl class="rp-facts">%s</dl>' % "".join(
             "<div><dt>%s</dt><dd>%s</dd></div>" % (esc(k), v) for k, v in spec["facts"]))
-    html_out.append(body)
+    if mode in ("questions", "session"):
+        # What needs the reader comes first, directly under the sticky bar; the
+        # heading, intro and facts are context and go below it.
+        action = [h for k, h in chunks if k in ACTION_KINDS]
+        rest = [h for k, h in chunks if k not in ACTION_KINDS]
+        if context and action:
+            context = ['<div class="rp-context">'] + context + ["</div>"]
+        html_out.extend(action + context + ([preamble] if preamble else []) + rest)
+    else:
+        html_out.extend(context + [preamble] + [h for _, h in chunks])
     if spec.get("after_html"):
         html_out.append('<div class="rp-after">%s</div>' % spec["after_html"])
-    if mode == "log":
+    if mode in ("log", "session"):
         html_out.append('<section class="rp-export"><h2>Copy my replies</h2><label class="rp-note-label">Anything else'
                         '<textarea data-extra rows="3"></textarea></label>'
                         '<button type="button" class="rp-copy" data-copy>Copy my replies</button></section>')
@@ -506,6 +591,24 @@ def section_html(text, sid):
     return m.group(1) if m else ""
 
 
+def rendered_kinds(text):
+    return re.findall(r'<section class="rp-section rp-kind-([\w-]+)"', text)
+
+
+def order_errors(text, mode):
+    """Open questions first, directly under the sticky bar; a session page in its fixed order."""
+    errs, kinds = [], rendered_kinds(text)
+    m = re.search(r'<main class="rp-main"[^>]*>\s*(<[^>]+>)', text)
+    first = m.group(1) if m else ""
+    if "questions" in kinds and 'rp-kind-questions' not in first:
+        errs.append("open questions must be the first thing under the sticky bar")
+    if mode == "session":
+        idx = [SESSION_ORDER.index(k) for k in kinds if k in SESSION_ORDER]
+        if idx != sorted(idx):
+            errs.append("session sections out of order: %s (want %s)" % (", ".join(kinds), ", ".join(SESSION_ORDER)))
+    return errs
+
+
 def check(path):
     text = Path(path).read_text()
     errs = []
@@ -554,8 +657,10 @@ def check(path):
                         errs.append("item %s has %d decision buttons, expected %d" % (it["id"], got, need))
         if mode == "review" and not spec.get("header", "").startswith("["):
             errs.append("export header must be bracketed")
-        if mode == "log" and title and not html.unescape(title.group(1)).startswith(spec.get("session") or "\0"):
-            errs.append("log <title> must lead with the session name")
+        if mode in ("log", "session") and title and not html.unescape(title.group(1)).startswith(spec.get("session") or "\0"):
+            errs.append("%s <title> must lead with the session name" % mode)
+        if mode in ("questions", "session"):
+            errs.extend(order_errors(text, mode))
         if not any(sec["items"] for sec in secs):
             errs.append("page has no items in any section")
     for name in re.findall(r"\{\{asset:([\w-]+)\}\}", text):

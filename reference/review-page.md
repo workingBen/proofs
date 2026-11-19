@@ -1,7 +1,7 @@
 # The review page builder
 
-Shared by `design-review`, `article-copy-edit`, `photo-picker`, `style-guide` and
-`working-log`. You write the content (a JSON spec plus the HTML for each item); the
+Shared by `design-review`, `article-copy-edit`, `photo-picker`, `style-guide`,
+`working-log`, `questions` and `qa-checklist`. You write the content (a JSON spec plus the HTML for each item); the
 builder writes one self-contained HTML page with every mechanic already built and
 tested. Do not hand-write the page's JavaScript.
 
@@ -40,7 +40,7 @@ Common fields:
 
 | Field | Meaning |
 |---|---|
-| `mode` | `review` (default), `questions` or `log` |
+| `mode` | `review` (default), `questions`, `session` or `log` |
 | `title` | the page `<title>`; review pages export `[title]` as the first line |
 | `header` | override the export's first line (keep it bracketed) |
 | `heading`, `intro_html`, `after_html` | top heading, intro, and anything below the items (recap, settled, parked) |
@@ -62,12 +62,20 @@ contributes its own block to the export, in page order:
 | `questions` | questions with radio options | `Q qid (raised rN) \| ask` blocks |
 | `qa` | PASS / FAIL / COULDN'T TEST checks | `--- QA results ---` then `QA qaid \| check` blocks |
 | `log` | log entries | `M6  [read]  title` lines with answers and notes |
+| `links` | `{label, status, url, link_text}`: other pages waiting on the reader, one line each | none |
+| `decided` | `{id, title, decision, when}`: settled items, folded (`"open": true` unfolds) | none |
 
 Every section takes `id` (default `s1`, `s2`, …), `kind` (default: the mode's own
 kind), `title`, `intro_html`, `items`, and a `review` section its own `decisions`
 (default: the page's). Ids of items must be unique across the whole page. Kinds
-can be mixed on one page. The flat shorthands below (`items`, `questions` + `qa`,
-`entries`) are the same thing with one section per kind.
+can be mixed on one page. The flat shorthands below (`items`, `questions`, `links`,
+`qa`, `entries`, `decided`) are the same thing with one section per kind.
+
+**Open questions come first.** On `questions` and `session` pages the builder puts
+the sections that need the reader (`questions`, then `links`, then `qa`) directly
+under the sticky bar, and moves `heading`, `intro_html` and `facts` below them; a
+`questions` page also moves its questions sections ahead of any others. `links` and
+`decided` sections, and any empty section on a session page, are not shown.
 
 Any string value written as `"@file:relative/path.html"` is replaced by that file's
 contents, so long item HTML can live in its own files. Fields ending in `_html` are
@@ -117,8 +125,11 @@ word-level diffs.
 
 ### `questions` mode
 
-`project`: `name`, `stream`, `round`, `artifact` (the published URL). `format`
-defaults to `working-log questions v1.2`. `bar_title_html` sets the sticky bar.
+A standalone questions page (the `questions` skill) or checklist (the `qa-checklist`
+skill). `project`: `name`, `stream`, `round`, `artifact` (the published URL).
+`format` defaults to `questions v1.3`, or `qa-checklist v1.0` on a page with checks
+and no questions, whose export says `results` instead of `answers`.
+`bar_title_html` sets the sticky bar.
 
 `questions` and `qa` sections, or the flat `questions` and `qa` lists:
 
@@ -126,12 +137,36 @@ defaults to `working-log questions v1.2`. `bar_title_html` sets the sticky bar.
 - `qa`: `[{qaid, check, why_html, notes_label}]`, answered PASS / FAIL / COULDN'T TEST.
 
 The bar carries the tally ("N of M answered · QA x of y") and Clear (with a
-confirm). The export is the `[format — answers]` block with project, stream, round,
+confirm). The export is the `[format — answers]` (or `— results]`) block with project, stream, round,
 artifact and a UTC `sent` stamp, one `Q qid (raised rN) | ask` per question with
 `-> answer` or `(UNANSWERED)` and its notes, then `--- QA results ---` with
 `(NOT CHECKED)` for an untouched check.
 
+### `session` mode
+
+Working-log's session page: one URL per session. `project`: `name`, `session`,
+`repo`, `round` (default for questions), `artifact`. `version`, `updated`, `details`,
+`facts`, `heading`, `intro_html` as in `log` mode. Content: `questions`, `links`,
+`qa`, `entries`, `decided` (or `sections` of those kinds).
+
+The page always shows them in this order, whatever order the spec uses, each only
+when it has items: **Waiting on you** (questions, then links titled "Other pages
+waiting on you"), **Checks for you** (qa), the heading, intro and facts, **Log**,
+**Decided**. A section's `title` overrides those names. Question and check cards take
+the page's light and dark tokens. A `review` section is refused (design reviews stay
+their own page; link them), and so is a log entry with option groups (questions go
+in `questions`).
+
+The status bar tallies all of it ("1 of 2 answered · checks 0 of 1 · 3 / 5 read").
+The export is `WORKING LOG — my replies`, project, session, repo, `artifact:` when
+set, the details, `exported:` (local time), then a block per section with content:
+`--- Questions ---` with the `Q` blocks, `--- QA results ---` with the `QA` blocks,
+`--- Log ---` with the entry lines, and `anything else:`.
+`examples/session.json` is a working spec.
+
 ### `log` mode
+
+A log-only page, kept for pages made before the session page.
 
 `project`: `name`, `session`, `repo`. `version`, `updated` (or `marker`) fill the
 status bar's version marker. `details`: `[[key, value], …]` printed after project,
@@ -149,12 +184,15 @@ option group (`answer (q):` when there are several, `(unanswered)` when empty) a
 
 The build runs `--check` itself: it extracts the page's script and runs
 `node --check`, then confirms the item cards and decision buttons match the spec,
-ids are unique, every `{{asset:…}}` resolved, and a log's title leads with the
-session. It exits 1 and says why when anything fails.
+ids are unique, every `{{asset:…}}` resolved, a log or session page's title leads
+with the session, open questions are the first thing in the page's main column, and a
+session page's sections are in order. It exits 1 and says why when anything fails.
 
 `--smoke` needs Playwright (`--playwright DIR`, `PROOFS_PLAYWRIGHT`, or one
 resolvable from the current folder). It clicks a variant and every decision on the
-first item, types a comment, ticks read, copies, reloads to prove persistence,
+first item (or answers the first question and check, and ticks the first entry),
+types a comment, ticks read, confirms open questions sit directly under the sticky
+bar, copies, reloads to prove persistence,
 forces a clipboard failure to prove the fallback, checks every image loaded, and
 checks for sideways scroll at 1280 and 390. Without Playwright, open the page in a
 browser and do those clicks yourself.

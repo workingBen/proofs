@@ -1,9 +1,9 @@
 /* Review page engine (proofs, shared/review_page). Built into every page by
    review_page.py; do not hand-edit a built page's copy.
 
-   A page is a frame (S.mode: its chrome, tally and export header) around a
-   list of sections (S.sections), each with a kind: review, questions, qa or
-   log. Each kind renders its own items, keeps its own state under
+   A page is a frame (S.mode: review, questions, log or session: its chrome,
+   tally and export header) around a list of sections (S.sections), each with a
+   kind: review, questions, qa, log, or the read-only links and decided. Each kind renders its own items, keeps its own state under
    st.sec[<section id>], and contributes its own block to the export, so one
    page can mix kinds. The export functions are pure so the tests can run them
    under plain node. */
@@ -97,7 +97,9 @@
         lines.push.apply(lines, noteLines("      note: ", notes[e.id]));
       });
       return lines;
-    }
+    },
+    links: function () { return []; },
+    decided: function () { return []; }
   };
 
   function blocks(S, st) {
@@ -112,7 +114,7 @@
   var FRAME = {
     review: function (S, st) { return [S.header].concat(blocks(S, st)).join("\n"); },
     questions: function (S, st, now) {
-      var lines = ["[" + S.format + " — answers]", "project: " + S.project, "stream:  " + S.stream,
+      var lines = ["[" + S.format + " — " + (S.verb || "answers") + "]", "project: " + S.project, "stream:  " + S.stream,
         "round:   " + S.round, "artifact: " + S.artifact, "sent:    " + utcStamp(now), ""];
       return lines.concat(blocks(S, st)).join("\n").replace(/\n+$/, "\n");
     },
@@ -125,6 +127,26 @@
       var extra = trimmed(st.extra);
       if (extra) lines.push("", "anything else:", extra);
       return lines.join("\n") + "\n";
+    },
+    // The session page: one export with a block per section that has one, in
+    // page order (questions, QA, log), each under its own header.
+    session: function (S, st, now) {
+      var lines = ["WORKING LOG — my replies", "project: " + S.project, "session: " + S.session];
+      if (S.repo) lines.push("repo: " + S.repo);
+      if (S.artifact) lines.push("artifact: " + S.artifact);
+      (S.details || []).forEach(function (kv) { lines.push(kv[0] + ": " + kv[1]); });
+      lines.push("exported: " + localStamp(now));
+      var HEAD = { questions: "--- Questions ---", log: "--- Log ---" };
+      S.sections.forEach(function (sec) {
+        var b = BLOCK[sec.kind](sec, ((st.sec || {})[sec.id]) || {});
+        if (!b.length) return;
+        lines.push("");
+        if (HEAD[sec.kind]) lines.push(HEAD[sec.kind], "");
+        lines.push.apply(lines, b);
+      });
+      var extra = trimmed(st.extra);
+      if (extra) lines.push("", "anything else:", extra);
+      return lines.join("\n").replace(/\n{3,}/g, "\n\n").replace(/\n+$/, "") + "\n";
     }
   };
 
@@ -225,15 +247,23 @@
       if (qa.total) parts.push(qa.done === qa.total ? "QA all " + qa.total + " checked" : "QA <b>" + qa.done + "</b> of " + qa.total);
       one("#rp-tally").innerHTML = parts.join(" · ");
     },
-    log: function () {
-      var n = 0, total = 0;
-      ofKind("log").forEach(function (sec) {
-        var read = secState(st, sec).read || {};
-        sec.items.forEach(function (e) { total++; if (read[e.id]) n++; });
-      });
-      one("#rp-tally").innerHTML = "<b>" + n + "</b> / " + total + " read";
+    log: function () { one("#rp-tally").innerHTML = readTally(); },
+    session: function () {
+      var q = answered("questions"), qa = answered("qa"), parts = [];
+      if (q.total) parts.push(q.done === q.total ? "all " + q.total + " answered" : "<b>" + q.done + "</b> of " + q.total + " answered");
+      if (qa.total) parts.push(qa.done === qa.total ? "checks all " + qa.total + " done" : "checks <b>" + qa.done + "</b> of " + qa.total);
+      if (ofKind("log").some(function (s) { return s.items.length; })) parts.push(readTally());
+      one("#rp-tally").innerHTML = parts.join(" · ") || "nothing waiting on you";
     }
   };
+  function readTally() {
+    var n = 0, total = 0;
+    ofKind("log").forEach(function (sec) {
+      var read = secState(st, sec).read || {};
+      sec.items.forEach(function (e) { total++; if (read[e.id]) n++; });
+    });
+    return "<b>" + n + "</b> / " + total + " read";
+  }
   function tally() { TALLY[S.mode](); }
 
   /* ------------------------------------------------- behavior, per section kind */
@@ -286,6 +316,8 @@
     },
     questions: answerable,
     qa: answerable,
+    links: function () {},
+    decided: function () {},
     log: function (sec, root, ss) {
       ss.read = ss.read || {}; ss.ans = ss.ans || {}; ss.notes = ss.notes || {};
       function paint() {

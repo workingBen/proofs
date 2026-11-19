@@ -1,0 +1,16 @@
+{
+  "mode": "questions",
+  "title": "Acme app — checks for you",
+  "project": {"name": "acme-app", "stream": "attachments release", "round": 1, "artifact": "(the published URL of this page)"},
+  "bar_title_html": "Acme app <span>· checks after deploy</span>",
+  "heading": "Checks only you can run",
+  "intro_html": "<p class=\"fine\">Most important first. Mark each one, then <b>Copy my results</b> and paste back.</p>",
+  "copy_label": "Copy my results",
+  "qa": [
+    {"qaid": "qa-delete-item", "check": "Delete an item that has an attachment",
+     "why_html": "<b>Expected:</b> it deletes cleanly. Before this release it raised an error and left the attachment behind."},
+    {"qaid": "qa-photos", "check": "Open an inspection on your phone and tap a photo",
+     "why_html": "<b>Expected:</b> the thumbnail shows, and tapping it zooms. Depends on <code>qa-delete-item</code> passing first. I could not test this here: no phone browser.",
+     "notes_label": "Paste the image URL if it failed"}
+  ]
+}

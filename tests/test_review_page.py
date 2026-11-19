@@ -125,7 +125,7 @@ class ExportText(unittest.TestCase):
         text = self.export("questions", {
             "ans": {"filter-placement": "A - Beside the sort menu in the header row", "qa-delete-item": "COULDN'T TEST"},
             "notes": {"filter-placement": "check the flip-up\non a short viewport", "qa-delete-item": "no attachment handy"}})
-        self.assertEqual(text, "[working-log questions v1.2 — answers]\n"
+        self.assertEqual(text, "[questions v1.3 — answers]\n"
                                "project: acme-app\n"
                                "stream:  list screen filters\n"
                                "round:   2\n"
@@ -199,6 +199,57 @@ class ExportText(unittest.TestCase):
                          "M1  [unread]  One\n1. Card — ACCEPT (Use Proposed)\n--- QA results ---\n\n"
                          "QA qa-x | Open it\n  -> PASS\n\n")
 
+    def test_session_exports_every_section_in_one_block(self):
+        text = self.export("session", {
+            "ans": {"csv-dates": "ISO dates (2026-03-14)", "qa-export-file": "FAIL"},
+            "notes": {"push-fix": "wait for CI", "qa-export-file": "totals off by one cent", "M5": "thanks"},
+            "read": {"M6": True}, "extra": "ship it"})
+        self.assertEqual(text, "WORKING LOG — my replies\n"
+                               "project: Acme Widgets\n"
+                               "session: invoice-export\n"
+                               "repo: acme/widgets\n"
+                               "artifact: (the published URL of this page)\n"
+                               "page: v4\n"
+                               "branch: invoice-export\n"
+                               "exported: 2026-03-14 18:53\n"
+                               "\n"
+                               "--- Questions ---\n"
+                               "\n"
+                               "Q csv-dates (raised r2) | Which date format should the CSV export use?\n"
+                               "  -> ISO dates (2026-03-14)\n"
+                               "\n"
+                               "Q push-fix (raised r1) | Can I push the settings fix to the branch?\n"
+                               "  -> (UNANSWERED)\n"
+                               "  note: wait for CI\n"
+                               "\n"
+                               "--- QA results ---\n"
+                               "\n"
+                               "QA qa-export-file | Export last month's invoices and open the file\n"
+                               "  -> FAIL\n"
+                               "  note: totals off by one cent\n"
+                               "\n"
+                               "--- Log ---\n"
+                               "\n"
+                               "M6  [read]  Found it — the config change was never being used\n"
+                               "M5  [unread]  Why the new setting changed nothing\n"
+                               "      note: thanks\n"
+                               "\n"
+                               "anything else:\n"
+                               "ship it\n")
+
+    def test_session_export_leaves_out_empty_sections(self):
+        spec = {"mode": "session", "title": "s1 · P session", "project": {"name": "P", "session": "s1"},
+                "entries": [{"id": "M1", "title": "One"}]}
+        self.assertEqual(self.export_spec(spec, {}).split("\n", 4)[4],
+                         "\n--- Log ---\n\nM1  [unread]  One\n")
+
+    def test_qa_checklist_page_exports_results(self):
+        text = self.export("qa-checklist", {"ans": {"qa-delete-item": "PASS"}})
+        self.assertTrue(text.startswith("[qa-checklist v1.0 — results]\nproject: acme-app\nstream:  attachments release\n"))
+        self.assertIn("QA qa-delete-item | Delete an item that has an attachment\n  -> PASS\n", text)
+        self.assertIn("QA qa-photos | Open an inspection on your phone and tap a photo\n  -> (NOT CHECKED)\n", text)
+        self.assertNotIn("Q ", text.replace("QA ", ""))
+
     def test_log_unanswered_group(self):
         self.assertIn("M6  [unread]  Found it — the config change was never being used\n      answer: (unanswered)\n",
                       self.export("log", {}))
@@ -232,7 +283,14 @@ class BuildAndCheck(unittest.TestCase):
                ({"title": "x", "sections": [{"id": "a", "items": [{"label": "a"}]}, {"id": "a"}]}, "section id"),
                ({"mode": "questions", "title": "x", "project": {"name": "p", "stream": "s"},
                  "sections": [{"kind": "questions", "items": [{"qid": "a"}]},
-                              {"kind": "qa", "items": [{"qaid": "a"}]}]}, "unique on the page")]
+                              {"kind": "qa", "items": [{"qaid": "a"}]}]}, "unique on the page"),
+               ({"mode": "session", "title": "s · p", "project": {"name": "p", "session": "s"},
+                 "sections": [{"kind": "review", "items": [{"label": "a"}]}]}, "links"),
+               ({"mode": "session", "title": "s · p", "project": {"name": "p", "session": "s"},
+                 "entries": [{"id": "M1", "questions": [{"q": "a", "options": ["x"]}]}]}, "Waiting on you"),
+               ({"mode": "session", "title": "s · p", "project": {"name": "p"}}, "session"),
+               ({"mode": "session", "title": "s · p", "project": {"name": "p", "session": "s"},
+                 "links": [{"label": "Design review"}]}, "url")]
         for spec, word in bad:
             p = self.tmp / "s.json"
             p.write_text(json.dumps(spec))
@@ -273,6 +331,80 @@ class BuildAndCheck(unittest.TestCase):
             log = build("log", self.tmp)
             log.write_text(log.read_text().replace("<title>invoice-export · ", "<title>"))
             self.assertTrue(any("session" in e for e in review_page.check(log)))
+
+    def page_text(self, spec):
+        p = self.tmp / "s.json"
+        p.write_text(json.dumps(spec))
+        return review_page.page(review_page.load_spec(p))
+
+    def first_in_main(self, text):
+        return re.search(r'<main class="rp-main"[^>]*>\s*(<[^>]+>)', text).group(1)
+
+    SESSION = {"mode": "session", "title": "s1 · P session", "project": {"name": "P", "session": "s1"},
+               "heading": "About", "intro_html": "<p>context</p>", "facts": [["Tests", "green"]]}
+
+    def test_session_sections_render_in_fixed_order_whatever_the_spec_order(self):
+        spec = dict(self.SESSION, sections=[
+            {"kind": "decided", "items": [{"title": "Old call", "decision": "yes"}]},
+            {"kind": "log", "items": [{"id": "M1", "title": "One"}]},
+            {"kind": "qa", "items": [{"qaid": "qa-x", "check": "Open it"}]},
+            {"kind": "links", "items": [{"label": "Design review", "status": "3 decisions open", "url": "https://x.test/r"}]},
+            {"kind": "questions", "items": [{"qid": "q1", "ask": "Which?", "options": [{"label": "A"}]}]}])
+        text = self.page_text(spec)
+        self.assertEqual(review_page.rendered_kinds(text), ["questions", "links", "qa", "log", "decided"])
+        for title in ("Waiting on you", "Other pages waiting on you", "Checks for you", "Log", "Decided"):
+            self.assertIn("<h2>%s" % title, text)
+        self.assertIn("<b>Design review</b>: <span class=\"rp-link-status\">3 decisions open</span>", text)
+        # context (heading, intro, facts) sits after the action sections, before the log
+        self.assertLess(text.index('<section class="rp-section rp-kind-qa"'), text.index('<div class="rp-context">'))
+        self.assertLess(text.index('<div class="rp-context">'), text.index('<section class="rp-section rp-kind-log"'))
+
+    def test_session_shows_only_sections_with_content(self):
+        spec = dict(self.SESSION, questions=[], qa=[], links=[], decided=[],
+                    entries=[{"id": "M1", "title": "One"}])
+        text = self.page_text(spec)
+        self.assertEqual(review_page.rendered_kinds(text), ["log"])
+        self.assertNotIn("Waiting on you", text)
+        self.assertNotIn("Checks for you", text)
+        spec = dict(self.SESSION, qa=[{"qaid": "qa-x", "check": "Open it"}])
+        self.assertEqual(review_page.rendered_kinds(self.page_text(spec)), ["qa"])
+
+    def test_open_questions_come_first_on_session_and_questions_pages(self):
+        spec = dict(self.SESSION, entries=[{"id": "M1", "title": "One"}],
+                    questions=[{"qid": "q1", "ask": "Which?", "options": [{"label": "A"}]}])
+        self.assertIn("rp-kind-questions", self.first_in_main(self.page_text(spec)))
+        q = {"mode": "questions", "title": "x", "project": {"name": "p", "stream": "s"},
+             "heading": "Round 2", "intro_html": "<p>long context</p>",
+             "sections": [{"kind": "qa", "items": [{"qaid": "qa-x", "check": "Open it"}]},
+                          {"kind": "questions", "items": [{"qid": "q1", "ask": "Which?"}]}]}
+        text = self.page_text(q)
+        self.assertIn("rp-kind-questions", self.first_in_main(text))
+        self.assertEqual(review_page.rendered_kinds(text), ["questions", "qa"])
+        self.assertLess(text.index('<section class="rp-section rp-kind-qa"'), text.index("Round 2"))
+
+    @unittest.skipUnless(NODE, "node is not installed")
+    def test_check_catches_questions_pushed_down_the_page(self):
+        page = build("session", self.tmp)
+        text = page.read_text()
+        page.write_text(text.replace('<main class="rp-main" data-preview="light">',
+                                     '<main class="rp-main" data-preview="light"><p>A long report first</p>', 1))
+        self.assertTrue(any("first thing under the sticky bar" in e for e in review_page.check(page)))
+        log_at = text.index('<section class="rp-section rp-kind-log"')
+        qa = re.search(r'<section class="rp-section rp-kind-qa".*?</section>', text, re.S).group(0)
+        swapped = text.replace(qa, "", 1)
+        swapped = swapped.replace('<section class="rp-section rp-kind-decided"', qa + '<section class="rp-section rp-kind-decided"', 1)
+        page.write_text(swapped)
+        self.assertTrue(log_at and any("out of order" in e for e in review_page.check(page)))
+
+    def test_standalone_questions_and_qa_pages_have_their_own_chrome(self):
+        for name, fmt in (("questions", "questions v1.3"), ("qa-checklist", "qa-checklist v1.0")):
+            spec = json.loads((EXAMPLES / (name + ".json")).read_text())
+            text = review_page.page(review_page.load_spec(EXAMPLES / (name + ".json")))
+            self.assertIn('class="rp rp-mode-questions"', text)
+            self.assertIn('<div class="bar">', text)
+            self.assertNotIn('<div class="rp-projectbar">', text)
+            self.assertIn('"format": "%s"' % fmt, text)
+            self.assertIn(spec.get("copy_label", "Copy my answers"), text)
 
     def test_custom_decisions_override_a_preset(self):
         p = self.tmp / "s.json"

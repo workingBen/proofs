@@ -1,25 +1,64 @@
 {
   "mode": "questions",
   "title": "Acme app — work log & open questions",
-  "format": "working-log questions v1.2",
-  "project": {"name": "acme-app", "stream": "list screen filters", "round": 2, "artifact": "(the published URL of this page)"},
+  "format": "questions v1.3",
+  "project": {
+    "name": "acme-app",
+    "stream": "list screen filters",
+    "round": 2,
+    "artifact": "(the published URL of this page)"
+  },
   "bar_title_html": "Acme app <span>· work log · round 2</span>",
-  "heading": "One question left",
+  "heading": "About this round",
   "intro_html": "<p class=\"fine\">Answer in any order, then <b>Copy my answers</b> and paste back.</p>",
   "questions": [
-    {"qid": "filter-placement", "round": 1, "ask": "Where the new filter control sits on the list screen",
-     "why_html": "<p>The list has a sort menu in the header and nothing else.</p>",
-     "mockups_html": "<div class=\"frame\"><div class=\"frame-cap\">A · Beside the sort menu</div></div>",
-     "options": [
-       {"value": "A - Beside the sort menu in the header row", "label": "A · Beside the sort menu", "recommended": true, "note_html": "One row for both controls."},
-       {"value": "B - Filter chips in a row above the list", "label": "B · Chips above the list", "note_html": "Always visible, uses a row."}
-     ]},
-    {"qid": "spec-approval", "round": 2, "ask": "Does the written spec match what you agreed?",
-     "options": [{"label": "Approved - write the implementation plan"}, {"label": "Not yet - see my note"}]}
+    {
+      "qid": "filter-placement",
+      "round": 1,
+      "ask": "Where the new filter control sits on the list screen",
+      "why_html": "<p>The list has a sort menu in the header and nothing else.</p>",
+      "mockups_html": "<div class=\"frame\"><div class=\"frame-cap\">A · Beside the sort menu</div></div>",
+      "options": [
+        {
+          "value": "A - Beside the sort menu in the header row",
+          "label": "A · Beside the sort menu",
+          "recommended": true,
+          "note_html": "One row for both controls."
+        },
+        {
+          "value": "B - Filter chips in a row above the list",
+          "label": "B · Chips above the list",
+          "note_html": "Always visible, uses a row."
+        }
+      ]
+    },
+    {
+      "qid": "spec-approval",
+      "round": 2,
+      "ask": "Does the written spec match what you agreed?",
+      "options": [
+        {
+          "label": "Approved - write the implementation plan"
+        },
+        {
+          "label": "Not yet - see my note"
+        }
+      ]
+    }
   ],
   "qa": [
-    {"qaid": "qa-delete-item", "check": "Delete an item that has an attachment",
-     "why_html": "<b>Expected:</b> it deletes cleanly. Before this push it raised an error."}
+    {
+      "qaid": "qa-delete-item",
+      "check": "Delete an item that has an attachment",
+      "why_html": "<b>Expected:</b> it deletes cleanly. Before this push it raised an error."
+    }
   ],
-  "after_html": "<h2>Settled — round 1</h2><p class=\"fine\">Export format: plain text with the full option text.</p>"
+  "decided": [
+    {
+      "id": "export-format",
+      "title": "How answers come back",
+      "decision": "Plain text with the full option text",
+      "when": "round 1"
+    }
+  ]
 }

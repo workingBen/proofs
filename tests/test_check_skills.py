@@ -15,11 +15,9 @@ version: 1.2.0
 # {name}
 
 {body}
-
-## Changelog
-
-- 1.2.0: first merged version.
 """
+LOG = "# Changelog\n\n- **1.2.0** (2026-01-01): first merged version.\n"
+REF = "# Where the page goes\n\nSet `PROOFS_PAGES` to artifact, file or wifi.\n"
 
 
 class CheckCase(unittest.TestCase):
@@ -28,11 +26,18 @@ class CheckCase(unittest.TestCase):
         self.addCleanup(self._tmp.cleanup)
         self.skills = Path(self._tmp.name) / "skills"
         self.skills.mkdir()
+        self.ref = Path(self._tmp.name) / "reference" / "where-the-page-goes.md"
+        self.ref.parent.mkdir()
+        self.ref.write_text(REF)
 
-    def skill(self, folder, text=None, name=None, body=""):
+    def skill(self, folder, text=None, name=None, body="", log=LOG):
         d = self.skills / folder
         d.mkdir(parents=True, exist_ok=True)
         (d / "SKILL.md").write_text(text if text is not None else GOOD.format(name=name or folder, body=body))
+        if log is None:
+            (d / "CHANGELOG.md").unlink(missing_ok=True)
+        else:
+            (d / "CHANGELOG.md").write_text(log)
 
     def run_check(self):
         return subprocess.run([sys.executable, str(CHECK), str(self.skills)],
@@ -70,12 +75,20 @@ class CheckCase(unittest.TestCase):
         base = GOOD.format(name="alpha", body="")
         self.skill("alpha", text=base.replace("version: 1.2.0", "version: 1.2"))
         self.assertEqual(self.run_check().returncode, 1)
-        self.skill("alpha", text=base.replace("## Changelog", "## History"))
-        self.assertEqual(self.run_check().returncode, 1)
-        self.skill("alpha", text=base.replace("- 1.2.0: first", "- 0.9.0: first"))
+        self.skill("alpha", log=None)
+        r = self.run_check()
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("missing CHANGELOG.md", r.stdout)
+        self.skill("alpha", log=LOG.replace("1.2.0", "0.9.0"))
         r = self.run_check()
         self.assertEqual(r.returncode, 1)
         self.assertIn("changelog", r.stdout.lower())
+
+    def test_changelog_section_in_skill_md_rejected(self):
+        self.skill("alpha", body="## Changelog\n\n- **1.2.0**: x\n")
+        r = self.run_check()
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("belongs in CHANGELOG.md", r.stdout)
 
     def test_bare_script_path_rejected(self):
         self.skill("alpha", body="Run `scripts/capture.cjs` now.")
@@ -138,7 +151,7 @@ class CheckCase(unittest.TestCase):
         self.skill("alpha", body="~~~\n/inside\n~~~\n")
         self.assertEqual(self.run_check().returncode, 0, self.run_check().stdout)
 
-    PAGES = ("## Where the page goes\n\nSet `PROOFS_PAGES` to artifact, file or wifi.\n")
+    PAGES = ("## Where the page goes\n\nRead `../../reference/where-the-page-goes.md` before publishing.\n")
 
     def test_page_skills_need_where_the_page_goes(self):
         self.skill("design-review")
@@ -146,11 +159,43 @@ class CheckCase(unittest.TestCase):
         self.assertEqual(r.returncode, 1)
         self.assertIn("Where the page goes", r.stdout)
 
-    def test_page_skills_must_name_all_three_values(self):
-        self.skill("design-review", body="## Where the page goes\n\nartifact or file only.\n")
+    def test_page_section_must_point_to_reference(self):
+        self.skill("design-review", body="## Where the page goes\n\nartifact, file or wifi.\n")
+        r = self.run_check()
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("must point to", r.stdout)
+
+    def test_reference_must_name_all_three_values(self):
+        self.ref.write_text("artifact or file only.\n")
+        self.skill("design-review", body=self.PAGES)
         r = self.run_check()
         self.assertEqual(r.returncode, 1)
         self.assertIn("wifi", r.stdout)
+
+    def test_missing_reference_file_fails(self):
+        self.ref.unlink()
+        self.skill("design-review", body=self.PAGES)
+        r = self.run_check()
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("does not exist", r.stdout)
+
+    def test_plugin_root_paths_must_exist(self):
+        self.skill("alpha", body="Run `python3 ../../shared/missing.py` first.")
+        r = self.run_check()
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("../../shared/missing.py", r.stdout)
+        (Path(self._tmp.name) / "shared").mkdir()
+        (Path(self._tmp.name) / "shared" / "missing.py").write_text("")
+        self.assertEqual(self.run_check().returncode, 0, self.run_check().stdout)
+
+    def test_skill_reference_files_must_exist(self):
+        self.skill("alpha", body="Read `reference/checkpoints.md` when a trigger fires.")
+        r = self.run_check()
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("reference/checkpoints.md", r.stdout)
+        (self.skills / "alpha" / "reference").mkdir()
+        (self.skills / "alpha" / "reference" / "checkpoints.md").write_text("# x\n")
+        self.assertEqual(self.run_check().returncode, 0, self.run_check().stdout)
 
     def test_page_skills_with_section_pass_and_others_exempt(self):
         self.skill("design-review", body=self.PAGES)
@@ -167,7 +212,7 @@ class CheckCase(unittest.TestCase):
     def test_section_text_identical_across_page_skills(self):
         self.skill("design-review", body=self.PAGES)
         self.skill("todos", body=self.PAGES)
-        self.skill("pr-qa", body=self.PAGES.replace("Set", "Choose"))
+        self.skill("pr-qa", body=self.PAGES.replace("Read", "Open"))
         r = self.run_check()
         self.assertEqual(r.returncode, 1)
         self.assertIn("pr-qa", r.stdout)
@@ -191,13 +236,11 @@ class CheckCase(unittest.TestCase):
         self.assertEqual(self.run_check().returncode, 1)
 
     def test_changelog_version_needs_word_boundary(self):
-        text = GOOD.format(name="alpha", body="").replace("- 1.2.0: first", "- 11.2.0: first")
-        self.skill("alpha", text=text)
+        self.skill("alpha", log=LOG.replace("**1.2.0**", "**11.2.0**"))
         r = self.run_check()
         self.assertEqual(r.returncode, 1)
         self.assertIn("changelog", r.stdout.lower())
-        text = GOOD.format(name="alpha", body="").replace("- 1.2.0: first", "- **1.2.0** (2026): first")
-        self.skill("alpha", text=text)
+        self.skill("alpha", log=LOG.replace("**1.2.0** (2026-01-01)", "1.2.0 (2026)"))
         self.assertEqual(self.run_check().returncode, 0, self.run_check().stdout)
 
 

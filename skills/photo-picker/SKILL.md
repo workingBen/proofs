@@ -1,7 +1,7 @@
 ---
 name: photo-picker
-version: 1.0.2
-description: Use when the user wants to source and add real photos to an article/page and review candidates before anything is applied — builds an interactive Artifact gallery of real, appropriately-licensed candidate images per "slot" (a spot in the content that needs a photo), with the same four decision states as article-copy-edit and design-review (Keep None / Use Selected / Approve with Comment / Request Revision, where Revision means "search again, different direction"), a "Copy My Decisions" export, and an apply step that uploads the winning image to your image host and wires the URL into the real page.
+version: 1.1.1
+description: Use when the user wants real photos found for an article or page and wants to pick from candidates before any is added, such as "find some photos for this" or "show me options for the hero image". Differs from design-review; it compares sourced, licensed photographs for one spot, not coded layouts, then uploads the winner.
 ---
 
 # Photo Picker Tool
@@ -31,24 +31,15 @@ A slot is one spot in the content that needs a photo: a section, a topic, a mood
 - Always disclose source and reuse-vs-new status per candidate (e.g., "already on site, reused from the pricing page" vs. "new, via Pexels").
 - 1-3 candidates per slot is normal; a slot can have just one if nothing else is a real contender. Don't pad for the sake of options.
 
-### 3. Build the review page as an Artifact, styled like the target page
+### 3. Build the review page with the shared builder
 
-Follow any design guidance your environment provides for published pages first. Utilitarian-but-polished register, same as the other two tools: this is a review tool, not editorial content.
+Write the content; the builder writes the page. Read `../../reference/review-page.md` first: it documents the spec and the command, `python3 ../../shared/review_page/review_page.py spec.json --out page.html`, with `"decisions": "photo-picker"`. Do not hand-write the page's JavaScript. Follow any design guidance your environment provides for published pages first; utilitarian-but-polished, same as the other two tools.
 
-- Reuse the target page's own design system (palette, type) where one exists.
-- **Structure per slot:** slot title + short context note (what it's illustrating) + a **photo gallery**: clickable cards, one per candidate, each showing the image, a label (Option A/B/C), a note (source + framing rationale), and an "Already on site" badge where applicable. Clicking a card marks it selected (same click-to-select interaction as `design-review`'s variant gallery).
-- Below the gallery, the same shared four-button action bar from the other two tools. Use plain text labels (or monochrome line icons), not emoji:
-
-  | Button | State | Comment box | Meaning |
-  |---|---|---|---|
-  | Keep None | `deny` | optional | Don't add a photo to this slot. |
-  | Use Selected | `accept` | optional | Add the currently-selected candidate exactly as shown. |
-  | Approve with Comment | `accept-comment` | opens, expected | Add the selected candidate, but modify per the comment (e.g. crop, caption, placement). |
-  | Request Revision | `revise` | opens, expected | None of these work. The comment explains what to try instead (different subject, different mood, different source); expect a follow-up round searching again for this slot. |
-
-  For a multi-candidate slot, the action bar acts on whichever candidate is currently selected in the gallery.
-
-- **Sticky bottom bar:** running "X of N reviewed" + tally per state + "Copy My Decisions" button writing a plain-text numbered summary via `navigator.clipboard.writeText`. If the clipboard is missing or the write fails, show the summary in a selectable text box (select all) instead, and never show "Copied" on failure. **The export's first line must identify the gallery being reviewed**, same convention as `article-copy-edit` and `design-review`: pasted decisions arrive back in chat with no other context, and a bare `1. ... — ACCEPT` is ambiguous once more than one review is in flight (or, for this tool specifically, once a gallery spans multiple articles' slots the way the worked example below does, since the slot labels alone don't say which gallery they came from). Use a stable bracketed header matching the Artifact's own title:
+- Reuse the target page's own design system (palette, type) where one exists, in the spec's `css`.
+- **One item per slot:** `label` (slot title), `location` (what it illustrates), and the candidates as `variants`, each with `name` (a short subject, exported after the option letter), the image, and `note_html` giving its source, framing rationale, and "Already on site" where it is reused. Option labels are A/B/C. Use plain text labels or monochrome line icons, never emoji.
+- **Images go in `assets`**, never as external URLs: the Artifact CSP blocks external requests, and an asset placeholder keeps the base64 out of the conversation. Downscale each image before embedding so the page stays well under the Artifact size limit, and do not commit the finished page to the repository.
+- The decisions: **Keep None** (no photo in this slot), **Use Selected** (add the selected candidate as shown), **Approve with Comment** (add it, modified per the comment: crop, caption, placement), **Request Revision** (none of these work; the comment says what to search for instead).
+- **The export's first line names the gallery**, because pasted decisions arrive with no other context, and a gallery can span several articles' slots. The builder writes the bracketed title:
   ```
   [How-To Guides — Photo Picker]
   1. Article One — Introduction section — ACCEPT (Use Selected: Option B, trail map)
@@ -56,18 +47,10 @@ Follow any design guidance your environment provides for published pages first. 
   3. Article Two — Proofing Basket — DENY (Keep None)
   4. Article Three — Chain Repair — REVISE — COMMENT: too staged, find something that looks more like a real workshop
   ```
-  Omit the `— COMMENT: ...` suffix for plain `ACCEPT`/`DENY` items with no comment.
 
 Publish with the `Artifact` tool. Use a stable icon across revisions of the *same* review page: redeploy to the same file path for new rounds or added candidates, don't mint a new URL for a gallery the user is already looking at.
 
-**Verify before publishing, every time.** Same script-syntax risk as the other two tools, plus this tool's own distinctive failure mode:
-1. Extract the `<script>...</script>` contents to a `.js` file and run `node --check` on it.
-2. Load the file in headless Playwright, assert the expected card/slot count rendered, click through a selection + decision on at least one slot, confirm `page.on('pageerror', ...)` came back empty.
-3. **Explicitly check every embedded image actually loaded**: `page.$$eval('img', els => els.map(i => ({ complete: i.complete, natW: i.naturalWidth })))` and confirm every entry has `complete: true` and `natW > 0`. A broken image source renders as a blank box with no console error. This is the one failure mode unique to this tool, so check for it by name rather than assuming a clean `pageerror` log means the images are fine.
-
-Only publish after all three pass. Embed images as base64 `data:` URIs directly in the HTML (download, verify with Read, base64-encode via a script, inject via placeholder replacement). The Artifact CSP blocks external image requests, and this also keeps large base64 blobs out of the conversation context. Downscale each image before embedding so the page stays well under the Artifact size limit, and do not commit the finished review page to the repository.
-
-**Define a dark-theme override for every semantic color token, not just the base palette.** The first real use of this tool defined its amber tokens (used for the "revision requested" comment box and status pill) only in `:root`, with no `@media (prefers-color-scheme: dark)` or `:root[data-theme="dark"]` override, unlike the background, ink and accent tokens, which all got proper dark variants. In dark mode, the comment box's background stayed the light-mode pale yellow while its text color (the page's ink token, correctly following the theme) flipped to near-white, making the user's own revision note unreadable. The user caught it from a live screenshot. Fix: give every semantic-state color (amber for revise, and by the same logic red or blue for deny or comment if they're ever used for a filled text-bearing surface, not just a pill background) an explicit dark-mode pair, and use a dedicated ink token for text sitting on that surface (e.g. `--amber-ink`) rather than the page's general ink. A filled colored box needs its own contrast-safe text color independent of the page's light/dark state, not the page's own foreground color.
+**Verify before publishing, every time.** The build runs its own check. Then run `--smoke`, which also fails on **any image that did not load**: a broken image renders as a blank box with no console error, the one failure mode unique to this tool. Without Playwright, open the page and look at every candidate yourself. Only publish after both pass.
 
 ### 4. Applying the decisions
 
@@ -83,7 +66,7 @@ Rebuild, verify and commit per the project's normal workflow.
 
 ### 5. Follow-up rounds on `REVISE` items
 
-Identical pattern to the other two tools: scope the new Artifact to only the still-open slots, carry the prior round's rejected candidates forward on each card (labeled "Round 1") alongside newly-sourced candidates ("Round 2"), republish to the same URL, and re-run the full verification step (including the per-image load check) before every republish.
+Identical pattern to the other two tools: scope the new Artifact to only the still-open slots, carry the prior round's rejected candidates forward on each card (labeled "Round 1") alongside newly-sourced candidates ("Round 2"), rebuild and republish to the same URL, and re-run the full verification (including the image load check) before every republish.
 
 ## Worked example
 
@@ -91,16 +74,4 @@ Built and applied for three how-to articles (a hiking guide, a bread recipe and 
 
 ## Where the page goes
 
-The project chooses with `PROOFS_PAGES`, set in the project's `.claude/settings.json` "env" block (or a line in CLAUDE.md: "proofs pages: file"). Values:
-
-- `artifact`: publish as a private claude.ai artifact (a link that opens on phone and computer). This is the default when publishing is available.
-- `file`: save the page as an HTML file (default folder `.proofs/pages/`; add it to .gitignore) and open it in the browser (`open` on macOS, `xdg-open` on Linux, `start` on Windows). This is the default when artifacts are not available. Reuse the same file path for later rounds so the page updates in place instead of piling up.
-- `wifi`: same as `file`, plus serve only a folder that holds this review's page(s) (for example `.proofs/pages/<review-name>/`, so older pages are not listed to the network) on the local network (`python3 -m http.server <port> --bind <the computer's local IP>` from that folder) and print the address so a phone on the same Wi-Fi can open it. This mode never uploads the page and never uses a public tunnel. Stop the server when the review is done. Use `wifi` only on a private network you trust, never on public or shared Wi-Fi.
-
-If `artifact` is chosen but publishing fails or is not available, fall back to `file` and say so in one line. Everything on the page works the same in every mode. The page's copy button gives the user text to paste back. Copy buttons must fall back to a selectable text box (select all) when `navigator.clipboard` is missing or the write fails (a page served over http on a local IP is not a secure context, so the clipboard is often unavailable), and must never show "Copied" unless the copy actually succeeded.
-
-## Changelog
-
-- **1.0.2** (2026-11-17): Copy buttons now fall back to a selectable text box when the clipboard is unavailable (as on a Wi-Fi-served page), and `wifi` mode is limited to a private network you trust. Worked example uses neutral topics.
-- **1.0.1** (2026-11-16): New section "Where the page goes": a project can choose an artifact, a local file, or a file served on its own Wi-Fi.
-- **1.0.0** (2026-11-16): Merged into proofs: generic, no project-specific steps.
+Before you publish or save the page, read `../../reference/where-the-page-goes.md` (the path is relative to this skill's folder). The project's `PROOFS_PAGES` setting picks artifact, file or wifi, and that file says what each means and how copy buttons must fall back.

@@ -1,13 +1,15 @@
 {
   "name": "proofs",
   "owner": {
-    "name": "workingBen"
+    "name": "workingBen",
+    "url": "https://github.com/workingBen"
   },
+  "description": "Proofs: Claude Code skills that show their work.",
   "plugins": [
     {
       "name": "proofs",
       "source": "./",
-      "description": "Claude Code skills that show their work: design reviews, visual QA, copy edits and decision pages you click through, then paste back to Claude."
+      "description": "Claude Code skills that show their work: design reviews with real mockups, visual QA at three screen sizes, copy edits with a claims check, and decision pages you answer from your phone."
     }
   ]
 }

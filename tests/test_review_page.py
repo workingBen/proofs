@@ -415,6 +415,130 @@ class BuildAndCheck(unittest.TestCase):
         self.assertIn("✓ Use Edit", text)
 
 
+MAGICK = shutil.which("magick")
+
+
+def write_png(path, width, height):
+    """A real, compressible PNG (a gradient) made with the stdlib only."""
+    import struct
+    import zlib
+    raw = b"".join(b"\x00" + b"".join(bytes(((x * 7 + y * 3) % 256, (x * 2) % 256, (y * 5) % 256))
+                                       for x in range(width)) for y in range(height))
+    def chunk(t, d):
+        return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xFFFFFFFF)
+    path.write_bytes(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+                     + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+
+
+class Assets(unittest.TestCase):
+    """Each asset's bytes appear once; screenshots become WebP; the settings and
+    fallbacks behave."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.tmp = Path(self._tmp.name)
+        write_png(self.tmp / "shot.png", 400, 300)
+        (self.tmp / "font.woff2").write_bytes(b"wOF2" + os.urandom(3000))
+
+    def spec(self, body, css="", **extra):
+        s = {"mode": "review", "title": "Assets — Design Review", "decisions": "design-review",
+             "assets": {"shot": "shot.png", "font": "font.woff2"}, "css": css,
+             "sections": [{"title": "S", "items": [{"label": "x", "recommended": True, "body_html": body,
+                                                    "reason_html": "<p>r</p>"}]}]}
+        s.update(extra)
+        (self.tmp / "spec.json").write_text(json.dumps(s))
+        return self.tmp / "spec.json"
+
+    def built(self, *a, env=None, **k):
+        out = self.tmp / "page.html"
+        e = dict(os.environ, **(env or {}))
+        r = subprocess.run([sys.executable, str(BUILD), str(self.spec(*a, **k)), "--out", str(out), "--no-check"],
+                           capture_output=True, text=True, env=e)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        return out.read_text(), r.stdout
+
+    def b64(self, name):
+        import base64
+        return base64.b64encode((self.tmp / name).read_bytes()).decode()
+
+    def test_font_in_css_is_embedded_once(self):
+        text, _ = self.built("<p>x</p>", css="@font-face{font-family:F;src:url({{asset:font}}) format('woff2')}")
+        self.assertEqual(text.count(self.b64("font.woff2")), 1)
+        self.assertIn("src:url(data:font/woff2;base64,", text)  # @font-face cannot read a CSS variable
+        self.assertNotIn("--asset-font", text)
+
+    def test_one_html_use_is_inlined_without_a_variable(self):
+        text, _ = self.built('<img alt="a" src="{{asset:shot}}">', env={"PROOFS_IMAGE_QUALITY": ""})
+        self.assertEqual(len(re.findall(r"data:image/(?:webp|png);base64", text)), 1)
+        self.assertNotIn("--asset-shot", text)
+        self.assertNotIn("data-rp-asset", text)
+
+    def test_many_uses_share_one_copy(self):
+        body = '<img alt="a" src="{{asset:shot}}"><img alt="b" src="{{asset:shot}}"><div style="background:url({{asset:shot}})"></div>'
+        text, _ = self.built(body)
+        self.assertEqual(len(re.findall(r"data:image/(?:webp|png);base64", text)), 1)
+        self.assertEqual(text.count('data-rp-asset="src shot"'), 2)
+        self.assertIn("background:var(--asset-shot)", text)
+        self.assertNotIn("{{asset:", text)
+
+    def test_unused_asset_is_left_out(self):
+        text, _ = self.built("<p>x</p>")
+        self.assertNotIn(self.b64("font.woff2"), text)
+
+    def test_fonts_svg_and_gif_are_never_converted(self):
+        self.assertNotIn(".woff2", review_page.CONVERTIBLE)
+        for ext in (".svg", ".gif", ".webp"):
+            self.assertNotIn(ext, review_page.CONVERTIBLE)
+
+    def test_settings_precedence_env_then_spec_then_default(self):
+        d = review_page.image_settings({}, env={})
+        self.assertEqual((d["quality"], d["max_width"]), (review_page.DEFAULT_IMAGE_QUALITY, review_page.DEFAULT_IMAGE_MAX_WIDTH))
+        s = review_page.image_settings({"image_quality": 60, "image_max_width": 900}, env={})
+        self.assertEqual((s["quality"], s["max_width"]), (60, 900))
+        e = review_page.image_settings({"image_quality": 60}, env={"PROOFS_IMAGE_QUALITY": "40", "PROOFS_IMAGE_MAX_WIDTH": "640"})
+        self.assertEqual((e["quality"], e["max_width"]), (40, 640))
+        for bad in ({"image_quality": 0}, {"image_quality": "high"}, {"image_max_width": 5}):
+            with self.assertRaises(review_page.SpecError):
+                review_page.image_settings(bad, env={})
+
+    def test_width_is_read_from_png_and_jpeg_headers(self):
+        self.assertEqual(review_page.image_width(self.tmp / "shot.png"), 400)
+        if MAGICK:
+            subprocess.run([MAGICK, str(self.tmp / "shot.png"), str(self.tmp / "shot.jpg")], check=True)
+            self.assertEqual(review_page.image_width(self.tmp / "shot.jpg"), 400)
+
+    def test_missing_tool_keeps_the_original_and_says_so(self):
+        text, out = self.built('<img alt="a" src="{{asset:shot}}">', env={"PATH": "/nonexistent"})
+        self.assertIn("data:image/png;base64," + self.b64("shot.png"), text)
+        self.assertIn("no magick or cwebp found", out)
+
+    @unittest.skipUnless(MAGICK or shutil.which("cwebp"), "no WebP encoder installed")
+    def test_png_becomes_smaller_webp(self):
+        text, out = self.built('<img alt="a" src="{{asset:shot}}">')
+        self.assertIn("data:image/webp;base64,", text)
+        self.assertIn("converted to WebP at quality %d" % review_page.DEFAULT_IMAGE_QUALITY, out)
+
+    @unittest.skipUnless(MAGICK, "ImageMagick is not installed")
+    def test_downscales_when_wider_never_upscales(self):
+        tool = review_page.image_tool()
+        small = review_page.to_webp(self.tmp / "shot.png", {"quality": 80, "max_width": 200}, tool)
+        (self.tmp / "s.webp").write_bytes(small)
+        w = subprocess.run([MAGICK, "identify", "-format", "%w", str(self.tmp / "s.webp")], capture_output=True, text=True).stdout
+        self.assertEqual(w, "200")
+        big = review_page.to_webp(self.tmp / "shot.png", {"quality": 80, "max_width": 4000}, tool)
+        if big is not None:
+            (self.tmp / "b.webp").write_bytes(big)
+            w = subprocess.run([MAGICK, "identify", "-format", "%w", str(self.tmp / "b.webp")], capture_output=True, text=True).stdout
+            self.assertEqual(w, "400")
+
+    def test_size_warning_names_the_largest_assets(self):
+        spec = {"_assets": {"big": "x" * 4000000, "small": "y" * 10}}
+        line = review_page.size_warning("z" * (4 * 1024 * 1024), spec)
+        self.assertIn("big (3906 KB)", line)
+        self.assertIsNone(review_page.size_warning("z" * 1000, spec))
+
+
 def playwright_dir():
     return review_page.find_playwright(None)
 

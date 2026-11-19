@@ -1,6 +1,6 @@
 ---
 name: questions
-version: 1.0.0
+version: 1.0.1
 description: Use when you have a question, decision or confirmation for the user that must not scroll away in chat, or several piling up — asks them as real answer controls with a stable id, a recommended option, notes and a copy-back export. Questions only; qa-checklist covers checks, design-review visual options, and working-log hosts these on its session page.
 ---
 
@@ -45,6 +45,8 @@ move below the sections that need action. The build's check fails a page where
 anything comes before the open questions.
 
 ## Building it
+
+**Needs the whole plugin.** This skill reads shared files at `../../reference/` and `../../shared/`, relative to its folder. If they are missing, the skill was copied on its own: install the whole plugin (`/plugin install proofs@proofs`) rather than recreating them.
 
 Read `../../reference/review-page.md` first. Do not hand-write the page's JavaScript.
 

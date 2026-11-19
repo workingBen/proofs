@@ -1,6 +1,6 @@
 ---
 name: style-guide
-version: 1.6.1
+version: 1.6.2
 description: Use when the user wants site-wide design rules settled (type scale, spacing, color, card style, disclaimer placement), names a rule, or points out the same inconsistency across many pages. Differs from design-review, which changes one page; this audits the whole site and records accepted rules in docs/style-guide.html.
 ---
 
@@ -48,6 +48,8 @@ Give every item a **Reason** and a **Recommended/Not Recommended** badge, same c
 
 ### 3. Build the review page with the shared builder
 
+**Needs the whole plugin.** This skill reads shared files at `../../reference/` and `../../shared/`, relative to its folder. If they are missing, the skill was copied on its own: install the whole plugin (`/plugin install proofs@proofs`) rather than recreating them.
+
 Write the content; the builder writes the page. Read `../../reference/review-page.md` first: it documents the spec and the command, `python3 ../../shared/review_page/review_page.py spec.json --out page.html`, with `"decisions": "style-guide"`. Do not hand-write the page's JavaScript. Follow any design guidance your environment provides for published pages, same as both siblings.
 
 - **Rendered examples, not screenshots, and not prose either.** Unlike `design-review`, build each example as real coded HTML/CSS using the site's actual classes and tokens (in `css`), rendered inline, not a screenshot of a live page. The point is to show the underlying recipe next to the visual. This cuts both ways: never substitute a *description* of the visual difference (for example, "the signup page uses a larger heading than the pricing page") for the difference itself. Class and token names carry no meaning to someone who doesn't read the codebase. Every item, including "current vs. proposed" and multi-variant items, renders the compared states side by side (or labeled Before/After) at their real size, color and weight, using real or representative copy from the site. The decision is "which of these two things I'm looking at do I prefer," never "which of these two labels."
@@ -76,7 +78,7 @@ Write the content; the builder writes the page. Read `../../reference/review-pag
   6. Customer vs. admin card density — DENY (Works as Designed) — COMMENT: two audiences with genuinely different density needs, not drift
   ```
 
-Publish with the `Artifact` tool, same file path across revisions of the same audit round.
+Deliver the page as "Where the page goes" below says (with `artifact`, that means publishing it with the `Artifact` tool). Use the same file path across revisions of the same audit round.
 
 **Verify before publishing, every time.** The build runs its own check; run `--smoke` too when Playwright is available. Then screenshot the page in both preview themes and check the coded examples don't add sideways scroll or overlap. Only publish after all of it passes.
 

@@ -109,9 +109,101 @@ def resolve_files(obj, base):
     return obj
 
 
-def data_uri(path):
-    mime = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
-    return "data:%s;base64,%s" % (mime, base64.b64encode(path.read_bytes()).decode("ascii"))
+def data_uri(path, data=None, mime=None):
+    mime = mime or mimetypes.guess_type(str(path))[0] or "application/octet-stream"
+    return "data:%s;base64,%s" % (mime, base64.b64encode(path.read_bytes() if data is None else data).decode("ascii"))
+
+
+# Screenshots (PNG and JPEG assets) are converted to WebP when the page is built,
+# which makes a page of screenshots several times lighter with no visible change.
+# The defaults are still being chosen; the spec keys image_quality / image_max_width
+# and the env vars PROOFS_IMAGE_QUALITY / PROOFS_IMAGE_MAX_WIDTH override them
+# (env first, then spec, then these).
+DEFAULT_IMAGE_QUALITY = 82
+DEFAULT_IMAGE_MAX_WIDTH = None  # None keeps the screenshot's own width
+CONVERTIBLE = {".png", ".jpg", ".jpeg"}
+WARN_PAGE_BYTES = 3 * 1024 * 1024
+BLANK_GIF = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="
+
+
+def image_settings(spec, env=None):
+    env = os.environ if env is None else env
+    def pick(env_key, spec_key, default, lo, hi):
+        raw = env.get(env_key) or spec.get(spec_key)
+        if raw in (None, ""):
+            return default
+        try:
+            v = int(raw)
+        except (TypeError, ValueError):
+            raise SpecError("%s must be a whole number, got %r" % (spec_key, raw))
+        if not lo <= v <= hi:
+            raise SpecError("%s must be between %d and %d, got %d" % (spec_key, lo, hi, v))
+        return v
+    return {"quality": pick("PROOFS_IMAGE_QUALITY", "image_quality", DEFAULT_IMAGE_QUALITY, 1, 100),
+            "max_width": pick("PROOFS_IMAGE_MAX_WIDTH", "image_max_width", DEFAULT_IMAGE_MAX_WIDTH, 16, 20000)}
+
+
+def image_tool():
+    """The first WebP encoder found: ("magick", path) or ("cwebp", path), else None."""
+    for name in ("magick", "cwebp"):
+        found = shutil.which(name)
+        if found:
+            return name, found
+    return None
+
+
+def image_width(path):
+    """Pixel width of a PNG or JPEG, read from its header (stdlib only)."""
+    data = path.read_bytes()
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return int.from_bytes(data[16:20], "big")
+    i = 2
+    while i + 9 < len(data) and data[:2] == b"\xff\xd8":
+        if data[i] != 0xFF:
+            i += 1
+            continue
+        marker, size = data[i + 1], int.from_bytes(data[i + 2:i + 4], "big")
+        if marker in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
+            return int.from_bytes(data[i + 7:i + 9], "big")
+        i += 2 + size
+    return None
+
+
+def to_webp(path, settings, tool):
+    """WebP bytes for a PNG or JPEG, downscaled only when wider than max_width, or
+    None when the conversion fails or would not be smaller."""
+    q, mw = settings["quality"], settings["max_width"]
+    width = image_width(path)
+    shrink = bool(mw and width and width > mw)
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp) / "out.webp"
+        name, exe = tool
+        if name == "magick":
+            cmd = [exe, str(path)] + (["-resize", "%dx>" % mw] if shrink else []) + ["-quality", str(q), str(out)]
+        else:
+            cmd = [exe, "-quiet", "-q", str(q)] + (["-resize", str(mw), "0"] if shrink else []) + [str(path), "-o", str(out)]
+        r = subprocess.run(cmd, capture_output=True)
+        if r.returncode != 0 or not out.is_file():
+            return None
+        data = out.read_bytes()
+    if not shrink and len(data) >= path.stat().st_size:
+        return None
+    return data
+
+
+def embed_asset(path, settings, tool, report):
+    size = path.stat().st_size
+    if path.suffix.lower() in CONVERTIBLE:
+        if tool is None:
+            report["missing_tool"] = True
+        else:
+            data = to_webp(path, settings, tool)
+            if data is not None:
+                report["converted"] += 1
+                report["before"] += size
+                report["after"] += len(data)
+                return data_uri(path, data, "image/webp")
+    return data_uri(path)
 
 
 def load_spec(spec_path):
@@ -125,12 +217,16 @@ def load_spec(spec_path):
     if not spec.get("title"):
         raise SpecError("title is required")
     assets = {}
+    settings = image_settings(spec)
+    tool = image_tool()
+    report = {"converted": 0, "before": 0, "after": 0, "missing_tool": False, "settings": settings}
     for name, rel in (spec.get("assets") or {}).items():
         p = (path.parent / rel).resolve()
         if not p.is_file():
             raise SpecError("asset %r not found: %s" % (name, rel))
-        assets[name] = data_uri(p)
+        assets[name] = embed_asset(p, settings, tool, report)
     spec["_assets"] = assets
+    spec["_image_report"] = report
     return spec
 
 
@@ -466,7 +562,7 @@ def page(spec):
     js["key"] = spec.get("storage_key") or "proofs:%s:%s" % (mode, slug("%s %s %s" % (
         proj.get("name", ""), proj.get("session", proj.get("stream", "")), spec["title"])))
     css_vars = "".join("%s:%s;" % (k, v) for k, v in (spec.get("vars") or {}).items())
-    assets = "".join("--asset-%s:url(%s);" % (k, v) for k, v in spec["_assets"].items())
+    assets = "/*rp-assets*/"
     html_out = ['<!doctype html>', '<html lang="en">', "<head>", '<meta charset="utf-8">',
                 '<meta name="viewport" content="width=device-width, initial-scale=1">',
                 "<title>%s</title>" % esc(spec["title"]), spec.get("head_html", ""),
@@ -528,9 +624,72 @@ def page(spec):
     html_out.append("<script>\n%s\n</script>" % ENGINE.read_text())
     html_out.append("</body></html>")
     text = "\n".join(html_out)
-    for k, v in spec["_assets"].items():
-        text = text.replace("{{asset:%s}}" % k, v)
+    return place_assets(text, spec["_assets"])
+
+
+def place_assets(text, assets):
+    """Put each asset's bytes in the page exactly once. A font in @font-face is
+    inlined there; other CSS uses (url({{asset:x}}) or var(--asset-x)) read the :root variable; a single HTML use with no CSS use
+    gets the data URI inline; several HTML uses point at the variable and a small
+    script copies it into each attribute when the page loads."""
+    root, fill = [], False
+    # @font-face cannot read CSS variables, so a font's data URI goes inline there.
+    text = re.sub(r"@font-face\s*\{(?:[^{}]|\{\{asset:[\w-]+\}\})*\}",
+                  lambda m: re.sub(r"\{\{asset:([\w-]+)\}\}",
+                                   lambda a: assets.get(a.group(1), a.group(0)), m.group(0)), text)
+    for k, v in assets.items():
+        ph = "{{asset:%s}}" % k
+        for q in ("", "'", '"'):
+            text = text.replace("url(%s%s%s)" % (q, ph, q), "var(--asset-%s)" % k)
+        css_use = ("var(--asset-%s)" % k) in text
+        html_uses = text.count(ph)
+        if html_uses == 1 and not css_use:
+            text = text.replace(ph, v)
+            continue
+        if html_uses:
+            text, n = re.subn(r'([\w-]+)=(\\?)"%s\\?"' % re.escape(ph),
+                              lambda m: '%s=%s"%s%s" data-rp-asset=%s"%s %s%s"' % (
+                                  m.group(1), m.group(2), BLANK_GIF, m.group(2), m.group(2), m.group(1), k, m.group(2)),
+                              text)
+            fill = fill or n > 0
+            text = text.replace(ph, v)  # anything left is not an attribute: inline it
+        if css_use or html_uses:
+            root.append("--asset-%s:url(%s);" % (k, v))
+    text = text.replace("/*rp-assets*/", "".join(root), 1)
+    if fill:
+        text = text.replace("</body></html>", "<script>\n%s\n</script>\n</body></html>" % ASSET_FILL, 1)
     return text
+
+
+ASSET_FILL = """document.querySelectorAll("[data-rp-asset]").forEach(function (el) {
+  var p = el.getAttribute("data-rp-asset").split(" ");
+  var v = getComputedStyle(document.documentElement).getPropertyValue("--asset-" + p[1]).trim();
+  var m = v.match(/^url\\(["']?([\\s\\S]*?)["']?\\)$/);
+  if (m) el.setAttribute(p[0], m[1]);
+});"""
+
+
+def size_warning(text, spec):
+    """A warning line when the page is over WARN_PAGE_BYTES, naming the largest assets."""
+    total = len(text.encode())
+    if total <= WARN_PAGE_BYTES:
+        return None
+    big = sorted(spec["_assets"].items(), key=lambda kv: -len(kv[1]))[:3]
+    names = ", ".join("%s (%d KB)" % (k, len(v) // 1024) for k, v in big)
+    return ("warning: the page is %.1f MB, over %d MB. Largest assets: %s. Lower image_quality "
+            "or set image_max_width, or split the review." % (total / 1048576, WARN_PAGE_BYTES // 1048576, names or "none"))
+
+
+def image_line(spec):
+    r = spec.get("_image_report") or {}
+    if r.get("converted"):
+        return "images: %d converted to WebP at quality %d%s (%d KB -> %d KB)" % (
+            r["converted"], r["settings"]["quality"],
+            ", max width %d" % r["settings"]["max_width"] if r["settings"]["max_width"] else "",
+            r["before"] // 1024, r["after"] // 1024)
+    if r.get("missing_tool"):
+        return "images: no magick or cwebp found, so screenshots were embedded as they are (install ImageMagick or libwebp to shrink them)"
+    return None
 
 
 def review_item(it, dec, colors):
@@ -722,13 +881,17 @@ def main(argv=None):
     if not a.spec or not a.out:
         ap.error("give SPEC.json --out PAGE.html, or --check PAGE, or --smoke PAGE")
     try:
-        text = page(load_spec(a.spec))
+        spec = load_spec(a.spec)
+        text = page(spec)
     except (SpecError, ValueError, KeyError) as e:
         print("spec error: %s" % e, file=sys.stderr)
         return 1
     Path(a.out).parent.mkdir(parents=True, exist_ok=True)
     Path(a.out).write_text(text)
     print("wrote %s (%d KB)" % (a.out, len(text.encode()) // 1024))
+    for line in (image_line(spec), size_warning(text, spec)):
+        if line:
+            print(line)
     if a.no_check:
         return 0
     errs = check(a.out)

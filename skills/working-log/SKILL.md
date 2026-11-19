@@ -1,7 +1,7 @@
 ---
 name: working-log
-version: 1.7.1
-description: Use when the user cannot reliably read terminal output, prefers a durable page to chat, or is on a phone, and the first time a session has a question, confirmation or check for them — keeps one session page (waiting on you, checks, log, decided) at one URL. It owns that page; questions and qa-checklist write its sections.
+version: 1.7.2
+description: Use when the user cannot reliably read terminal output, prefers a durable page to chat, is stepping away, and the first time a session has something waiting on them — keeps one session page (waiting on you, checks, log, decided) at one URL. It owns that page and the log; questions and qa-checklist write its other sections.
 ---
 
 # Working Log

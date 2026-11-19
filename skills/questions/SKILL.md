@@ -1,7 +1,7 @@
 ---
 name: questions
-version: 1.0.1
-description: Use when you have a question, decision or confirmation for the user that must not scroll away in chat, or several piling up — asks them as real answer controls with a stable id, a recommended option, notes and a copy-back export. Questions only; qa-checklist covers checks, design-review visual options, and working-log hosts these on its session page.
+version: 1.1.0
+description: Use when you need the user to answer or decide anything — one question or several piling up in chat, including decisions to answer later or from a phone — as real answer controls with a recommended pick and a copy-back export. On working-log's session page they still come from here, at the top. Checks: qa-checklist.
 ---
 
 # Questions

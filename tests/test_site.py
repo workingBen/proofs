@@ -4,9 +4,14 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DOCS = os.path.join(ROOT, "docs")
 
 
+sys.path.insert(0, os.path.join(ROOT, "site-src"))
+from site_order import NOT_YET_ON_SITE  # noqa: E402
+
+
 def skills():
+    """Skills that have a site page: every skill, less the ones waiting on review."""
     return sorted(d for d in os.listdir(os.path.join(ROOT, "skills"))
-                  if os.path.isfile(os.path.join(ROOT, "skills", d, "SKILL.md")))
+                  if os.path.isfile(os.path.join(ROOT, "skills", d, "SKILL.md")) and d not in NOT_YET_ON_SITE)
 
 
 def build():

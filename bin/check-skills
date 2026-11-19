@@ -23,7 +23,7 @@ REFS = [re.compile(r"`" + NAME + r"`\s+[Ss]kill\b"),
         re.compile(r"(?<![\w/.:<-])/" + NAME + r"(?![\w/.:-])")]
 BUILTIN = {"help", "clear", "compact", "init", "review", "model", "config", "loop", "schedule",
            "simplify", "login", "logout", "status", "memory", "agents", "hooks", "mcp", "plugin", "plugins"}
-PAGE_SKILLS = {"design-review", "visual-qa", "pr-qa", "working-log", "article-copy-edit",
+PAGE_SKILLS = {"design-review", "visual-qa", "pr-qa", "working-log", "questions", "qa-checklist", "article-copy-edit",
                "style-guide", "photo-picker", "todos", "review-cycle"}
 PAGE_VALUES = ("artifact", "file", "wifi")
 PAGE_REF = "../../reference/where-the-page-goes.md"

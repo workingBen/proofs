@@ -1,7 +1,8 @@
 // Click through a built review page in headless Chromium and report what broke.
 // Usage: node smoke.cjs <playwright package dir> <page.html>
 // Prints one JSON line: { mode, items, export, problems: [...] }. Exercises the
-// first item of the first section of each kind the page's frame uses. Run through
+// first item of each kind the page's frame uses, and on question and session
+// pages checks that open questions sit directly under the sticky bar. Run through
 // review_page.py --smoke rather than directly.
 const path = require("path");
 const { chromium } = require(process.argv[2]);
@@ -47,14 +48,28 @@ const file = "file://" + path.resolve(process.argv[3]);
       await card.locator(".rp-comment textarea").fill("smoke comment");
       if (sec.decisions.mark_read) await card.locator("[data-read]").check();
     }
-  } else if (S.mode === "questions") {
-    out.items = await page.locator("[data-qid], [data-qaid]").count();
+  } else if (S.mode === "questions" || S.mode === "session") {
+    out.items = await page.locator("[data-qid], [data-qaid], [data-entry]").count();
     const firstOpt = page.locator(".q input[type=radio]").first();
     if (await firstOpt.count()) await firstOpt.check();
     const firstQa = page.locator(".qa input[type=radio]").first();
     if (await firstQa.count()) await firstQa.check();
+    const tick = page.locator("[data-tick]").first();
+    if (await tick.count()) await tick.check();
     const note = page.locator("[data-note]").first();
     if (await note.count()) await note.fill("smoke note");
+    // Open questions first: the first thing in <main>, and visible without scrolling.
+    if (items("questions").length) {
+      const first = await page.evaluate(() => {
+        const el = document.querySelector(".rp-main").firstElementChild;
+        const bars = Array.from(document.querySelectorAll(".rp-projectbar, .rp-statusbar, .bar"));
+        const barBottom = Math.max(0, ...bars.map((b) => b.getBoundingClientRect().bottom));
+        return { cls: el ? el.className : "", top: el ? el.getBoundingClientRect().top : 1e9, barBottom };
+      });
+      if (!first.cls.includes("rp-kind-questions")) problems.push("open questions are not the first thing under the sticky bar");
+      if (first.top - first.barBottom > 80) problems.push(`open questions start ${Math.round(first.top - first.barBottom)}px below the sticky bar`);
+    }
+    if (S.mode === "session" && !(await page.title()).startsWith(S.session)) problems.push("<title> does not lead with the session name");
   } else {
     out.items = await page.locator("[data-entry]").count();
     if (out.items !== items("log").length) problems.push(`rendered ${out.items} entries, spec has ${items("log").length}`);

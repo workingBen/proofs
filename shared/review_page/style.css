@@ -138,9 +138,10 @@ ins.rp-ins, .rp-panes ins { background:color-mix(in srgb, var(--rp-accept) 18%, 
 @media (prefers-reduced-motion: reduce) { .rp-flash { transition:none; } }
 
 /* log mode */
-.rp-projectbar { position:sticky; top:0; z-index:30; background:#16161c; color:#d7d7de; padding:10px 28px; font-size:15px; }
+.rp-topbars { position:sticky; top:0; z-index:30; }
+.rp-projectbar { background:#16161c; color:#d7d7de; padding:10px 28px; font-size:15px; }
 .rp-projectbar .rp-session { color:#c4a7ff; }
-.rp-statusbar { position:sticky; top:41px; z-index:29; display:flex; flex-wrap:wrap; gap:8px 16px; align-items:center; padding:8px 28px;
+.rp-statusbar { display:flex; flex-wrap:wrap; gap:8px 16px; align-items:center; padding:8px 28px;
   background:var(--rp-sunk); border-bottom:1px solid var(--rp-rule); font-size:15px; }
 .rp-statusbar .rp-marker { margin-left:auto; color:var(--rp-soft); }
 .rp-statusbar .rp-marker b { color:var(--rp-accent); }
@@ -164,6 +165,47 @@ ins.rp-ins, .rp-panes ins { background:color-mix(in srgb, var(--rp-accept) 18%, 
 .rp-note-label { flex:1 1 320px; display:flex; flex-direction:column; gap:4px; font-size:14px; color:var(--rp-faint); }
 .rp-tick { display:flex; gap:8px; align-items:center; font-size:15.5px; cursor:pointer; }
 .rp-export .rp-copy { margin-top:12px; }
+
+/* session mode: the log chrome, with question and check cards on its light and
+   dark tokens. The questions card styles below read these names; questions mode
+   redefines them for its own dark world. */
+body.rp {
+  --ground:var(--rp-bg); --raised:var(--rp-card); --sunk:var(--rp-sunk); --ink:var(--rp-ink); --ink-soft:var(--rp-soft);
+  --ink-faint:var(--rp-faint); --rule:var(--rp-rule); --accent:var(--rp-accent); --accent-ink:var(--rp-accent-ink);
+  --accent-soft:color-mix(in srgb, var(--rp-accent) 12%, transparent); --good:var(--rp-accept);
+  --good-soft:color-mix(in srgb, var(--rp-accept) 14%, transparent); --warn:var(--rp-revise);
+  --warn-soft:color-mix(in srgb, var(--rp-revise) 14%, transparent); --shadow:none; --serif:var(--rp-sans);
+}
+.rp-mode-session .rp-section { margin:0 0 34px; }
+.rp-mode-session .rp-kind-questions, .rp-mode-session .rp-kind-links {
+  background:color-mix(in srgb, var(--rp-accent) 7%, var(--rp-bg)); border:2px solid var(--rp-accent);
+  border-radius:14px; padding:18px 20px 4px; }
+.rp-mode-session .rp-kind-links { padding-bottom:14px; border-width:1px; }
+.rp-mode-session .rp-kind-questions > h2, .rp-mode-session .rp-kind-links > h2 { color:var(--rp-accent); }
+.rp-mode-session .rp-kind-qa { border-top:3px solid var(--rp-revise); padding-top:14px; }
+.rp-mode-session .rp-kind-qa > h2 { color:var(--rp-revise); }
+.rp-mode-session .rp-section > h2 { margin-top:0; }
+.rp-mode-session .rp-kind-log > h2, .rp-mode-session .rp-kind-decided > h2 { margin-top:8px; }
+.rp-count { font-weight:600; letter-spacing:.02em; text-transform:none; color:var(--rp-soft); margin-left:6px; }
+.rp-mode-session .q, .rp-mode-session .qa { padding:20px 22px 18px; margin:0 0 18px; }
+.rp-mode-session .q-ask { font-size:21px; }
+.rp-mode-session .notes textarea { font-size:15.5px; }
+.rp-context { margin:8px 0 30px; padding-top:18px; border-top:1px solid var(--rp-rule); }
+.rp-context .rp-h1 { font-size:24px; }
+.rp-links { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+.rp-links li { font-size:16.5px; }
+.rp-links a { color:var(--rp-accent); font-weight:650; margin-left:6px; }
+.rp-link-status { color:var(--rp-ink); }
+.rp-decided summary { cursor:pointer; color:var(--rp-soft); font-size:15.5px; padding:6px 0; }
+.rp-decided ul { margin:8px 0 0; padding-left:20px; color:var(--rp-soft); font-size:15.5px; }
+.rp-decided li { margin:0 0 6px; }
+.rp-decided-what { color:var(--rp-ink); }
+.rp-decided-when { color:var(--rp-faint); font-size:14px; }
+.rp-mode-questions .rp-links li, .rp-mode-questions .rp-decided li, .rp-mode-questions .rp-decided summary { color:var(--ink-soft); }
+.rp-mode-questions .rp-link-status, .rp-mode-questions .rp-decided-what { color:var(--ink); }
+.rp-mode-questions .rp-links a { color:var(--accent); }
+.rp-mode-questions .rp-context { border-top-color:var(--rule); }
+.rp-mode-questions .rp-context .rp-h1 { font-size:26px; }
 
 /* questions mode: one dark world with a violet accent, whatever the theme */
 body.rp-mode-questions, :root[data-theme] body.rp-mode-questions {
@@ -232,4 +274,15 @@ body.rp-mode-questions, :root[data-theme] body.rp-mode-questions {
   .rp-item, .rp-entry { padding:16px; }
   .rp-read { margin-left:0; }
   .rp-mode-questions .rp-main { padding:28px 16px 96px; }
+  .rp-mode-session .rp-kind-questions, .rp-mode-session .rp-kind-links { padding:14px 12px 2px; }
+  .rp-mode-session .q, .rp-mode-session .qa { padding:16px; }
+  /* phones: the two top bars collapse to one line (session name, tally, Copy) */
+  .rp-topbars { display:flex; align-items:center; background:var(--rp-sunk); border-bottom:1px solid var(--rp-rule); }
+  .rp-projectbar { flex:0 0 auto; min-width:0; max-width:45%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    padding:8px 10px 8px 16px; align-self:stretch; display:flex; align-items:center; }
+  .rp-projectbar .rp-pb-x, .rp-statusbar .rp-marker, .rp-statusbar .rp-copy-x { display:none; }
+  .rp-projectbar .rp-session { overflow:hidden; text-overflow:ellipsis; }
+  .rp-statusbar { flex:1 1 0; min-width:0; flex-wrap:nowrap; padding:6px 16px 6px 10px; border-bottom:0; }
+  .rp-statusbar #rp-tally { flex:1 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:14px; }
+  .rp-statusbar .rp-copy { flex:none; min-height:44px; padding:8px 14px; }
 }

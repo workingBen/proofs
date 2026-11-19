@@ -36,6 +36,8 @@ Screenshots shrink automatically when ImageMagick or libwebp (`cwebp`) is instal
 
 <p align="center"><sub>The 30-second tour. Every picture is a real page, before and after. <a href="assets/clips/proofs-30s.mp4">Full-size MP4</a> (1920x1080, silent).</sub></p>
 
+<p align="center"><a href="https://youtube.com/shorts/LGoRROsziv8">Watch the one-minute tour on YouTube</a></p>
+
 <!-- examples:grid:start -->
 ## See it work
 

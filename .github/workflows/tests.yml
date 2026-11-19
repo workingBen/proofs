@@ -1,0 +1,30 @@
+# Runs the test suite by hand (Actions tab -> Run workflow) and once a week.
+# No push or pull_request triggers, on purpose.
+name: tests
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 11 * * 1"   # Mondays, 3am Pacific (4am during daylight time)
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: ImageMagick and fonts (README tiles and showcase tests)
+        run: sudo apt-get update && sudo apt-get install -y imagemagick fonts-dejavu-core
+      - name: Playwright (browser click-through tests)
+        run: npm install --prefix /tmp/pw "playwright@$PW_VERSION" && npx --prefix /tmp/pw playwright install --with-deps chromium
+        env:
+          PW_VERSION: "1.61.1"
+      - name: Tests
+        run: python3 -m unittest discover -s tests
+        env:
+          PROOFS_PLAYWRIGHT: /tmp/pw/node_modules/playwright
+      - name: Skill and privacy checks
+        run: bin/check-skills && bin/privacy-scan

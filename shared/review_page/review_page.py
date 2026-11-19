@@ -116,11 +116,11 @@ def data_uri(path, data=None, mime=None):
 
 # Screenshots (PNG and JPEG assets) are converted to WebP when the page is built,
 # which makes a page of screenshots several times lighter with no visible change.
-# The defaults are still being chosen; the spec keys image_quality / image_max_width
-# and the env vars PROOFS_IMAGE_QUALITY / PROOFS_IMAGE_MAX_WIDTH override them
-# (env first, then spec, then these).
+# The spec keys image_quality / image_max_width and the env vars
+# PROOFS_IMAGE_QUALITY / PROOFS_IMAGE_MAX_WIDTH override these (env first, then
+# spec, then these). The width limit is used only when the shrunk file is smaller.
 DEFAULT_IMAGE_QUALITY = 70
-DEFAULT_IMAGE_MAX_WIDTH = None  # None keeps the screenshot's own width
+DEFAULT_IMAGE_MAX_WIDTH = 1600
 CONVERTIBLE = {".png", ".jpg", ".jpeg"}
 WARN_PAGE_BYTES = 3 * 1024 * 1024
 BLANK_GIF = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="

@@ -48,7 +48,7 @@ Common fields:
 | `vars` | CSS variables set on `:root`, to retune the chrome's light values. Dark values go in `css` under `@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {…} }` and `:root[data-theme="dark"]`; give every color you change a dark pair, and a filled box its own text color (as `--rp-amber-ink` does), or it goes unreadable in dark mode |
 | `head_html` | extra `<head>` markup |
 | `assets` | `{"name": "path/to/file.png"}`: the builder reads the files, so their bytes never pass through your context. Use one as `{{asset:name}}` (in an attribute, or in `css` as `url({{asset:name}})`) or as `var(--asset-name)`; each is embedded **once** however often it is used. PNG and JPEG become WebP when `magick` or `cwebp` is installed: the smaller of lossy (at `image_quality`) and lossless, or the original if that is smaller still (without either tool they are kept, and the build says so) |
-| `image_quality`, `image_max_width` | WebP quality (1–100, default 70) and the widest a screenshot may be, in pixels: applied only when the shrunk file is actually smaller, and never upscales. Env vars `PROOFS_IMAGE_QUALITY` and `PROOFS_IMAGE_MAX_WIDTH` win over the spec |
+| `image_quality`, `image_max_width` | WebP quality (1–100, default 70) and the widest a screenshot may be, in pixels (default 1600): applied only when the shrunk file is actually smaller, and never upscales. Env vars `PROOFS_IMAGE_QUALITY` and `PROOFS_IMAGE_MAX_WIDTH` win over the spec |
 | `storage_key` | the `localStorage` key, if the default is not stable enough |
 
 ### Frame and sections

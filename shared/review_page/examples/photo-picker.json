@@ -1,0 +1,16 @@
+{
+  "mode": "review",
+  "title": "How-To Guides — Photo Picker",
+  "decisions": "photo-picker",
+  "assets": {"a": "sample.png"},
+  "items": [
+    {"label": "Article One — Introduction section", "location": "Illustrates: the trail",
+     "variants": [
+       {"name": "summit view", "html": "<img alt=\"Summit view\" src=\"{{asset:a}}\">", "note_html": "New, via Pexels"},
+       {"name": "trail map", "html": "<img alt=\"Trail map\" src=\"{{asset:a}}\">", "note_html": "Already on site, reused"}
+     ], "recommended": true, "reason_html": "<p>The map orients a first-time reader.</p>"},
+    {"label": "Article Two — Proofing Basket",
+     "variants": [{"name": "basket on bench", "html": "<img alt=\"Basket\" src=\"{{asset:a}}\">"}],
+     "recommended": false, "reason_html": "<p>Only one real contender.</p>"}
+  ]
+}

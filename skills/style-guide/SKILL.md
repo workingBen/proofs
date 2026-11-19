@@ -1,6 +1,6 @@
 ---
 name: style-guide
-version: 1.5.3
+version: 1.6.0
 description: Use when the user wants to review and codify design/style consistency across the whole site (type scale, spacing, color, icon-header layout, card style, hero headers, disclaimer placement) rather than one page at a time — audits pages/templates for existing and candidate conventions, builds an interactive Artifact review with a 4-state decision model (Deny / Request Revision / Accept - Apply Everywhere Now / Accept - Record for Later), and persists accepted rules into a committed, re-publishable docs/style-guide.html that both the user and future Claude sessions consult.
 ---
 
@@ -46,27 +46,26 @@ For each inconsistency or notable convention not already covered by an existing 
 
 Give every item a **Reason** and a **Recommended/Not Recommended** badge, same convention as the sibling tools.
 
-### 3. Build the review page as an Artifact
+### 3. Build the review page with the shared builder
 
-Follow any design guidance your environment provides for published pages, same as both siblings.
+Write the content; the builder writes the page. Read `../../reference/review-page.md` first: it documents the spec and the command, `python3 ../../shared/review_page/review_page.py spec.json --out page.html`, with `"decisions": "style-guide"`. Do not hand-write the page's JavaScript. Follow any design guidance your environment provides for published pages, same as both siblings.
 
-- **Rendered examples, not screenshots, and not prose either.** Unlike `design-review`, build each example as real coded HTML/CSS using the site's actual classes and tokens, rendered inline in the Artifact, not a screenshot of a live page. The point is to show the underlying recipe next to the visual, which a screenshot can't do. This cuts both ways: never substitute a *description* of the visual difference (for example, a line of text reading "the signup page uses a larger heading than the pricing page") for the difference itself. Class and token names carry no meaning to someone who doesn't read the codebase. Every item, including "current vs. proposed" and multi-variant items, renders the actual compared states side by side (or clearly labeled Before/After) at their real size, color and weight, using real or representative copy from the site. The decision is then "which of these two things I'm looking at do I prefer," never "which of these two labels do I prefer."
-- **Clickable category filter tabs.** For any round past a handful of items, render the category list (Typography, Spacing, Color, and so on, plus a live count per category) as clickable filter buttons near the top, not just static section headers. Clicking one scrolls to or isolates that category, so reviewing a big audit doesn't require scrolling past everything. Keep the section headers too; the tabs are a navigation aid on top of them, not a replacement. Only list categories that actually have an item in this round.
-- **Colored category chips.** Give each category its own distinct badge color, reused consistently for that category's chip on every item and on its filter tab. It makes scanning a long round by eye much faster than uniform-colored labels.
-- **A decision-state legend**, once near the top of the page (not per item): a small key mapping each of the four decision colors (Deny, Revise, Accept-now, Accept-later) to its meaning, so the color-coded progress bar and per-item button states stay legible without re-reading the button row on every item.
-- **A light/dark preview switch whenever the site has both themes.** A small toggle near the top flips every rendered example between the site's light and dark values, independent of the review page's own chrome theme (which stays on its own light/dark handling, unaffected by the toggle). This matters because several real inconsistencies are dark-mode-only contrast bugs a reviewer can't judge from seeing the recipe in one theme. A site with only one theme doesn't need the switch.
-- **Structure per item:** number + category label + Recommended/Not-Recommended badge, the rendered example(s) (a single example for an already-decided item, a clickable variant gallery for an undecided one), the exact class or markup recipe in a `<code>` block, a Reason block, then the decision bar:
+- **Rendered examples, not screenshots, and not prose either.** Unlike `design-review`, build each example as real coded HTML/CSS using the site's actual classes and tokens (in `css`), rendered inline, not a screenshot of a live page. The point is to show the underlying recipe next to the visual. This cuts both ways: never substitute a *description* of the visual difference (for example, "the signup page uses a larger heading than the pricing page") for the difference itself. Class and token names carry no meaning to someone who doesn't read the codebase. Every item, including "current vs. proposed" and multi-variant items, renders the compared states side by side (or labeled Before/After) at their real size, color and weight, using real or representative copy from the site. The decision is "which of these two things I'm looking at do I prefer," never "which of these two labels."
+- **Each item:** `label`, `category` (Typography, Spacing, Color, Components, ...), `recommended`, the rendered example plus its exact class or markup recipe in a `<code>` block in `body_html` (one example for an already-decided item; `variants` for an undecided one), and `reason_html`.
+- **Turn on `"filters": true`** for any round past a handful of items: clickable category tabs with a live open count, each category with its own chip color on every item and tab. Keep the section headers (one section per category) too.
+- **Turn on `"preview_toggle": true` whenever the site has both themes**, and write each example's dark values in `css` under `[data-preview="dark"]`. Several real inconsistencies are dark-mode-only contrast bugs a reviewer can't judge in one theme. A one-theme site doesn't need it.
+- The preset shows the decision legend once near the top and a color-coded progress bar. Its four buttons:
 
   | Button | Comment box | Meaning |
   |---|---|---|
-  | ✕ Deny | optional; a **"Works as Designed"** checkbox sits next to the comment box | Reject the proposed style. Plain deny (checkbox unchecked): nothing recorded, nothing changed, the comment is just a note. With the checkbox checked: the *current, existing* state is recorded as the ratified rule instead of the proposal, a positive confirmation that the status quo is intentional and correct, not silence. Use this when two things that look inconsistent are actually deliberately different (for example, a denser card layout for admins than for customers). The comment becomes that rule's rationale in `docs/style-guide.html`. |
-  | ↻ Request Revision | opens, expected | Don't accept as shown; the comment explains what to try instead. Scoped follow-up round next time. |
-  | ✓ Accept: Apply Everywhere Now | optional | Record as the official rule AND retrofit every page currently using something else to match it, in the same apply pass. |
-  | ✓ Accept: Record for Later | optional | Record as the official rule only. Retrofitting existing pages becomes a new entry in the project's to-do list (or ask where follow-up work should be tracked if the project has no to-do list), not done in this pass. |
+  | ✕ Deny | optional; a **"Works as Designed"** checkbox appears beside it | Reject the proposed style. Plain deny: nothing recorded, nothing changed, the comment is just a note. With the checkbox: the *current, existing* state is recorded as the ratified rule instead of the proposal, a positive confirmation that the status quo is intentional (for example, a denser card layout for admins than for customers). The comment becomes that rule's rationale. |
+  | ↻ Request Revision | expected | Don't accept as shown; the comment explains what to try instead. Scoped follow-up round next time. |
+  | ✓ Accept: Apply Everywhere Now | optional | Record as the official rule AND retrofit every page using something else, in the same apply pass. |
+  | ✓ Accept: Record for Later | optional | Record as the official rule only. Retrofitting becomes a new entry in the project's to-do list (or ask where follow-up work is tracked), not done in this pass. |
 
-  Four buttons, not five. An optional comment box is available on **all four**: leaving it blank on any of them is a plain decision; filling it in on an Accept modifies the recorded rule (and the retrofit, if also applying now); filling it in on Deny is just a reason unless "Works as Designed" is checked, in which case it's the rule's rationale. There's no separate "Approve with Comment" button competing with the Accepts, and no separate "Confirm as Designed" button competing with Deny.
+  Four buttons, not five: the comment box is open on all four. Filled in on an Accept, it modifies the recorded rule (and the retrofit); on Deny it is just a reason unless "Works as Designed" is checked.
 
-- **Sticky bottom bar:** running "X of N reviewed" + a tally per state + "Copy My Decisions", same mechanism as the siblings (`navigator.clipboard.writeText`). If the clipboard is missing or the write fails, show the summary in a selectable text box (select all) instead, and never show "Copied" on failure. Export format, first line identifying the review:
+- **Export**, first line identifying the review (the bracketed title). An undecided item is left out entirely, not printed as `PENDING`; step 4 treats any missing number as pending. For an undecided item the chosen option is named, e.g. `ACCEPT (Record for Later: Option B)`.
   ```
   [Style Guide Audit — 2026-01-15]
   1. Body text size on disclaimer notes — ACCEPT (Apply Everywhere Now)
@@ -76,16 +75,10 @@ Follow any design guidance your environment provides for published pages, same a
   5. Hero header color — DENY
   6. Customer vs. admin card density — DENY (Works as Designed) — COMMENT: two audiences with genuinely different density needs, not drift
   ```
-  Omit the `— COMMENT: ...` suffix for items with no comment. An item the user never decided on simply doesn't appear in the pasted export at all (nothing to copy): its number is absent, not present as a `PENDING` line. Step 4's apply logic treats any number missing from the summary as still pending.
 
 Publish with the `Artifact` tool, same file path across revisions of the same audit round.
 
-**Verify before publishing, every time.** Same requirement as both siblings:
-1. Extract the contents of the page's `script` element and run `node --check` on it.
-2. Load the file in a headless browser (Playwright or similar), assert the expected item count rendered, click through a decision (including selecting a variant, for an undecided item) on at least one already-decided and one undecided item, and confirm page errors came back empty.
-3. Screenshot the Artifact page itself and check the coded examples don't introduce unintended horizontal scroll or overlapping elements.
-
-Only publish after all three pass.
+**Verify before publishing, every time.** The build runs its own check; run `--smoke` too when Playwright is available. Then screenshot the page in both preview themes and check the coded examples don't add sideways scroll or overlap. Only publish after all of it passes.
 
 ### 4. Applying the decisions
 
@@ -121,7 +114,7 @@ Check that the project's own instructions file (`CLAUDE.md` or the equivalent) a
 
 ### 7. Follow-up rounds on `REVISE` items
 
-Identical pattern to the sibling tools: scope the new Artifact to only the still-open items (every item without a final decision, not just the explicitly revised ones), carry the prior round's proposal forward on each card labeled "Round N," republish to the same URL, and re-verify before every republish. If a prior round's already-decided item is worth keeping visible for context (for example, it's near a new item covering related ground), render it visually de-emphasized (reduced opacity, say) rather than omitting it or presenting it as open again. It's there for continuity, not re-review.
+Identical pattern to the sibling tools: scope the new Artifact to only the still-open items (every item without a final decision, not just the explicitly revised ones), carry the prior round's proposal forward on each card labeled "Round N," rebuild and republish to the same URL, and re-verify before every republish. If a prior round's already-decided item is worth keeping visible for context (for example, it's near a new item covering related ground), show it de-emphasized in `after_html` or a `history_html` rather than omitting it or presenting it as open again. It's there for continuity, not re-review.
 
 ## Where the page goes
 

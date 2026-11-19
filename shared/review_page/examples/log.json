@@ -1,0 +1,18 @@
+{
+  "mode": "log",
+  "title": "invoice-export · Acme Widgets log",
+  "project": {"name": "Acme Widgets", "session": "invoice-export", "repo": "acme/widgets"},
+  "version": "v3", "updated": "2026-03-14",
+  "details": [["log", "2026-03-14 · invoice-export · page v3"], ["round", "M5–M6"], ["branch", "invoice-export"]],
+  "heading": "Working log",
+  "intro_html": "<p>Newest first. Tick what you have read, answer where asked, then <b>Copy my replies</b> and paste the text into chat.</p><p><b>To reopen:</b> the link in your artifact list titled <i>invoice-export · Acme Widgets log</i>.</p>",
+  "facts": [["Branch", "invoice-export"], ["Tests", "212 passing"], ["Live", "nothing new"], ["Waiting on you", "M6"]],
+  "entries": [
+    {"id": "M6", "title": "Found it — the config change was never being used", "status": "Your move",
+     "lede": "The setting was read from the wrong file.", "detail_html": "<p>Push the fix: <code>git push origin invoice-export</code>.</p>",
+     "questions": [{"q": "push", "label": "Did the push work?", "options": ["Pushed — it worked", "Push failed"]}]},
+    {"id": "M5", "title": "Why the new setting changed nothing", "status": "Background",
+     "lede": "Investigating; no action needed."}
+  ],
+  "after_html": "<h2>Settled</h2><p>M1–M4: export format agreed.</p>"
+}

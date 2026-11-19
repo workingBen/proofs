@@ -25,11 +25,12 @@ no skills to fire. Each case runs 3 times. `results/` is ignored by git.
 
 ## Last run
 
-2026-11-19, Claude Code 2.1.311, 3 runs per case, `-j 6`, 4 min 36 s:
+2026-11-19, Claude Code 2.1.311, 3 runs per case, `-j 6`, 4 min 56 s:
 
 - **Everyday requests (fire- and miss-): 108 of 108 runs passed.** Every skill 6 of 6
   on its own requests and 3 of 3 on its near miss.
-- **Harder round (ambiguous- and none-): 39 of 42.** The three plain coding requests
-  fired no skill (9 of 9). Ten of eleven ambiguous cases passed 3 of 3; the eleventh,
-  `ambiguous-ask-later` (several decisions to answer later from a phone, expected
-  `questions`), fired `working-log` in all 3 runs.
+- **Harder round (ambiguous- and none-): 42 of 42.** The three plain coding requests
+  fired no skill (9 of 9), and all eleven ambiguous cases passed 3 of 3. The one
+  miss in the previous run, `ambiguous-ask-later` (several decisions to answer later
+  from a phone, expected `questions`), was fixed by sharpening the `questions` and
+  `working-log` descriptions; it then passed 6 of 6 on its own.

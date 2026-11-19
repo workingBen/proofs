@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/skills-12-1d1b17" alt="12 skills">
   <img src="https://img.shields.io/badge/license-MIT-6b6458" alt="MIT license">
   <a href="https://github.com/workingBen/proofs/actions/workflows/tests.yml"><img src="https://github.com/workingBen/proofs/actions/workflows/tests.yml/badge.svg" alt="tests"></a>
-  <a href="evals/"><img src="https://img.shields.io/badge/trigger_evals-108%2F108_clear_%C2%B7_39%2F42_ambiguous-2f6b3a" alt="Trigger evals: 108 of 108 on clear requests, 39 of 42 on ambiguous ones"></a>
+  <a href="evals/"><img src="https://img.shields.io/badge/trigger_evals-108%2F108_clear_%C2%B7_42%2F42_ambiguous-2f6b3a" alt="Trigger evals: 108 of 108 on clear requests, 42 of 42 on ambiguous ones"></a>
 </p>
 
 Stop reading walls of terminal text. Every skill here includes a page you can look at, click through and decide on, then hand back to Claude in one paste. Design reviews, visual QA, copy edits and decision pages for [Claude Code](https://claude.com/claude-code): Claude builds the review, you choose from real options, and Claude builds what you chose.
@@ -107,7 +107,7 @@ Proofs is a small, tested codebase, not just a folder of prompts.
 
 **Tests and evals.**
 - 97 unit and browser tests cover the builder, the exports, the site and the README tiles (`python3 -m unittest discover -s tests`).
-- 50 trigger evals check that the right skill fires for a real request, that its nearest sibling doesn't, and that a plain coding request fires none (`claude plugin eval . --ablation none`). The latest run passed 108 of 108 on everyday requests and 39 of 42 on deliberately ambiguous ones.
+- 50 trigger evals check that the right skill fires for a real request, that its nearest sibling doesn't, and that a plain coding request fires none (`claude plugin eval . --ablation none`). The latest run passed 108 of 108 on everyday requests and 42 of 42 on deliberately ambiguous ones.
 
 **Repo checks.**
 - `bin/check-skills` holds every skill to the same rules: a description that says when to use it, a version and a changelog.

@@ -119,7 +119,7 @@ def data_uri(path, data=None, mime=None):
 # The defaults are still being chosen; the spec keys image_quality / image_max_width
 # and the env vars PROOFS_IMAGE_QUALITY / PROOFS_IMAGE_MAX_WIDTH override them
 # (env first, then spec, then these).
-DEFAULT_IMAGE_QUALITY = 82
+DEFAULT_IMAGE_QUALITY = 70
 DEFAULT_IMAGE_MAX_WIDTH = None  # None keeps the screenshot's own width
 CONVERTIBLE = {".png", ".jpg", ".jpeg"}
 WARN_PAGE_BYTES = 3 * 1024 * 1024
@@ -169,26 +169,43 @@ def image_width(path):
     return None
 
 
-def to_webp(path, settings, tool):
-    """WebP bytes for a PNG or JPEG, downscaled only when wider than max_width, or
-    None when the conversion fails or would not be smaller."""
-    q, mw = settings["quality"], settings["max_width"]
-    width = image_width(path)
-    shrink = bool(mw and width and width > mw)
+def encode_webp(path, quality, width, lossless, tool):
+    """WebP bytes for one encoding (resized to width when given), or None on failure."""
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "out.webp"
         name, exe = tool
         if name == "magick":
-            cmd = [exe, str(path)] + (["-resize", "%dx>" % mw] if shrink else []) + ["-quality", str(q), str(out)]
+            cmd = ([exe, str(path)] + (["-resize", "%dx" % width] if width else [])
+                   + (["-define", "webp:lossless=true"] if lossless else ["-quality", str(quality)]) + [str(out)])
         else:
-            cmd = [exe, "-quiet", "-q", str(q)] + (["-resize", str(mw), "0"] if shrink else []) + [str(path), "-o", str(out)]
+            cmd = ([exe, "-quiet"] + (["-lossless"] if lossless else ["-q", str(quality)])
+                   + (["-resize", str(width), "0"] if width else []) + [str(path), "-o", str(out)])
         r = subprocess.run(cmd, capture_output=True)
         if r.returncode != 0 or not out.is_file():
             return None
-        data = out.read_bytes()
-    if not shrink and len(data) >= path.stat().st_size:
+        return out.read_bytes()
+
+
+def to_webp(path, settings, tool):
+    """The smallest WebP for a PNG or JPEG, or None when the original is smaller.
+
+    Both lossy (at the quality setting) and lossless are tried, because flat UI
+    screenshots are often smaller lossless. When the screenshot is wider than
+    max_width, the shrunk versions are tried too, and win only when actually
+    smaller: shrinking a crisp shot can make the lossless file bigger. Never
+    upscales."""
+    q, mw = settings["quality"], settings["max_width"]
+    width = image_width(path)
+    widths = [None] + ([mw] if mw and width and width > mw else [])
+    best = None
+    for w in widths:
+        for lossless in (False, True):
+            data = encode_webp(path, q, w, lossless, tool)
+            if data is not None and (best is None or len(data) < len(best)):
+                best = data
+    if best is None or len(best) >= path.stat().st_size:
         return None
-    return data
+    return best
 
 
 def embed_asset(path, settings, tool, report):
@@ -683,7 +700,7 @@ def size_warning(text, spec):
 def image_line(spec):
     r = spec.get("_image_report") or {}
     if r.get("converted"):
-        return "images: %d converted to WebP at quality %d%s (%d KB -> %d KB)" % (
+        return "images: %d converted to WebP (smaller of lossy at quality %d and lossless%s) (%d KB -> %d KB)" % (
             r["converted"], r["settings"]["quality"],
             ", max width %d" % r["settings"]["max_width"] if r["settings"]["max_width"] else "",
             r["before"] // 1024, r["after"] // 1024)

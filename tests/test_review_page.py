@@ -517,12 +517,12 @@ class Assets(unittest.TestCase):
     def test_png_becomes_smaller_webp(self):
         text, out = self.built('<img alt="a" src="{{asset:shot}}">')
         self.assertIn("data:image/webp;base64,", text)
-        self.assertIn("converted to WebP at quality %d" % review_page.DEFAULT_IMAGE_QUALITY, out)
+        self.assertIn("lossy at quality %d and lossless" % review_page.DEFAULT_IMAGE_QUALITY, out)
 
     @unittest.skipUnless(MAGICK, "ImageMagick is not installed")
     def test_downscales_when_wider_never_upscales(self):
         tool = review_page.image_tool()
-        small = review_page.to_webp(self.tmp / "shot.png", {"quality": 80, "max_width": 200}, tool)
+        small = review_page.encode_webp(self.tmp / "shot.png", 80, 200, False, tool)
         (self.tmp / "s.webp").write_bytes(small)
         w = subprocess.run([MAGICK, "identify", "-format", "%w", str(self.tmp / "s.webp")], capture_output=True, text=True).stdout
         self.assertEqual(w, "200")
@@ -531,6 +531,44 @@ class Assets(unittest.TestCase):
             (self.tmp / "b.webp").write_bytes(big)
             w = subprocess.run([MAGICK, "identify", "-format", "%w", str(self.tmp / "b.webp")], capture_output=True, text=True).stdout
             self.assertEqual(w, "400")
+
+    def stub_encoder(self, sizes):
+        """Replace the encoder with one returning sizes[(width, lossless)] bytes."""
+        calls = []
+        def fake(path, quality, width, lossless, tool):
+            calls.append((width, lossless))
+            n = sizes.get((width, lossless))
+            return None if n is None else b"x" * n
+        real = review_page.encode_webp
+        review_page.encode_webp = fake
+        self.addCleanup(setattr, review_page, "encode_webp", real)
+        return calls
+
+    def test_keeps_the_smaller_of_lossy_and_lossless(self):
+        src = self.tmp / "shot.png"
+        self.stub_encoder({(None, False): 900, (None, True): 600})
+        self.assertEqual(len(review_page.to_webp(src, {"quality": 70, "max_width": None}, ("magick", "m"))), 600)
+        self.stub_encoder({(None, False): 500, (None, True): 600})
+        self.assertEqual(len(review_page.to_webp(src, {"quality": 70, "max_width": None}, ("magick", "m"))), 500)
+
+    def test_keeps_the_original_when_it_is_smallest(self):
+        src = self.tmp / "shot.png"
+        big = src.stat().st_size + 10
+        self.stub_encoder({(None, False): big, (None, True): big})
+        self.assertIsNone(review_page.to_webp(src, {"quality": 70, "max_width": None}, ("magick", "m")))
+
+    def test_shrinks_only_when_the_shrunk_file_is_smaller(self):
+        src = self.tmp / "shot.png"  # 400 px wide
+        calls = self.stub_encoder({(None, False): 800, (None, True): 700, (200, False): 900, (200, True): 750})
+        self.assertEqual(len(review_page.to_webp(src, {"quality": 70, "max_width": 200}, ("magick", "m"))), 700)
+        self.assertIn((200, True), calls)
+        self.stub_encoder({(None, False): 800, (None, True): 700, (200, False): 300, (200, True): 450})
+        self.assertEqual(len(review_page.to_webp(src, {"quality": 70, "max_width": 200}, ("magick", "m"))), 300)
+
+    def test_never_tries_a_width_at_or_above_the_screenshot(self):
+        calls = self.stub_encoder({(None, False): 10, (None, True): 10})
+        review_page.to_webp(self.tmp / "shot.png", {"quality": 70, "max_width": 4000}, ("magick", "m"))
+        self.assertEqual(sorted(calls, key=str), [(None, False), (None, True)])
 
     def test_size_warning_names_the_largest_assets(self):
         spec = {"_assets": {"big": "x" * 4000000, "small": "y" * 10}}

@@ -60,6 +60,14 @@ Ask for a skill by name, like `design review for /pricing`, or run `/proofs:visu
 
 No claude.ai artifacts? Pages open in your browser instead, or on your phone over Wi-Fi. See [Where the Page Goes](https://workingben.github.io/proofs/design-review.html#wp).
 
+## What runs automatically
+
+One hook, and it is off until you turn it on. At the start of each session (a `SessionStart` hook in `hooks/hooks.json`), it tells Claude how many pull requests are open in the current repo and lists them oldest first with their age, so an unreviewed one cannot sit forgotten.
+
+- **Off by default.** It does nothing unless `PROOFS_PR_REMINDER=1` is set for the project.
+- **Never blocks a session.** No token, no network, GitHub down: it exits quietly and the session starts as usual. Its one GitHub call gives up after 5 seconds.
+- **Turn it on** from your project's root folder (the script edits the `.claude/settings.json` of the folder you run it in): `python3 <the proofs plugin folder>/skills/pr-qa/scripts/install_session_hook.py`. Or add `"PROOFS_PR_REMINDER": "1"` to the `"env"` block of that file yourself. It reads GitHub access from `GITHUB_TOKEN`, then `gh auth token`.
+
 ## How every skill works
 
 <picture>

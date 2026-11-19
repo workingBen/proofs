@@ -1,0 +1,18 @@
+{
+  "mode": "review",
+  "title": "Pricing Page — Copy-Edit Review",
+  "decisions": "copy-edit",
+  "sections": [
+    {"title": "Claims & Compliance", "items": [], "empty_html": "No compliance concerns found in this pass."},
+    {"title": "Copy Edits", "items": [
+      {"label": "Intro — first sentence", "location": "Line 12", "recommended": true,
+       "body_html": "<div class=\"rp-panes\"><div class=\"rp-pane\"><div class=\"rp-pane-label\">Original</div><p>We <del>ensure</del> results.</p></div><div class=\"rp-pane\"><div class=\"rp-pane-label\">Edit</div><p>We <ins>aim for</ins> results.</p></div></div>",
+       "reason_html": "<p>Removes a guarantee.</p>"}
+    ]},
+    {"title": "Proposed Additions & Recommendations", "items": [
+      {"label": "New — Introduction to the Method", "recommended": true,
+       "body_html": "<div class=\"rp-panes\"><div class=\"rp-pane\"><div class=\"rp-pane-label\">Original</div><p><i>Nothing there today.</i></p></div><div class=\"rp-pane\"><div class=\"rp-pane-label\">Edit</div><p>Our method has three steps.</p></div></div>",
+       "reason_html": "<p>Readers arrive without context.</p>"}
+    ]}
+  ]
+}

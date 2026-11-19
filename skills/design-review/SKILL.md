@@ -1,7 +1,7 @@
 ---
 name: design-review
-version: 1.3.2
-description: Use when the user wants to review a visual/layout design change to a page before it's built — builds an interactive Artifact showing the current live page (real screenshot) against 1-3 coded mockup variants per section, with the same four decision states as article-copy-edit (Keep Original / Use Selected / Approve with Comment / Request Revision), a Reason and Recommended/Not Recommended badge on every item, and a "Copy My Decisions" export the user pastes back to drive translating the approved mockup into the real view.
+version: 1.4.1
+description: Use when the user wants to see and choose between rendered options for a visual or layout change before it is built, such as a redesign, a layout bug or "make this section nicer". Differs from visual-qa, which finds what is wrong, and article-copy-edit, which reviews wording; this compares coded mockups with the current page.
 ---
 
 # Design Review Tool
@@ -35,14 +35,14 @@ for i in $(seq 1 20); do code=$(curl -s -o /dev/null -w "%{http_code}" http://lo
 Take the screenshot with the first of these that the project has:
 
 1. **A browser-automation tool** the project already uses (Playwright or similar). Best: scriptable, repeatable, and it can also measure the page.
-2. **Headless Chrome from the command line**, which needs nothing running. Use your platform's Chrome binary with `--headless --hide-scrollbars --virtual-time-budget=8000 --window-size=1200,2200 --screenshot=out.png URL`, then crop the section out with an image tool. It also screenshots `file://` URLs, which is how you verify the built review page itself (step 4).
+2. **Headless Chrome from the command line**, which needs nothing running. Use your platform's Chrome binary with `--headless --hide-scrollbars --virtual-time-budget=8000 --window-size=1200,2200 --screenshot=out.png URL`, then crop the section out with an image tool. It also screenshots `file://` URLs, which is how you look at the built review page itself (step 4).
 3. **The Chrome browser extension tools** (open a tab, navigate, resize, screenshot). These need the extension actually connected. If it isn't, every call fails with a "not connected" error and there is nothing you can do about it from here. Don't burn turns retrying; fall back to option 2.
 
 **Rebuild before screenshotting.** If the project compiles its styles (a CSS build step), run that build and restart the server first. Otherwise the screenshot shows the old look and you will review a design that isn't what you built. A stale stylesheet producing a misleading "before" picture happens in every stack.
 
 **Match the live wording.** Local test data drifts from what editors have since changed on the live site, so a local screenshot can show different text than the user is looking at. Bring the real live text into the local copy before capturing, or the "before" pane won't match the picture in the user's head.
 
-Screenshot each in-scope section at whichever viewport width(s) matter for this review (desktop, mobile, or both). Embed each screenshot as a base64 data URI directly in the Artifact HTML: no external image hosting, which keeps the page self-contained under the Artifact's content security policy.
+Screenshot each in-scope section at whichever viewport width(s) matter for this review (desktop, mobile, or both). The builder embeds each one as a data URI (step 4): no external image hosting, which keeps the page self-contained under the Artifact's content security policy.
 
 There is no mandatory standing-audit section here (unlike a copy review's compliance step). If something accessibility- or readability-related comes up, raise it inline as a normal item's Reason, not as a separate always-on section.
 
@@ -51,33 +51,19 @@ There is no mandatory standing-audit section here (unlike a copy review's compli
 Each item is one section or component:
 
 - Give it 1-3 coded mockup variants: real HTML/CSS built from the target page's own fonts, colors, and spacing (the same "reuse the target page's own design system" principle as a copy review), not AI-generated images and not a text diff.
-- A single-variant item works exactly like a copy-edit item: no gallery needed, just Original vs. the one proposed variant. **Label its accept button "Use Proposed", not "Use Selected".** With nothing selectable, "Use Selected" reads as a control the reviewer has failed to find, and they hesitate over whether their approval registered. The state is still `accept`; only the wording changes.
+- A single-variant item works exactly like a copy-edit item: no gallery needed, just Original vs. the one proposed variant. Its accept button reads "Use Proposed", not "Use Selected": with nothing selectable, "Use Selected" reads as a control the reviewer has failed to find. The builder does this for any item without `variants`.
 - Give every item a **Reason** and a **Recommended / Not Recommended** badge, the same convention as a copy review: your own honest judgment, independent of whether you present the item at all.
 
-### 4. Build the review page as an Artifact, styled like the real page
+### 4. Build the review page with the shared builder
 
-Follow any design guidance your environment provides for published pages. This is a UI/tool, not editorial content: "utilitarian but polished," not a landing-page treatment.
+Write the content; the builder writes the page. Read `../../reference/review-page.md` first: it documents the spec and the command, `python3 ../../shared/review_page/review_page.py spec.json --out page.html`, with `"decisions": "design-review"`. Do not hand-write the page's JavaScript. Follow any design guidance your environment provides for published pages: "utilitarian but polished," not a landing page.
 
-- **Reuse the target page's own design system** for the mockups themselves. Read the project's style guide for its colors and fonts, including dark mode if it has one, rather than trusting a list in this skill. Build mockups against the project's own tokens so they render correctly in every theme the site supports, not just whichever one was active in the "before" screenshot. The Artifact itself is theme-aware, so give mockup panes their own explicit background rather than letting them inherit the review page's. If the project deliberately darkened its grays to pass contrast, don't "fix" a mockup by reaching back to stock framework grays that fail contrast.
-- **Fonts and images.** Review pages cannot load web fonts from a font service, so a mockup left to fall back to a default font isn't showing the real design. Download the real fonts (the weights you need, the `woff2` files) and embed them as `@font-face` data URIs. Do the same for photos and the before screenshot, but embed each one **once**: put it in a CSS custom property on `:root` and reference the property, so an asset used in several mockups is not embedded once per use.
-- **Structure per item:** number + location label + Recommended/Not-Recommended badge + status pill, the before screenshot, then either a single "proposed" pane (one variant) or a **variant gallery** (2-3 variants): clickable cards that mark the current selection. Below that, a Reason block, then the shared four-button action bar:
-
-  | Button | State | Comment box | Meaning |
-  |---|---|---|---|
-  | ✕ Keep Original | `deny` | optional | Reject all variants, keep the current design. |
-  | ✓ Use Selected (✓ Use Proposed, single-variant) | `accept` | optional | Ship the currently-selected variant exactly as shown. |
-  | ✓ Approve with Comment | `accept-comment` | opens, expected | Ship the selected variant, but modify per the comment. |
-  | ↻ Request Revision | `revise` | opens, expected | Don't ship anything yet. The comment explains what to try instead; expect a follow-up round on this item. |
-
-  For a multi-variant item, the action bar acts on whichever variant is currently selected in the gallery; clicking a different variant before deciding is one click, not a separate step.
-
-- **Mark the selection with a border, never a fill.** A selected variant card gets a border, a check mark, or a tinted edge, and must never take a solid background color. The mockup lives inside that card, and a strong fill competes with the very thing being reviewed, which is the one job the page has.
-
-- **Open decisions go first. Always.** The things needing a decision this round sit at the top of the page, above any recap, carried-forward context, or already-settled material. A reviewer should never have to scroll past things they have already read to reach the first open item. Recap belongs below the decisions, or in a collapsed block.
-
-- **Every item carries a "Mark as read" switch**, independent of its decision buttons. Read state is included in the "Copy My Decisions" export as a `READ` marker on the line. **On the next round, drop every item marked read**: do not render it again, not even dimmed. Carrying context forward applies to the *open* item's own history (Round 1's rejected proposal on the Round 2 card), not to items the reader has finished with.
-
-- **Sticky bottom bar:** running "X of N reviewed" + a tally per state + a "Copy My Decisions" button that writes a plain-text numbered summary to the clipboard via `navigator.clipboard.writeText`. If the clipboard is missing or the write fails, show the summary in a selectable text box (select all) instead, and never show "Copied" on failure. **The export's first line must identify the page being reviewed**: pasted decisions arrive back in chat with no other context, and a bare `1. ... — ACCEPT` is ambiguous once more than one review is in flight. Use a stable bracketed header matching the Artifact's own title, and include the selected variant letter for multi-variant items:
+- **Reuse the target page's own design system** for the mockups (the spec's `css`). Read the project's style guide for its colors and fonts, including dark mode if it has one, rather than trusting a list in this skill, and build against its tokens so the mockups render correctly in every theme the site supports. Give mockup panes their own explicit background rather than letting them inherit the review page's. If the project deliberately darkened its grays to pass contrast, don't "fix" a mockup by reaching back to stock framework grays.
+- **Fonts and images.** Review pages cannot load web fonts from a font service, so download the real fonts (the `woff2` weights you need) and embed them as `@font-face` data URIs in `css`. Put photos and the before screenshot in `assets`, so each is embedded **once** and referenced from every mockup that uses it.
+- **One item per section**, each with the before screenshot in `body_html`, then either one proposal in `body_html` (the builder then labels the accept button "Use Proposed") or 2-3 `variants`. Every item gets `reason_html` and `recommended`.
+- **Open decisions go first. Always.** Things needing a decision this round are the first section, above any recap, carried-forward context, or settled material (`after_html`, or a collapsed block). A reviewer should never scroll past what they have already read to reach the first open item.
+- **"Mark as read" drops an item from the next round.** The page exports it as `READ`; next round, do not render that item again, not even dimmed. Carrying context forward applies to an *open* item's own history (`history_html`), not to items the reader has finished with.
+- **The export's first line is the page's bracketed title**, because pasted decisions arrive in chat with no other context. The builder writes it, plus the variant letter:
 
   ```
   [Articles Index — Design Review]
@@ -88,17 +74,9 @@ Follow any design guidance your environment provides for published pages. This i
   5. Sidebar links — ACCEPT (Use Proposed) — READ
   ```
 
-  Omit the `— COMMENT: ...` suffix entirely for plain `ACCEPT`/`DENY` items with no comment.
-
 Publish with the `Artifact` tool. Redeploy to the same file path across revisions of the *same* review page; don't mint a new URL for revisions the user is already looking at.
 
-**Verify before publishing, every time and not just the first.** A single bad escape in hand-authored JavaScript can silently kill the entire script, leaving a structurally fine page with nothing clickable and no visible error. Before publishing:
-
-1. Extract the `<script>` contents to a `.js` file and run `node --check` on it.
-2. Drive the built file through a real DOM, in whatever browser or DOM tool the project has (a headless browser, or jsdom installed into a scratch folder). Stub `navigator.clipboard.writeText` to capture the export, collect `window` `error` events and `console.error` calls, then assert: the expected item, variant and card counts rendered; choosing a variant moves the selection (`aria-pressed`); each decision button sets the right state and opens the comment box where it should; the "Mark as read" switch writes the `READ` marker; and the exported text has the right header, variant letter, and comment suffix. Assert the error list is empty last.
-3. Screenshot the review page itself and check the coded mockups don't introduce unintended horizontal scroll or overlapping elements. A mockup is only useful if it renders cleanly on its own terms.
-
-Only publish after all three pass.
+**Verify before publishing, every time and not just the first.** The build runs its own check (script syntax, card and button counts); run `--smoke` too when Playwright is available. Then screenshot the page at a desktop and a phone width and check your coded mockups don't add sideways scroll or overlap. Only publish after all of it passes.
 
 ### 5. Applying the decisions
 
@@ -114,7 +92,7 @@ Then rebuild styles if the project compiles them, verify against a real render, 
 
 ### 6. Follow-up rounds on `REVISE` items
 
-Scope the new Artifact to only the still-open item(s). Carry the prior round's rejected proposal forward on each card (clearly labeled "Round 1," "Round 2," etc.) alongside the new one, republish to the same URL, and re-run the full verification step before every republish; a smaller page is not a lower-risk page. Items the reader marked read are dropped, not carried.
+Scope the new Artifact to only the still-open item(s). Carry the prior round's rejected proposal forward on each card in `history_html` (clearly labeled "Round 1," "Round 2," etc.) alongside the new one, rebuild and republish to the same URL, re-running the verification before every republish; a smaller page is not a lower-risk page. Items the reader marked read are dropped, not carried.
 
 ## Worked example
 
@@ -131,16 +109,4 @@ What made this work, worth repeating:
 
 ## Where the page goes
 
-The project chooses with `PROOFS_PAGES`, set in the project's `.claude/settings.json` "env" block (or a line in CLAUDE.md: "proofs pages: file"). Values:
-
-- `artifact`: publish as a private claude.ai artifact (a link that opens on phone and computer). This is the default when publishing is available.
-- `file`: save the page as an HTML file (default folder `.proofs/pages/`; add it to .gitignore) and open it in the browser (`open` on macOS, `xdg-open` on Linux, `start` on Windows). This is the default when artifacts are not available. Reuse the same file path for later rounds so the page updates in place instead of piling up.
-- `wifi`: same as `file`, plus serve only a folder that holds this review's page(s) (for example `.proofs/pages/<review-name>/`, so older pages are not listed to the network) on the local network (`python3 -m http.server <port> --bind <the computer's local IP>` from that folder) and print the address so a phone on the same Wi-Fi can open it. This mode never uploads the page and never uses a public tunnel. Stop the server when the review is done. Use `wifi` only on a private network you trust, never on public or shared Wi-Fi.
-
-If `artifact` is chosen but publishing fails or is not available, fall back to `file` and say so in one line. Everything on the page works the same in every mode. The page's copy button gives the user text to paste back. Copy buttons must fall back to a selectable text box (select all) when `navigator.clipboard` is missing or the write fails (a page served over http on a local IP is not a secure context, so the clipboard is often unavailable), and must never show "Copied" unless the copy actually succeeded.
-
-## Changelog
-
-- **1.3.2** (2026-11-17): Copy buttons now fall back to a selectable text box when the clipboard is unavailable (as on a Wi-Fi-served page), and `wifi` mode is limited to a private network you trust.
-- **1.3.1** (2026-11-16): New section "Where the page goes": a project can choose an artifact, a local file, or a file served on its own Wi-Fi.
-- **1.3.0** (2026-11-16): Merged into proofs: generic, no project-specific steps. Includes: open decisions at the top, a "Mark as read" switch per item (read items leave the next round), selection marked with a border rather than a fill, and "Use Proposed" for single-option items.
+Before you publish or save the page, read `../../reference/where-the-page-goes.md` (the path is relative to this skill's folder). The project's `PROOFS_PAGES` setting picks artifact, file or wifi, and that file says what each means and how copy buttons must fall back.

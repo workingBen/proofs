@@ -27,4 +27,9 @@ jobs:
         env:
           PROOFS_PLAYWRIGHT: /tmp/pw/node_modules/playwright
       - name: Skill and privacy checks
-        run: bin/check-skills && bin/privacy-scan
+        # The deny list is private, so it lives in a repository secret, never in the repo.
+        env:
+          PROOFS_DENY_LIST: ${{ secrets.PROOFS_DENY_LIST }}
+        run: |
+          printf '%s\n' "$PROOFS_DENY_LIST" > "$RUNNER_TEMP/deny.txt"
+          bin/check-skills && PROOFS_DENY="$RUNNER_TEMP/deny.txt" bin/privacy-scan

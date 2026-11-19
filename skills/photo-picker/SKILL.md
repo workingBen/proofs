@@ -1,6 +1,6 @@
 ---
 name: photo-picker
-version: 1.1.1
+version: 1.1.2
 description: Use when the user wants real photos found for an article or page and wants to pick from candidates before any is added, such as "find some photos for this" or "show me options for the hero image". Differs from design-review; it compares sourced, licensed photographs for one spot, not coded layouts, then uploads the winner.
 ---
 
@@ -33,6 +33,8 @@ A slot is one spot in the content that needs a photo: a section, a topic, a mood
 
 ### 3. Build the review page with the shared builder
 
+**Needs the whole plugin.** This skill reads shared files at `../../reference/` and `../../shared/`, relative to its folder. If they are missing, the skill was copied on its own: install the whole plugin (`/plugin install proofs@proofs`) rather than recreating them.
+
 Write the content; the builder writes the page. Read `../../reference/review-page.md` first: it documents the spec and the command, `python3 ../../shared/review_page/review_page.py spec.json --out page.html`, with `"decisions": "photo-picker"`. Do not hand-write the page's JavaScript. Follow any design guidance your environment provides for published pages first; utilitarian-but-polished, same as the other two tools.
 
 - Reuse the target page's own design system (palette, type) where one exists, in the spec's `css`.
@@ -48,7 +50,7 @@ Write the content; the builder writes the page. Read `../../reference/review-pag
   4. Article Three — Chain Repair — REVISE — COMMENT: too staged, find something that looks more like a real workshop
   ```
 
-Publish with the `Artifact` tool. Use a stable icon across revisions of the *same* review page: redeploy to the same file path for new rounds or added candidates, don't mint a new URL for a gallery the user is already looking at.
+Deliver the page as "Where the page goes" below says (with `artifact`, that means publishing it with the `Artifact` tool). Use a stable icon across revisions of the *same* review page: redeploy to the same file path for new rounds or added candidates, don't mint a new URL for a gallery the user is already looking at.
 
 **Verify before publishing, every time.** The build runs its own check. Then run `--smoke`, which also fails on **any image that did not load**: a broken image renders as a blank box with no console error, the one failure mode unique to this tool. Without Playwright, open the page and look at every candidate yourself. Only publish after both pass.
 

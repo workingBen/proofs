@@ -1,6 +1,6 @@
 ---
 name: pr-qa
-version: 1.4.4
+version: 1.4.5
 description: Use when open pull requests, especially ones an AI agent made unattended, need checking before merge and the user wants to see the change rather than read a diff, such as "QA the PRs", "check the agent's work" or screenshots before approving. Differs from visual-qa; it shows a PR's before and after, not a live page's problems.
 ---
 
@@ -417,6 +417,8 @@ pushes and deploys is in its own notes; follow them.
 - **Burying the bad news.** Worst PR first, verdict in the table at the top.
 - **Publishing images you have not looked at.** Read every screenshot before it goes
   in the page. A blank or unstyled shot presented as evidence is worse than none.
+
+**Needs the whole plugin.** This skill reads shared files at `../../reference/` and `../../shared/`, relative to its folder. If they are missing, the skill was copied on its own: install the whole plugin (`/plugin install proofs@proofs`) rather than recreating them.
 
 ## Where the page goes
 

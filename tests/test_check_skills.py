@@ -106,6 +106,14 @@ class CheckCase(unittest.TestCase):
         r = self.run_check()
         self.assertEqual(r.returncode, 0, r.stdout)
 
+    def test_relative_paths_need_the_whole_plugin_line(self):
+        self.skill("alpha", body="Read `../../reference/where-the-page-goes.md` first.")
+        r = self.run_check()
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("Needs the whole plugin", r.stdout)
+        self.skill("alpha", body="**Needs the whole plugin.** Install it.\n\nRead `../../reference/where-the-page-goes.md` first.")
+        self.assertEqual(self.run_check().returncode, 0, self.run_check().stdout)
+
     def test_other_plugin_references_ignored(self):
         self.skill("alpha", body="Use the `superpowers:brainstorming` skill.")
         self.assertEqual(self.run_check().returncode, 0)
@@ -151,7 +159,7 @@ class CheckCase(unittest.TestCase):
         self.skill("alpha", body="~~~\n/inside\n~~~\n")
         self.assertEqual(self.run_check().returncode, 0, self.run_check().stdout)
 
-    PAGES = ("## Where the page goes\n\nRead `../../reference/where-the-page-goes.md` before publishing.\n")
+    PAGES = ("**Needs the whole plugin.** Install it.\n\n## Where the page goes\n\nRead `../../reference/where-the-page-goes.md` before publishing.\n")
 
     def test_page_skills_need_where_the_page_goes(self):
         self.skill("design-review")
@@ -180,7 +188,7 @@ class CheckCase(unittest.TestCase):
         self.assertIn("does not exist", r.stdout)
 
     def test_plugin_root_paths_must_exist(self):
-        self.skill("alpha", body="Run `python3 ../../shared/missing.py` first.")
+        self.skill("alpha", body="**Needs the whole plugin.**\n\nRun `python3 ../../shared/missing.py` first.")
         r = self.run_check()
         self.assertEqual(r.returncode, 1)
         self.assertIn("../../shared/missing.py", r.stdout)

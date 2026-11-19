@@ -1,6 +1,6 @@
 ---
 name: visual-qa
-version: 1.1.4
+version: 1.1.5
 description: Use when pointed at whole pages to find what is wrong with how they look, before saying any user-facing page is done, and when the user says a layout looks wrong, cramped, empty, too small or broken on a phone. Differs from design-review (options for a change already decided) and pr-qa (a PR's diff), since this finds the problems.
 ---
 
@@ -122,6 +122,8 @@ test (a query budget, a row count).
 | Counting a stretched link's text as the target | A link whose `::after` covers its row has the row's hit area |
 | Leaving seeded data behind | Restore the starting state you noted |
 | Reporting a helper's verdict | Open the screenshots yourself |
+
+**Needs the whole plugin.** This skill reads shared files at `../../reference/` and `../../shared/`, relative to its folder. If they are missing, the skill was copied on its own: install the whole plugin (`/plugin install proofs@proofs`) rather than recreating them.
 
 ## Where the page goes
 

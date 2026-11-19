@@ -1,5 +1,6 @@
 # Changelog
 
+- **1.11.4** (2026-11-19): The tracking page is delivered as "Where the page goes" says rather than always via artifacts. Says plainly that it needs the whole plugin.
 - **1.11.3** (2026-11-18): Description trimmed to the trigger and how it differs from its nearest sibling; the detail it used to carry is in the body. No change in behavior.
 - **1.11.2** (2026-11-18): Checkpoints, The Tracking Page and End-of-Session Summary moved to `reference/` files in this skill's folder, each read when it applies (their Common Mistakes rows moved with them); SKILL.md keeps a short pointer and the trigger list. No change in behavior.
 - **1.11.1** (2026-11-18): Moved 'Where the page goes' to a shared reference file and the changelog to CHANGELOG.md; no change in behavior.

@@ -1,6 +1,6 @@
 ---
 name: todos
-version: 1.1.4
+version: 1.1.5
 description: Use when the user wants to see and work their open to-do list ("show my todos", "what's still open"), tick items off and archive the done ones with evidence, or adopt the convention in a repo whose TODO.md has grown into a decision log. Differs from review-cycle; it closes existing items, not a stream of new requests.
 ---
 
@@ -197,6 +197,8 @@ apply, adopt and round-trip tests. The round-trip and page-behavior tests execut
 the generated page's JavaScript in jsdom; without it they skip with a loud banner.
 To run them, install jsdom (`npm install jsdom`) and point `NODE_PATH` at its
 `node_modules`.
+
+**Needs the whole plugin.** This skill reads shared files at `../../reference/` and `../../shared/`, relative to its folder. If they are missing, the skill was copied on its own: install the whole plugin (`/plugin install proofs@proofs`) rather than recreating them.
 
 ## Where the page goes
 

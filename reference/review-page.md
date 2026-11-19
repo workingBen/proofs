@@ -44,10 +44,11 @@ Common fields:
 | `title` | the page `<title>`; review pages export `[title]` as the first line |
 | `header` | override the export's first line (keep it bracketed) |
 | `heading`, `intro_html`, `after_html` | top heading, intro, and anything below the items (recap, settled, parked) |
-| `css` | your CSS, appended after the chrome: the target site's tokens, fonts, mockup styles |
+| `css` | your CSS, appended after the chrome: the target site's tokens, fonts, mockup styles. Fonts come from `assets`: `@font-face{src:url({{asset:name}}) format('woff2')}`; never paste base64 into the spec |
 | `vars` | CSS variables set on `:root`, to retune the chrome's light values. Dark values go in `css` under `@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {…} }` and `:root[data-theme="dark"]`; give every color you change a dark pair, and a filled box its own text color (as `--rp-amber-ink` does), or it goes unreadable in dark mode |
 | `head_html` | extra `<head>` markup |
-| `assets` | `{"name": "path/to/file.png"}`: embedded once as `--asset-name` on `:root`, and `{{asset:name}}` anywhere in the HTML becomes its `data:` URI |
+| `assets` | `{"name": "path/to/file.png"}`: the builder reads the files, so their bytes never pass through your context. Use one as `{{asset:name}}` (in an attribute, or in `css` as `url({{asset:name}})`) or as `var(--asset-name)`; each is embedded **once** however often it is used. PNG and JPEG become WebP when `magick` or `cwebp` is installed: the smaller of lossy (at `image_quality`) and lossless, or the original if that is smaller still (without either tool they are kept, and the build says so) |
+| `image_quality`, `image_max_width` | WebP quality (1–100, default 70) and the widest a screenshot may be, in pixels (default 1600): applied only when the shrunk file is actually smaller, and never upscales. Env vars `PROOFS_IMAGE_QUALITY` and `PROOFS_IMAGE_MAX_WIDTH` win over the spec |
 | `storage_key` | the `localStorage` key, if the default is not stable enough |
 
 ### Frame and sections
@@ -188,12 +189,14 @@ ids are unique, every `{{asset:…}}` resolved, a log or session page's title le
 with the session, open questions are the first thing in the page's main column, and a
 session page's sections are in order. It exits 1 and says why when anything fails.
 
+The build also prints how many screenshots became WebP and how much smaller they got, and **warns (without failing) when the page passes 3 MB**, naming the largest assets. Large pages load slowly on a phone and can hit a viewer's size limit; lower `image_quality`, set `image_max_width`, or split the review.
+
 `--smoke` needs Playwright (`--playwright DIR`, `PROOFS_PLAYWRIGHT`, or one
 resolvable from the current folder). It clicks a variant and every decision on the
 first item (or answers the first question and check, and ticks the first entry),
 types a comment, ticks read, confirms open questions sit directly under the sticky
 bar, copies, reloads to prove persistence,
-forces a clipboard failure to prove the fallback, checks every image loaded, and
+forces a clipboard failure to prove the fallback, checks every image loaded (shared images included), and
 checks for sideways scroll at 1280 and 390. Without Playwright, open the page in a
 browser and do those clicks yourself.
 

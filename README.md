@@ -24,6 +24,10 @@ In Claude Code:
 /plugin install proofs@proofs
 ```
 
+Install the whole plugin, not single skill folders. The skills share a page builder and reference files at the plugin root; a skill copied on its own into `.claude/skills/` can't find them, and says so.
+
+Screenshots shrink automatically when ImageMagick or libwebp (`cwebp`) is installed: they're converted to WebP as each page is built. Without either, pages still work, just heavier.
+
 **[Browse the site](https://workingben.github.io/proofs/)** for all 12 skills and 230+ features, each with a short write-up.
 
 <p align="center"><a href="assets/clips/proofs-30s.mp4"><img src="assets/clips/proofs-30s.gif" width="100%" alt="The 30-second Proofs tour: real pages wipe from before to after under short captions, from Done? Prove it. to Tap. Paste. Done., ending on the two install commands."></a></p>

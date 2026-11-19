@@ -168,15 +168,26 @@ class ShowcaseBuildTests(unittest.TestCase):
     def page(self, name):
         return open(os.path.join(self.out, name), encoding="utf-8").read()
 
-    def test_home_hero_is_an_eager_slider(self):
+    def test_home_hero_is_a_click_to_play_video(self):
         txt = self.page("index.html")
-        hero = re.search(r'<figure class="hero-ba">(.*?)</figure>', txt, re.S).group(1)
-        self.assertIn('role="slider"', hero)
-        self.assertIn('aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"', hero)
+        hero = re.search(r'<figure class="hero-vid">(.*?)</figure>', txt, re.S).group(1)
+        self.assertIn('data-yt="LGoRROsziv8"', hero)
+        self.assertIn('src="media/proofs-short-cover.jpg"', hero)
         self.assertIn('fetchpriority="high"', hero)
-        self.assertIn('srcset="examples/hero-pair/before-480.webp 480w, examples/hero-pair/before-960.webp 960w"', hero)
+        self.assertNotIn("<iframe", txt)  # nothing from YouTube until the play button is pressed
+        self.assertNotIn("youtube.com/", txt.replace("youtube-nocookie.com/embed/", ""))
+        self.assertIn("https://www.youtube-nocookie.com/embed/", txt)
+        for f in ("proofs-short-cover.jpg", "proofs-short-cover.webp"):
+            self.assertTrue(os.path.isfile(os.path.join(self.out, "media", f)), f)
+        self.assertNotIn("dchip", txt)
         self.assertIn("/plugin install proofs@proofs", txt)
-        self.assertLess(txt.index("hero-ba"), txt.index("class=\"tries\""))
+        self.assertLess(txt.index("hero-vid"), txt.index("class=\"tries\""))
+
+    def test_retreat_pair_leads_the_gallery(self):
+        txt = self.page("index.html")
+        cards = re.findall(r'<figure class="bx v-[a-z]+" id="ex-([^"]+)"', txt)
+        self.assertEqual(cards[0], "hero-pair")
+        self.assertEqual(re.findall(r'class="fx-pick[^"]*"[^>]*><b>([^<]+)</b>', txt)[0], "Hero pair")
 
     def test_home_has_gallery_steps_and_script(self):
         txt = self.page("index.html")

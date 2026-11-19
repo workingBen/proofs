@@ -4,7 +4,8 @@
 Each skill keeps its version in SKILL.md frontmatter and its history in
 skills/<name>/CHANGELOG.md, whose first entry must be that version. Page skills
 carry a short "Where the page goes" pointer to reference/where-the-page-goes.md
-at the plugin root. Any ../../ path a SKILL.md names must exist.
+at the plugin root. Any ../../ path, and any reference/*.md path (relative to
+the skill's folder), that a SKILL.md names must exist.
 
 Usage: check-skills [skills_dir]   (default: skills/ at the repo root)
 Exit 1 on any problem.
@@ -26,7 +27,7 @@ PAGE_SKILLS = {"design-review", "visual-qa", "pr-qa", "working-log", "article-co
                "style-guide", "photo-picker", "todos", "review-cycle"}
 PAGE_VALUES = ("artifact", "file", "wifi")
 PAGE_REF = "../../reference/where-the-page-goes.md"
-ROOT_PATH = re.compile(r"\.\./\.\./[\w./-]*[\w-]")
+ROOT_PATH = re.compile(r"\.\./\.\./[\w./-]*[\w-]|(?<![\w./-])reference/[\w./-]*\.md")
 
 
 def frontmatter(text):

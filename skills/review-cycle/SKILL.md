@@ -1,6 +1,6 @@
 ---
 name: review-cycle
-version: 1.11.1
+version: 1.11.2
 description: Use when the user opens a review session and feeds a stream of requests, from small bug reports to big feature ideas, one at a time or in a batch (often from a phone), wanting each one triaged and handled without stopping for questions: easy fixes shipped, design calls sent to a design review, large features saved as to-dos, and risky or unclear ones flagged instead of decided alone.
 ---
 
@@ -20,7 +20,7 @@ A queue-processing workflow for a live review session: the user reports issues o
 ## Lifecycle
 
 1. On open, confirm you're ready and invite items one at a time or in a batch. **Screenshots are ON by default.** State it as a one-line announcement with an opt-out, not a question: *"Screenshots ON — tell me if you want them OFF."* Do not make the user answer a question before they can start feeding items. If they turn them off, note it and skip the Screenshot Capture step for the rest of the session; otherwise follow it. Skip one item's shot only when capturing it for that particular feature is genuinely hard (an awkward-to-reach state, a flow that won't screenshot cleanly), a case-by-case call and not a reason to disable screenshots for the session; note the skip and the reason in the backlog entry. (Screenshots cost real per-item time, an extra browser run beyond what the fix already needs, but these reports usually come from a phone and a width-matched before/after is the fastest way to confirm a fix landed.)
-2. **Set up the session's working copy once, at open** (see Per-Item Workflow, step 3). Then **the moment the first batch of items is in hand, publish the tracking page** (see The Tracking Page below): one card per reported item with its *before* evidence, before the first fix ships. It is republished after every item, and it is the same page the end-of-session summary lands on.
+2. **Set up the session's working copy once, at open** (see Per-Item Workflow, step 3). Then **the moment the first batch of items is in hand, publish the tracking page** (see The Tracking Page below, and its reference file): one card per reported item with its *before* evidence, before the first fix ships. It is republished after every item, and it is the same page the end-of-session summary lands on.
 3. Every message after that is one or more queue items. **Start working them immediately and advance automatically.** The user does NOT need to say "start," "go," "next," or "continue" between items. When one item finishes, pick up the next queued one on your own. The only thing that ends the loop is the user saying they're done (or going quiet after the last item). A checkpoint (below) **pauses** the loop across a cleared conversation and is not an end.
 4. An item arriving mid-item queues behind the current one. Never interrupt in-flight work to jump to something new.
 5. **Drain the no-input queue first, then batch the input questions.** Within the queue, fully complete every item you can finish **without the user's input** (autonomous fixes, investigations, bug debugging, questions you can answer from the code) before surfacing anything that genuinely needs the user. Items triaged to **Needs input** (below) still get logged the moment you encounter them, but you do **not** stop to ask about them inline: collect their questions and present them **as a single batch at the end**, once nothing autonomous is left, together with the links to every design review started this session. One consolidated round beats a scattered interruption per item. A **bug or investigation is not a Needs input item** just because it's hard: debug it autonomously (see systematic-debugging), and defer it only if, after real investigation, it turns out to need a specific decision or piece of information only the user has. Then defer just that specific question to the end batch.
@@ -91,7 +91,7 @@ A queue-processing workflow for a live review session: the user reports issues o
    [N/M] <short title> — saved as a to-do (<where>). <count> remaining.
    ```
    `M` is the count of items received so far in the session; it grows if the user adds more mid-session.
-7. **Checkpoint check.** If a trigger in Checkpoints (below) has fired, checkpoint now, at this boundary, before starting anything else.
+7. **Checkpoint check.** If a trigger in Checkpoints (below) has fired, checkpoint now, at this boundary, before starting anything else (`reference/checkpoints.md`).
 8. **Move to the next queued item IMMEDIATELY, in the same turn.** A progress line is a status broadcast, not a pause: do not stop after it, do not summarize, and do not wait for the user to say "continue." Keep taking items until the queue is genuinely empty.
    - The user opened a review cycle precisely so they could hand over a stream of items and walk away. Stopping to report after each one recreates the back-and-forth the tool exists to avoid, and it strands work that was already unblocked.
    - The only legitimate reasons to stop mid-queue: the queue is empty; every remaining item is blocked on a flagged decision; or something genuinely destructive needs confirming. The user saying they're done also ends it.
@@ -128,143 +128,20 @@ The user hands over a mixed stream on purpose: a typo, a broken button, "this pa
 
 ## Checkpoints — Handoff and Clear Between Features
 
-A review cycle accumulates. By item 20 the context still carries item 1's file reads, diffs and test output, and every turn pays for all of it. A long session once merged 27 pull requests in a single context and ran out of its budget mid-flight: it died with a PR open and unverified, and the entire queue (what had been reported, what had shipped, what the user had said and no one had acted on) existed nowhere but the conversation. Checkpointing exists so that never has to be reconstructed under pressure.
-
-A checkpoint is three things in order: **route everything durable to its real home, write a resume handoff, clear the context and resume from the file.**
-
-### When to checkpoint
-
-Checkpoint at the **next item boundary** after any one of these becomes true. Never mid-item. A session that dispatches its per-item work to subagents from the start will rarely reach these at all, and that is the point.
-
-- **A major item just finished and the next queued item is unrelated.** *Major*: it needed its own branch and PR, or a subagent, or touched more than a handful of files, or took several rounds of tests to land. *Unrelated*: starting the next item means opening a different set of files, with no shared model, controller, view or feature area with the one just finished. **Both must hold.** A major item followed by three more tweaks to the same view is not a checkpoint point; the context you are carrying is the context the next item needs.
-- **Five items have shipped since the last checkpoint**, related or not. A count is here rather than left to judgment because a long session never recognized a boundary it was willing to stop at.
-- **Context is more than half spent**, or a compaction or summarization warning has appeared. Being summarized by something you did not author *is* the failure mode: get ahead of it rather than waiting for a second signal.
-- **The next item is visibly large**: something you can already see will take several PRs. Start it in a fresh context rather than on top of twenty finished ones.
-
-Never checkpoint with an item in flight, a dirty working tree, or a PR whose merge state you have not read back.
-
-### What a checkpoint does, in order
-
-1. **Verify the state before writing it down.** For every PR since the last checkpoint:
-
-   ```bash
-   gh pr view <N> --json state,mergedAt --jq '"state=\(.state) mergedAt=\(.mergedAt)"'
-   ```
-
-   `state=MERGED` with a non-null `mergedAt` is the only proof a merge merged. Confirm the working tree is clean, the suite is green, and every branch and worktree is accounted for. A checkpoint that records an unverified claim is worse than no checkpoint: the next context has no way to doubt it.
-
-2. **Route every durable thing to its real home, and commit it.** The handoff is a pointer, never the store. The kinds of thing, and where each goes, are the project's to name; the routing is the rule. As its notes say, projects typically have:
-
-   | If it is... | It goes in... |
-   |---|---|
-   | open work, including anything flagged `[NEEDS INPUT]` | the project's to-do list |
-   | a finished item and its evidence | the project's archive of finished work |
-   | a non-obvious codebase or environment gotcha | the project's field guide or notes file |
-   | a close call worth re-examining on a date | the project's decisions file |
-   | a rule for how to work in this repository | the project's notes file for agents |
-
-   If something has no home in that table, it is open work: it goes in the to-do list. In a project with fewer of these, the backlog file absorbs open work and decisions.
-
-3. **Write the checkpoint handoff** (contents below) in the project's handoff folder, as its notes say, and commit it alongside the routing edits from step 2, so the pointers and their targets land together.
-
-4. **Keep going. Do not stop, and do not make the user do the clearing.** A session cannot clear its own context, since no tool exposes that. So the checkpoint's job is **not** to beg for a clear; it is to make one unnecessary, and to be a safe place to land if the user clears anyway. Three rules:
-
-   - **Prevent the accumulation instead of curing it.** The context that used to force a clear was item 1's file reads, diffs and test output. Those belong in a **subagent**, whose context dies with it and which hands back only a conclusion. From the checkpoint onward, dispatch each item's investigate-and-build to an implementer rather than doing it inline. That is the actual fix; clearing was only ever the fallback. Tell each implementer to run tests in the foreground.
-   - **Announce in one line, then continue in the same turn.** Name the checkpoint file and the counts, and **immediately start the next item**: no stopping, no waiting for a reply. A paused loop is a worse failure than a long context, because the queue stops moving and the user has to restart it.
-
-     ```
-     Checkpoint: <handoff file>. [N/M] done, <k> queued. Continuing with <next item>.
-     ```
-   - **If the user does clear, resume from the file without being told to.** The handoff is written to be read cold, so a cleared session picks the loop up from it. Mention a paste-ready resume line **only** if the user asks how to clear, or if a harness limit has actually been hit, never as a routine chore at every checkpoint.
-
-### What the checkpoint handoff must carry
-
-A normal handoff describes the state of play. A checkpoint handoff must also carry enough to **restart the loop cold**, because the loop's own state lives only in the conversation:
-
-- **The queue, in full**: every item received this session in the order received, each marked shipped (with PR number and *verified* merge state), flagged `[NEEDS INPUT]`, or not started. This is what makes the `[N/M]` progress line survive the clear; `M` cannot be recovered from git.
-- **Merged versus deployed**: the last deployed commit, and what is owed to production (migrations especially). "27 PRs merged, nothing deployed" is a real state, and `git log` does not show it.
-- **Open and unverified**: any PR left open, its branch, its worktree path, and specifically what has *not* been checked about it. The resumed context must never merge on the strength of a PR description.
-- **What the user said that has not been acted on**: asides, preferences, overrides, "while you're in there" remarks, anything that changes how a later item should be done. This class of thing exists only in the transcript, and the clear is precisely what destroys it.
-- **The decisions log**: every autonomous call made with a lowest-risk default and the assumption behind it, plus every question banked for the end-of-session batch. Those banked questions are the session's output; losing them means asking the user to report their own items back to you.
-- **Session settings**: screenshots ON or OFF, the scratch path captures are written to, and the URL of every page published so far, **the tracking page first**, since it is the channel the user is replying through and a new one cannot be published over the tab they have open.
-
-Every bullet naming a durable thing links the real home it was written to in step 2. **A checkpoint handoff containing something that is not also in one of those homes is a bug in the handoff.** A checkpoint is a handoff you are guaranteed to read back.
-
-Name it by date, as the project's handoff folder convention says, with `-2`, `-3` for later ones the same day. Each checkpoint gets its own file rather than overwriting the previous one; open it with a line naming the file it supersedes, and a resumer always takes the newest.
-
-### Resuming after a clear
-
-First act in the new context, before touching any item: read the newest checkpoint handoff, then the project's to-do list.
-
-**If there is no checkpoint handoff, recover the published page links before writing anything.** A clear can happen without one, since the user can clear whenever they like. Look wherever the project records the pages it publishes (a log file, its notes), or ask the user for the tracking page's link as a last resort. Publishing without it mints a second tracking page against a tab the user is not reading, so recover it *before* the first publish, not after. Re-announce the loop in one line (`[N/M]`, screenshots on or off, next item) and pick it up. The loop's rules are unchanged by the clear: still auto-advancing, still draining the no-input queue first, still banking flagged questions for one batch at the end.
-
-**Do not re-read the files from finished items to "get oriented."** The handoff is the orientation. Re-reading them rebuilds exactly the context the checkpoint was paid to discard.
+Checkpoint at the next item boundary (never mid-item) once a major item has finished and the next is unrelated, five items have shipped since the last checkpoint, context is half spent, or the next item is visibly large. **When one fires, and first thing after any clear, read `reference/checkpoints.md`** (in this skill's folder) and follow it: verify, route, write the handoff, keep going.
 
 ## The Tracking Page — one artifact, published at intake, updated per item
 
-The session's artifact is its record **from the first item, not the last**. A user who resumes a session that shipped seven PRs they never saw has nothing to react to; a page that exists from the first item lets them follow along and correct course early. The end-of-session summary below is the **last republish of this page**, not a separate page built at the end.
-
-1. **Publish it as soon as the first batch of items is in hand**, before the first fix ships. One card per reported item, in the order reported, each seeded with its **before** evidence.
-2. **Capture the before FIRST, and treat that as blocking.** Once the fix is in the working tree, the old state cannot be recaptured without stashing it back out. Use the user's own screenshot when they sent one (almost always a phone, so mobile); otherwise capture both viewports yourself **before touching the code**. An item whose before was never captured is an item the user cannot review.
-3. **Republish to the same URL after every item**, adding the after shots, a line on what changed, the PR or commit, and the card's new state. Never mint a second page: a new page against a tab the user already has open is invisible to them. Its URL belongs in the checkpoint handoff.
-4. **Every card carries a state and a note from the moment it exists.** A reported item the user can still redirect is worth more than a shipped one they can only complain about:
-
-   | Card state | When | What it offers the user |
-   |---|---|---|
-   | **Reported** | queued, not started | a note: add detail, change the ask, drop it |
-   | **In progress** | being worked now | the same note: it reaches you before the fix lands |
-   | **Shipped** | built, verified, before/after shown | Looks right / Comment / Request revision / Revert it, plus a note |
-   | **In design review** | sent to `design-review` or another sibling skill | a link to that skill's page, where the user decides |
-   | **Saved as a to-do** | too big for the session | where it was saved, and a note to change its scope |
-   | **Flagged** | needs the user's input | the banked question, and a note answering it |
-
-   **No button on a shipped card is pre-selected.** A card nobody has touched exports as "(no decision yet)", never as approval: a pre-selected default makes a skipped card look like a considered yes, and the page can't tell the difference. An untouched card is not a reason to revert or revise anything.
-5. **One `Copy My Decisions` export covering every card in any state**, plain text, pasted back into chat. A note on a *Reported* card is a scope change to fold in before building; a note on a *Shipped* card is a revision item on top of it.
-6. **The header carries the counts** (reported / in progress / shipped / flagged) and each card its state badge, so a glance on a phone answers "what has happened."
-7. **It must be navigable, not just complete.** By item 20 the page is longer than anything anyone will scroll on a phone, and a card that needs the user is indistinguishable from twenty that do not. So the page carries:
-   - **A docked bar**: `position: sticky; top: 0`, never `position: fixed`. A fixed bar overlays the document and **intercepts clicks on whatever sits under it**, which is how a decision button at the foot of a page becomes unclickable; a sticky bar occupies real space and cannot.
-   - **Filter buttons with live counts**: Needs you / Being built / Merged / All, defaulting to **Needs you**, so the page opens on the user's work and not on the archive.
-   - **Pagination**, about five cards a page, with a page counter and disabled ends. One long scroll is what makes items unfindable.
-   - **A banner that answers "is anything waiting on me?" before they scroll at all**, and that says *nothing needs an answer* when nothing does. A stale count that implies the user owes replies is worse than no count: it sends them looking for items that do not exist.
-8. **Watch the page budget.** Embedded `data:` images blow the Artifact size limit (about 16 MB) quickly: downscale each capture to its viewport width and re-encode (JPEG at about 0.7 quality) before embedding, and do not commit image-heavy review pages to the repository.
+One page per session, published as soon as the first batch is in hand and republished to the same URL after every item; the end-of-session summary is its last republish. **Read `reference/tracking-page.md` before you first publish it.**
 
 ## End-of-Session Summary
 
-When the user says they're done, or goes quiet after the last item, do two things. **The artifact here is the final republish of the tracking page, at its existing URL**, not a second page built from scratch.
-
-**If the session checkpointed, the summary covers the whole session, not the surviving context.** Build it from the checkpoint handoffs plus the to-do list: those are the record; your context only holds the last stretch. Republish to the **URL recorded in the handoff** rather than publishing a second page, and write a final handoff that names the checkpoints it supersedes.
-
-1. **A short chat summary**: items shipped (1 line + commit each), items flagged for discussion (1 line + reason each), anything left mid-queue.
-2. **The published tracking page**, recapping the session as a standalone page the user can revisit or share later (follow any design guidance your environment provides for published pages, same as the sibling tools). Structure:
-   - Header: date, item counts (shipped / flagged / total).
-   - **Shipped** section: one card per item: title, one-line summary of the fix, commit SHA linked to the repository's commit URL if the remote is a known host (GitHub or GitLab), and the before/after screenshots if screenshot capture applied to that item.
-     - **Mobile/Desktop toggle:** when an item has screenshots at both viewports, show a small segmented control (Mobile / Desktop) on that card that switches which before/after pair is shown, **mobile selected by default**, since these reports usually originate from a phone. Don't show both viewports stacked at once; that is what causes mismatched mobile-before/desktop-after comparisons. If only one viewport has a screenshot for that item, show it directly with a small label naming the viewport, no toggle.
-   - **Sent to review** section: one card per item routed to a sibling skill, with that page's link and whether the user has decided yet.
-   - **Saved as to-dos** section: one card per item, with where it was saved.
-   - **Flagged for discussion** section: one card per item: title and the banked question.
-   - **Left mid-queue** section (only if the session ended before an item finished): what state it's in and what's needed to pick it back up.
-   - **A decision per shipped item, and an export.** Seeing a before/after with nowhere to say "not quite" makes the page a dead end. Each shipped card carries four buttons, **none of them pre-selected**:
-
-     | State | Means | What you do with it |
-     |---|---|---|
-     | **Looks right** | Nothing wanted. | Nothing. |
-     | **Comment** | A remark worth keeping, no change asked for. | Record it where it belongs: the project's decisions file or the archive entry. |
-     | **Request revision** | The fix is wrong or incomplete. | A new queue item, scoped to the user's words, on top of the shipped one. |
-     | **Revert it** | Ship it back out. | Revert the commit, then ask what should replace it. |
-
-     Plus a free-text note on every card, and one **Copy My Decisions** button producing plain text the user pastes back into chat. A card with no button pressed and no note exports as "(no decision yet)". Flagged items keep their own note field; the user's answer to a banked question arrives the same way.
-   - This is still a record first: it does not block and nothing waits on it. It starts private; the user shares it if they want to.
+When the user says they're done, or goes quiet after the last item, **read `reference/end-of-session-summary.md`** and follow it.
 
 ## Common Mistakes
 
 | Rationalization | Reality |
 |---|---|
-| "I'll capture the before when I get to the screenshots" | The before is gone the moment you edit the file. Capture it at intake, before the first change, or that item has nothing to review against. |
-| "I'll build the artifact at the end, when I know what shipped" | The page is published at intake and republished per item. An item the user can still redirect while it is *Reported* is worth more than one they can only complain about after it ships. |
-| Pre-selecting "Looks right" so a silent page reads as agreement | A skipped card then looks like a considered yes. Leave every button unpressed; an untouched card exports as "(no decision yet)". |
-| Giving the docked bar `position: fixed` | It intercepts clicks on the controls beneath it, so a decision button at the page foot stops working, silently. Use `position: sticky; top: 0`. |
-| Setting the page's bottom padding on a bare type selector (`main { padding-block: ... }`) | A class on the same element (`.wrap { padding: 0 20px }`) wins on specificity and zeroes it, so the bar lands on top of the last card. Use `main.wrap`, and verify by clicking the last control in a headless browser. |
-| Publishing a fresh artifact each time instead of republishing the tracked URL | A new page against the tab the user already has open is invisible to them. Republish the recorded URL; recover it from where the project records published pages if a clear lost it. |
 | "This UX call is ambiguous, but I can make a reasonable choice and just note what I'd have asked" | Documenting the assumption doesn't substitute for asking. Ambiguous UX/design decisions always go to `design-review`, started by you, full stop. |
 | "I'll flag this design item and let the user ask for a design review later" | Starting the review is your job. Triage puts it in the Design review lane and you run `design-review` now, publish its page, link it from the card, and keep going. |
 | "This feature is big, so I'll start building the first piece" | A feature that needs its own plan is a To-do. Save it with the user's words and a scope line; don't half-build it inside a review cycle. |
@@ -280,13 +157,6 @@ When the user says they're done, or goes quiet after the last item, do two thing
 | "This turn is very long, I'll wrap up and continue next turn" | Length is not a stopping condition. Only an empty queue, an all-blocked queue, or a destructive action needing confirmation is. |
 | Interrupting the flow to ask about each design/decision item as you hit it | Log it, keep draining everything you can finish without the user, and present all the input-needed questions as one consolidated batch at the end. |
 | Flagging a bug to the batch just because it's hard to debug | Bugs and investigations aren't Needs input items. Debug them autonomously; defer only a specific decision or fact the user alone holds, and only after real investigation. |
-| "Clearing would lose context I need" | The context you're afraid to lose is exactly what the checkpoint writes down. What a clear actually loses is item 1's diffs and test output, which you are paying for on every turn. |
-| "I'll checkpoint when the context actually gets tight" | A long session can stop with no warning it could act on. Checkpoint on the trigger (major + unrelated, five items, half spent), not on a feeling. |
-| Stopping at a checkpoint to wait for the user to clear the conversation | A paused loop is worse than a long context: the queue stops moving and the user has to restart it. Announce the checkpoint in one line and start the next item in the same turn. |
-| Doing each item's reads, diffs and test output inline, then blaming the context | That is the accumulation the clear was invented to cure. Put the item in a subagent and keep the conclusion; the context never grows in the first place. |
-| Writing the open decision, flagged item or gotcha into the handoff and nowhere else | A handoff is a pointer, never a store. File it in the project's to-do list, archive, field guide or decisions file first, then link it. |
-| Checkpointing mid-item, or right after pushing, without reading the merge state back | Checkpoint only at an item boundary with a clean tree, and only after `state=MERGED` plus a non-null `mergedAt`. An unverified claim in a handoff is worse than no handoff. |
-| Re-reading the finished items' files after a clear to get oriented | The handoff is the orientation; re-reading them rebuilds the exact context the checkpoint was paid to discard. |
 
 ## Portability
 

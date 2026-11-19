@@ -188,6 +188,15 @@ class CheckCase(unittest.TestCase):
         (Path(self._tmp.name) / "shared" / "missing.py").write_text("")
         self.assertEqual(self.run_check().returncode, 0, self.run_check().stdout)
 
+    def test_skill_reference_files_must_exist(self):
+        self.skill("alpha", body="Read `reference/checkpoints.md` when a trigger fires.")
+        r = self.run_check()
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("reference/checkpoints.md", r.stdout)
+        (self.skills / "alpha" / "reference").mkdir()
+        (self.skills / "alpha" / "reference" / "checkpoints.md").write_text("# x\n")
+        self.assertEqual(self.run_check().returncode, 0, self.run_check().stdout)
+
     def test_page_skills_with_section_pass_and_others_exempt(self):
         self.skill("design-review", body=self.PAGES)
         self.skill("changelog")

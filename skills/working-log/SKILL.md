@@ -1,6 +1,6 @@
 ---
 name: working-log
-version: 1.7.2
+version: 1.8.0
 description: Use when the user cannot reliably read terminal output, prefers a durable page to chat, is stepping away, and the first time a session has something waiting on them — keeps one session page (waiting on you, checks, log, decided) at one URL. It owns that page and the log; questions and qa-checklist write its other sections.
 ---
 
@@ -17,7 +17,7 @@ when it has content:
 1. **Waiting on you**: open questions and confirmations (written by the `questions`
    skill), plus one-line links to other pages that need them.
 2. **Checks for you**: checks only the user can run (written by the `qa-checklist` skill).
-3. **Log**: newest message first, a **Read this** tick per entry.
+3. **Log**: newest message first, a **Read this** tick per entry. A ticked entry folds to one line under **Read** at the bottom of the log; unticking it brings the full card back.
 4. **Decided**: settled items, folded away.
 
 One **Copy my replies** button exports every section's block as plain text the user

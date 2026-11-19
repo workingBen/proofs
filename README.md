@@ -1,5 +1,7 @@
 <p align="center">
   <picture>
+    <source media="(max-width: 700px) and (prefers-color-scheme: dark)" srcset="assets/banner-mobile-dark.svg">
+    <source media="(max-width: 700px)" srcset="assets/banner-mobile-light.svg">
     <source media="(prefers-color-scheme: dark)" srcset="assets/banner-dark.svg">
     <img src="assets/banner-light.svg" alt="Claude skills that show their work. Skills for Claude Code." width="100%">
   </picture>
@@ -33,22 +35,22 @@ In Claude Code:
 
 Real pages, before and after one review. [See all of them, as sliders](https://workingben.github.io/proofs/).
 
-<table>
-<tr><td colspan="2"><img src="assets/examples/rows/row-1.gif" width="100%" alt="Left: Retreat page hero, before and after Right: Bare date picker to a room-and-dates step, before and after."></td></tr>
-<tr><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A pale boxed card becomes a full-bleed sunset hero.</td><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A bare date picker gains the room photo and a teal stay.</td></tr>
-<tr><td colspan="2"><img src="assets/examples/rows/row-2.gif" width="100%" alt="Left: Plain sentence to an edit with a claims check, before and after Right: Plain report links to page stacks, before and after."></td></tr>
-<tr><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/article-copy-edit.html">article-copy-edit</a></b> · A plain sentence becomes a tracked edit with a claims check.</td><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · Three plain links become fanned stacks of real report pages.</td></tr>
-</table>
+<p>
+<a href="https://workingben.github.io/proofs/design-review.html"><img src="assets/examples/c-retreat-look/tile.gif" width="380" alt="design-review: A pale boxed card becomes a full-bleed sunset hero. (Retreat page hero, before and after)"></a>
+<a href="https://workingben.github.io/proofs/design-review.html"><img src="assets/examples/d-booking-dates/tile.gif" width="380" alt="design-review: A bare date picker gains the room photo and a teal stay. (Bare date picker to a room-and-dates step, before and after)"></a>
+<a href="https://workingben.github.io/proofs/article-copy-edit.html"><img src="assets/examples/x-copy-edit/tile.gif" width="380" alt="article-copy-edit: A plain sentence becomes a tracked edit with a claims check. (Plain sentence to an edit with a claims check, before and after)"></a>
+<a href="https://workingben.github.io/proofs/design-review.html"><img src="assets/examples/a-report-stacks/tile.gif" width="380" alt="design-review: Three plain links become fanned stacks of real report pages. (Plain report links to page stacks, before and after)"></a>
+</p>
 
 <details>
 <summary><b>More examples (4)</b></summary>
 
-<table>
-<tr><td colspan="2"><img src="assets/examples/rows/row-3.gif" width="100%" alt="Left: Text-only marketing flier to a photo card, before and after Right: Supplement test text to a ranked bar chart, before and after."></td></tr>
-<tr><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A text-only card back becomes a wildflower-photo card.</td><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A text section gains a ranked green-to-red bar chart.</td></tr>
-<tr><td colspan="2"><img src="assets/examples/rows/row-4.gif" width="100%" alt="Left: Biofield measurement table to range gauges, before and after Right: Gantt list to a two-lane study plan, before and after."></td></tr>
-<tr><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A dense readings table becomes seven colored range gauges.</td><td width="50%" valign="top"><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> · A long Gantt list becomes a two-lane timeline.</td></tr>
-</table>
+<p>
+<a href="https://workingben.github.io/proofs/design-review.html"><img src="assets/examples/e-card-back/tile.gif" width="380" alt="design-review: A text-only card back becomes a wildflower-photo card. (Text-only marketing flier to a photo card, before and after)"></a>
+<a href="https://workingben.github.io/proofs/design-review.html"><img src="assets/examples/b-supplement-chart/tile.gif" width="380" alt="design-review: A text section gains a ranked green-to-red bar chart. (Supplement test text to a ranked bar chart, before and after)"></a>
+<a href="https://workingben.github.io/proofs/design-review.html"><img src="assets/examples/a-organ-table-to-gauges/tile.gif" width="380" alt="design-review: A dense readings table becomes seven colored range gauges. (Biofield measurement table to range gauges, before and after)"></a>
+<a href="https://workingben.github.io/proofs/design-review.html"><img src="assets/examples/b-bbi-plan/tile.gif" width="380" alt="design-review: A long Gantt list becomes a two-lane timeline. (Gantt list to a two-lane study plan, before and after)"></a>
+</p>
 </details>
 <!-- examples:grid:end -->
 
@@ -73,11 +75,11 @@ Every skill below plugs into this loop.
 
 Because your agents keep working while you decide, and you can decide from anywhere, with nothing running on your computer. Tools that send your answers straight back to the agent are smoother, and they pay for it in other ways:
 
-| | Agents keep working while you decide | Decide on your phone | Server on your computer |
+| | Proofs | [Lavish](https://github.com/kunchenguid/lavish-axi) | [make-pages-interactive](https://github.com/paraschopra/make-pages-interactive) |
 | --- | --- | --- | --- |
-| **Proofs** (one paste) | Yes | Yes, any device | None (a private claude.ai link) |
-| [Lavish](https://github.com/kunchenguid/lavish-axi) | No, it waits for your feedback | With Tailscale | Yes |
-| [make-pages-interactive](https://github.com/paraschopra/make-pages-interactive) | Yes, it watches an inbox | Not stated | Yes |
+| Keeps working while you decide | **Yes** | No, it waits | Yes, it watches an inbox |
+| Decide on your phone | **Yes, any device** | With Tailscale | Not stated |
+| Server on your computer | **None** | Yes | Yes |
 
 Both are good tools, and neither replaces our visual communication skills.
 
@@ -143,28 +145,33 @@ Grouped by what you are trying to do. Each name links to that skill's page.
 
 **Decide before it's built**
 
-<table>
-<tr><td width="50%" valign="top"><a href="https://workingben.github.io/proofs/design-review.html"><img src="docs/cards/design-review.jpg" width="100%" alt="design-review"></a><br><b><a href="https://workingben.github.io/proofs/design-review.html">design-review</a></b> <img src="https://img.shields.io/badge/%E2%98%85_top_pick-Start_here-c2410c" alt="Top pick: Start here"><br>Your live page next to one to three mockups per section. You pick, Claude builds it.</td><td width="50%" valign="top"><a href="https://workingben.github.io/proofs/article-copy-edit.html"><img src="docs/cards/article-copy-edit.jpg" width="100%" alt="article-copy-edit"></a><br><b><a href="https://workingben.github.io/proofs/article-copy-edit.html">article-copy-edit</a></b><br>Line edits shown on your real article, with a claims check first.</td></tr>
-<tr><td width="50%" valign="top"><a href="https://workingben.github.io/proofs/photo-picker.html"><img src="docs/cards/photo-picker.jpg" width="100%" alt="photo-picker"></a><br><b><a href="https://workingben.github.io/proofs/photo-picker.html">photo-picker</a></b><br>Licensed photo candidates for every spot that needs one, in a gallery you choose from.</td><td width="50%" valign="top"><a href="https://workingben.github.io/proofs/style-guide.html"><img src="docs/cards/style-guide.jpg" width="100%" alt="style-guide"></a><br><b><a href="https://workingben.github.io/proofs/style-guide.html">style-guide</a></b><br>Audits the whole site for one consistent look and saves the rules you accept.</td></tr>
-</table>
+<p>
+<a href="https://workingben.github.io/proofs/design-review.html"><img src="docs/cards/tiles/design-review.jpg" width="380" alt="design-review: Your live page next to one to three mockups per section. You pick, Claude builds it. (Top pick: Start here)"></a>
+<a href="https://workingben.github.io/proofs/article-copy-edit.html"><img src="docs/cards/tiles/article-copy-edit.jpg" width="380" alt="article-copy-edit: Line edits shown on your real article, with a claims check first."></a>
+<a href="https://workingben.github.io/proofs/photo-picker.html"><img src="docs/cards/tiles/photo-picker.jpg" width="380" alt="photo-picker: Licensed photo candidates for every spot that needs one, in a gallery you choose from."></a>
+<a href="https://workingben.github.io/proofs/style-guide.html"><img src="docs/cards/tiles/style-guide.jpg" width="380" alt="style-guide: Audits the whole site for one consistent look and saves the rules you accept."></a>
+</p>
 
 **Check what's built**
 
-<table>
-<tr><td width="50%" valign="top"><a href="https://workingben.github.io/proofs/pr-qa.html"><img src="docs/cards/pr-qa.jpg" width="100%" alt="pr-qa"></a><br><b><a href="https://workingben.github.io/proofs/pr-qa.html">pr-qa</a></b> <img src="https://img.shields.io/badge/%E2%98%85_top_pick-Critical_for_UI_changes-c2410c" alt="Top pick: Critical for UI changes"><br>Before and after screenshots of each open pull request, with one decision per PR.</td><td width="50%" valign="top"><a href="https://workingben.github.io/proofs/visual-qa.html"><img src="docs/cards/visual-qa.jpg" width="100%" alt="visual-qa"></a><br><b><a href="https://workingben.github.io/proofs/visual-qa.html">visual-qa</a></b><br>Measures pages at three screen sizes, finds layout problems, and designs the fixes.</td></tr>
-</table>
+<p>
+<a href="https://workingben.github.io/proofs/pr-qa.html"><img src="docs/cards/tiles/pr-qa.jpg" width="380" alt="pr-qa: Before and after screenshots of each open pull request, with one decision per PR. (Top pick: Critical for UI changes)"></a>
+<a href="https://workingben.github.io/proofs/visual-qa.html"><img src="docs/cards/tiles/visual-qa.jpg" width="380" alt="visual-qa: Measures pages at three screen sizes, finds layout problems, and designs the fixes."></a>
+</p>
 
 **Talk on a page, not in the terminal**
 
-<table>
-<tr><td width="50%" valign="top"><a href="https://workingben.github.io/proofs/working-log.html"><img src="docs/cards/working-log.jpg" width="100%" alt="working-log"></a><br><b><a href="https://workingben.github.io/proofs/working-log.html">working-log</a></b> <img src="https://img.shields.io/badge/%E2%98%85_top_pick-Most_used-c2410c" alt="Top pick: Most used"><br>A newest-first log with read ticks, answer buttons and a Copy button.</td><td width="50%" valign="top"><a href="https://workingben.github.io/proofs/todos.html"><img src="docs/cards/todos.jpg" width="100%" alt="todos"></a><br><b><a href="https://workingben.github.io/proofs/todos.html">todos</a></b><br>Your to-do list as a tickable page. Done items are checked before they are archived.</td></tr>
-</table>
+<p>
+<a href="https://workingben.github.io/proofs/working-log.html"><img src="docs/cards/tiles/working-log.jpg" width="380" alt="working-log: A newest-first log with read ticks, answer buttons and a Copy button. (Top pick: Most used)"></a>
+<a href="https://workingben.github.io/proofs/todos.html"><img src="docs/cards/tiles/todos.jpg" width="380" alt="todos: Your to-do list as a tickable page. Done items are checked before they are archived."></a>
+</p>
 
 **Keep long sessions on track**
 
-<table>
-<tr><td width="50%" valign="top"><a href="https://workingben.github.io/proofs/review-cycle.html"><img src="docs/cards/review-cycle.jpg" width="100%" alt="review-cycle"></a><br><b><a href="https://workingben.github.io/proofs/review-cycle.html">review-cycle</a></b><br>Report bugs and ideas as they come; each is fixed, reviewed or saved for later.</td><td width="50%" valign="top"><a href="https://workingben.github.io/proofs/changelog.html"><img src="docs/cards/changelog.jpg" width="100%" alt="changelog"></a><br><b><a href="https://workingben.github.io/proofs/changelog.html">changelog</a></b><br>A "What's new" page split by month, updated at the end of every session that ships something.</td></tr>
-</table>
+<p>
+<a href="https://workingben.github.io/proofs/review-cycle.html"><img src="docs/cards/tiles/review-cycle.jpg" width="380" alt="review-cycle: Report bugs and ideas as they come; each is fixed, reviewed or saved for later."></a>
+<a href="https://workingben.github.io/proofs/changelog.html"><img src="docs/cards/tiles/changelog.jpg" width="380" alt="changelog: A "What's new" page split by month, updated at the end of every session that ships something."></a>
+</p>
 
 ## FAQ
 

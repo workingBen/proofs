@@ -1,6 +1,20 @@
 {
   "name": "proofs",
-  "version": "1.0.0",
-  "description": "Claude Code skills that show their work: design reviews, visual QA, copy edits and decision pages you click through, then paste back to Claude.",
-  "license": "MIT"
+  "version": "1.0.1",
+  "description": "Claude Code skills that show their work: design reviews with real mockups, visual QA at three screen sizes, copy edits with a claims check, and decision pages you answer from your phone.",
+  "author": {
+    "name": "workingBen",
+    "url": "https://github.com/workingBen"
+  },
+  "homepage": "https://workingben.github.io/proofs/",
+  "repository": "https://github.com/workingBen/proofs",
+  "license": "MIT",
+  "keywords": [
+    "design-review",
+    "visual-qa",
+    "copy-edit",
+    "human-in-the-loop",
+    "review",
+    "claude-code"
+  ]
 }

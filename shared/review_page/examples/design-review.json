@@ -1,0 +1,24 @@
+{
+  "mode": "review",
+  "title": "Articles Index — Design Review",
+  "decisions": "design-review",
+  "heading": "Articles index: card layout",
+  "intro_html": "<p>Pick a decision on each item, then press <b>Copy My Decisions</b> and paste the text back into chat.</p>",
+  "assets": {"before": "sample.png"},
+  "css": ".mock{background:#fff;color:#222;font-family:Georgia,serif;padding:12px;border-radius:8px}.mock h4{margin:0 0 6px}",
+  "sections": [
+    {"title": "Open decisions", "items": [
+      {"label": "Article card layout", "location": "/articles · card grid", "recommended": true,
+       "body_html": "<div class=\"rp-pane\"><div class=\"rp-pane-label\">Before</div><img class=\"rp-shot\" alt=\"Current card grid\" src=\"{{asset:before}}\"></div>",
+       "variants": [
+         {"html": "<div class=\"mock\"><h4>Two columns</h4><p>Image left, text right.</p></div>"},
+         {"html": "<div class=\"mock\"><h4>Stacked</h4><p>Image on top.</p></div>", "recommended": true}
+       ],
+       "reason_html": "<p>The stacked card reads better on a phone.</p>"},
+      {"label": "Read More button placement", "recommended": false,
+       "body_html": "<div class=\"rp-panes\"><div class=\"rp-pane\"><div class=\"rp-pane-label\">Before</div><div class=\"mock\">Read more at the bottom</div></div><div class=\"rp-pane\"><div class=\"rp-pane-label\">Proposed</div><div class=\"mock\">Read more beside the title</div></div></div>",
+       "reason_html": "<p>Saves a row, but splits the eye.</p>"}
+    ]}
+  ],
+  "after_html": "<h2>Recap</h2><p>Round 1 settled the header.</p>"
+}

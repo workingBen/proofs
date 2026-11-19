@@ -1,0 +1,77 @@
+{
+ "skill": "questions",
+ "tagline": "Questions you answer on a page, not in the terminal",
+ "use_when": "Claude has a question, a decision or a confirmation for you, or several piling up, and you would rather answer them all in one pass on a page, at your own pace or from your phone, than hunt for them in chat.",
+ "try_it": "Use /proofs:questions to put your open questions for me on a page I can answer.",
+ "sections": [
+  {
+   "title": "What you see",
+   "features": [
+    {
+     "id": "f1",
+     "label": "Questions First",
+     "sub": "Open questions sit at the very top",
+     "title": "Open questions sit at the very top",
+     "what": "The questions are the first thing under the top bar, highlighted. Reports, context and settled items come after them, so you never scroll to find what is being asked.",
+     "html": "<div class=\"col\"><div class=\"opt sel\"><b class=\"hd\">Where should the dropdown sit?</b><div class=\"row\"><span class=\"mb on\">Below the field</span><span class=\"mb\">Beside it</span></div></div><div class=\"opt\"><div class=\"note2\">Report and settled items come after</div><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i></div></div>"
+    },
+    {
+     "id": "f2",
+     "label": "Real Buttons, Not Letters",
+     "sub": "Every question has options you click",
+     "title": "Every question has options you click",
+     "what": "Each question has options you select on the page and a notes box for the answer nobody thought to offer. A pinned bar counts what you have answered, and answers save in your browser as you go. You never have to type Q2: C in chat and hope it is understood.",
+     "html": "<div class=\"col\"><b class=\"hd\">Where should the dropdown sit?</b><div class=\"opt\"><div class=\"row\"><span class=\"tag\">A</span><i class=\"mk\" style=\"width:70%;height:7px\"></i></div></div><div class=\"opt sel\"><div class=\"row\"><span class=\"tag acc\">B</span><i class=\"mk\" style=\"width:60%;height:7px\"></i></div></div><div class=\"opt\"><div class=\"row\"><span class=\"tag\">C</span><i class=\"mk\" style=\"width:50%;height:7px\"></i></div></div></div>"
+    },
+    {
+     "id": "f3",
+     "label": "The Ask, the Why, a Pick",
+     "sub": "Each question says why it matters, what each option costs, and Claude's choice",
+     "title": "Each question says why it matters, what each option costs, and Claude's choice",
+     "what": "A question states what is being decided, why it matters, and a real trade-off for every option. Claude marks the option it would choose and says why, and keeps defensible options it disagrees with on the list so you can overrule it. Decisions you delegated appear too, as a stated call with an overrule control.",
+     "html": "<div class=\"col\"><b class=\"hd\">Show search results as you type?</b><div class=\"why\"><b>Why it matters:</b> slow phones lag on every key.</div><div class=\"opt\"><b class=\"hd\">Yes</b><div class=\"note2\">feels fast, more server load</div></div><div class=\"opt\"><b class=\"hd\">After a pause</b><div class=\"note2\">smoother, half a second later</div></div></div>"
+    },
+    {
+     "id": "f4",
+     "label": "See It to Decide It",
+     "sub": "Visual questions come with drawn mockups",
+     "title": "Visual questions come with drawn mockups",
+     "what": "When a question is about where something goes or how it looks, each option is drawn as a mockup at the real width. You choose by looking, not by picturing a description.",
+     "html": "<div class=\"three\"><div class=\"opt sm\"><span class=\"tag\">A</span><div class=\"phone\"><i class=\"mk d\" style=\"width:100%;height:10px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i></div></div><div class=\"opt sm\"><span class=\"tag\">B</span><div class=\"phone\"><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk d\" style=\"width:100%;height:14px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i></div></div><div class=\"opt sm\"><span class=\"tag\">C</span><div class=\"phone\"><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i><i class=\"mk d\" style=\"width:100%;height:10px\"></i></div></div></div>"
+    },
+    {
+     "id": "f5",
+     "label": "Answers That Can't Be Misfiled",
+     "sub": "Every answer carries its question id, the round and the full option text",
+     "title": "Every answer carries its question id, the round and the full option text",
+     "what": "Each question keeps a short id that never changes, and the copied text opens with the project, stream, round, page link and time. It carries the whole wording of the option you chose, not a letter, and says UNANSWERED plainly for anything you skipped. A late reply to an earlier round still lands on the right question.",
+     "html": "<pre class=\"ex\">Q placement (raised r1)\n  -> B - Below the field, flips up on short screens\nQ spec-approval (raised r2)\n  -> (UNANSWERED)</pre>"
+    },
+    {
+     "id": "f6",
+     "label": "No Building on Guesses",
+     "sub": "Claude waits on blocking questions and works around them",
+     "title": "Claude waits on blocking questions and works around them",
+     "what": "Claude stops at a question it truly needs answered, carries on with work that does not depend on it, and does not guess and build on the guess. Answered questions stay on the page as a short record, and things noticed but not done go in a parked list.",
+     "html": "<div class=\"col\"><div class=\"row flow\"><span class=\"st mid\">placement</span><span class=\"arr\">waiting on you</span></div><div class=\"row flow\"><span class=\"st ok\">tests, docs</span><span class=\"arr\">carrying on meanwhile</span></div></div>"
+    },
+    {
+     "id": "f7",
+     "label": "One Copy Button",
+     "sub": "Everything you answered, in one paste",
+     "title": "Everything you answered, in one paste",
+     "what": "Copy my answers gathers every answer and note into one block of text that names the project, so you paste it back once.",
+     "html": "<pre class=\"ex\">[questions v1.3 — answers]\nproject: Acme Shop\n\nQ placement (raised r1)\n  -> Below the field</pre>"
+    },
+    {
+     "id": "wp",
+     "label": "Where the Page Goes",
+     "sub": "A private link, a local file, or your Wi-Fi",
+     "title": "A private link, a local file, or your Wi-Fi",
+     "what": "Your project picks where review pages go: a private claude.ai link, an HTML file that opens in your browser, or that file served on your home Wi-Fi so a phone can open it. Nothing is ever uploaded or tunneled in the Wi-Fi mode, and the server stops when the review ends.",
+     "html": "<div class=\"col\"><div class=\"opt\"><span class=\"tag\">artifact</span><div class=\"row\" style=\"align-items:stretch\"><div class=\"phone\" style=\"max-width:112px;flex:none\"><i class=\"mk d\" style=\"width:100%;height:16px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i><span class=\"link\" style=\"font-size:9px;padding:2px 6px\">private link</span></div><div class=\"desk\" style=\"flex:1;min-width:0;display:grid;gap:5px;align-content:start\"><i class=\"mk d\" style=\"width:100%;height:24px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i><span class=\"link\" style=\"font-size:9px;padding:2px 6px\">private link</span></div></div></div><div class=\"opt\"><span class=\"tag\">file</span><div class=\"win\" style=\"max-width:240px\"><div class=\"wb\"><i></i><i></i><i></i><span>file</span></div><div class=\"wbody\"><i class=\"mk d\" style=\"width:100%;height:18px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i></div></div></div><div class=\"opt\"><span class=\"tag\">wifi</span><div class=\"row\"><div class=\"phone\" style=\"max-width:84px;flex:none\"><i class=\"mk d\" style=\"width:100%;height:16px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i></div><div class=\"col\" style=\"flex:1;min-width:0;justify-items:center;gap:3px\"><span class=\"note2\">same Wi-Fi</span><span style=\"display:block;width:100%;border-top:2px dashed var(--accent)\"></span></div><div class=\"desk\" style=\"flex:none;width:96px;display:grid;gap:5px;align-content:start\"><i class=\"mk d\" style=\"width:100%;height:18px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i></div></div></div></div>"
+    }
+   ]
+  }
+ ]
+}

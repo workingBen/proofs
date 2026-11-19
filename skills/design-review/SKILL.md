@@ -1,6 +1,6 @@
 ---
 name: design-review
-version: 1.4.1
+version: 1.5.0
 description: Use when the user wants to see and choose between rendered options for a visual or layout change before it is built, such as a redesign, a layout bug or "make this section nicer". Differs from visual-qa, which finds what is wrong, and article-copy-edit, which reviews wording; this compares coded mockups with the current page.
 ---
 
@@ -42,7 +42,7 @@ Take the screenshot with the first of these that the project has:
 
 **Match the live wording.** Local test data drifts from what editors have since changed on the live site, so a local screenshot can show different text than the user is looking at. Bring the real live text into the local copy before capturing, or the "before" pane won't match the picture in the user's head.
 
-Screenshot each in-scope section at whichever viewport width(s) matter for this review (desktop, mobile, or both). The builder embeds each one as a data URI (step 4): no external image hosting, which keeps the page self-contained under the Artifact's content security policy.
+Screenshot each in-scope section at whichever viewport width(s) matter for this review (desktop, mobile, or both). The builder embeds each one as a data URI (step 4): no external image hosting, which keeps the page self-contained wherever it is opened.
 
 There is no mandatory standing-audit section here (unlike a copy review's compliance step). If something accessibility- or readability-related comes up, raise it inline as a normal item's Reason, not as a separate always-on section.
 
@@ -56,10 +56,12 @@ Each item is one section or component:
 
 ### 4. Build the review page with the shared builder
 
+**Needs the whole plugin.** This skill reads shared files at `../../reference/` and `../../shared/`, relative to its folder. If they are missing, the skill was copied on its own: install the whole plugin (`/plugin install proofs@proofs`) rather than recreating them.
+
 Write the content; the builder writes the page. Read `../../reference/review-page.md` first: it documents the spec and the command, `python3 ../../shared/review_page/review_page.py spec.json --out page.html`, with `"decisions": "design-review"`. Do not hand-write the page's JavaScript. Follow any design guidance your environment provides for published pages: "utilitarian but polished," not a landing page.
 
 - **Reuse the target page's own design system** for the mockups (the spec's `css`). Read the project's style guide for its colors and fonts, including dark mode if it has one, rather than trusting a list in this skill, and build against its tokens so the mockups render correctly in every theme the site supports. Give mockup panes their own explicit background rather than letting them inherit the review page's. If the project deliberately darkened its grays to pass contrast, don't "fix" a mockup by reaching back to stock framework grays.
-- **Fonts and images.** Review pages cannot load web fonts from a font service, so download the real fonts (the `woff2` weights you need) and embed them as `@font-face` data URIs in `css`. Put photos and the before screenshot in `assets`, so each is embedded **once** and referenced from every mockup that uses it.
+- **Fonts and images.** Review pages cannot load web fonts from a font service, so download the real fonts (the `woff2` weights you need) and list them in `assets`, then point `@font-face` at them from `css` with `src: url({{asset:name}}) format('woff2')`. **Never paste a font's base64 into the spec**: one 22 KB font is about 28,000 tokens, while an asset costs none. Put photos and the before screenshot in `assets` too. The builder embeds every asset **once**, however many mockups use it, and converts PNG and JPEG screenshots to WebP (`image_quality`, `image_max_width`; see the builder reference).
 - **One item per section**, each with the before screenshot in `body_html`, then either one proposal in `body_html` (the builder then labels the accept button "Use Proposed") or 2-3 `variants`. Every item gets `reason_html` and `recommended`.
 - **Open decisions go first. Always.** Things needing a decision this round are the first section, above any recap, carried-forward context, or settled material (`after_html`, or a collapsed block). A reviewer should never scroll past what they have already read to reach the first open item.
 - **"Mark as read" drops an item from the next round.** The page exports it as `READ`; next round, do not render that item again, not even dimmed. Carrying context forward applies to an *open* item's own history (`history_html`), not to items the reader has finished with.
@@ -74,7 +76,7 @@ Write the content; the builder writes the page. Read `../../reference/review-pag
   5. Sidebar links — ACCEPT (Use Proposed) — READ
   ```
 
-Publish with the `Artifact` tool. Redeploy to the same file path across revisions of the *same* review page; don't mint a new URL for revisions the user is already looking at.
+Deliver the page as "Where the page goes" below says (with `artifact`, that means publishing it with the `Artifact` tool). Redeploy to the same file path across revisions of the *same* review page; don't mint a new URL for revisions the user is already looking at.
 
 **Verify before publishing, every time and not just the first.** The build runs its own check (script syntax, card and button counts); run `--smoke` too when Playwright is available. Then screenshot the page at a desktop and a phone width and check your coded mockups don't add sideways scroll or overlap. Only publish after all of it passes.
 

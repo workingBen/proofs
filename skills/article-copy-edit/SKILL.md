@@ -1,6 +1,6 @@
 ---
 name: article-copy-edit
-version: 1.3.1
+version: 1.3.2
 description: Use when the user hands you copy-edit feedback or proposed line edits for an article or page and wants to approve each change before the file is touched, or asks to go through copy together. Differs from design-review; this judges words and claims, with a standing compliance audit, not layout.
 ---
 
@@ -55,6 +55,8 @@ Give every item, edit or addition alike:
 
 ### 4. Build the review page with the shared builder
 
+**Needs the whole plugin.** This skill reads shared files at `../../reference/` and `../../shared/`, relative to its folder. If they are missing, the skill was copied on its own: install the whole plugin (`/plugin install proofs@proofs`) rather than recreating them.
+
 Write the content; the builder writes the page. Read `../../reference/review-page.md` first: it documents the spec and the command, `python3 ../../shared/review_page/review_page.py spec.json --out page.html`, with `"decisions": "copy-edit"`. Do not hand-write the page's JavaScript. Follow any design guidance your environment provides for published pages: "utilitarian but polished," not a landing page.
 
 - **Reuse the target page's own design system** (the spec's `css` and `vars`). Don't invent a palette; pull colors and type straight from the article or page you're editing, and reuse the site's own before/after colors for "original" and "edit" if it has an established pairing, working in both light and dark mode. If the site themes through CSS variables or tokens, take the light/dark values from those same variables.
@@ -79,7 +81,7 @@ Write the content; the builder writes the page. Read `../../reference/review-pag
   14. Whole page — missing disclosure — REVISE — COMMENT: don't call it "not typical," I don't want to imply that
   ```
 
-Publish with the `Artifact` tool. Redeploy to the same file path when you add fields or fix bugs; don't mint a new URL for revisions the user is already looking at.
+Deliver the page as "Where the page goes" below says (with `artifact`, that means publishing it with the `Artifact` tool). Redeploy to the same file path when you add fields or fix bugs; don't mint a new URL for revisions the user is already looking at.
 
 **Verify before publishing, on every revision.** The build runs its own check (script syntax, card and button counts); run `--smoke` too when Playwright is available, or open the page and click a decision and Copy yourself. Then look at the page: every item rendered, the panes read correctly. Only publish after that.
 

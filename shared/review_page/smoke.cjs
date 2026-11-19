@@ -108,6 +108,11 @@ const file = "file://" + path.resolve(process.argv[3]);
 
   out.broken_images = await page.$$eval("img", (els) => els.filter((i) => !i.complete || i.naturalWidth === 0).map((i) => i.src.slice(0, 80)));
   if (out.broken_images.length) problems.push(`${out.broken_images.length} image(s) did not load`);
+  // Shared assets are copied into their attributes by a script; a blank one means it did not run.
+  const unfilled = await page.$$eval("[data-rp-asset]", (els) => els.filter((el) => /^data:image\/gif/.test(el.getAttribute(el.getAttribute("data-rp-asset").split(" ")[0]) || "")).length);
+  if (unfilled) problems.push(`${unfilled} shared image(s) were never filled in`);
+  const fonts = await page.evaluate(async () => { await document.fonts.ready; return [...document.fonts].filter((f) => f.status === "error").map((f) => f.family); });
+  if (fonts.length) problems.push(`font(s) failed to load: ${fonts.join(", ")}`);
   for (const w of [1280, 390]) {
     await page.setViewportSize({ width: w, height: 900 });
     const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

@@ -1,6 +1,6 @@
 ---
 name: working-log
-version: 1.7.0
+version: 1.7.1
 description: Use when the user cannot reliably read terminal output, prefers a durable page to chat, or is on a phone, and the first time a session has a question, confirmation or check for them — keeps one session page (waiting on you, checks, log, decided) at one URL. It owns that page; questions and qa-checklist write its sections.
 ---
 
@@ -80,6 +80,8 @@ Take it from the session's own name if it has one; otherwise name it for the wor
 (`credential-rotation`, `pr-qa-review`) and keep it stable for the life of the page.
 
 ## Building it: the shared builder
+
+**Needs the whole plugin.** This skill reads shared files at `../../reference/` and `../../shared/`, relative to its folder. If they are missing, the skill was copied on its own: install the whole plugin (`/plugin install proofs@proofs`) rather than recreating them.
 
 Write the content; the builder writes the page. Read `../../reference/review-page.md` first: `"mode": "session"`, built with `python3 ../../shared/review_page/review_page.py spec.json --out session.html`; `../../shared/review_page/examples/session.json` is a working example. Do not hand-write the page's JavaScript. Load `artifact-design` first if it is available; this is a utilitarian tool page, not editorial: real type hierarchy, no hero.
 

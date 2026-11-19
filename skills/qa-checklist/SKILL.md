@@ -1,6 +1,6 @@
 ---
 name: qa-checklist
-version: 1.0.0
+version: 1.0.1
 description: Use when shipped work needs checks only the user can run — a real phone, production data, a service you cannot reach — as a PASS / FAIL / COULDN'T TEST list ordered by consequence, with its own export. Checks only: decisions go to questions, visual options to design-review, and working-log hosts the list on its session page.
 ---
 
@@ -28,6 +28,8 @@ mockups (the `design-review` skill), or checks already green in automated tests.
 user to ignore the section.
 
 ## Building it
+
+**Needs the whole plugin.** This skill reads shared files at `../../reference/` and `../../shared/`, relative to its folder. If they are missing, the skill was copied on its own: install the whole plugin (`/plugin install proofs@proofs`) rather than recreating them.
 
 Read `../../reference/review-page.md` first. Do not hand-write the page's JavaScript.
 

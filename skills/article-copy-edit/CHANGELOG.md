@@ -1,5 +1,6 @@
 # Changelog
 
+- **1.3.2** (2026-11-19): Delivers the page as "Where the page goes" says rather than always via artifacts. Says plainly that it needs the whole plugin.
 - **1.3.1** (2026-11-18): Description trimmed to the trigger and how it differs from its nearest sibling; the detail it used to carry is in the body. No change in behavior.
 - **1.3.0** (2026-11-18): The review page is now built by the shared, tested builder (`shared/review_page`): Claude writes the spec and the Original/Edit panes, the builder supplies the four decision buttons, sticky tally, export and clipboard fallback. Same page and export for the reviewer; a plain accept exports as `ACCEPT (Use Edit)`.
 - **1.2.3** (2026-11-18): Moved 'Where the page goes' to a shared reference file and the changelog to CHANGELOG.md; no change in behavior.

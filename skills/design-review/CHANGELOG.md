@@ -1,5 +1,6 @@
 # Changelog
 
+- **1.5.0** (2026-11-19): Fonts go in `assets` and are used from `css`, never pasted into the spec as base64 (one font was about 28,000 tokens). The builder embeds each asset once and converts screenshots to WebP: the smaller of lossy (quality 70) and lossless, shrunk to 1600 px wide only when that makes the file smaller. Delivers the page as "Where the page goes" says rather than always via artifacts. Says plainly that it needs the whole plugin.
 - **1.4.1** (2026-11-18): Description trimmed to the trigger and how it differs from its nearest sibling; the detail it used to carry is in the body. No change in behavior.
 - **1.4.0** (2026-11-18): The review page is now built by the shared, tested builder (`shared/review_page`): Claude writes the spec and the mockups, the builder supplies the buttons, variant gallery, read switch, sticky tally, export and clipboard fallback. Same page and export for the reviewer; a multi-variant Approve with Comment now names the selected variant.
 - **1.3.3** (2026-11-18): Moved 'Where the page goes' to a shared reference file and the changelog to CHANGELOG.md; no change in behavior.

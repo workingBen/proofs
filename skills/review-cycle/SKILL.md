@@ -1,6 +1,6 @@
 ---
 name: review-cycle
-version: 1.11.3
+version: 1.11.4
 description: Use when the user opens a review session ("starting a review cycle", "let's do a review pass") and feeds a stream of bug reports and requests, often from a phone, to be triaged and handled without questions; fixes ship, design calls go to design-review, big features become to-dos. Not for a single one-off request.
 ---
 
@@ -165,7 +165,9 @@ This skill assumes:
 - The project uses GitHub pull requests (`gh` authenticated) and the session may merge its own PRs to the main branch without human approval. **Verify both before adopting the skill in a new project.** If the project requires human review on every PR, the loop still works, but say at session open that items will land as open PRs rather than merged ones, and treat that as the session's shipping definition.
 - **Check whether merging deploys.** Landing on the main branch should be safe for the target project: no auto-deploy-on-merge, or the project owner has explicitly accepted that. If the project auto-deploys, get that turned off first, or add an explicit "hold for manual deploy" step after the merge. Never call a merged item "deployed" unless you have confirmed it is.
 - The checkpoint protocol assumes somewhere to put a dated handoff (the project's handoff folder, as its notes say) and a real home per kind of durable thing (its to-do list, archive, field guide, decisions file and notes file for agents). **The routing is the rule; the file names are the project's.** In a project with fewer of these, the backlog file absorbs open work and decisions, and the handoff still may not be the only home for anything.
-- Uses the `Artifact` tool for the tracking page, which carries a decision per shipped item and a copy-back export. **Mid-session the loop still has no blocking review step by design**: that is what keeps it fast. The user reviews on the page when they choose, and nothing waits on it.
+- Uses a tracking page (delivered as "Where the page goes" says), which carries a decision per shipped item and a copy-back export. **Mid-session the loop still has no blocking review step by design**: that is what keeps it fast. The user reviews on the page when they choose, and nothing waits on it.
+
+**Needs the whole plugin.** This skill reads shared files at `../../reference/` and `../../shared/`, relative to its folder. If they are missing, the skill was copied on its own: install the whole plugin (`/plugin install proofs@proofs`) rather than recreating them.
 
 ## Where the page goes
 

@@ -1,0 +1,69 @@
+{
+ "skill": "qa-checklist",
+ "tagline": "The checks only you can run, as a list you tick off",
+ "use_when": "Claude shipped something it could not fully test itself, on a real phone, with real data or against a service it cannot reach, and you want the checks as a short list you work through rather than instructions that scroll away in chat.",
+ "try_it": "Use /proofs:qa-checklist to list the checks I need to run on what you just shipped.",
+ "sections": [
+  {
+   "title": "What you see",
+   "features": [
+    {
+     "id": "f1",
+     "label": "Pass, Fail or Couldn't Test",
+     "sub": "One answer per check",
+     "title": "One answer per check",
+     "what": "Each check has three answers, including the honest one for a check blocked by an earlier failure.",
+     "html": "<div class=\"col\"><b class=\"hd\">Delete a clip that made a recommendation</b><div class=\"why\"><b>Expected:</b> it deletes cleanly.</div><div class=\"row wrap\"><span class=\"mb on\">Pass</span><span class=\"mb\">Fail</span><span class=\"mb\">Couldn't test</span></div></div>"
+    },
+    {
+     "id": "f2",
+     "label": "Most Important First",
+     "sub": "Checks are ordered by what a failure would cost",
+     "title": "Checks are ordered by what a failure would cost",
+     "what": "A crash or lost data comes first, so the checks that matter most get done even if you stop halfway.",
+     "html": "<div class=\"col\"><div class=\"row flow\"><span class=\"st mid\">1 · Delete an order</span><span class=\"arr\">lost data</span></div><div class=\"row flow\"><span class=\"st mid\">2 · Pay on a phone</span><span class=\"arr\">crash</span></div><div class=\"row flow\"><span class=\"st mute\">3 · Receipt font</span><span class=\"arr\">looks off</span></div></div>"
+    },
+    {
+     "id": "f3",
+     "label": "What Pass Looks Like",
+     "sub": "Every check says what you should see",
+     "title": "Every check says what you should see",
+     "what": "Each check names the expected result and why it is on the list, and asks for the exact evidence Claude needs if it fails.",
+     "html": "<div class=\"col\"><b class=\"hd\">Open the receipt on your phone</b><div class=\"why\"><b>Expected:</b> the total matches the cart.</div><div class=\"note2\">If it fails: paste the order number</div></div>"
+    },
+    {
+     "id": "f4",
+     "label": "Why Claude Couldn't Check It",
+     "sub": "Each check says what stopped Claude",
+     "title": "Each check says what stopped Claude",
+     "what": "A check is on your list because Claude could not run it: no real phone, no live data, a service it cannot reach. Each one says which.",
+     "html": "<div class=\"col\"><div class=\"row flow\"><span class=\"st mute\">Pay on a phone</span><span class=\"arr\">no real phone</span></div><div class=\"row flow\"><span class=\"st mute\">Refund a card</span><span class=\"arr\">no live data</span></div></div>"
+    },
+    {
+     "id": "f5",
+     "label": "Not a Bug, Not Built Yet",
+     "sub": "What will look broken is named up front",
+     "title": "What will look broken is named up front",
+     "what": "If something will look broken but simply isn't built yet, the page says so, so it doesn't come back as a bug report.",
+     "html": "<div class=\"col\"><b class=\"hd\">Expected, not a bug</b><div class=\"note2\">The Export button is gray: export comes next week.</div></div>"
+    },
+    {
+     "id": "f6",
+     "label": "Results in One Paste",
+     "sub": "Copy my results sends them all back",
+     "title": "Copy my results sends them all back",
+     "what": "One button copies every result and note, with anything you have not reached marked as not checked.",
+     "html": "<pre class=\"ex\">QA qa-delete-order\n  -> PASS\nQA qa-receipt\n  -> (NOT CHECKED)</pre>"
+    },
+    {
+     "id": "wp",
+     "label": "Where the Page Goes",
+     "sub": "A private link, a local file, or your Wi-Fi",
+     "title": "A private link, a local file, or your Wi-Fi",
+     "what": "Your project picks where review pages go: a private claude.ai link, an HTML file that opens in your browser, or that file served on your home Wi-Fi so a phone can open it. Nothing is ever uploaded or tunneled in the Wi-Fi mode, and the server stops when the review ends.",
+     "html": "<div class=\"col\"><div class=\"opt\"><span class=\"tag\">artifact</span><div class=\"row\" style=\"align-items:stretch\"><div class=\"phone\" style=\"max-width:112px;flex:none\"><i class=\"mk d\" style=\"width:100%;height:16px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i><span class=\"link\" style=\"font-size:9px;padding:2px 6px\">private link</span></div><div class=\"desk\" style=\"flex:1;min-width:0;display:grid;gap:5px;align-content:start\"><i class=\"mk d\" style=\"width:100%;height:24px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i><span class=\"link\" style=\"font-size:9px;padding:2px 6px\">private link</span></div></div></div><div class=\"opt\"><span class=\"tag\">file</span><div class=\"win\" style=\"max-width:240px\"><div class=\"wb\"><i></i><i></i><i></i><span>file</span></div><div class=\"wbody\"><i class=\"mk d\" style=\"width:100%;height:18px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i></div></div></div><div class=\"opt\"><span class=\"tag\">wifi</span><div class=\"row\"><div class=\"phone\" style=\"max-width:84px;flex:none\"><i class=\"mk d\" style=\"width:100%;height:16px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i></div><div class=\"col\" style=\"flex:1;min-width:0;justify-items:center;gap:3px\"><span class=\"note2\">same Wi-Fi</span><span style=\"display:block;width:100%;border-top:2px dashed var(--accent)\"></span></div><div class=\"desk\" style=\"flex:none;width:96px;display:grid;gap:5px;align-content:start\"><i class=\"mk d\" style=\"width:100%;height:18px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i></div></div></div></div>"
+    }
+   ]
+  }
+ ]
+}

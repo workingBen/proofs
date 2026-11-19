@@ -479,11 +479,11 @@ def page(spec):
             spec.get("version") and '<b>%s</b>' % esc(spec["version"]),
             spec.get("updated") and "updated %s" % esc(spec["updated"]),
             first and "entry %s" % esc(first["id"])) if x)
-        html_out.append('<div class="rp-topbars"><div class="rp-projectbar">%s · <b class="rp-session">%s</b>%s · %s</div>'
+        html_out.append('<div class="rp-topbars"><div class="rp-projectbar"><span class="rp-pb-x">%s · </span><b class="rp-session">%s</b><span class="rp-pb-x">%s · %s</span></div>'
                         % (esc(proj["name"]), esc(proj["session"]), repo,
                            "Session page" if mode == "session" else "Working log"))
         html_out.append('<div class="rp-statusbar"><span id="rp-tally"></span><span class="rp-marker">%s</span>'
-                        '<button type="button" class="rp-copy" data-copy>Copy my replies</button></div></div>' % marker)
+                        '<button type="button" class="rp-copy" data-copy>Copy<span class="rp-copy-x"> my replies</span></button></div></div>' % marker)
     elif mode == "questions":
         html_out.append('<div class="bar"><div class="bar-title">%s</div><div class="tally" id="rp-tally">—</div>'
                         '<button class="ghost" id="rp-clear" type="button">Clear</button>'

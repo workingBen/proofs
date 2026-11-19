@@ -1,7 +1,7 @@
 {
  "skill": "working-log",
  "tagline": "A page Claude talks to you through when the terminal fails you",
- "use_when": "You can't comfortably read terminal output, you want a durable, tickable page of what Claude has told you instead of chat scrollback, or open questions are piling up and you would rather answer them all in one pass on a page, at your own pace or from your phone.",
+ "use_when": "You can't comfortably read terminal output, you'd rather have one durable page per session than chat scrollback, or you're answering from your phone. It also starts on its own the first time Claude has a question or a check for you.",
  "try_it": "Use /proofs:working-log to start a working log for this session and post your updates there instead of in chat.",
  "sections": [
   {
@@ -86,19 +86,19 @@
     },
     {
      "id": "f10",
-     "label": "Buttons Only When Asked",
-     "sub": "Answer buttons appear only on real questions",
-     "title": "Answer buttons appear only on real questions",
-     "what": "Most messages are just news and carry no buttons. When a message does show options, you know Claude is really asking, so you never learn to click past them.",
-     "html": "<div class=\"col\"><div class=\"opt\"><b class=\"hd\">Ship the refund flow today?</b><div class=\"row\"><span class=\"mb on\">Ship today</span><span class=\"mb\">Wait for review</span></div></div><div class=\"opt\"><b class=\"hd\">Tests are running</b><div class=\"note2\">No question, no buttons</div></div></div>"
+     "label": "Questions Up Top",
+     "sub": "Anything waiting on you sits above the log",
+     "title": "Anything waiting on you sits above the log",
+     "what": "Questions and checks for you have their own sections at the top of the page, and log entries never ask. If something has buttons, it is waiting on you.",
+     "html": "<div class=\"col\"><div class=\"opt\"><b class=\"hd\">Waiting on you</b><div class=\"row\"><span class=\"mb on\">Ship today</span><span class=\"mb\">Wait for review</span></div></div><div class=\"opt\"><b class=\"hd\">Tests are running</b><div class=\"note2\">Log entry, no buttons</div></div></div>"
     },
     {
      "id": "f11",
-     "label": "Two Questions, Two Answers",
-     "sub": "Each question in a message keeps its own answer",
-     "title": "Each question in a message keeps its own answer",
-     "what": "When one message asks two things, each answer is saved separately and copied back by name. A second click can't wipe out the first, and anything you skipped shows as unanswered instead of vanishing.",
-     "html": "<div class=\"col\"><div class=\"row\"><span class=\"mb on\">Tonight</span><span class=\"mb\">Tomorrow</span></div><div class=\"row\"><span class=\"mb\">Keep old page</span><span class=\"mb\">Remove it</span></div><pre class=\"ex\">deploy window: Tonight\nold page: (unanswered)</pre></div>"
+     "label": "Only the Sections You Need",
+     "sub": "Waiting on you, Checks for you, Log and Decided",
+     "title": "Waiting on you, Checks for you, Log and Decided",
+     "what": "The page has four sections, and each appears only when it has something in it. A quiet session is just a log.",
+     "html": "<div class=\"col\"><div class=\"row flow\"><span class=\"st ok\">Waiting on you</span><span class=\"arr\">1 question</span></div><div class=\"row flow\"><span class=\"st mute\">Checks for you</span><span class=\"arr\">none, hidden</span></div><div class=\"row flow\"><span class=\"st ok\">Log</span><span class=\"arr\">3 entries</span></div><div class=\"row flow\"><span class=\"st ok\">Decided</span><span class=\"arr\">folded</span></div></div>"
     },
     {
      "id": "f12",
@@ -160,11 +160,11 @@
     },
     {
      "id": "f18",
-     "label": "Settled Moves Out of the Way",
-     "sub": "Finished messages shrink to a line at the bottom",
-     "title": "Finished messages shrink to a line at the bottom",
-     "what": "Once a message is resolved it moves to a Settled section as a line or two, or goes entirely. The top of the page is always what still needs you.",
-     "html": "<div class=\"col\"><div class=\"openi\"><span class=\"dot\"></span>14 · Approve the refund flow</div><div class=\"openi\"><span class=\"dot\"></span>12 · Email copy question</div><div class=\"recap\">Settled · 6 messages ▸</div></div>"
+     "label": "Decided, Folded Away",
+     "sub": "Answered questions leave the top at once",
+     "title": "Answered questions leave the top at once",
+     "what": "As soon as you answer a question, it leaves Waiting on you and becomes one line in Decided, folded at the bottom. Finished log entries go there too, or go entirely. The top of the page is always what still needs you.",
+     "html": "<div class=\"col\"><div class=\"openi\"><span class=\"dot\"></span>14 · Approve the refund flow</div><div class=\"openi\"><span class=\"dot\"></span>12 · Email copy question</div><div class=\"recap\">Decided · 6 ▸</div></div>"
     },
     {
      "id": "f19",
@@ -181,59 +181,6 @@
      "title": "Every button is clicked and the layout looked at before publishing",
      "what": "Before each publish the page is loaded and clicked through to confirm ticks, answers and the copied text all work, including the session name. Then one real screenshot at laptop and phone width checks that nothing scrolls sideways or squeezes text into a narrow column.",
      "html": "<div class=\"two mid\"><div class=\"phone\"><i class=\"mk d\" style=\"width:100%;height:12px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:70%;height:7px\"></i></div><div class=\"col chk\"><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> buttons work</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> export has session</span><span><svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M3 8.5l3.2 3L13 4.5\"/></svg> no sideways scroll</span></div></div>"
-    }
-   ]
-  },
-  {
-   "title": "Questions-for-you mode",
-   "features": [
-    {
-     "id": "q1",
-     "label": "Real Buttons, Not Letters",
-     "sub": "Questions-for-you mode: every question has options you click",
-     "title": "Real Buttons, Not Letters",
-     "what": "When questions pile up, switch to the questions-for-you mode: one page holds every open question, each with options you select on the page and a notes box for the answer nobody thought to offer. A pinned bar counts what you have answered, and answers save in your browser as you go. You never have to type Q2: C in chat and hope it is understood.",
-     "html": "<div class=\"col\"><b class=\"hd\">Where should the dropdown sit?</b><div class=\"opt\"><div class=\"row\"><span class=\"tag\">A</span><i class=\"mk\" style=\"width:70%;height:7px\"></i></div></div><div class=\"opt sel\"><div class=\"row\"><span class=\"tag acc\">B</span><i class=\"mk\" style=\"width:60%;height:7px\"></i></div></div><div class=\"opt\"><div class=\"row\"><span class=\"tag\">C</span><i class=\"mk\" style=\"width:50%;height:7px\"></i></div></div></div>"
-    },
-    {
-     "id": "q2",
-     "label": "The Ask, the Why, a Pick",
-     "sub": "Each question says why it matters, what each option costs, and Claude's choice",
-     "title": "The Ask, the Why, a Pick",
-     "what": "A question states what is being decided, why it matters, and a real trade-off for every option. Claude marks the option it would choose and says why, and keeps defensible options it disagrees with on the list so you can overrule it. Decisions you delegated appear too, as a stated call with an overrule control.",
-     "html": "<div class=\"col\"><b class=\"hd\">Show search results as you type?</b><div class=\"why\"><b>Why it matters:</b> slow phones lag on every key.</div><div class=\"opt\"><b class=\"hd\">Yes</b><div class=\"note2\">feels fast, more server load</div></div><div class=\"opt\"><b class=\"hd\">After a pause</b><div class=\"note2\">smoother, half a second later</div></div></div>"
-    },
-    {
-     "id": "q3",
-     "label": "See It to Decide It",
-     "sub": "Visual questions come with drawn mockups",
-     "title": "See It to Decide It",
-     "what": "When a question is about where something goes or how it looks, each option is drawn as a mockup at the real width. You choose by looking, not by picturing a description.",
-     "html": "<div class=\"three\"><div class=\"opt sm\"><span class=\"tag\">A</span><div class=\"phone\"><i class=\"mk d\" style=\"width:100%;height:10px\"></i><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i></div></div><div class=\"opt sm\"><span class=\"tag\">B</span><div class=\"phone\"><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk d\" style=\"width:100%;height:14px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i></div></div><div class=\"opt sm\"><span class=\"tag\">C</span><div class=\"phone\"><i class=\"mk\" style=\"width:100%;height:7px\"></i><i class=\"mk\" style=\"width:60%;height:7px\"></i><i class=\"mk d\" style=\"width:100%;height:10px\"></i></div></div></div>"
-    },
-    {
-     "id": "q4",
-     "label": "Answers That Can't Be Misfiled",
-     "sub": "Every answer carries its question id, the round and the full option text",
-     "title": "Answers That Can't Be Misfiled",
-     "what": "Each question keeps a short id that never changes, and the copied text opens with the project, stream, round, page link and time. It carries the whole wording of the option you chose, not a letter, and says UNANSWERED plainly for anything you skipped. A late reply to an earlier round still lands on the right question.",
-     "html": "<pre class=\"ex\">Q placement (raised r1)\n  -> B - Below the field, flips up on short screens\nQ spec-approval (raised r2)\n  -> (UNANSWERED)</pre>"
-    },
-    {
-     "id": "q5",
-     "label": "A Test Checklist for You",
-     "sub": "Checks only you can run, marked Pass, Fail or Couldn't test",
-     "title": "A Test Checklist for You",
-     "what": "After something ships, the same page can list checks that need your device or your live data, worst failures first. Each says what to do, what passing looks like and why it is on the list, which ones Claude could not verify itself, and what will look broken but is simply not built yet. Results come back in their own block.",
-     "html": "<div class=\"col\"><b class=\"hd\">Delete a clip that made a recommendation</b><div class=\"why\"><b>Expected:</b> it deletes cleanly.</div><div class=\"row wrap\"><span class=\"mb on\">Pass</span><span class=\"mb\">Fail</span><span class=\"mb\">Couldn't test</span></div></div>"
-    },
-    {
-     "id": "q6",
-     "label": "No Building on Guesses",
-     "sub": "Claude waits on blocking questions and works around them",
-     "title": "No Building on Guesses",
-     "what": "Claude stops at a question it truly needs answered, carries on with work that does not depend on it, and does not guess and build on the guess. Answered questions stay on the page as a short record, and things noticed but not done go in a parked list.",
-     "html": "<div class=\"col\"><div class=\"row flow\"><span class=\"st mid\">placement</span><span class=\"arr\">waiting on you</span></div><div class=\"row flow\"><span class=\"st ok\">tests, docs</span><span class=\"arr\">carrying on meanwhile</span></div></div>"
     },
     {
      "id": "wp",
@@ -248,7 +195,7 @@
  ],
  "promises": [
   "Works on phone and desktop",
-  "Answer many questions at once",
+  "One page per session",
   "Your replies go back with one paste"
  ]
 }

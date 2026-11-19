@@ -56,9 +56,9 @@ class SiteTests(unittest.TestCase):
         for f in glob.glob(os.path.join(DOCS, "*.html")):
             self.assertNotIn("%%", open(f, encoding="utf-8").read(), f)
 
-    def test_home_page_says_ten_skills(self):
+    def test_home_page_says_twelve_skills(self):
         txt = open(os.path.join(DOCS, "index.html"), encoding="utf-8").read()
-        self.assertIn("10 skills", txt)
+        self.assertIn("12 skills", txt)
 
 
 if __name__ == "__main__":

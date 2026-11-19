@@ -27,7 +27,7 @@ for gi, (gname, skills) in enumerate(GROUPS):
         pic = (f'<img class="sk-pic" src="cards/{e(s)}.jpg" width="780" height="300" alt="" loading="lazy">'
                if os.path.exists(os.path.join(showcase.out_dir(), "cards", f"{s}.jpg")) else "")
         items += f'''<a class="sk-card{' top' if s in TOP else ''}" href="{e(s)}.html">{top}<div class="sk-top"><b>{e(s)}</b><em>{len(feats)} features</em></div>
-<p class="sk-tag">{e(d["tagline"])}</p><div class="sk-chips">{chips}<span class="more">+{max(0, len(feats)-4)} more</span></div>{pic}</a>'''
+<p class="sk-tag">{e(d["tagline"])}</p><div class="sk-chips">{chips}{f'<span class="more">+{len(feats)-4} more</span>' if len(feats) > 4 else ''}</div>{pic}</a>'''
     cards += f'<section class="grp"><h3><span>{gi+1:02d}</span>{e(gname)}</h3><div class="sk-grid">{items}</div></section>'
 
 exs = showcase.load()

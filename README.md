@@ -11,7 +11,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Claude_Code-plugin-c2410c" alt="Claude Code plugin">
-  <img src="https://img.shields.io/badge/skills-10-1d1b17" alt="10 skills">
+  <img src="https://img.shields.io/badge/skills-12-1d1b17" alt="12 skills">
   <img src="https://img.shields.io/badge/license-MIT-6b6458" alt="MIT license">
 </p>
 
@@ -24,7 +24,7 @@ In Claude Code:
 /plugin install proofs@proofs
 ```
 
-**[Browse the site](https://workingben.github.io/proofs/)** for all 10 skills and 230+ features, each with a short write-up.
+**[Browse the site](https://workingben.github.io/proofs/)** for all 12 skills and 230+ features, each with a short write-up.
 
 <p align="center"><a href="assets/clips/proofs-30s.mp4"><img src="assets/clips/proofs-30s.gif" width="100%" alt="The 30-second Proofs tour: real pages wipe from before to after under short captions, from Done? Prove it. to Tap. Paste. Done., ending on the two install commands."></a></p>
 
@@ -123,9 +123,9 @@ Opens every page at desktop, laptop and phone sizes and measures it: text too sm
 
 ### working-log: never scroll endless terminal output again
 
-<img src="docs/cards/working-log.jpg" width="100%" alt="A working log: a session bar with a Copy my replies button, the newest entry asking whether to ship the refund flow with answer buttons, a background entry ticked as read, and settled items folded to the side.">
+<img src="docs/cards/working-log.jpg" width="100%" alt="A session page: a top bar with a Copy my replies button, Waiting on you asking whether to ship the refund flow with answer buttons, a background log entry under it, and Checks for you and Decided at the side.">
 
-Claude keeps one page up to date while it works. The newest news sits on top, every question comes with answer buttons, and each entry has a read tick. Tap your answers, press Copy, paste. Check it from the couch on your phone, and nothing you need is buried 400 lines up.
+Claude keeps one page per session up to date while it works. Anything waiting on you sits at the top with answer buttons, then checks only you can run, then the newest news, each with a read tick. Tap your answers, press Copy, paste. Check it from the couch on your phone, and nothing you need is buried 400 lines up.
 
 - Questions you answer with a tap
 - Read it on your phone, anywhere
@@ -147,7 +147,7 @@ The claims check is set up for your field: medical and wellness promises, financ
 
 [Read the article-copy-edit page](https://workingben.github.io/proofs/article-copy-edit.html)
 
-## All 10 skills
+## All 12 skills
 
 Grouped by what you are trying to do. Each name links to that skill's page.
 
@@ -165,12 +165,14 @@ Grouped by what you are trying to do. Each name links to that skill's page.
 <p>
 <a href="https://workingben.github.io/proofs/pr-qa.html"><img src="docs/cards/tiles/pr-qa.jpg" width="380" alt="pr-qa: Before and after screenshots of each open pull request, with one decision per PR. (Top pick: Critical for UI changes)"></a>
 <a href="https://workingben.github.io/proofs/visual-qa.html"><img src="docs/cards/tiles/visual-qa.jpg" width="380" alt="visual-qa: Measures pages at three screen sizes, finds layout problems, and designs the fixes."></a>
+<a href="https://workingben.github.io/proofs/qa-checklist.html"><img src="docs/cards/tiles/qa-checklist.jpg" width="380" alt="qa-checklist: The checks only you can run, each marked Pass, Fail or Couldn't test."></a>
 </p>
 
 **Talk on a page, not in the terminal**
 
 <p>
-<a href="https://workingben.github.io/proofs/working-log.html"><img src="docs/cards/tiles/working-log.jpg" width="380" alt="working-log: A newest-first log with read ticks, answer buttons and a Copy button. (Top pick: Most used)"></a>
+<a href="https://workingben.github.io/proofs/working-log.html"><img src="docs/cards/tiles/working-log.jpg" width="380" alt="working-log: One page per session: what's waiting on you first, then the log, with one Copy button. (Top pick: Most used)"></a>
+<a href="https://workingben.github.io/proofs/questions.html"><img src="docs/cards/tiles/questions.jpg" width="380" alt="questions: Claude's questions on a page, with real buttons, its pick marked and one Copy."></a>
 <a href="https://workingben.github.io/proofs/todos.html"><img src="docs/cards/tiles/todos.jpg" width="380" alt="todos: Your to-do list as a tickable page. Done items are checked before they are archived."></a>
 </p>
 

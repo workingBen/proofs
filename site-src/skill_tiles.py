@@ -1,0 +1,49 @@
+"""Build the README's skill tiles: docs/cards/<skill>.jpg with the skill's name, top-pick label and one-line
+description drawn under it, as docs/cards/tiles/<skill>.jpg. A README cannot style text, and only pictures wrap
+from two across (laptop) to one per row (phone). Run after changing a card or a line below:
+    python3 site-src/skill_tiles.py
+Keep the README's alt text in step with these lines."""
+import os
+import subprocess
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import import_examples as ie  # noqa: E402  (same colors, fonts and band layout as the example tiles)
+
+REPO = os.path.dirname(HERE)
+# (skill, top-pick label or "", description) in README order
+TILES = [
+    ('design-review', 'Start here', 'Your live page next to one to three mockups per section. You pick, Claude builds it.'),
+    ('article-copy-edit', '', 'Line edits shown on your real article, with a claims check first.'),
+    ('photo-picker', '', 'Licensed photo candidates for every spot that needs one, in a gallery you choose from.'),
+    ('style-guide', '', 'Audits the whole site for one consistent look and saves the rules you accept.'),
+    ('pr-qa', 'Critical for UI changes', 'Before and after screenshots of each open pull request, with one decision per PR.'),
+    ('visual-qa', '', 'Measures pages at three screen sizes, finds layout problems, and designs the fixes.'),
+    ('working-log', 'Most used', 'A newest-first log with read ticks, answer buttons and a Copy button.'),
+    ('todos', '', 'Your to-do list as a tickable page. Done items are checked before they are archived.'),
+    ('review-cycle', '', 'Report bugs and ideas as they come; each is fixed, reviewed or saved for later.'),
+    ('changelog', '', 'A "What\'s new" page split by month, updated at the end of every session that ships something.'),
+]
+
+
+def main():
+    tool = ie.magick()
+    out_dir = os.path.join(REPO, "docs", "cards", "tiles")
+    os.makedirs(out_dir, exist_ok=True)
+    bands = {}
+    for name, pick, text in TILES:
+        bands[name] = os.path.join(out_dir, name + ".band.png")
+        label = f"{name}  ·  ★ {pick}" if pick else name
+        ie.caption_band(tool, {"skill": label, "caption": text}, bands[name])
+    band_h = max(ie.identify(tool, f)[1] for f in bands.values())
+    for name, _, _ in TILES:
+        subprocess.run(tool + [os.path.join(REPO, "docs", "cards", name + ".jpg"), "-resize", f"{ie.TILE_CELL[0]}x",
+                               "(", bands[name], "-background", ie.TILE_BG, "-gravity", "north", "-extent", f"{ie.TILE_CELL[0]}x{band_h}", ")",
+                               "-append", "-quality", "85", os.path.join(out_dir, name + ".jpg")], check=True)
+        os.remove(bands[name])
+    print(f"built {len(TILES)} skill tiles in docs/cards/tiles")
+
+
+if __name__ == "__main__":
+    main()

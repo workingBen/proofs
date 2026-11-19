@@ -15,7 +15,7 @@ title, skill, caption (or a one-line "short" caption, preferred when present) an
 It replaces what it owns, so the manifest is always the full set:
   docs/examples/<id>/<frame>-<width>.webp and .jpg   resized, metadata stripped
   assets/examples/<id>/wipe.gif                      for the README (GitHub runs no scripts)
-  assets/examples/rows/row-<n>.gif                   two wipes per README row in one gif, so a row moves in step (needs ffmpeg)
+  assets/examples/<id>/tile.gif                      the README tile: the wipe with its caption drawn under it (needs ffmpeg)
   site-src/examples.json                             read by build.py
   README.md, between the <!-- examples:grid --> markers
 
@@ -121,64 +121,80 @@ def readme_grid(examples):
     return [x for x in gifs if x["use"] != "skill"][:README_GRID]
 
 
-ROW_CELL = (600, 375)   # every example sits in the same 16:10 frame; tall phone shots are boxed, not stretched
-ROW_GAP, ROW_BG = 16, "0x1e1b16"
+TILE_CELL = (600, 375)   # every example sits in the same 16:10 frame; tall phone shots are boxed, not stretched
+TILE_BG, TILE_INK, TILE_ACCENT = "#1e1b16", "#efe8dc", "#ff8a4c"
+TILE_WIDTH = 380         # two fit side by side in GitHub's README column; on a phone each takes the full width
+FONTS = ("/System/Library/Fonts/Supplemental/Arial.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
+BOLD_FONTS = ("/System/Library/Fonts/Supplemental/Arial Bold.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
 
 
-def row_gif(root, pair, n):
-    """Two wipes side by side in ONE gif, so they always move together (separate gifs start whenever each
-    finishes loading, so they drift). The shorter one holds its last frame to match the longer."""
-    w, h = ROW_CELL
-    durs = []
-    for x in pair:
-        r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
-                            os.path.join(root, x["gif"])], capture_output=True, text=True, check=True)
-        durs.append(float(r.stdout.strip()))
-    longest = max(durs)
-    cmd, chains = ["ffmpeg", "-v", "error", "-y"], []
-    for i, x in enumerate(pair):
-        cmd += ["-i", os.path.join(root, x["gif"])]
-        right = ROW_GAP if i < len(pair) - 1 else 0
-        chains.append(f"[{i}:v]fps=10,scale={w}:{h}:force_original_aspect_ratio=decrease,"
-                      f"pad={w + right}:{h}:({w}-iw)/2:(oh-ih)/2:color={ROW_BG},"
-                      f"tpad=stop_mode=clone:stop_duration={longest - durs[i]:.2f}[v{i}]")
-    stack = "".join(f"[v{i}]" for i in range(len(pair)))
-    graph = ";".join(chains) + (f";{stack}hstack=inputs={len(pair)}[s]" if len(pair) > 1 else ";[v0]null[s]")
-    graph += ";[s]split[a][b];[a]palettegen=max_colors=192:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle"
-    rel = f"assets/examples/rows/row-{n}.gif"
-    os.makedirs(os.path.join(root, "assets", "examples", "rows"), exist_ok=True)
-    subprocess.run(cmd + ["-filter_complex", graph, "-t", f"{longest:.2f}", "-loop", "0", os.path.join(root, rel)], check=True)
-    return rel
+def first_file(paths):
+    for f in paths:
+        if os.path.isfile(f):
+            return f
+    raise OSError("no font found for the README tiles; looked in " + ", ".join(paths))
 
 
-def readme_block(examples, rows=None):
-    """The README's See it work grid. The hero example leads it; the 30-second tour is the README's top picture.
-    With rows (one combined gif per pair, from row_gif), each pair plays in step; without, one gif per cell.
+def caption_band(tool, x, path):
+    """The skill name and caption under a tile, drawn into the picture: a README cannot style text, and only
+    pictures wrap from two across (laptop) to one per row (phone). The caption is also the picture's alt text."""
+    w, pad = TILE_CELL[0], 24
+    common = ["-background", TILE_BG, "-size", f"{w - 2 * pad}x"]
+    subprocess.run(tool + common + ["-font", first_file(BOLD_FONTS), "-fill", TILE_ACCENT, "-pointsize", "30",
+                                    f"caption:{x['skill']}"]
+                   + common + ["-font", first_file(FONTS), "-fill", TILE_INK, "-pointsize", "30", "-interline-spacing", "4",
+                               f"caption:{x['caption']}"]
+                   + ["-append", "-bordercolor", TILE_BG, "-border", f"{pad}x20", path], check=True)
+
+
+def tile_gifs(root, tool, grid):
+    """One gif per example: the wipe boxed into the 16:10 frame, its caption band under it. All bands share the
+    tallest band's height, so tiles side by side line up."""
+    w, h = TILE_CELL
+    tmp = os.path.join(root, "assets", "examples", ".bands")
+    os.makedirs(tmp, exist_ok=True)
+    bands = {}
+    for x in grid:
+        bands[x["id"]] = os.path.join(tmp, x["id"] + ".png")
+        caption_band(tool, x, bands[x["id"]])
+    band_h = max(identify(tool, f)[1] for f in bands.values())
+    out = {}
+    for x in grid:
+        rel = f"assets/examples/{x['id']}/tile.gif"
+        graph = (f"[0:v]fps=10,scale={w}:{h}:force_original_aspect_ratio=decrease,"
+                 f"pad={w}:{h}:({w}-iw)/2:(oh-ih)/2:color=0x{TILE_BG[1:]}[v];"
+                 f"[1:v]pad={w}:{band_h}:0:0:color=0x{TILE_BG[1:]},format=rgba[b];[v][b]vstack=inputs=2,"
+                 "split[a][c];[a]palettegen=max_colors=192:stats_mode=diff[p];[c][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle")
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", os.path.join(root, x["gif"]), "-i", bands[x["id"]],
+                        "-filter_complex", graph, "-loop", "0", os.path.join(root, rel)], check=True)
+        out[x["id"]] = rel
+    shutil.rmtree(tmp, ignore_errors=True)
+    return out
+
+
+def readme_block(examples, tiles=None):
+    """The README's See it work grid. With tiles (one captioned gif per example, from tile_gifs), the examples are
+    linked pictures that wrap: two across on a laptop, one per row on a phone. Without, a two-column table.
     The first README_SHOWN rows are open; the rest sit in a <details> fold-out (GitHub runs no scripts)."""
     grid = readme_grid(examples)
-    rows_md = []
-    for n, i in enumerate(range(0, len(grid), 2)):
-        pair = grid[i:i + 2]
-        caps = "".join(f'<td width="50%" valign="top"><b><a href="{SITE}{x["skill"]}.html">{x["skill"]}</a></b> · '
-                       f'{esc(x["caption"])}</td>' for x in pair)
-        if rows:
-            alt = " Right: ".join(f'{esc(x["title"])}, before and after' for x in pair)
-            rows_md.append(f'<tr><td colspan="2"><img src="{rows[n]}" width="100%" alt="Left: {alt}."></td></tr>\n'
-                           f"<tr>{caps}</tr>\n")
-        else:
-            cells = "".join(f'<td width="50%" valign="top"><img src="{x["gif"]}" width="100%" '
-                            f'alt="{esc(x["title"])}: before and after."><br>'
-                            f'<b><a href="{SITE}{x["skill"]}.html">{x["skill"]}</a></b> · {esc(x["caption"])}</td>' for x in pair)
-            rows_md.append(f"<tr>{cells}</tr>\n")
-    if not rows_md:
+    if not grid:
         return ""
+    shown = 2 * README_SHOWN
+    if tiles:
+        pics = [f'<a href="{SITE}{x["skill"]}.html"><img src="{tiles[x["id"]]}" width="{TILE_WIDTH}" '
+                f'alt="{x["skill"]}: {esc(x["caption"])} ({esc(x["title"])}, before and after)"></a>' for x in grid]
+        top, more = "<p>\n" + "\n".join(pics[:shown]) + "\n</p>", pics[shown:]
+        more = "<p>\n" + "\n".join(more) + "\n</p>" if more else ""
+    else:
+        cells = [f'<td width="50%" valign="top"><img src="{x["gif"]}" width="100%" alt="{esc(x["title"])}: before and after."><br>'
+                 f'<b><a href="{SITE}{x["skill"]}.html">{x["skill"]}</a></b> · {esc(x["caption"])}</td>' for x in grid]
+        rows = ["<tr>" + "".join(cells[i:i + 2]) + "</tr>\n" for i in range(0, len(cells), 2)]
+        top = "<table>\n" + "".join(rows[:README_SHOWN]) + "</table>"
+        more = "<table>\n" + "".join(rows[README_SHOWN:]) + "</table>" if rows[README_SHOWN:] else ""
     out = ("## See it work\n\nReal pages, before and after one review. "
-           f"[See all of them, as sliders]({SITE}).\n\n<table>\n{''.join(rows_md[:README_SHOWN])}</table>")
-    more = rows_md[README_SHOWN:]
+           f"[See all of them, as sliders]({SITE}).\n\n{top}")
     if more:
-        n_more = len(grid) - 2 * README_SHOWN
-        out += (f"\n\n<details>\n<summary><b>More examples ({n_more})</b></summary>\n\n"
-                f"<table>\n{''.join(more)}</table>\n</details>")
+        out += (f"\n\n<details>\n<summary><b>More examples ({len(grid) - shown})</b></summary>\n\n{more}\n</details>")
     return out
 
 
@@ -271,12 +287,12 @@ def main(argv=None):
     readme = os.path.join(root, "README.md")
     if os.path.isfile(readme):
         text = open(readme, encoding="utf-8").read()
-        grid, rows = readme_grid(out), []
+        grid, tiles = readme_grid(out), {}
         try:
-            rows = [row_gif(root, grid[i:i + 2], n + 1) for n, i in enumerate(range(0, len(grid), 2))]
+            tiles = tile_gifs(root, tool, grid)
         except (OSError, ValueError, subprocess.CalledProcessError) as err:
-            print(f"warning: could not build the README row gifs ({err}); one gif per cell instead", file=sys.stderr)
-        text, ok = replace_block(text, "grid", readme_block(out, rows))
+            print(f"warning: could not build the README tiles ({err}); a two-column table instead", file=sys.stderr)
+        text, ok = replace_block(text, "grid", readme_block(out, tiles))
         if not ok:
             print("warning: README.md is missing the examples markers; left as is", file=sys.stderr)
         open(readme, "w", encoding="utf-8").write(text)

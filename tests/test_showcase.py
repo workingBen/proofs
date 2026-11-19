@@ -132,22 +132,23 @@ class ReadmeGridTests(unittest.TestCase):
         cells = import_examples.readme_block(exs)
         self.assertLess(cells.index("examples/herox/"), cells.index("examples/alpha/"))
         self.assertNotIn("skillonly", cells)
-        rows = import_examples.readme_block(exs, ["assets/examples/rows/row-1.gif", "assets/examples/rows/row-2.gif"])
-        self.assertIn('<td colspan="2"><img src="assets/examples/rows/row-1.gif"', rows)
-        self.assertLess(rows.index("Caption herox."), rows.index("Caption alpha."))
-        self.assertNotIn("examples/alpha/wipe.gif", rows)
+        tiles = import_examples.readme_block(exs, {i: f"assets/examples/{i}/tile.gif" for i in ("herox", "alpha", "stepsx")})
+        self.assertIn('<img src="assets/examples/herox/tile.gif" width="380"', tiles)
+        self.assertNotIn("<table>", tiles)  # tables never wrap; linked pictures do, two across on a laptop, one on a phone
+        self.assertLess(tiles.index("Caption herox."), tiles.index("Caption alpha."))
+        self.assertNotIn("examples/alpha/wipe.gif", tiles)
 
     def test_rows_past_the_first_two_fold_away(self):
         sys.path.insert(0, os.path.dirname(IMPORT))
         import import_examples
         exs = [{"id": f"e{i}", "title": f"T{i}", "skill": "design-review", "caption": f"Cap {i}.", "use": "featured",
                 "gif": f"assets/examples/e{i}/wipe.gif"} for i in range(8)]
-        md = import_examples.readme_block(exs, [f"assets/examples/rows/row-{n}.gif" for n in range(1, 5)])
+        md = import_examples.readme_block(exs, {f"e{i}": f"assets/examples/e{i}/tile.gif" for i in range(8)})
         top, fold = md.split("<details>")
-        self.assertIn("row-2.gif", top)
-        self.assertNotIn("row-3.gif", top)
+        self.assertIn("e3/tile.gif", top)
+        self.assertNotIn("e4/tile.gif", top)
         self.assertIn("<summary><b>More examples (4)</b></summary>", fold)
-        self.assertIn("row-4.gif", fold)
+        self.assertIn("e7/tile.gif", fold)
 
 
 class ShowcaseBuildTests(unittest.TestCase):
@@ -175,7 +176,7 @@ class ShowcaseBuildTests(unittest.TestCase):
         self.assertIn('fetchpriority="high"', hero)
         self.assertIn('srcset="examples/hero-pair/before-480.webp 480w, examples/hero-pair/before-960.webp 960w"', hero)
         self.assertIn("/plugin install proofs@proofs", txt)
-        self.assertLess(txt.index("hero-ba"), txt.index("tryc"))
+        self.assertLess(txt.index("hero-ba"), txt.index("class=\"tries\""))
 
     def test_home_has_gallery_steps_and_script(self):
         txt = self.page("index.html")

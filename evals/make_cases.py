@@ -63,6 +63,42 @@ CASES = {
         ("working-log", "Keep a running page of what you're doing this session that I can follow and reply to.")),
 }
 
+# Harder round: requests a reasonable person could word either way. Each names the ONE right
+# skill and why, and passes only if that skill fires and no other proofs skill does. A case that
+# was a genuine coin flip was dropped rather than graded.
+# (case name, right skill, why it is that one, prompt)
+AMBIGUOUS = [
+    ("phone-tonight", "qa-checklist", "Only the user has the phone and production; Claude cannot run it.",
+     "The menu fix is live on production. I'll check it on my own phone tonight. What should I look at?"),
+    ("phones-look-right", "visual-qa", "Claude can measure the page at phone width itself.",
+     "Does the new menu look right on phones? Check it before we call it done."),
+    ("list-cross-off", "todos", "The user's own list, to tick off.",
+     "What's left on my list? I want to cross off what's finished."),
+    ("pr-mobile", "pr-qa", "An open PR, judged by what it changes.",
+     "Is this pull request ok to merge? I mostly care whether it breaks anything on mobile."),
+    ("ask-later", "questions", "Several decisions, answered later from a phone.",
+     "You'll hit a few decisions while building the import: column names, date handling, what to do with duplicates. Ask me instead of guessing; I'll answer later from my phone."),
+    ("stepping-away", "working-log", "A running record for an absent user, with decisions in it.",
+     "I'm stepping away for the afternoon. Keep me posted as you go, and leave anything you need me to decide where I can answer it."),
+    ("weak-intro", "article-copy-edit", "Wording of an article, approved line by line.",
+     "The intro of the sleep article is weak. Rewrite it, but let me approve the changes before they go in."),
+    ("buttons-differ", "style-guide", "Consistency across the whole site, not one page.",
+     "Our buttons look different on every page. Sort that out so they match everywhere."),
+    ("shipped-today", "changelog", "Users reading what shipped, not the session record.",
+     "Write up what we shipped today so our users can see it."),
+    ("little-fixes", "review-cycle", "A stream of small items worked one by one.",
+     "I've got a bunch of little fixes for the app. I'll send them one at a time as I find them."),
+    ("ugly-hero", "photo-picker", "A new photo, not a new layout.",
+     "The hero image on the retreat page is ugly. Find me a better one."),
+]
+# Plain coding requests: no proofs skill should fire.
+NONE = [
+    ("typo", "Fix the typo 'recieve' in the signup form."),
+    ("regex", "What does this regex match: ^[0-9]{3}-[0-9]{4}$ ?"),
+    ("unit-test", "Add a unit test for the price calculator."),
+]
+SKILLS = list(CASES)
+
 PROMPT = """---
 max_turns: 3
 timeout_seconds: 180
@@ -80,6 +116,12 @@ def fired(skill, should=True):
     return f"---\ntype: tool_used\ntool: Skill\ninput_match: '[\":]{skill}\"'\n{rng}---\n"
 
 
+def none_other(skills):
+    """No proofs skill outside `skills` fired."""
+    alt = "|".join(x for x in SKILLS if x not in skills)
+    return f"---\ntype: tool_used\ntool: Skill\ninput_match: '[\":]({alt})\"'\nmin: 0\nmax: 0\narm: both\n---\n"
+
+
 def write(name, prompt, graders):
     d = os.path.join(HERE, name)
     os.makedirs(os.path.join(d, "graders"))
@@ -92,12 +134,16 @@ def write(name, prompt, graders):
 
 def main():
     for e in os.listdir(HERE):
-        if e.startswith(("fire-", "miss-")):
+        if e.startswith(("fire-", "miss-", "ambiguous-", "none-")):
             shutil.rmtree(os.path.join(HERE, e))
     for skill, (fires, (sib, miss)) in CASES.items():
         for i, p in enumerate(fires, 1):
             write(f"fire-{skill}-{i}", p, {"fired": fired(skill)})
         write(f"miss-{skill}", miss, {"sibling-fired": fired(sib), "not-fired": fired(skill, False)})
+    for name, right, _why, p in AMBIGUOUS:
+        write(f"ambiguous-{name}", p, {"right-fired": fired(right), "no-other": none_other([right])})
+    for name, p in NONE:
+        write(f"none-{name}", p, {"no-proofs-skill": none_other([])})
 
 
 if __name__ == "__main__":

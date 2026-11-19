@@ -133,8 +133,7 @@ def load_spec(spec_path):
     return spec
 
 
-def decisions_for(spec):
-    d = spec.get("decisions", "copy-edit")
+def decisions_for(d):
     if isinstance(d, str):
         if d not in PRESETS:
             raise SpecError("unknown decisions preset %r (have: %s)" % (d, ", ".join(PRESETS)))
@@ -154,42 +153,182 @@ def decisions_for(spec):
     return d
 
 
-# ---------------------------------------------------------------- review mode
+# ------------------------------------------------------------------ sections
+#
+# A page is a frame (the mode: its chrome, tally and export header) around a list
+# of sections. Each section has a kind, renders its own items and contributes its
+# own block to the export, so one page can mix kinds.
 
-def build_review(spec):
-    dec = decisions_for(spec)
+KINDS = ("review", "questions", "qa", "log")
+DEFAULT_KIND = {"review": "review", "questions": "questions", "log": "log"}
+DEFAULT_TITLE = {"questions": "Open — needs you", "qa": "QA after deploy — check these off"}
+
+
+def sections_of(spec):
+    mode, secs = spec["mode"], spec.get("sections")
+    if secs is None:  # flat shorthands
+        if mode == "review":
+            secs = [{"items": spec.get("items", [])}]
+        elif mode == "questions":
+            secs = []
+            if spec.get("questions"):
+                secs.append({"kind": "questions", "title": spec.get("questions_heading"), "items": spec["questions"]})
+            if spec.get("qa"):
+                secs.append({"kind": "qa", "title": spec.get("qa_heading"), "intro_html": spec.get("qa_intro_html"),
+                             "items": spec["qa"]})
+        else:
+            secs = [{"kind": "log", "items": spec.get("entries", [])}]
+    ids = set()
+    for i, sec in enumerate(secs):
+        sec.setdefault("kind", DEFAULT_KIND[mode])
+        if sec["kind"] not in KINDS:
+            raise SpecError("section kind must be one of %s" % ", ".join(KINDS))
+        sec["id"] = str(sec.get("id") or "s%d" % (i + 1))
+        if sec["id"] in ids:
+            raise SpecError("duplicate section id %r" % sec["id"])
+        ids.add(sec["id"])
+        sec["items"] = sec.get("items") or []
+    return secs
+
+
+class Ctx:
+    def __init__(self, spec, secs):
+        self.spec, self.n, self.seen = spec, 0, set()
+        self.cats = []
+        for sec in secs:
+            if sec["kind"] == "review":
+                sec["_dec"] = decisions_for(sec.get("decisions", spec.get("decisions", "copy-edit")))
+                for it in sec["items"]:
+                    if it.get("category") and it["category"] not in self.cats:
+                        self.cats.append(it["category"])
+        self.colors = dict(zip(self.cats, CATEGORY_COLORS * 4))
+        self.colors.update(spec.get("category_colors") or {})
+
+    def claim(self, ident, what):
+        if not ident or ident in self.seen:
+            raise SpecError("every %s needs an id unique on the page (got %r)" % (what, ident))
+        self.seen.add(ident)
+
+
+def render_review(sec, ctx):
+    dec, out, items = sec["_dec"], [], []
     word = dec.get("variant_word", "Option")
-    sections = spec.get("sections")
-    if sections is None:
-        sections = [{"title": None, "items": spec.get("items", [])}]
-    cats, items_js, n, seen = [], [], 0, set()
-    for sec in sections:
-        for it in sec.get("items", []):
-            n += 1
-            it.setdefault("num", str(n))
-            it["id"] = str(it.get("id") or it["num"])
-            if it["id"] in seen:
-                raise SpecError("duplicate item id %r" % it["id"])
-            seen.add(it["id"])
-            if not it.get("label"):
-                raise SpecError("item %s needs a label" % it["id"])
-            for i, v in enumerate(it.get("variants") or []):
-                v.setdefault("key", chr(65 + i))
-                v.setdefault("label", "%s %s" % (word, v["key"]))
-            if it.get("category") and it["category"] not in cats:
-                cats.append(it["category"])
-            items_js.append({"id": it["id"], "num": it["num"], "label": it["label"],
-                             "category": it.get("category"),
-                             "variants": [{"key": v["key"], "label": v["label"], "name": v.get("name", "")}
-                                          for v in it.get("variants") or []],
-                             "selected": it.get("selected")})
-    colors = dict(zip(cats, CATEGORY_COLORS * 4))
-    colors.update(spec.get("category_colors") or {})
+    for it in sec["items"]:
+        ctx.n += 1
+        it.setdefault("num", str(ctx.n))
+        it["id"] = str(it.get("id") or it["num"])
+        if it["id"] in ctx.seen:
+            raise SpecError("duplicate item id %r" % it["id"])
+        ctx.claim(it["id"], "item")
+        if not it.get("label"):
+            raise SpecError("item %s needs a label" % it["id"])
+        for i, v in enumerate(it.get("variants") or []):
+            v.setdefault("key", chr(65 + i))
+            v.setdefault("label", "%s %s" % (word, v["key"]))
+        out.append(review_item(it, dec, ctx.colors))
+        items.append({"id": it["id"], "num": it["num"], "label": it["label"], "category": it.get("category"),
+                      "variants": [{"key": v["key"], "label": v["label"], "name": v.get("name", "")}
+                                   for v in it.get("variants") or []],
+                      "selected": it.get("selected")})
+    js = {"items": items, "decisions": {k: dec.get(k) for k in
+                                        ("buttons", "pending", "mark_read", "comment_always", "works_as_designed")}}
+    return out, js
 
-    out = []
-    if dec.get("legend"):
+
+def notes_box(qid, label):
+    return ('<div class="notes"><label for="n-%s">%s</label><textarea id="n-%s" data-note="%s"></textarea></div>'
+            % (esc(qid), esc(label), esc(qid), esc(qid)))
+
+
+def render_questions(sec, ctx):
+    out, items, rnd = [], [], (ctx.spec.get("project") or {}).get("round", "?")
+    for i, q in enumerate(sec["items"], 1):
+        qid = q.get("qid")
+        ctx.claim(qid, "question qid")
+        ask, r = q.get("ask", qid), str(q.get("round", rnd))
+        out.append('<div class="q" data-qid="%s" data-ask="%s" data-round="%s">' % (esc(qid), esc(ask), esc(r)))
+        out.append('<div class="q-num">Question %d <span class="qid">· id: %s</span></div>' % (i, esc(qid)))
+        out.append('<div class="q-ask">%s</div>' % esc(ask))
+        if q.get("why_html"):
+            out.append('<div class="q-why">%s</div>' % q["why_html"])
+        if q.get("mockups_html"):
+            out.append('<div class="frames">%s</div>' % q["mockups_html"])
+        out.append('<div class="opts">')
+        for o in q.get("options") or []:
+            rec = ' <span class="rec">— RECOMMENDED</span>' if o.get("recommended") else ""
+            note = '<span class="opt-note">%s</span>' % o["note_html"] if o.get("note_html") else ""
+            out.append('<label class="opt"><input type="radio" name="%s" value="%s"><span><span class="opt-label">%s%s</span>%s</span></label>'
+                       % (esc(qid), esc(o.get("value") or o["label"]), esc(o["label"]), rec, note))
+        out.append("</div>" + notes_box(qid, q.get("notes_label", "Or in your own words")) + "</div>")
+        items.append({"qid": qid, "ask": ask, "round": r})
+    return out, {"items": items}
+
+
+def render_qa(sec, ctx):
+    out, items = [], []
+    for i, c in enumerate(sec["items"], 1):
+        qid = c.get("qaid")
+        ctx.claim(qid, "QA item qaid")
+        check_text = c.get("check", qid)
+        out.append('<div class="qa" data-qaid="%s" data-check="%s">' % (esc(qid), esc(check_text)))
+        out.append('<div class="qa-num">QA %d <span class="qid">· id: %s</span></div>' % (i, esc(qid)))
+        out.append('<div class="qa-what">%s</div>' % esc(check_text))
+        if c.get("why_html"):
+            out.append('<div class="qa-why">%s</div>' % c["why_html"])
+        out.append('<div class="opts qa-opts">')
+        for val, lab in (("PASS", "Pass"), ("FAIL", "Fail"), ("COULDN'T TEST", "Couldn't test")):
+            out.append('<label class="opt"><input type="radio" name="%s" value="%s"><span class="opt-label">%s</span></label>'
+                       % (esc(qid), esc(val), lab))
+        out.append("</div>" + notes_box(qid, c.get("notes_label", "What happened")) + "</div>")
+        items.append({"qaid": qid, "check": check_text})
+    return out, {"items": items}
+
+
+def render_log(sec, ctx):
+    out, items = [], []
+    for e in sec["items"]:
+        eid = e.get("id")
+        ctx.claim(eid, "entry id")
+        status = e.get("status", "Background")
+        out.append('<article class="rp-entry" data-entry="%s">' % esc(eid))
+        out.append('<header class="rp-entry-head"><span class="rp-num">%s</span><h3>%s</h3>'
+                   '<span class="rp-status rp-status-%s">%s</span></header>'
+                   % (esc(eid), esc(e.get("title", "")), slug(status), esc(status)))
+        if e.get("lede"):
+            out.append('<p class="rp-lede">%s</p>' % e["lede"])
+        if e.get("detail_html"):
+            out.append('<div class="rp-detail">%s</div>' % e["detail_html"])
+        qnames = []
+        for g in e.get("questions") or []:
+            q = g.get("q")
+            if not q or q in qnames:
+                raise SpecError("entry %s: every option group needs a unique q" % eid)
+            qnames.append(q)
+            out.append('<fieldset class="rp-opts" data-q="%s">' % esc(q))
+            if g.get("label"):
+                out.append("<legend>%s</legend>" % esc(g["label"]))
+            for o in g.get("options") or []:
+                out.append('<label class="rp-opt"><input type="radio" name="%s::%s" value="%s"><span>%s</span></label>'
+                           % (esc(eid), esc(q), esc(o), esc(o)))
+            out.append("</fieldset>")
+        out.append('<div class="rp-entry-foot"><label class="rp-note-label">Note<textarea data-note="%s" rows="2"></textarea></label>'
+                   '<label class="rp-tick"><input type="checkbox" data-tick="%s"> Read this</label></div></article>'
+                   % (esc(eid), esc(eid)))
+        items.append({"id": eid, "title": e.get("title", ""), "groups": qnames})
+    return out, {"items": items}
+
+
+RENDER = {"review": render_review, "questions": render_questions, "qa": render_qa, "log": render_log}
+
+
+def render_sections(spec):
+    secs = sections_of(spec)
+    ctx = Ctx(spec, secs)
+    out, js = [], []
+    first_dec = next((s["_dec"] for s in secs if s["kind"] == "review"), None)
+    if first_dec and first_dec.get("legend"):
         out.append('<div class="rp-legend" aria-label="What each decision means">')
-        for b in dec["buttons"]:
+        for b in first_dec["buttons"]:
             out.append('<span class="rp-legend-item"><span class="rp-swatch rp-st-%s"></span><b>%s</b> %s</span>'
                        % (esc(b["state"]), esc(b["label"]), esc(b.get("meaning", ""))))
         out.append("</div>")
@@ -197,28 +336,116 @@ def build_review(spec):
         out.append('<div class="rp-preview-toggle"><span>Examples shown in</span>'
                    '<button type="button" class="rp-chip-btn" data-preview-set="light" aria-pressed="true">Light</button>'
                    '<button type="button" class="rp-chip-btn" data-preview-set="dark" aria-pressed="false">Dark</button></div>')
-    if spec.get("filters") and cats:
+    if spec.get("filters") and ctx.cats:
         out.append('<nav class="rp-filters" aria-label="Filter by category">'
                    '<button type="button" class="rp-chip-btn" data-filter="" aria-pressed="true">All <span data-count=""></span></button>')
-        for c in cats:
+        for c in ctx.cats:
             out.append('<button type="button" class="rp-chip-btn" data-filter="%s" aria-pressed="false" style="--cat:%s">%s <span data-count="%s"></span></button>'
-                       % (esc(c), esc(colors[c]), esc(c), esc(c)))
+                       % (esc(c), esc(ctx.colors[c]), esc(c), esc(c)))
         out.append("</nav>")
-    for sec in sections:
-        out.append('<section class="rp-section">')
-        if sec.get("title"):
-            out.append("<h2>%s</h2>" % esc(sec["title"]))
+    for sec in secs:
+        kind = sec["kind"]
+        body, sjs = RENDER[kind](sec, ctx)
+        if kind in ("questions", "qa") and not sec["items"] and not sec.get("title"):
+            continue
+        out.append('<section class="rp-section rp-kind-%s" data-section="%s">' % (kind, esc(sec["id"])))
+        title = sec.get("title") or DEFAULT_TITLE.get(kind)
+        if title:
+            out.append("<h2>%s</h2>" % esc(title))
         if sec.get("intro_html"):
             out.append('<div class="rp-section-intro">%s</div>' % sec["intro_html"])
-        if not sec.get("items"):
+        if not sec["items"] and kind == "review":
             out.append('<p class="rp-empty">%s</p>' % (sec.get("empty_html") or "Nothing in this section."))
-        for it in sec.get("items", []):
-            out.append(review_item(it, dec, colors))
+        out.extend(body)
         out.append("</section>")
-    js = {"mode": "review", "header": spec.get("header") or "[%s]" % spec["title"],
-          "items": items_js, "decisions": {k: dec.get(k) for k in
-                                           ("buttons", "pending", "mark_read", "comment_always", "works_as_designed")}}
+        sjs.update({"id": sec["id"], "kind": kind})
+        js.append(sjs)
     return "\n".join(out), js
+
+
+def frame_js(spec):
+    mode, proj = spec["mode"], spec.get("project") or {}
+    if mode == "review":
+        return {"header": spec.get("header") or "[%s]" % spec["title"]}
+    if mode == "questions":
+        for k in ("name", "stream"):
+            if not proj.get(k):
+                raise SpecError("questions mode needs project.%s" % k)
+        return {"format": spec.get("format", "working-log questions v1.2"), "project": proj.get("name"),
+                "stream": proj.get("stream"), "round": proj.get("round", "?"),
+                "artifact": proj.get("artifact", "(the published URL of this page)")}
+    for k in ("name", "session"):
+        if not proj.get(k):
+            raise SpecError("log mode needs project.%s" % k)
+    return {"project": proj.get("name"), "session": proj.get("session"), "repo": proj.get("repo"),
+            "details": spec.get("details") or []}
+
+
+# --------------------------------------------------------------------- page
+
+def page(spec):
+    mode = spec["mode"]
+    js = frame_js(spec)
+    body, js["sections"] = render_sections(spec)
+    js["mode"] = mode
+    proj = spec.get("project") or {}
+    js["key"] = spec.get("storage_key") or "proofs:%s:%s" % (mode, slug("%s %s %s" % (
+        proj.get("name", ""), proj.get("session", proj.get("stream", "")), spec["title"])))
+    css_vars = "".join("%s:%s;" % (k, v) for k, v in (spec.get("vars") or {}).items())
+    assets = "".join("--asset-%s:url(%s);" % (k, v) for k, v in spec["_assets"].items())
+    html_out = ['<!doctype html>', '<html lang="en">', "<head>", '<meta charset="utf-8">',
+                '<meta name="viewport" content="width=device-width, initial-scale=1">',
+                "<title>%s</title>" % esc(spec["title"]), spec.get("head_html", ""),
+                "<style>\n%s\n:root{%s%s}\n%s\n</style>" % (STYLE.read_text(), css_vars, assets, spec.get("css", "")),
+                "</head>", '<body class="rp rp-mode-%s">' % mode]
+    if mode == "log":
+        repo = ' · <span>%s</span>' % esc(proj["repo"]) if proj.get("repo") else ""
+        first = next((s["items"][0] for s in js["sections"] if s["kind"] == "log" and s["items"]), None)
+        marker = spec.get("marker") or " · ".join(x for x in (
+            spec.get("version") and '<b>%s</b>' % esc(spec["version"]),
+            spec.get("updated") and "updated %s" % esc(spec["updated"]),
+            first and "entry %s" % esc(first["id"])) if x)
+        html_out.append('<div class="rp-projectbar">%s · <b class="rp-session">%s</b>%s · Working log</div>'
+                        % (esc(proj["name"]), esc(proj["session"]), repo))
+        html_out.append('<div class="rp-statusbar"><span id="rp-tally"></span><span class="rp-marker">%s</span>'
+                        '<button type="button" class="rp-copy" data-copy>Copy my replies</button></div>' % marker)
+    elif mode == "questions":
+        html_out.append('<div class="bar"><div class="bar-title">%s</div><div class="tally" id="rp-tally">—</div>'
+                        '<button class="ghost" id="rp-clear" type="button">Clear</button>'
+                        '<button class="copy" type="button" data-copy>%s</button></div>'
+                        % (spec.get("bar_title_html") or esc(proj["name"]), esc(spec.get("copy_label", "Copy my answers"))))
+    html_out.append('<main class="rp-main" data-preview="light">')
+    if spec.get("heading"):
+        html_out.append('<h1 class="rp-h1">%s</h1>' % esc(spec["heading"]))
+    if spec.get("intro_html"):
+        html_out.append('<div class="rp-intro">%s</div>' % spec["intro_html"])
+    if mode == "log" and spec.get("facts"):
+        html_out.append('<dl class="rp-facts">%s</dl>' % "".join(
+            "<div><dt>%s</dt><dd>%s</dd></div>" % (esc(k), v) for k, v in spec["facts"]))
+    html_out.append(body)
+    if spec.get("after_html"):
+        html_out.append('<div class="rp-after">%s</div>' % spec["after_html"])
+    if mode == "log":
+        html_out.append('<section class="rp-export"><h2>Copy my replies</h2><label class="rp-note-label">Anything else'
+                        '<textarea data-extra rows="3"></textarea></label>'
+                        '<button type="button" class="rp-copy" data-copy>Copy my replies</button></section>')
+    html_out.append("</main>")
+    if mode == "review":
+        html_out.append('<div class="rp-bar"><div class="rp-progress" aria-hidden="true"></div><span id="rp-tally"></span>'
+                        '<button type="button" class="rp-copy" data-copy>%s</button></div>'
+                        % esc(spec.get("copy_label", "Copy My Decisions")))
+    html_out.append('<div class="rp-fallback" hidden role="dialog" aria-label="Copy the text"><div class="rp-fallback-in">'
+                    '<p>Copying was blocked here, so nothing was copied. The text is selected: copy it with Cmd+C or Ctrl+C.</p>'
+                    '<textarea readonly></textarea><button type="button" data-close>Close</button></div></div>')
+    html_out.append('<div class="rp-flash" role="status" aria-live="polite">Copied — paste it back to me</div>')
+    spec_json = json.dumps(js, ensure_ascii=False).replace("<", "\\u003c")
+    html_out.append('<script type="application/json" id="rp-spec">%s</script>' % spec_json)
+    html_out.append("<script>\n%s\n</script>" % ENGINE.read_text())
+    html_out.append("</body></html>")
+    text = "\n".join(html_out)
+    for k, v in spec["_assets"].items():
+        text = text.replace("{{asset:%s}}" % k, v)
+    return text
 
 
 def review_item(it, dec, colors):
@@ -269,186 +496,14 @@ def review_item(it, dec, colors):
     return "\n".join(h)
 
 
-# ------------------------------------------------------------- questions mode
-
-def build_questions(spec):
-    proj = spec.get("project") or {}
-    for k in ("name", "stream"):
-        if not proj.get(k):
-            raise SpecError("questions mode needs project.%s" % k)
-    qs, qa, seen = spec.get("questions") or [], spec.get("qa") or [], set()
-    out = []
-    if qs:
-        out.append('<h2>%s</h2>' % esc(spec.get("questions_heading", "Open — needs you")))
-    for i, q in enumerate(qs, 1):
-        qid = q.get("qid")
-        if not qid or qid in seen:
-            raise SpecError("every question needs a unique qid (got %r)" % qid)
-        seen.add(qid)
-        out.append('<div class="q" data-qid="%s" data-ask="%s" data-round="%s">'
-                   % (esc(qid), esc(q.get("ask", qid)), esc(q.get("round", proj.get("round", "?")))))
-        out.append('<div class="q-num">Question %d <span class="qid">· id: %s</span></div>' % (i, esc(qid)))
-        out.append('<div class="q-ask">%s</div>' % esc(q.get("ask", qid)))
-        if q.get("why_html"):
-            out.append('<div class="q-why">%s</div>' % q["why_html"])
-        if q.get("mockups_html"):
-            out.append('<div class="frames">%s</div>' % q["mockups_html"])
-        out.append('<div class="opts">')
-        for o in q.get("options") or []:
-            rec = ' <span class="rec">— RECOMMENDED</span>' if o.get("recommended") else ""
-            note = '<span class="opt-note">%s</span>' % o["note_html"] if o.get("note_html") else ""
-            out.append('<label class="opt"><input type="radio" name="%s" value="%s"><span><span class="opt-label">%s%s</span>%s</span></label>'
-                       % (esc(qid), esc(o.get("value") or o["label"]), esc(o["label"]), rec, note))
-        out.append("</div>")
-        out.append('<div class="notes"><label for="n-%s">%s</label><textarea id="n-%s" data-note="%s"></textarea></div></div>'
-                   % (esc(qid), esc(q.get("notes_label", "Or in your own words")), esc(qid), esc(qid)))
-    if qa:
-        out.append('<h2>%s</h2>' % esc(spec.get("qa_heading", "QA after deploy — check these off")))
-        if spec.get("qa_intro_html"):
-            out.append('<p class="fine">%s</p>' % spec["qa_intro_html"])
-    for i, c in enumerate(qa, 1):
-        qid = c.get("qaid")
-        if not qid or qid in seen:
-            raise SpecError("every QA item needs a unique qaid (got %r)" % qid)
-        seen.add(qid)
-        out.append('<div class="qa" data-qaid="%s" data-check="%s">' % (esc(qid), esc(c.get("check", qid))))
-        out.append('<div class="qa-num">QA %d <span class="qid">· id: %s</span></div>' % (i, esc(qid)))
-        out.append('<div class="qa-what">%s</div>' % esc(c.get("check", qid)))
-        if c.get("why_html"):
-            out.append('<div class="qa-why">%s</div>' % c["why_html"])
-        out.append('<div class="opts qa-opts">')
-        for val, lab in (("PASS", "Pass"), ("FAIL", "Fail"), ("COULDN'T TEST", "Couldn't test")):
-            out.append('<label class="opt"><input type="radio" name="%s" value="%s"><span class="opt-label">%s</span></label>'
-                       % (esc(qid), esc(val), lab))
-        out.append("</div>")
-        out.append('<div class="notes"><label for="n-%s">%s</label><textarea id="n-%s" data-note="%s"></textarea></div></div>'
-                   % (esc(qid), esc(c.get("notes_label", "What happened")), esc(qid), esc(qid)))
-    js = {"mode": "questions", "format": spec.get("format", "working-log questions v1.2"),
-          "project": proj.get("name"), "stream": proj.get("stream"), "round": proj.get("round", "?"),
-          "artifact": proj.get("artifact", "(the published URL of this page)"),
-          "questions": [{"qid": q["qid"], "ask": q.get("ask", q["qid"]),
-                         "round": str(q.get("round", proj.get("round", "?")))} for q in qs],
-          "qa": [{"qaid": c["qaid"], "check": c.get("check", c["qaid"])} for c in qa]}
-    return "\n".join(out), js
-
-
-# ------------------------------------------------------------------- log mode
-
-def build_log(spec):
-    proj = spec.get("project") or {}
-    for k in ("name", "session"):
-        if not proj.get(k):
-            raise SpecError("log mode needs project.%s" % k)
-    entries, seen, out = spec.get("entries") or [], set(), []
-    for e in entries:
-        eid = e.get("id")
-        if not eid or eid in seen:
-            raise SpecError("every entry needs a unique id (got %r)" % eid)
-        seen.add(eid)
-        status = e.get("status", "Background")
-        out.append('<article class="rp-entry" data-entry="%s">' % esc(eid))
-        out.append('<header class="rp-entry-head"><span class="rp-num">%s</span><h3>%s</h3>'
-                   '<span class="rp-status rp-status-%s">%s</span></header>'
-                   % (esc(eid), esc(e.get("title", "")), slug(status), esc(status)))
-        if e.get("lede"):
-            out.append('<p class="rp-lede">%s</p>' % e["lede"])
-        if e.get("detail_html"):
-            out.append('<div class="rp-detail">%s</div>' % e["detail_html"])
-        groups = e.get("questions") or []
-        qnames = set()
-        for g in groups:
-            q = g.get("q")
-            if not q or q in qnames:
-                raise SpecError("entry %s: every option group needs a unique q" % eid)
-            qnames.add(q)
-            out.append('<fieldset class="rp-opts" data-q="%s">' % esc(q))
-            if g.get("label"):
-                out.append("<legend>%s</legend>" % esc(g["label"]))
-            for o in g.get("options") or []:
-                out.append('<label class="rp-opt"><input type="radio" name="%s::%s" value="%s"><span>%s</span></label>'
-                           % (esc(eid), esc(q), esc(o), esc(o)))
-            out.append("</fieldset>")
-        out.append('<div class="rp-entry-foot"><label class="rp-note-label">Note<textarea data-note="%s" rows="2"></textarea></label>'
-                   '<label class="rp-tick"><input type="checkbox" data-tick="%s"> Read this</label></div></article>'
-                   % (esc(eid), esc(eid)))
-    js = {"mode": "log", "project": proj.get("name"), "session": proj.get("session"), "repo": proj.get("repo"),
-          "details": spec.get("details") or [],
-          "entries": [{"id": e["id"], "title": e.get("title", ""), "groups": [g["q"] for g in e.get("questions") or []]}
-                      for e in entries]}
-    return "\n".join(out), js
-
-
-# --------------------------------------------------------------------- page
-
-def page(spec):
-    mode = spec["mode"]
-    body, js = {"review": build_review, "questions": build_questions, "log": build_log}[mode](spec)
-    proj = spec.get("project") or {}
-    key = spec.get("storage_key") or "proofs:%s:%s" % (mode, slug("%s %s %s" % (
-        proj.get("name", ""), proj.get("session", proj.get("stream", "")), spec["title"])))
-    js["key"] = key
-    css_vars = "".join("%s:%s;" % (k, v) for k, v in (spec.get("vars") or {}).items())
-    assets = "".join("--asset-%s:url(%s);" % (k, v) for k, v in spec["_assets"].items())
-    head = spec.get("head_html", "")
-    css = STYLE.read_text()
-    extra = spec.get("css", "")
-    html_out = ['<!doctype html>', '<html lang="en">', "<head>", '<meta charset="utf-8">',
-                '<meta name="viewport" content="width=device-width, initial-scale=1">',
-                "<title>%s</title>" % esc(spec["title"]), head,
-                "<style>\n%s\n:root{%s%s}\n%s\n</style>" % (css, css_vars, assets, extra),
-                "</head>", '<body class="rp rp-mode-%s">' % mode]
-    if mode == "log":
-        repo = ' · <span>%s</span>' % esc(proj["repo"]) if proj.get("repo") else ""
-        marker = spec.get("marker") or " · ".join(x for x in (
-            spec.get("version") and '<b>%s</b>' % esc(spec["version"]),
-            spec.get("updated") and "updated %s" % esc(spec["updated"]),
-            spec.get("entries") and "entry %s" % esc(spec["entries"][0]["id"])) if x)
-        html_out.append('<div class="rp-projectbar">%s · <b class="rp-session">%s</b>%s · Working log</div>'
-                        % (esc(proj["name"]), esc(proj["session"]), repo))
-        html_out.append('<div class="rp-statusbar"><span id="rp-tally"></span><span class="rp-marker">%s</span>'
-                        '<button type="button" class="rp-copy" data-copy>Copy my replies</button></div>' % marker)
-    elif mode == "questions":
-        html_out.append('<div class="bar"><div class="bar-title">%s</div><div class="tally" id="rp-tally">—</div>'
-                        '<button class="ghost" id="rp-clear" type="button">Clear</button>'
-                        '<button class="copy" type="button" data-copy>%s</button></div>'
-                        % (spec.get("bar_title_html") or esc(proj["name"]), esc(spec.get("copy_label", "Copy my answers"))))
-    html_out.append('<main class="rp-main" data-preview="light">')
-    if spec.get("heading"):
-        html_out.append('<h1 class="rp-h1">%s</h1>' % esc(spec["heading"]))
-    if spec.get("intro_html"):
-        html_out.append('<div class="rp-intro">%s</div>' % spec["intro_html"])
-    if mode == "log" and spec.get("facts"):
-        html_out.append('<dl class="rp-facts">%s</dl>' % "".join(
-            "<div><dt>%s</dt><dd>%s</dd></div>" % (esc(k), v) for k, v in spec["facts"]))
-    html_out.append(body)
-    if spec.get("after_html"):
-        html_out.append('<div class="rp-after">%s</div>' % spec["after_html"])
-    if mode == "log":
-        html_out.append('<section class="rp-export"><h2>Copy my replies</h2><label class="rp-note-label">Anything else'
-                        '<textarea data-extra rows="3"></textarea></label>'
-                        '<button type="button" class="rp-copy" data-copy>Copy my replies</button></section>')
-    html_out.append("</main>")
-    if mode == "review":
-        html_out.append('<div class="rp-bar"><div class="rp-progress" aria-hidden="true"></div><span id="rp-tally"></span>'
-                        '<button type="button" class="rp-copy" data-copy>%s</button></div>'
-                        % esc(spec.get("copy_label", "Copy My Decisions")))
-    html_out.append('<div class="rp-fallback" hidden role="dialog" aria-label="Copy the text"><div class="rp-fallback-in">'
-                    '<p>Copying was blocked here, so nothing was copied. The text is selected: copy it with Cmd+C or Ctrl+C.</p>'
-                    '<textarea readonly></textarea><button type="button" data-close>Close</button></div></div>')
-    html_out.append('<div class="rp-flash" role="status" aria-live="polite">Copied — paste it back to me</div>')
-    spec_json = json.dumps(js, ensure_ascii=False).replace("<", "\\u003c")
-    html_out.append('<script type="application/json" id="rp-spec">%s</script>' % spec_json)
-    html_out.append("<script>\n%s\n</script>" % ENGINE.read_text())
-    html_out.append("</body></html>")
-    text = "\n".join(html_out)
-    for k, v in spec["_assets"].items():
-        text = text.replace("{{asset:%s}}" % k, v)
-    return text
-
-
 # -------------------------------------------------------------------- check
 
 SCRIPT_RX = re.compile(r"<script(?![^>]*\bsrc=)(?![^>]*application/json)[^>]*>(.*?)</script>", re.S | re.I)
+
+
+def section_html(text, sid):
+    m = re.search(r'<section class="rp-section[^"]*" data-section="%s">(.*?)</section>' % re.escape(html.escape(sid, quote=True)), text, re.S)
+    return m.group(1) if m else ""
 
 
 def check(path):
@@ -486,22 +541,23 @@ def check(path):
     if dup:
         errs.append("duplicate element ids: %s" % ", ".join(dup))
     if spec:
-        mode = spec.get("mode")
-        if mode == "review":
-            n = len(re.findall(r'<article class="rp-item"', text))
-            if n != len(spec["items"]):
-                errs.append("%d item cards for %d items" % (n, len(spec["items"])))
-            for it in spec["items"]:
-                need = len(spec["decisions"]["buttons"])
-                got = len(re.findall(r'data-item="%s" data-choice=' % re.escape(html.escape(it["id"], quote=True)), text))
-                if got != need:
-                    errs.append("item %s has %d decision buttons, expected %d" % (it["id"], got, need))
-            if not spec.get("header", "").startswith("["):
-                errs.append("export header must be bracketed")
+        mode, secs = spec.get("mode"), spec.get("sections") or []
+        for sec in secs:
+            if sec["kind"] == "review":
+                n = len(re.findall(r'<article class="rp-item"', section_html(text, sec["id"])))
+                if n != len(sec["items"]):
+                    errs.append("section %s: %d item cards for %d items" % (sec["id"], n, len(sec["items"])))
+                need = len(sec["decisions"]["buttons"])
+                for it in sec["items"]:
+                    got = len(re.findall(r'data-item="%s" data-choice=' % re.escape(html.escape(it["id"], quote=True)), text))
+                    if got != need:
+                        errs.append("item %s has %d decision buttons, expected %d" % (it["id"], got, need))
+        if mode == "review" and not spec.get("header", "").startswith("["):
+            errs.append("export header must be bracketed")
         if mode == "log" and title and not html.unescape(title.group(1)).startswith(spec.get("session") or "\0"):
             errs.append("log <title> must lead with the session name")
-        if mode == "questions" and len(re.findall(r'class="q" data-qid=', text)) + len(re.findall(r'class="qa" data-qaid=', text)) == 0:
-            errs.append("questions page has no questions or QA items")
+        if not any(sec["items"] for sec in secs):
+            errs.append("page has no items in any section")
     for name in re.findall(r"\{\{asset:([\w-]+)\}\}", text):
         errs.append("unresolved asset placeholder {{asset:%s}}" % name)
     return errs

@@ -1,6 +1,6 @@
 ---
 name: changelog
-version: 1.3.0
+version: 1.3.1
 description: Use when the user wants a signed-in-only changelog page for their app (or one per sub-app), backed by plain markdown files and a vertical-timeline UI, with entries automatically broken up by calendar month and past months reachable as archive links — and use at the end of any session where something changelog-worthy shipped, to add a dated entry.
 ---
 
@@ -152,7 +152,3 @@ The changelog page (and one per sub-app) is a signed-in-only page backed by `doc
 ## The ongoing habit
 
 Once set up, this is the part that matters every session after: before finishing a session where you shipped a feature, redesign or real bug fix, open the relevant `docs/changelog/<app>.md` and add (or extend) today's `## YYYY-MM-DD` section with 1-3 plain-language bullets. Don't log lint, refactor or typo-only work. Don't ask the user first: this is a standing habit, like updating a backlog file.
-
-## Changelog
-
-- **1.3.0** (2026-11-16): Merged into proofs: generic, no project-specific steps.

@@ -1,6 +1,6 @@
 ---
 name: todos
-version: 1.1.2
+version: 1.1.3
 description: Use when the user wants to see and work their open to-do list — publishes TODO.md's open items as a tickable Artifact with a note per item and a copy-back export, then applies the result: archiving what is done with its evidence, verifying repo work before believing it, and leaving anything unproven open. Also use to adopt the convention in a repo whose TODO.md has grown into a decision log.
 ---
 
@@ -200,16 +200,4 @@ To run them, install jsdom (`npm install jsdom`) and point `NODE_PATH` at its
 
 ## Where the page goes
 
-The project chooses with `PROOFS_PAGES`, set in the project's `.claude/settings.json` "env" block (or a line in CLAUDE.md: "proofs pages: file"). Values:
-
-- `artifact`: publish as a private claude.ai artifact (a link that opens on phone and computer). This is the default when publishing is available.
-- `file`: save the page as an HTML file (default folder `.proofs/pages/`; add it to .gitignore) and open it in the browser (`open` on macOS, `xdg-open` on Linux, `start` on Windows). This is the default when artifacts are not available. Reuse the same file path for later rounds so the page updates in place instead of piling up.
-- `wifi`: same as `file`, plus serve only a folder that holds this review's page(s) (for example `.proofs/pages/<review-name>/`, so older pages are not listed to the network) on the local network (`python3 -m http.server <port> --bind <the computer's local IP>` from that folder) and print the address so a phone on the same Wi-Fi can open it. This mode never uploads the page and never uses a public tunnel. Stop the server when the review is done. Use `wifi` only on a private network you trust, never on public or shared Wi-Fi.
-
-If `artifact` is chosen but publishing fails or is not available, fall back to `file` and say so in one line. Everything on the page works the same in every mode. The page's copy button gives the user text to paste back. Copy buttons must fall back to a selectable text box (select all) when `navigator.clipboard` is missing or the write fails (a page served over http on a local IP is not a secure context, so the clipboard is often unavailable), and must never show "Copied" unless the copy actually succeeded.
-
-## Changelog
-
-- **1.1.2** (2026-11-17): Copy buttons now fall back to a selectable text box when the clipboard is unavailable (as on a Wi-Fi-served page), and `wifi` mode is limited to a private network you trust. Default page path is `.proofs/pages/todos.html`.
-- **1.1.1** (2026-11-16): New section "Where the page goes": a project can choose an artifact, a local file, or a file served on its own Wi-Fi.
-- **1.1.0** (2026-11-16): Merged into proofs: generic, no project-specific steps.
+Before you publish or save the page, read `../../reference/where-the-page-goes.md` (the path is relative to this skill's folder). The project's `PROOFS_PAGES` setting picks artifact, file or wifi, and that file says what each means and how copy buttons must fall back.

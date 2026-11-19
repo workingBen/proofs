@@ -1,6 +1,6 @@
 ---
 name: style-guide
-version: 1.5.2
+version: 1.5.3
 description: Use when the user wants to review and codify design/style consistency across the whole site (type scale, spacing, color, icon-header layout, card style, hero headers, disclaimer placement) rather than one page at a time — audits pages/templates for existing and candidate conventions, builds an interactive Artifact review with a 4-state decision model (Deny / Request Revision / Accept - Apply Everywhere Now / Accept - Record for Later), and persists accepted rules into a committed, re-publishable docs/style-guide.html that both the user and future Claude sessions consult.
 ---
 
@@ -125,16 +125,4 @@ Identical pattern to the sibling tools: scope the new Artifact to only the still
 
 ## Where the page goes
 
-The project chooses with `PROOFS_PAGES`, set in the project's `.claude/settings.json` "env" block (or a line in CLAUDE.md: "proofs pages: file"). Values:
-
-- `artifact`: publish as a private claude.ai artifact (a link that opens on phone and computer). This is the default when publishing is available.
-- `file`: save the page as an HTML file (default folder `.proofs/pages/`; add it to .gitignore) and open it in the browser (`open` on macOS, `xdg-open` on Linux, `start` on Windows). This is the default when artifacts are not available. Reuse the same file path for later rounds so the page updates in place instead of piling up.
-- `wifi`: same as `file`, plus serve only a folder that holds this review's page(s) (for example `.proofs/pages/<review-name>/`, so older pages are not listed to the network) on the local network (`python3 -m http.server <port> --bind <the computer's local IP>` from that folder) and print the address so a phone on the same Wi-Fi can open it. This mode never uploads the page and never uses a public tunnel. Stop the server when the review is done. Use `wifi` only on a private network you trust, never on public or shared Wi-Fi.
-
-If `artifact` is chosen but publishing fails or is not available, fall back to `file` and say so in one line. Everything on the page works the same in every mode. The page's copy button gives the user text to paste back. Copy buttons must fall back to a selectable text box (select all) when `navigator.clipboard` is missing or the write fails (a page served over http on a local IP is not a secure context, so the clipboard is often unavailable), and must never show "Copied" unless the copy actually succeeded.
-
-## Changelog
-
-- **1.5.2** (2026-11-17): Copy buttons now fall back to a selectable text box when the clipboard is unavailable (as on a Wi-Fi-served page), and `wifi` mode is limited to a private network you trust.
-- **1.5.1** (2026-11-16): New section "Where the page goes": a project can choose an artifact, a local file, or a file served on its own Wi-Fi.
-- **1.5.0** (2026-11-16): Merged into proofs: generic, no project-specific steps.
+Before you publish or save the page, read `../../reference/where-the-page-goes.md` (the path is relative to this skill's folder). The project's `PROOFS_PAGES` setting picks artifact, file or wifi, and that file says what each means and how copy buttons must fall back.

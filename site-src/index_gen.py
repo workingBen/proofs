@@ -61,7 +61,7 @@ if feat or steps:
 HERO_CSS = """
 .home.has-ba .in{grid-template-columns:minmax(0,5fr) minmax(0,7fr);grid-template-areas:"eb ba" "h1 ba" "tl ba" "ch ba" "try ba";align-items:start;column-gap:44px;row-gap:14px;padding-block:36px 40px}
 .home.has-ba .eyebrow{grid-area:eb} .home.has-ba h1{grid-area:h1;font-size:clamp(44px,5.2vw,76px)}
-.home.has-ba .tagline{grid-area:tl;font-size:clamp(20px,2.1vw,26px)} .home.has-ba .chipset{grid-area:ch} .home.has-ba .try{grid-area:try}
+.home.has-ba .tagline{grid-area:tl;font-size:clamp(20px,2.1vw,26px)} .home.has-ba .chipset{grid-area:ch} .home.has-ba .tries{grid-area:try}
 .hero-ba{grid-area:ba;margin:0;display:grid;gap:10px;align-self:center;min-width:0}
 .hero-ba figcaption{font-size:15px;color:var(--muted);line-height:1.45}
 .hero-ba figcaption b{color:var(--fg)} .hero-ba figcaption a{color:var(--accent);font:600 13px "JetBrains Mono",monospace}
@@ -116,14 +116,15 @@ HERO_JS = r"""
   })();
 })();
 </script>"""
-body = f'''<header class="top"><div class="in"><a class="logo" href="index.html">pro<i>o</i>fs</a><span>/ skills for Claude Code</span>{"<a href=\"#examples\" style=\"margin-left:auto;text-decoration:none\">Examples</a><a href=\"#skills\" style=\"text-decoration:none\">Skills ↓</a>" if (feat or steps) else "<a href=\"#skills\" style=\"margin-left:auto;text-decoration:none\">All skills ↓</a>"}</div></header>
+body = f'''<header class="top"><div class="in"><a class="logo" href="index.html">pro<i>o</i>fs</a><span>/ skills for Claude Code</span>{"<a href=\"#examples\" style=\"margin-left:auto;text-decoration:none\">Examples</a><a href=\"#skills\" style=\"text-decoration:none\">Skills ↓</a>" if (feat or steps) else "<a href=\"#skills\" style=\"margin-left:auto;text-decoration:none\">All skills ↓</a>"}<a href="https://github.com/workingBen/proofs" style="text-decoration:none">GitHub ↗</a></div></header>
 <section class="hero home{" has-ba" if hero else ""}"><div class="in">
   <div class="eyebrow">Skills for Claude Code · {len([s for _, g in GROUPS for s in g])} skills · {total_f}+ features</div>
   <h1>Claude skills that <i>show</i> their work.</h1>{hero_ba}
   <p class="tagline">Stop reading walls of terminal text. Every skill here includes a page you can look at, click through and decide on, then hand back to Claude in one paste.</p>
   <div class="chipset">{chips}</div>
-  <div class="try"><span class="lbl">Install in Claude Code</span><div class="trybox"><code id="tryc">/plugin marketplace add workingBen/proofs
-/plugin install proofs@proofs</code><button type="button" id="tryb">Copy</button></div></div>
+  <div class="tries"><div class="try"><span class="lbl">Install in Claude Code</span><div class="trybox"><code>/plugin marketplace add workingBen/proofs
+/plugin install proofs@proofs</code><button type="button" class="tryb">Copy</button></div></div>
+  <div class="try"><span class="lbl">Then try this prompt</span><div class="trybox"><code>Use the design-review skill to propose two or three design updates for the page [YOUR URL]</code><button type="button" class="tryb">Copy</button></div></div></div>
 </div></section>
 {show}<section class="loopw"><div class="in"><h2 class="h2">How every skill works</h2><div class="loop">
   <div class="step"><span class="n">01</span><b>Claude shows you first</b><span>Mockups, measurements and drafts, before anything changes.</span></div>
@@ -132,15 +133,20 @@ body = f'''<header class="top"><div class="in"><a class="logo" href="index.html"
   <div class="step"><span class="n">04</span><b>Paste it back</b><span>One Copy button. Claude does exactly what you chose.</span></div>
 </div></div></section>
 <section class="in" id="skills" style="padding-block:24px 80px"><h2 class="h2">All skills</h2>{cards}</section>
-<footer class="foot"><div class="in"><span>proofs · Claude skills that show their work</span><span>MIT license</span></div></footer>
+<footer class="foot"><div class="in"><span>proofs · Claude skills that show their work</span><span><a href="https://github.com/workingBen/proofs">Code on GitHub</a> · MIT license</span></div></footer>
 <script>
-(function(){{var b=document.getElementById('tryb'),c=document.getElementById('tryc');
-b.addEventListener('click',function(){{try{{navigator.clipboard.writeText(c.textContent).then(function(){{b.textContent='Copied';setTimeout(function(){{b.textContent='Copy'}},1500)}},function(){{}})}}catch(_){{}}}});}})();
+/* Copy buttons. If the clipboard is blocked, select the text so a long-press copies it;
+   never say "Copied" unless it was. */
+[].forEach.call(document.querySelectorAll('.tryb'),function(b){{var c=b.previousElementSibling;
+b.addEventListener('click',function(){{function pick(){{var r=document.createRange();r.selectNodeContents(c);var g=getSelection();g.removeAllRanges();g.addRange(r)}}
+if(!navigator.clipboard||!navigator.clipboard.writeText)return pick();
+navigator.clipboard.writeText(c.textContent).then(function(){{b.textContent='Copied';setTimeout(function(){{b.textContent='Copy'}},1500)}},pick)}})}});
 </script>''' + (HERO_JS if hero else '') + (showcase.JS if exs else '')
 extra = '''
 .home h1{font-size:clamp(44px,8vw,92px)} .home h1 i{color:var(--accent)}
 .home .trybox code{white-space:pre;overflow-x:auto}
 .home .try{max-width:100%;min-width:0}
+.tries{display:grid;gap:16px;min-width:0}
 .home .in{min-width:0}
 .chipset{display:flex;gap:6px;flex-wrap:wrap}
 .dchip{font:600 12px/1 "JetBrains Mono",monospace;padding:8px 11px;border-radius:999px;border:1.5px solid var(--fg)}

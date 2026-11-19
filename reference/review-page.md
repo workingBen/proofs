@@ -175,7 +175,7 @@ session and repo in the export. `facts`: `[[label, html], …]`. Make `title` le
 with the session: `SESSION · PROJECT log`.
 
 A `log` section, or the flat `entries` list, newest first: `[{id, title, status, lede, detail_html, questions: [{q, label, options: [text, …]}]}]`.
-Each entry gets a note field and a "Read this" tick; the page ends with an
+Each entry gets a note field and a "Read this" tick (a ticked entry folds to one line under "Read" at the bottom of the log); the page ends with an
 "Anything else" box. The export is `WORKING LOG — my replies`, the details block,
 `exported:` (local time), then `M6  [read]  title` per entry with `answer:` per
 option group (`answer (q):` when there are several, `(unanswered)` when empty) and

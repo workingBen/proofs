@@ -54,10 +54,11 @@ const file = "file://" + path.resolve(process.argv[3]);
     if (await firstOpt.count()) await firstOpt.check();
     const firstQa = page.locator(".qa input[type=radio]").first();
     if (await firstQa.count()) await firstQa.check();
-    const tick = page.locator("[data-tick]").first();
-    if (await tick.count()) await tick.check();
+    // a reader writes the note, then ticks: a read entry folds its note box away
     const note = page.locator("[data-note]").first();
     if (await note.count()) await note.fill("smoke note");
+    const tick = page.locator("[data-tick]").first();
+    if (await tick.count()) await tick.check();
     // Open questions first: the first thing in <main>, and visible without scrolling.
     if (items("questions").length) {
       const first = await page.evaluate(() => {
@@ -73,12 +74,22 @@ const file = "file://" + path.resolve(process.argv[3]);
   } else {
     out.items = await page.locator("[data-entry]").count();
     if (out.items !== items("log").length) problems.push(`rendered ${out.items} entries, spec has ${items("log").length}`);
-    const tick = page.locator("[data-tick]").first();
-    if (await tick.count()) await tick.check();
-    const opt = page.locator(".rp-opts input[type=radio]").first();
-    if (await opt.count()) await opt.check();
     const note = page.locator("[data-note]").first();
     if (await note.count()) await note.fill("smoke note");
+    const opt = page.locator(".rp-opts input[type=radio]").first();
+    if (await opt.count()) await opt.check();
+    const entry = page.locator("[data-entry]").first();
+    const tick = page.locator("[data-tick]").first();
+    if (await tick.count()) {
+      const open = await entry.evaluate((c) => Array.from(c.querySelectorAll("[data-q]"))
+        .some((g) => !g.querySelector("input:checked")));
+      await tick.check();
+      const folded = await entry.evaluate((c) => c.classList.contains("rp-is-read"));
+      if (folded === open) problems.push(open ? "a read entry with an unanswered option folded away" : "a read entry did not fold");
+      await tick.uncheck();
+      if (await entry.evaluate((c) => c.classList.contains("rp-is-read"))) problems.push("unticking did not unfold the entry");
+      await tick.check();
+    }
     if (!(await page.title()).startsWith(S.session)) problems.push("<title> does not lead with the session name");
   }
 

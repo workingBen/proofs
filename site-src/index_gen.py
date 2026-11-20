@@ -53,9 +53,15 @@ if feat or steps:
     items = ([hero] if hero else []) + [x for x in exs if x is not hero and x["use"] != "skill"]
     show = ('<section class="in showcase" id="examples"><div class="lede"><div class="eyebrow">Real work, before and after</div>'
             '<h2>See it work</h2><p>Each pair is a real page before and after one review. They slide on their own. Drag any of them.</p></div>'
-            + showcase.featured(items))
+            + showcase.featured(items)
+            # From the 2026-11-19 design review: one quiet, full-width line after the gallery saying
+            # where the real examples come from.
+            + '<p class="gs-note">Every example here is real work from my own business, '
+              '<a href="https://greensprings.life" target="_blank" rel="noopener">'
+              'Greensprings Longevity\u00a0\u2197</a>.</p>')
     show += "</section>"
 HERO_CSS = """
+.gs-note{margin:22px 0 0;font-size:15.5px;line-height:1.5;color:var(--muted)} .gs-note a{color:var(--accent);font-weight:600}
 .home.has-vid .in{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-areas:"eb vid" "h1 vid" "tl vid" "try vid" ". vid";grid-template-rows:auto auto auto auto 1fr;align-items:start;align-content:start;column-gap:48px;row-gap:22px;padding-block:36px 40px}
 .home.has-vid .eyebrow{grid-area:eb} .home.has-vid h1{grid-area:h1;font-size:clamp(44px,5vw,72px);margin:0}
 .home.has-vid .tagline{grid-area:tl;font-size:clamp(19px,1.8vw,23px);margin:0} .home.has-vid .tries{grid-area:try;margin-top:6px}

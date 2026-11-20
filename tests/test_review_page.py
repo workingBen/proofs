@@ -47,6 +47,21 @@ def build(name, tmp):
 
 
 @unittest.skipUnless(NODE, "node is not installed")
+class Stylesheet(unittest.TestCase):
+    CSS = (RP / "style.css").read_text()
+
+    def test_links_in_item_text_have_a_color_for_every_theme(self):
+        # A bare <a> in item text, a note or a question once fell back to the browser's
+        # blue, unreadable on the dark theme. Every theme block must set --rp-link.
+        self.assertIn(":where(body.rp) a { color:var(--rp-link); }", self.CSS)
+        blocks = [":root {", ':root:not([data-theme="light"]) {', ':root[data-theme="dark"] {',
+                  "body.rp-mode-questions, :root[data-theme] body.rp-mode-questions {"]
+        for head in blocks:
+            body = self.CSS[self.CSS.index(head):]
+            body = body[:body.index("}")]
+            self.assertIn("--rp-link:", body, head)
+
+
 class ExportText(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()

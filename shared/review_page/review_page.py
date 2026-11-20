@@ -81,6 +81,11 @@ PRESETS = {
 }
 CATEGORY_COLORS = ["#2563eb", "#b45309", "#047857", "#9333ea", "#be123c", "#0e7490", "#4d7c0f", "#c2410c"]
 MODES = ("review", "questions", "log", "session")
+# The skill named in the page's brand pill when the spec gives no `skill`: a review
+# page takes it from its decisions preset (a custom set with no preset shows the
+# wordmark alone), the other modes from their kind of page.
+PRESET_SKILLS = {"copy-edit": "article-copy-edit", "design-review": "design-review",
+                 "style-guide": "style-guide", "photo-picker": "photo-picker"}
 
 
 class SpecError(Exception):
@@ -286,6 +291,11 @@ SESSION_ORDER = ("questions", "links", "qa", "log", "decided")
 # before the heading, intro and facts.
 ACTION_KINDS = ("questions", "links", "qa")
 READ_ONLY_KINDS = ("links", "decided")
+# A link is "open" (the page waits on the reader) or "in-progress" (the reader has
+# answered and Claude is working on it): still listed, so it is not lost, but after
+# the open ones and without the call to action.
+LINK_STATES = ("open", "in-progress")
+WIP_LINKS_TITLE = "Pages Claude is working on"
 
 
 def flat_sections(spec):
@@ -323,6 +333,13 @@ def sections_of(spec):
             raise SpecError("duplicate section id %r" % sec["id"])
         ids.add(sec["id"])
         sec["items"] = sec.get("items") or []
+        if sec["kind"] == "links":
+            for ln in sec["items"]:
+                if ln.get("state", "open") not in LINK_STATES:
+                    raise SpecError("a link's state must be one of %s" % ", ".join(LINK_STATES))
+            sec["items"] = sorted(sec["items"], key=lambda ln: ln.get("state") == "in-progress")
+            if sec["items"] and all(ln.get("state") == "in-progress" for ln in sec["items"]):
+                sec["title"] = sec.get("title") or WIP_LINKS_TITLE
         if mode == "session":
             sec["title"] = sec.get("title") or SESSION_TITLE[sec["kind"]]
     # Enforce the order (a stable sort, so sections of one kind keep theirs).
@@ -335,7 +352,7 @@ def sections_of(spec):
 
 class Ctx:
     def __init__(self, spec, secs):
-        self.spec, self.n, self.seen = spec, 0, set()
+        self.spec, self.n, self.seen, self.anchors = spec, 0, set(), set()
         self.cats = []
         for sec in secs:
             if sec["kind"] == "review":
@@ -426,16 +443,32 @@ def render_qa(sec, ctx):
     return out, {"items": items}
 
 
+MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def short_when(value):
+    """"2026-11-19T15:54" -> "Nov 19 - 3:54PM". The string is already the author's
+    local time, so it is only reformatted, never converted."""
+    m = re.match(r"^\d{4}-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?$", str(value).strip())
+    if not m or not 1 <= int(m.group(1)) <= 12 or int(m.group(3)) > 23:
+        raise SpecError("`when` must be an ISO-8601 local date and time like 2026-11-19T15:54, got %r" % value)
+    mon, day, hour, minute = (int(g) for g in m.groups())
+    return "%s %d - %d:%02d%s" % (MONTHS[mon - 1], day, (hour % 12) or 12, minute, "AM" if hour < 12 else "PM")
+
+
 def render_log(sec, ctx):
     out, items = ['<h3 class="rp-read-head" hidden>Read</h3>'], []
     for e in sec["items"]:
         eid = e.get("id")
         ctx.claim(eid, "entry id")
         status = e.get("status", "Background")
-        out.append('<article class="rp-entry" data-entry="%s">' % esc(eid))
-        out.append('<header class="rp-entry-head"><span class="rp-num">%s</span><h3>%s</h3>'
+        when = short_when(e["when"]) if e.get("when") else None
+        out.append('<article class="rp-entry" id="%s" data-entry="%s">' % (esc(eid), esc(eid)))
+        out.append('<header class="rp-entry-head"><span class="rp-num">%s</span><h3>%s</h3>%s'
                    '<span class="rp-status rp-status-%s">%s</span></header>'
-                   % (esc(eid), esc(e.get("title", "")), slug(status), esc(status)))
+                   % (esc(eid), esc(e.get("title", "")),
+                      '<time class="rp-when" datetime="%s">%s</time>' % (esc(e["when"]), when) if when else "",
+                      slug(status), esc(status)))
         if e.get("lede"):
             out.append('<p class="rp-lede">%s</p>' % e["lede"])
         if e.get("detail_html"):
@@ -459,8 +492,12 @@ def render_log(sec, ctx):
         out.append('<div class="rp-entry-foot"><label class="rp-note-label">Note<textarea data-note="%s" rows="2"></textarea></label>'
                    '<label class="rp-tick"><input type="checkbox" data-tick="%s"> <span class="rp-tick-l">Read this</span></label></div></article>'
                    % (esc(eid), esc(eid)))
-        items.append({"id": eid, "title": e.get("title", ""), "groups": qnames})
+        items.append({"id": eid, "title": e.get("title", ""), "groups": qnames, "when": when})
     return out, {"items": items}
+
+
+IN_PAGE_TEXT = {"questions": "Open questions above", "checks": "Open checks above", "log": "See the log below"}
+SECTION_ANCHOR = {"questions": "questions", "qa": "checks", "log": "log", "decided": "decided"}
 
 
 def render_links(sec, ctx):
@@ -469,6 +506,18 @@ def render_links(sec, ctx):
         if not ln.get("label") or not ln.get("url"):
             raise SpecError("every link needs a label and a url")
         status = ': <span class="rp-link-status">%s</span>' % esc(ln["status"]) if ln.get("status") else ""
+        # A link into this same page (#questions, #checks, #log, #L12) stays on the page and
+        # says where it goes; "Open it" would just reload the page the reader is already on.
+        if ln["url"].startswith("#"):
+            target = ln["url"][1:]
+            text = ln.get("link_text") or IN_PAGE_TEXT.get(target, "See it in the log below")
+            out.append('<li><b>%s</b>%s <a href="%s">%s</a></li>' % (esc(ln["label"]), status, esc(ln["url"]), esc(text)))
+            continue
+        if ln.get("state") == "in-progress":
+            out.append('<li class="rp-link-wip"><b>%s</b>%s <span class="rp-wip">In progress</span>'
+                       ' <a class="rp-link-quiet" href="%s" target="_blank" rel="noopener">%s</a></li>'
+                       % (esc(ln["label"]), status, esc(ln["url"]), esc(ln.get("link_text", "View page"))))
+            continue
         out.append('<li><b>%s</b>%s <a href="%s" target="_blank" rel="noopener">%s</a></li>'
                    % (esc(ln["label"]), status, esc(ln["url"]), esc(ln.get("link_text", "Open it"))))
     out.append("</ul>")
@@ -523,7 +572,11 @@ def render_sections(spec):
         if not sec["items"] and (mode == "session" or kind in READ_ONLY_KINDS
                                  or (kind in ("questions", "qa") and not sec.get("title"))):
             continue  # a section shows only when it has content
-        h = ['<section class="rp-section rp-kind-%s" data-section="%s">' % (kind, esc(sec["id"]))]
+        anchor = SECTION_ANCHOR.get(kind)
+        anchor = ' id="%s"' % anchor if anchor and anchor not in ctx.anchors else ""
+        if anchor:
+            ctx.anchors.add(SECTION_ANCHOR[kind])
+        h = ['<section class="rp-section rp-kind-%s" data-section="%s"%s>' % (kind, esc(sec["id"]), anchor)]
         title = sec.get("title") or DEFAULT_TITLE.get(kind)
         if title:
             count = ""
@@ -547,7 +600,7 @@ def render_sections(spec):
 def frame_js(spec):
     mode, proj = spec["mode"], spec.get("project") or {}
     if mode == "review":
-        return {"header": spec.get("header") or "[%s]" % spec["title"]}
+        return {"header": spec.get("header") or "[%s]" % spec["title"], "session": proj.get("session")}
     if mode == "questions":
         for k in ("name", "stream"):
             if not proj.get(k):
@@ -556,7 +609,7 @@ def frame_js(spec):
                                                   for s in spec.get("sections") or [])
         return {"format": spec.get("format", "questions v1.3" if asks else "qa-checklist v1.0"),
                 "verb": "answers" if asks else "results", "project": proj.get("name"),
-                "stream": proj.get("stream"), "round": proj.get("round", "?"),
+                "stream": proj.get("stream"), "session": proj.get("session"), "round": proj.get("round", "?"),
                 "artifact": proj.get("artifact", "(the published URL of this page)")}
     for k in ("name", "session"):
         if not proj.get(k):
@@ -570,6 +623,32 @@ def frame_js(spec):
 
 # --------------------------------------------------------------------- page
 
+def skill_name(spec, js_sections):
+    """The skill a page belongs to, for its brand pill; None shows the wordmark alone."""
+    if "skill" in spec:
+        return spec["skill"] or None
+    mode = spec["mode"]
+    if mode in ("log", "session"):
+        return "working-log"
+    if mode == "questions":
+        kinds = {s["kind"] for s in js_sections if s["items"]}
+        return "qa-checklist" if "qa" in kinds and "questions" not in kinds else "questions"
+    secs = spec.get("sections") or [spec]
+    d = next((s.get("decisions", spec.get("decisions", "copy-edit")) for s in secs
+              if s.get("kind", "review") == "review"), None)
+    preset = d if isinstance(d, str) else (d or {}).get("preset")
+    return PRESET_SKILLS.get(preset)
+
+
+def brand(skill):
+    """The proofs wordmark and skill pill that start every page's top line, so one
+    skill's page reads apart from another's. Screen readers get one plain phrase."""
+    pill = '<span class="rp-sk" aria-hidden="true">%s</span>' % esc(skill) if skill else ""
+    return ('<span class="rp-brand"><span class="rp-wm" aria-hidden="true">pro<i>o</i>fs</span>%s'
+            '<span class="rp-sr">Proofs%s</span><span class="rp-brand-sep" aria-hidden="true"></span></span>'
+            % (pill, ", " + esc(skill) if skill else ""))
+
+
 def page(spec):
     mode = spec["mode"]
     js = frame_js(spec)
@@ -578,6 +657,7 @@ def page(spec):
     proj = spec.get("project") or {}
     js["key"] = spec.get("storage_key") or "proofs:%s:%s" % (mode, slug("%s %s %s" % (
         proj.get("name", ""), proj.get("session", proj.get("stream", "")), spec["title"])))
+    mark = brand(skill_name(spec, js["sections"]))
     css_vars = "".join("%s:%s;" % (k, v) for k, v in (spec.get("vars") or {}).items())
     assets = "/*rp-assets*/"
     html_out = ['<!doctype html>', '<html lang="en">', "<head>", '<meta charset="utf-8">',
@@ -592,17 +672,26 @@ def page(spec):
             spec.get("version") and '<b>%s</b>' % esc(spec["version"]),
             spec.get("updated") and "updated %s" % esc(spec["updated"]),
             first and "entry %s" % esc(first["id"])) if x)
-        html_out.append('<div class="rp-topbars"><div class="rp-projectbar"><span class="rp-pb-x">%s · </span><b class="rp-session">%s</b><span class="rp-pb-x">%s · %s</span></div>'
-                        % (esc(proj["name"]), esc(proj["session"]), repo,
-                           "Session page" if mode == "session" else "Working log"))
+        html_out.append('<div class="rp-topbars"><div class="rp-projectbar">%s<span class="rp-pb-x">%s · </span><b class="rp-session">%s</b><span class="rp-pb-x">%s</span></div>'
+                        % (mark, esc(proj["name"]), esc(proj["session"]), repo))
         html_out.append('<div class="rp-statusbar"><span id="rp-tally"></span><span class="rp-marker">%s</span>'
                         '<button type="button" class="rp-copy" data-copy>Copy<span class="rp-copy-x"> my replies</span></button></div></div>' % marker)
     elif mode == "questions":
-        html_out.append('<div class="bar"><div class="bar-title">%s</div><div class="tally" id="rp-tally">—</div>'
+        html_out.append('<div class="bar">%s<div class="bar-title">%s</div><div class="tally" id="rp-tally">—</div>'
                         '<button class="ghost" id="rp-clear" type="button">Clear</button>'
                         '<button class="copy" type="button" data-copy>%s</button></div>'
-                        % (spec.get("bar_title_html") or esc(proj["name"]), esc(spec.get("copy_label", "Copy my answers"))))
+                        % (mark, (spec.get("bar_title_html") or esc(proj["name"])) + (
+                            '<span class="rp-sess"> · <b class="rp-session">%s</b></span>' % esc(proj["session"])
+                            if proj.get("session") else ""), esc(spec.get("copy_label", "Copy my answers"))))
     html_out.append('<main class="rp-main" data-preview="light">')
+    if mode == "review":
+        # project · session, then the repo (dropped on phones, separator and all)
+        where = " · ".join(x for x in (proj.get("name") and esc(proj["name"]),
+                                       proj.get("session") and '<b class="rp-session">%s</b>' % esc(proj["session"])) if x)
+        if proj.get("repo"):
+            where += '<span class="rp-pb-x">%s%s</span>' % (" · " if where else "", esc(proj["repo"]))
+        html_out.append('<div class="rp-brandline">%s%s</div>' % (
+            mark, '<span class="rp-where">%s</span>' % where if where else ""))
     context = []
     if spec.get("heading"):
         context.append('<h1 class="rp-h1">%s</h1>' % esc(spec["heading"]))
@@ -844,6 +933,19 @@ def check(path):
     return errs
 
 
+NO_SESSION = "no session name: the reader can't tell which session this page belongs to (set project.session)"
+
+
+def warnings(path):
+    """Problems worth saying that still leave a working page: older specs keep building."""
+    m = re.search(r'<script type="application/json" id="rp-spec">(.*?)</script>', Path(path).read_text(), re.S)
+    try:
+        spec = json.loads(m.group(1)) if m else {}
+    except ValueError:
+        return []
+    return [NO_SESSION] if spec.get("mode") in ("review", "questions") and not spec.get("session") else []
+
+
 def find_playwright(arg):
     for c in (arg, os.environ.get("PROOFS_PLAYWRIGHT")):
         if c and (Path(c) / "package.json").is_file():
@@ -883,6 +985,8 @@ def main(argv=None):
     if a.check or a.smoke:
         target = a.check or a.smoke
         errs = check(target)
+        for w in warnings(target):
+            print("warning: " + w, file=sys.stderr)
         for e in errs:
             print("check: " + e, file=sys.stderr)
         if errs:
@@ -914,6 +1018,8 @@ def main(argv=None):
     errs = check(a.out)
     for e in errs:
         print("check: " + e, file=sys.stderr)
+    for w in warnings(a.out):
+        print("warning: " + w, file=sys.stderr)
     if not errs:
         print("check: ok")
     return 1 if errs else 0

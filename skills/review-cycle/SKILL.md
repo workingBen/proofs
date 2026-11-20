@@ -1,6 +1,6 @@
 ---
 name: review-cycle
-version: 1.11.4
+version: 1.12.0
 description: Use when the user opens a review session ("starting a review cycle", "let's do a review pass") and feeds a stream of bug reports and requests, often from a phone, to be triaged and handled without questions; fixes ship, design calls go to design-review, big features become to-dos. Not for a single one-off request.
 ---
 
@@ -132,7 +132,7 @@ Checkpoint at the next item boundary (never mid-item) once a major item has fini
 
 ## The Tracking Page — one artifact, published at intake, updated per item
 
-One page per session, published as soon as the first batch is in hand and republished to the same URL after every item; the end-of-session summary is its last republish. **Read `reference/tracking-page.md` before you first publish it.**
+One page per session, published as soon as the first batch is in hand and republished to the same URL after every item; the end-of-session summary is its last republish. **Read `reference/tracking-page.md` before you first publish it.** Its docked bar starts with the proofs mark, a `review-cycle` pill, the project and the session, as every proofs page does.
 
 ## End-of-Session Summary
 

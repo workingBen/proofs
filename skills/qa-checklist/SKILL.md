@@ -1,6 +1,6 @@
 ---
 name: qa-checklist
-version: 1.0.1
+version: 1.1.0
 description: Use when shipped work needs checks only the user can run — a real phone, production data, a service you cannot reach — as a PASS / FAIL / COULDN'T TEST list ordered by consequence, with its own export. Checks only: decisions go to questions, visual options to design-review, and working-log hosts the list on its session page.
 ---
 
@@ -36,7 +36,10 @@ Read `../../reference/review-page.md` first. Do not hand-write the page's JavaSc
 - **On the session page:** the `qa` list in working-log's session spec.
 - **Standalone:** `"mode": "questions"` with only a `qa` list, built with
   `python3 ../../shared/review_page/review_page.py spec.json --out checks.html`.
-  `../../shared/review_page/examples/qa-checklist.json` is a working example. A page
+  `../../shared/review_page/examples/qa-checklist.json` is a working example. Fill `project` with `name`, `session` and `repo`, taking
+  the session name the way the `working-log` skill does: the page's header shows the proofs
+  mark, a `qa-checklist` pill, the project and the session, so the user can tell which
+  session the checks belong to. A page
   with checks and no questions exports as `[qa-checklist v1.0 — results]`; set
   `copy_label` to "Copy my results".
 

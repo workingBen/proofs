@@ -88,6 +88,19 @@ class TestRender(unittest.TestCase):
         self.assertIn("Acme Widgets", html)
         self.assertIn("acme/widgets", html)
 
+    def test_project_bar_starts_with_the_proofs_mark_skill_and_session(self):
+        html = render(DATA, "Acme Widgets", "acme/widgets", "todo-sweep")
+        bar = html[html.index('<div class="projbar-inner">'):html.index('<div class="statusbar">')]
+        self.assertLess(bar.index('<span class="pf-sk" aria-hidden="true">todos</span>'), bar.index("Acme Widgets"))
+        self.assertIn('<span class="pf-sr">Proofs, todos</span>', bar)
+        self.assertLess(bar.index("Acme Widgets"), bar.index('<span class="session">todo-sweep</span>'))
+        self.assertNotIn('class="session"', render(DATA, "P", "o/r"))
+
+    def test_session_is_a_flag_that_leaves_the_positional_arguments_alone(self):
+        from todos_page import take_session
+        self.assertEqual(take_session(["x", "T.md", "--session", "s1", "out.html"]), (["x", "T.md", "out.html"], "s1"))
+        self.assertEqual(take_session(["x"]), (["x"], None))
+
     def test_no_unparsed_means_no_warning_banner(self):
         html = render(DATA, "P", "o/r")
         self.assertNotIn("could not be parsed", html)

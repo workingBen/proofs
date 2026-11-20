@@ -1,6 +1,7 @@
 {
   "mode": "review",
   "title": "Articles Index — Design Review",
+  "project": {"name": "Acme app", "session": "articles-redesign", "repo": "acme/app"},
   "decisions": "design-review",
   "heading": "Articles index: card layout",
   "intro_html": "<p>Pick a decision on each item, then press <b>Copy My Decisions</b> and paste the text back into chat.</p>",

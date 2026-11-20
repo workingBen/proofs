@@ -230,7 +230,7 @@ class ExportText(unittest.TestCase):
                                "\n"
                                "--- Log ---\n"
                                "\n"
-                               "M6  [read]  Found it — the config change was never being used\n"
+                               "M6  [read]  Mar 14 - 3:54PM  Found it — the config change was never being used\n"
                                "M5  [unread]  Why the new setting changed nothing\n"
                                "      note: thanks\n"
                                "\n"
@@ -367,6 +367,20 @@ class BuildAndCheck(unittest.TestCase):
         self.assertLess(log.index("rp-read-head"), log.index('data-entry="M1"'))
         self.assertIn('<span class="rp-tick-l">Read this</span>', log)
 
+    def test_in_page_links_stay_on_the_page_and_say_where_they_go(self):
+        spec = dict(self.SESSION, questions=[{"qid": "q1", "ask": "Which?", "options": [{"label": "A"}]}],
+                    entries=[{"id": "L3", "title": "One"}],
+                    links=[{"label": "Repos", "status": "1 question", "url": "#questions"},
+                           {"label": "Brief", "url": "#L3"},
+                           {"label": "Review", "url": "https://x.test/r"}])
+        text = self.page_text(spec)
+        self.assertIn('<section class="rp-section rp-kind-questions" data-section="s1" id="questions">', text)
+        self.assertIn('id="L3" data-entry="L3"', text)
+        self.assertIn('<a href="#questions">Open questions above</a>', text)
+        self.assertIn('<a href="#L3">See it in the log below</a>', text)
+        self.assertNotIn('href="#questions" target', text)
+        self.assertIn('href="https://x.test/r" target="_blank" rel="noopener">Open it</a>', text)
+
     def test_session_shows_only_sections_with_content(self):
         spec = dict(self.SESSION, questions=[], qa=[], links=[], decided=[],
                     entries=[{"id": "M1", "title": "One"}])
@@ -413,6 +427,112 @@ class BuildAndCheck(unittest.TestCase):
             self.assertNotIn('<div class="rp-projectbar">', text)
             self.assertIn('"format": "%s"' % fmt, text)
             self.assertIn(spec.get("copy_label", "Copy my answers"), text)
+
+    def brand_of(self, text):
+        m = re.search(r'<span class="rp-brand">.*?<span class="rp-sr">(.*?)</span>', text)
+        return m and m.group(1)
+
+    def test_every_mode_starts_with_the_brand_and_its_default_skill(self):
+        want = {"session": "Proofs, working-log", "log": "Proofs, working-log",
+                "questions": "Proofs, questions", "qa-checklist": "Proofs, qa-checklist",
+                "design-review": "Proofs, design-review", "copy-edit": "Proofs, article-copy-edit",
+                "style-guide": "Proofs, style-guide", "photo-picker": "Proofs, photo-picker"}
+        for name, sr in want.items():
+            text = review_page.page(review_page.load_spec(EXAMPLES / (name + ".json")))
+            self.assertEqual(self.brand_of(text), sr, name)
+            self.assertEqual(text.count('<span class="rp-brand">'), 1, name)
+            self.assertIn('<span class="rp-wm" aria-hidden="true">pro<i>o</i>fs</span>', text)
+            self.assertIn('<span class="rp-sk" aria-hidden="true">%s</span>' % sr.split(", ")[1], text)
+        # where it sits: first in the project bar, first in the questions bar, above a review heading
+        session = review_page.page(review_page.load_spec(EXAMPLES / "session.json"))
+        self.assertIn('<div class="rp-projectbar"><span class="rp-brand">', session)
+        self.assertNotIn("Session page", session)
+        q = review_page.page(review_page.load_spec(EXAMPLES / "questions.json"))
+        self.assertIn('<div class="bar"><span class="rp-brand">', q)
+        dr = review_page.page(review_page.load_spec(EXAMPLES / "design-review.json"))
+        self.assertRegex(dr, r'<main class="rp-main"[^>]*>\s*<div class="rp-brandline"><span class="rp-brand">')
+        self.assertLess(dr.index("rp-brandline"), dr.index('<h1 class="rp-h1">'))
+
+    def test_every_mode_names_its_project_and_session_beside_the_mark(self):
+        session = review_page.page(review_page.load_spec(EXAMPLES / "session.json"))
+        self.assertRegex(session, r'<div class="rp-projectbar"><span class="rp-brand">.*?</span></span>'
+                                  r'<span class="rp-pb-x">Acme Widgets · </span><b class="rp-session">invoice-export</b>')
+        q = review_page.page(review_page.load_spec(EXAMPLES / "qa-checklist.json"))
+        self.assertIn('<div class="bar-title">Acme app <span>· checks after deploy</span>'
+                      '<span class="rp-sess"> · <b class="rp-session">attachments-release</b></span></div>', q)
+        dr = review_page.page(review_page.load_spec(EXAMPLES / "design-review.json"))
+        self.assertIn('<span class="rp-where">Acme app · <b class="rp-session">articles-redesign</b>'
+                      '<span class="rp-pb-x"> · acme/app</span></span></div>', dr)
+        # a review page with no project at all keeps the bare mark line
+        text = self.page_text({"title": "x", "decisions": "design-review", "items": [{"label": "a"}]})
+        self.assertNotIn('class="rp-where"', text)
+
+    def test_a_page_with_no_session_builds_with_a_warning(self):
+        for spec in ({"title": "x", "items": [{"label": "a"}]},
+                     {"title": "x", "project": {"name": "P"}, "items": [{"label": "a"}]},
+                     {"mode": "questions", "title": "x", "project": {"name": "p", "stream": "s"},
+                      "questions": [{"qid": "q1", "ask": "Which?"}]}):
+            p = self.tmp / "s.json"
+            p.write_text(json.dumps(spec))
+            r = subprocess.run([sys.executable, str(BUILD), str(p), "--out", str(self.tmp / "p.html"), "--no-check"],
+                               capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertEqual(review_page.warnings(self.tmp / "p.html"), [review_page.NO_SESSION])
+        for name in ("design-review", "questions", "session", "log"):
+            self.assertEqual(review_page.warnings(build(name, self.tmp)), [], name)
+
+    def test_skill_field_overrides_the_default_and_custom_decisions_show_the_wordmark_alone(self):
+        text = self.page_text(dict(self.SESSION, skill="review-cycle", entries=[{"id": "M1", "title": "One"}]))
+        self.assertEqual(self.brand_of(text), "Proofs, review-cycle")
+        text = self.page_text({"title": "x", "skill": "pr-qa", "decisions": "design-review", "items": [{"label": "a"}]})
+        self.assertEqual(self.brand_of(text), "Proofs, pr-qa")
+        custom = {"buttons": [{"state": "accept", "label": "OK", "export": "OK"}]}
+        for spec in ({"title": "x", "decisions": custom, "items": [{"label": "a"}]},
+                     {"title": "x", "skill": "", "decisions": "copy-edit", "items": [{"label": "a"}]}):
+            text = self.page_text(spec)
+            self.assertEqual(self.brand_of(text), "Proofs")
+            self.assertNotIn('class="rp-sk"', text)
+        # the preset may come from a section, or from a custom set built on a preset
+        text = self.page_text({"title": "x", "sections": [{"decisions": {"preset": "photo-picker"}, "items": [{"label": "a"}]}]})
+        self.assertEqual(self.brand_of(text), "Proofs, photo-picker")
+
+    def test_links_in_progress_sort_after_open_ones_without_the_call_to_action(self):
+        links = [{"label": "Copy edit", "status": "answered", "url": "https://x.test/c", "state": "in-progress"},
+                 {"label": "Design review", "status": "3 open", "url": "https://x.test/d"}]
+        text = self.page_text(dict(self.SESSION, links=links))
+        sec = text[text.index('<section class="rp-section rp-kind-links"'):]
+        sec = sec[:sec.index("</section>")]
+        self.assertIn("<h2>Other pages waiting on you</h2>", sec)
+        self.assertLess(sec.index("Design review"), sec.index("Copy edit"))
+        self.assertIn('<a href="https://x.test/d" target="_blank" rel="noopener">Open it</a>', sec)
+        self.assertIn('<li class="rp-link-wip"><b>Copy edit</b>: <span class="rp-link-status">answered</span> '
+                      '<span class="rp-wip">In progress</span> <a class="rp-link-quiet" href="https://x.test/c"', sec)
+        self.assertEqual(sec.count("Open it"), 1)
+        # all in progress: the heading says so, unless the spec names its own
+        text = self.page_text(dict(self.SESSION, links=links[:1]))
+        self.assertIn("<h2>Pages Claude is working on</h2>", text)
+        self.assertNotIn("Other pages waiting on you", text)
+        text = self.page_text(dict(self.SESSION, links=links[:1], links_heading="Mine"))
+        self.assertIn("<h2>Mine</h2>", text)
+        with self.assertRaises(review_page.SpecError) as cm:
+            self.page_text(dict(self.SESSION, links=[dict(links[0], state="done")]))
+        self.assertIn("state", str(cm.exception))
+
+    def test_when_reads_as_a_short_local_time(self):
+        for iso, want in (("2026-11-19T15:54", "Nov 19 - 3:54PM"), ("2026-11-19T00:05", "Nov 19 - 12:05AM"),
+                          ("2026-01-02T12:30", "Jan 2 - 12:30PM"), ("2026-12-31T09:07:45", "Dec 31 - 9:07AM"),
+                          ("2026-07-04 23:59", "Jul 4 - 11:59PM")):
+            self.assertEqual(review_page.short_when(iso), want, iso)
+        for bad in ("Nov 19", "2026-13-01T10:00", "2026-11-19T24:00", "2026-11-19T15:54Z"):
+            with self.assertRaises(review_page.SpecError):
+                review_page.short_when(bad)
+
+    def test_log_entries_show_when_only_if_given(self):
+        text = self.page_text(dict(self.SESSION, entries=[{"id": "M2", "title": "Two", "when": "2026-11-19T00:05"},
+                                                          {"id": "M1", "title": "One"}]))
+        self.assertIn('<h3>Two</h3><time class="rp-when" datetime="2026-11-19T00:05">Nov 19 - 12:05AM</time>', text)
+        self.assertIn("<h3>One</h3><span class=\"rp-status", text)
+        self.assertEqual(text.count('<time class="rp-when"'), 1)
 
     def test_custom_decisions_override_a_preset(self):
         p = self.tmp / "s.json"

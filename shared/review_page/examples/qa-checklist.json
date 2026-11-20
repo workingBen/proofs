@@ -1,7 +1,7 @@
 {
   "mode": "questions",
   "title": "Acme app — checks for you",
-  "project": {"name": "acme-app", "stream": "attachments release", "round": 1, "artifact": "(the published URL of this page)"},
+  "project": {"name": "acme-app", "stream": "attachments release", "session": "attachments-release", "round": 1, "artifact": "(the published URL of this page)"},
   "bar_title_html": "Acme app <span>· checks after deploy</span>",
   "heading": "Checks only you can run",
   "intro_html": "<p class=\"fine\">Most important first. Mark each one, then <b>Copy my results</b> and paste back.</p>",

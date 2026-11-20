@@ -1,6 +1,6 @@
 ---
 name: working-log
-version: 1.8.0
+version: 1.9.0
 description: Use when the user cannot reliably read terminal output, prefers a durable page to chat, is stepping away, and the first time a session has something waiting on them — keeps one session page (waiting on you, checks, log, decided) at one URL. It owns that page and the log; questions and qa-checklist write its other sections.
 ---
 
@@ -53,10 +53,12 @@ equivalent). Follow them.
 
 The page carries a **fixed project bar** at the top, always visible, so the user can
 tell one project's page from another's at a glance. This is not decoration: once two
-projects both have a session page, two tabs look identical without it.
+projects both have a session page, two tabs look identical without it. The builder starts
+it with the proofs mark and a `working-log` pill, which tell this page from a design
+review or a checklist; every proofs page carries the same header.
 
 ```
-PROJECT NAME · SESSION NAME · owner/repo · Session page
+proofs [working-log] │ PROJECT NAME · SESSION NAME · owner/repo
 ```
 
 Take the project name from the repo's own `CLAUDE.md` (its overview line or
@@ -91,12 +93,12 @@ The builder supplies the mechanics: the sticky project bar (session accented) an
 
 The spec's fields, in the order the page shows them:
 
-1. **Project bar**: brand · **session** · repo · "Session page" (`project`).
+1. **Project bar**: proofs mark and `working-log` pill · project · **session** · repo (`project`).
 2. **Status bar**: the tally ("1 of 2 answered · checks 0 of 1 · 3 / 5 read") and a **version marker**, `v3 · updated <date> · entry N`. The reader reloads the same URL after every change and otherwise cannot tell whether the reload landed, so bump `version` on every republish, carry it into the export (`details`), and pass the same thing as the `Artifact` tool's `label`.
-3. **Waiting on you** (`questions`, then `links`): open questions, directly under the sticky bar, highlighted. Write them by the `questions` skill. `links` are other pages waiting on the user: `{label, status, url}`, as "Design review: 3 decisions open".
+3. **Waiting on you** (`questions`, then `links`): open questions, directly under the sticky bar, highlighted. Write them by the `questions` skill. `links` are other pages waiting on the user: `{label, status, url, state}`, as "Design review: 3 decisions open". `state` is `open` (the default, with an **Open it** link) or `in-progress` once the user has answered that page and you are working on it: it stays listed, muted and after the open ones, until the page needs them again.
 4. **Checks for you** (`qa`): written by the `qa-checklist` skill.
 5. **About this page** (`heading`, `intro_html`, `facts`): what the page is, how to reply, **how to reopen it** (the user will close the tab; name the project's artifact-opener script or list of links if it has one), and 3-4 live facts (branch, tests, what is live). This is context, so it sits below everything that needs action.
-6. **Log, newest first** (`entries`): a title, a status (`Background` / `Queued` / `Done`), an id; a full-strength `lede` sentence with detail below. Log entries do not ask: a question goes in `questions`, and the builder refuses an entry with option buttons.
+6. **Log, newest first** (`entries`): a title, a status (`Background` / `Queued` / `Done`), an id, and `when` on every new entry: the user's local time you wrote it, as `2026-11-19T15:54` (the page shows `Nov 19 - 3:54PM`); a full-strength `lede` sentence with detail below. Log entries do not ask: a question goes in `questions`, and the builder refuses an entry with option buttons.
 7. **Decided** (`decided`): settled items, `{id, title, decision, when}`, one line each, folded.
 
 ## Rules that matter
@@ -104,6 +106,8 @@ The spec's fields, in the order the page shows them:
 **Open questions are the first thing on the page.** Reports, context, screenshots and settled items go below them or folded away. The user should never scroll to find what you are asking; the builder enforces the order and its check fails a page that breaks it.
 
 **Clear out what is settled.** The top of the page is what needs the user. An answered question leaves Waiting on you at once for Decided; a log entry that is done becomes a Decided line or goes entirely. A page that only grows is scrollback with extra steps.
+
+**A paste updates the page first, before any other work.** When the user pastes an export (from this page or any page linked from it), republish the session page before you start on what it asks: mark each answered page's link `"state": "in-progress"`, move answered questions to Decided, and log what you are about to do. When a linked page is ready for the user again, flip its link back to `open` with its new status in the same republish. A page that still shows answered work as waiting on them reads as stale, and they stop trusting it.
 
 **Say what a failure looks like.** When an entry asks the user to run something, give the success output *and* the most likely failure text. They often cannot read their own terminal — that is why this page exists.
 
@@ -136,7 +140,7 @@ QA qa-export-file | Export last month's invoices and open the file
 
 --- Log ---
 
-M6  [read]  Found it — the config change was never being used
+M6  [read]  Mar 14 - 3:54PM  Found it — the config change was never being used
 M5  [unread]  Why the new setting changed nothing
       note: thanks
 

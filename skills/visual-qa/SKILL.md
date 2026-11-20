@@ -1,6 +1,6 @@
 ---
 name: visual-qa
-version: 1.1.5
+version: 1.2.0
 description: Use when pointed at whole pages to find what is wrong with how they look, before saying any user-facing page is done, and when the user says a layout looks wrong, cramped, empty, too small or broken on a phone. Differs from design-review (options for a change already decided) and pr-qa (a PR's diff), since this finds the problems.
 ---
 
@@ -94,6 +94,7 @@ viewport, screenshot, the number, what is wrong in plain words, and a proposed f
 
 Follow the `design-review` skill's page mechanics, with these additions:
 
+- Set `"skill": "visual-qa"` so the header names this skill, and fill `project` with the session name as `design-review` does.
 - One item per problem (or per group of problems with one fix). BEFORE is the real screenshot,
   the user's own first if they sent one.
 - 1–2 coded mockups per item, built from the page's real fonts, colors and data, each drawn to

@@ -27,7 +27,7 @@
      "notes_label": "If it failed, paste the first row"}
   ],
   "entries": [
-    {"id": "M6", "title": "Found it — the config change was never being used", "status": "Done",
+    {"id": "M6", "title": "Found it — the config change was never being used", "status": "Done", "when": "2026-03-14T15:54",
      "lede": "The setting was read from the wrong file; fixed on the branch.", "detail_html": "<p>Commit <code>1a2b3c4</code>.</p>"},
     {"id": "M5", "title": "Why the new setting changed nothing", "status": "Background",
      "lede": "Investigating; no action needed."}

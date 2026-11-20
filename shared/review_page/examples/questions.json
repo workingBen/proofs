@@ -4,7 +4,7 @@
   "format": "questions v1.3",
   "project": {
     "name": "acme-app",
-    "stream": "list screen filters",
+    "stream": "list screen filters", "session": "list-filters",
     "round": 2,
     "artifact": "(the published URL of this page)"
   },

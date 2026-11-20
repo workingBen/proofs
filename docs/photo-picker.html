@@ -149,74 +149,6 @@ nav.toc{position:sticky;top:20px;align-self:start;max-height:calc(100vh - 40px);
   .feat{grid-template-columns:1fr;gap:16px;padding:18px}
 }
 @media (max-width:440px){.three{grid-template-columns:1fr 1fr}.three>.opt:nth-child(3){display:none}.four{grid-template-columns:1fr 1fr}.row.wrap .mb{font-size:11px}}
-
-/* before/after showcase */
-.ba{position:relative;width:100%;overflow:hidden;border-radius:12px;border:1px solid var(--line);background:var(--card);
-  touch-action:pan-y;user-select:none;-webkit-user-select:none;cursor:ew-resize;outline:none;box-shadow:0 1px 0 var(--line)}
-.ba:focus-visible{box-shadow:0 0 0 3px var(--accent)}
-.ba-img,.ba-img picture,.ba-img img{position:absolute;inset:0;width:100%;height:100%;display:block}
-.ba-img img{object-fit:cover;object-position:top;pointer-events:none}
-.ba-after{clip-path:inset(0 0 0 calc(var(--p) * 100%))}
-.ba-line{position:absolute;top:0;bottom:0;left:calc(var(--p) * 100%);width:2px;margin-left:-1px;background:#fff;
-  box-shadow:0 0 0 1px rgba(0,0,0,.25);pointer-events:none}
-.ba-knob{position:absolute;top:50%;left:50%;width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;
-  background:var(--accent);color:#fff;display:grid;place-items:center;box-shadow:0 2px 10px rgba(0,0,0,.3)}
-.ba-lbl{position:absolute;top:10px;font:600 11px/1 "JetBrains Mono",monospace;letter-spacing:.06em;text-transform:uppercase;
-  padding:6px 9px;border-radius:999px;background:rgba(20,18,15,.78);color:#fff;pointer-events:none;
-  max-width:calc(50% - 16px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:opacity .12s linear}
-.ba-lbl.l{left:10px} .ba-lbl.r{right:10px;background:var(--accent)} .st-img .ba-lbl.r{right:auto}
-.ba.v-phone,.steps.v-phone .st-stage{aspect-ratio:16/10!important;background:var(--soft)}
-.ba.v-phone .ba-img img,.steps.v-phone .st-img img{object-fit:contain;object-position:center}
-.steps{display:grid;gap:10px}
-.st-stage{position:relative;width:100%;overflow:hidden;border-radius:12px;border:1px solid var(--line);background:var(--card)}
-.st-img{position:absolute;inset:0;opacity:0;transition:opacity .6s ease}
-.st-img.on{opacity:1}
-.st-img picture,.st-img img{display:block;width:100%;height:100%}
-.st-img img{object-fit:cover;object-position:top}
-.st-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:6px}
-.st-b{position:relative;display:flex;gap:6px;align-items:baseline;text-align:left;overflow:hidden;font:600 13px/1.25 -apple-system,sans-serif;
-  color:var(--fg);background:var(--card);border:1px solid var(--line);border-radius:9px;padding:10px 10px 12px;min-height:44px;cursor:pointer}
-.st-b.on{border-color:var(--accent)}
-.st-n{font:600 11px "JetBrains Mono",monospace;color:var(--accent)}
-.st-bar{position:absolute;left:0;bottom:0;height:3px;width:0;background:var(--accent)}
-.st-b.on .st-bar{width:var(--t,100%)}
-.bx-grid{columns:2;column-gap:18px}
-.bx-grid>.bx{break-inside:avoid;margin-bottom:18px}
-.bx{margin:0;display:grid;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
-.bx figcaption{display:grid;gap:4px;padding:0 4px 4px;min-width:0}
-.bx h3{margin:0;font:400 28px/1.08 "Instrument Serif",Georgia,serif;text-wrap:balance}
-.bx .sub{margin:0;color:var(--muted);font-size:16px;line-height:1.4}
-.bx-skill{display:inline-flex;gap:6px;align-items:center;width:fit-content;margin-top:4px;font:600 12.5px "JetBrains Mono",monospace;
-  color:var(--accent);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:5px 11px;min-height:32px}
-a.bx-skill:hover{border-color:var(--accent)}
-.bx-more{display:block;margin:4px auto 0;font:700 16px -apple-system,sans-serif;padding:14px 22px;min-height:48px;border-radius:999px;border:1px solid var(--accent);background:var(--card);color:var(--accent);cursor:pointer}
-.bx-more:hover{background:var(--accent);color:#fff}
-.showcase{padding-block:8px 40px}
-.showcase .lede{display:grid;gap:6px;margin-bottom:18px}
-.showcase .lede h2{font:400 40px/1.1 "Instrument Serif",Georgia,serif;margin:0}
-.showcase .lede p{margin:0;font-size:18px;font-weight:650;line-height:1.35;max-width:40em}
-@media (max-width:900px){.bx-grid{columns:1}}
-.fx-list{display:none}
-@media (min-width:901px){
- .fx.fx-on{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2.4fr);gap:28px;align-items:start}
- .fx.fx-on .fx-list{display:flex;flex-direction:column;border-top:1px solid var(--line)}
- .fx-pick{position:relative;overflow:hidden;text-align:left;cursor:pointer;padding:10px 14px;background:none;border:0;border-bottom:1px solid var(--line);border-left:3px solid transparent;font:15px/1.35 -apple-system,sans-serif;color:var(--muted)}
- .fx-pick b{display:block;font:400 20px/1.15 "Instrument Serif",Georgia,serif;color:var(--fg)}
- .fx-pick span{display:none} .fx-pick:hover b{color:var(--accent)}
- .fx-pick.on{border-left-color:var(--accent);background:var(--card)} .fx-pick.on span{display:block;margin-top:4px}
- .fx-pick:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
- .fx-bar{position:absolute;left:0;bottom:0;height:3px;width:0;background:var(--accent)}
- .fx.auto .fx-pick.on .fx-bar{width:calc(var(--t,0) * 100%)}
- .fx.fx-on .bx-grid{columns:auto}
- .fx.fx-on .bx-grid>.bx{display:none;margin:0}
- .fx.fx-on .bx-grid>.bx.on{display:grid}
- .fx.fx-on .bx-grid>.bx.on[hidden]{display:grid!important} /* the phone show-more hides 5+; the desktop gallery shows any one */
- .fx.fx-on .bx .fn,.fx.fx-on .bx h3,.fx.fx-on .bx .sub{display:none}
- .fx.fx-on .bx-more{display:none!important}
-}
-
-@media (max-width:440px){.bx{padding:10px}.bx h3{font-size:25px}.ba-lbl{font-size:10px;padding:5px 7px}.st-b{font-size:12px;padding:8px 8px 11px}}
-@media (prefers-reduced-motion:reduce){.st-img{transition:none}}
 </style>
 
 <header class="top"><div class="in"><a class="logo" href="index.html">pro<i>o</i>fs</a><span>/ <a href="index.html#skills" style="text-decoration:none">skills</a> /</span><span style="color:var(--fg)">photo-picker</span></div></header>
@@ -228,7 +160,7 @@ a.bx-skill:hover{border-color:var(--accent)}
   <div class="try"><span class="lbl">Try it: paste this into Claude Code</span><div class="trybox"><code id="tryc">Use the photo-picker skill to find two or three photo options for each section of my /articles/herb-garden page.</code><button type="button" id="tryb">Copy</button></div></div>
   <div class="stats"><span><b>23</b> features</span><span>Every candidate checked by eye first</span><span>Nothing is added until you pick it</span></div>
 </div></section>
-<section class="in showcase" id="examples"><div class="lede"><div class="eyebrow">Real work, before and after</div><h2>See it work</h2><p>Real pages, before and after a photo-picker round. They play on their own. Drag a slider to compare.</p></div><div class="bx-grid"><figure class="bx v-desktop" id="ex-c-hero-photos-3step"><div class="steps v-desktop" data-steps><div class="st-stage" style="aspect-ratio:1200/771" aria-live="polite"><div class="st-img on"><picture><source type="image/webp" srcset="examples/c-hero-photos-3step/before-480.webp 480w, examples/c-hero-photos-3step/before-960.webp 960w" sizes="(min-width: 960px) 680px, 100vw"><img src="examples/c-hero-photos-3step/before-960.jpg" srcset="examples/c-hero-photos-3step/before-480.jpg 480w, examples/c-hero-photos-3step/before-960.jpg 960w" sizes="(min-width: 960px) 680px, 100vw" width="1200" height="771" alt="Before · old hero" loading="lazy" decoding="async" draggable="false"></picture><span class="ba-lbl l">Before · old hero</span></div><div class="st-img"><picture><source type="image/webp" srcset="examples/c-hero-photos-3step/picker-480.webp 480w, examples/c-hero-photos-3step/picker-960.webp 960w" sizes="(min-width: 960px) 680px, 100vw"><img src="examples/c-hero-photos-3step/picker-960.jpg" srcset="examples/c-hero-photos-3step/picker-480.jpg 480w, examples/c-hero-photos-3step/picker-960.jpg 960w" sizes="(min-width: 960px) 680px, 100vw" width="1200" height="771" alt="Photo picker" loading="lazy" decoding="async" draggable="false"></picture><span class="ba-lbl l">Photo picker</span></div><div class="st-img"><picture><source type="image/webp" srcset="examples/c-hero-photos-3step/after-480.webp 480w, examples/c-hero-photos-3step/after-960.webp 960w" sizes="(min-width: 960px) 680px, 100vw"><img src="examples/c-hero-photos-3step/after-960.jpg" srcset="examples/c-hero-photos-3step/after-480.jpg 480w, examples/c-hero-photos-3step/after-960.jpg 960w" sizes="(min-width: 960px) 680px, 100vw" width="1200" height="771" alt="After · rebuilt hero" loading="lazy" decoding="async" draggable="false"></picture><span class="ba-lbl l r">After · rebuilt hero</span></div></div><div class="st-row" role="group" aria-label="Hero photo, picked: steps"><button type="button" class="st-b on" aria-pressed="true"><span class="st-n">01</span>Before · old hero<i class="st-bar"></i></button><button type="button" class="st-b" aria-pressed="false"><span class="st-n">02</span>Photo picker<i class="st-bar"></i></button><button type="button" class="st-b" aria-pressed="false"><span class="st-n">03</span>After · rebuilt hero<i class="st-bar"></i></button></div></div><figcaption><span class="fn">01</span><h3>Hero photo, picked</h3><p class="sub">A hazy hero, a photo picker, then a lupine hero.</p><span class="bx-skill">photo-picker</span></figcaption></figure></div></section><div class="in layout">
+<div class="in layout">
   <nav class="toc" aria-label="Features"><h2>On this page</h2><ol><li><a href="#s1">What you see</a><ol><li><a href="#f1">Spots That Need a Photo</a></li><li><a href="#f2">Real Photos, Not Guesses</a></li><li><a href="#f3">Checked by Eye First</a></li><li><a href="#f4">Where It Came From</a></li><li><a href="#f5">Reuse What You Have</a></li><li><a href="#f6">Only Real Contenders</a></li><li><a href="#f7">Your Site&#x27;s Look</a></li></ol></li><li><a href="#s2">How you decide</a><ol><li><a href="#f8">Click to Pick</a></li><li><a href="#f9">Four Clear Choices</a></li><li><a href="#f10">Say How to Use It</a></li><li><a href="#f11">Search Again</a></li><li><a href="#f12">Readable in Both Themes</a></li><li><a href="#f13">Always Know Where You Are</a></li><li><a href="#f14">One Paste Back</a></li></ol></li><li><a href="#s3">After you decide</a><ol><li><a href="#f15">Uploaded to Your Image Host</a></li><li><a href="#f16">Your Changes Applied</a></li><li><a href="#f17">Only What You Picked</a></li><li><a href="#f18">No Blank Boxes</a></li><li><a href="#f19">Tested Before You See It</a></li></ol></li><li><a href="#s4">Rounds</a><ol><li><a href="#f20">Just the Open Slots</a></li><li><a href="#f21">Compare With Last Time</a></li><li><a href="#f22">Several Pages, One Gallery</a></li><li><a href="#wp">Where the Page Goes</a></li></ol></li></ol></nav>
   <main><section class="sec" id="s1"><h2><span>1</span>What you see</h2><article class="feat" id="f1"><div class="fx"><span class="fn">01</span><h3>Spots That Need a Photo</h3><p class="sub">Each place on the page that needs a picture is a slot</p><p>The page is broken into slots, one per spot that needs a photo, each with a note on what it should illustrate. You decide slot by slot instead of all or nothing.</p></div><div class="fig" aria-hidden="true"><div class="win"><div class="wb"><i></i><i></i><i></i><span>Herb garden article</span></div><div class="wbody"><div class="band"><span class="num">1</span><b class="hd">Intro</b></div><div class="band"><span class="num">2</span><b class="hd">Soil section</b></div><div class="band"><span class="num">3</span><b class="hd">Harvest tips</b></div></div></div></div></article><article class="feat" id="f2"><div class="fx"><span class="fn">02</span><h3>Real Photos, Not Guesses</h3><p class="sub">Real, properly licensed candidates for every slot</p><p>Candidates are real photographs from free-license stock libraries, or official cover images for books. You choose between actual images, not descriptions of them.</p></div><div class="fig" aria-hidden="true"><div class="three"><div class="opt"><span class="tag">A · stock</span><i class="mk d" style="width:100%;height:40px"></i></div><div class="opt sel"><span class="tag">B · stock</span><i class="mk d" style="width:100%;height:40px"></i></div><div class="opt"><span class="tag">C · stock</span><i class="mk d" style="width:100%;height:40px"></i></div></div></div></article><article class="feat" id="f3"><div class="fx"><span class="fn">03</span><h3>Checked by Eye First</h3><p class="sub">Every candidate is opened and looked at before you see it</p><p>Each image is downloaded and looked at before it is offered: the right subject, the right book edition, the right orientation, not a broken placeholder. A link that loads is not taken as proof.</p></div><div class="fig" aria-hidden="true"><div class="two mid"><div class="opt"><span class="tag">Option A</span><i class="mk d" style="width:100%;height:40px"></i></div><div class="col chk"><span><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 8.5l3.2 3L13 4.5"/></svg> right subject</span><span><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 8.5l3.2 3L13 4.5"/></svg> right orientation</span><span><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 8.5l3.2 3L13 4.5"/></svg> not a placeholder</span></div></div></div></article><article class="feat" id="f4"><div class="fx"><span class="fn">04</span><h3>Where It Came From</h3><p class="sub">Every candidate shows its source and license</p><p>Each card notes where the image came from and why it fits. You know what you are allowed to use before you pick it.</p></div><div class="fig" aria-hidden="true"><div class="two mid"><div class="opt"><span class="tag">Option B</span><i class="mk d" style="width:100%;height:40px"></i></div><div class="col"><span class="pill line">free license</span><div class="note2">from a stock library · close-up fits a narrow column</div></div></div></div></article><article class="feat" id="f5"><div class="fx"><span class="fn">05</span><h3>Reuse What You Have</h3><p class="sub">Photos already on your site are offered first</p><p>If your site already has a photo of the same subject, it is offered as a candidate with an Already on site badge. Pages stay consistent and you avoid two different photos of the same thing.</p></div><div class="fig" aria-hidden="true"><div class="two mid"><div class="opt"><span class="tag">Option A</span><i class="mk d" style="width:100%;height:40px"></i><span class="st ok">Already on site</span></div><div class="opt"><span class="tag">Option B</span><i class="mk d" style="width:100%;height:40px"></i><span class="st mute">New · stock</span></div></div></div></article><article class="feat" id="f6"><div class="fx"><span class="fn">06</span><h3>Only Real Contenders</h3><p class="sub">One to three options, never padded</p><p>Most slots get one to three candidates. If only one image truly fits, you see just that one rather than filler added to make a set.</p></div><div class="fig" aria-hidden="true"><div class="two mid"><div class="opt"><span class="tag">Only option</span><i class="mk d" style="width:100%;height:40px"></i></div><div class="note2">one real match · no filler</div></div></div></article><article class="feat" id="f7"><div class="fx"><span class="fn">07</span><h3>Your Site&#x27;s Look</h3><p class="sub">The gallery uses your page&#x27;s own fonts and colors</p><p>The review page borrows the palette and type of the page the photos are for, so you judge each photo in a setting close to where it will live.</p></div><div class="fig" aria-hidden="true"><div class="win"><div class="wb"><i></i><i></i><i></i><span>Photo picker · your look</span></div><div class="wbody"><b class="hd">Soil section</b><div class="three"><div class="opt"><i class="mk d" style="width:100%;height:28px"></i></div><div class="opt"><i class="mk d" style="width:100%;height:28px"></i></div><div class="opt"><i class="mk d" style="width:100%;height:28px"></i></div></div></div></div></div></article></section><section class="sec" id="s2"><h2><span>2</span>How you decide</h2><article class="feat" id="f8"><div class="fx"><span class="fn">08</span><h3>Click to Pick</h3><p class="sub">Click a photo to select it</p><p>Clicking a card selects it with a border, and the decision buttons apply to whichever photo is selected.</p></div><div class="fig" aria-hidden="true"><div class="three"><div class="opt"><span class="tag">A</span><i class="mk d" style="width:100%;height:40px"></i></div><div class="opt sel"><span class="tag acc">B · selected</span><i class="mk d" style="width:100%;height:40px"></i></div><div class="opt"><span class="tag">C</span><i class="mk d" style="width:100%;height:40px"></i></div></div></div></article><article class="feat" id="f9"><div class="fx"><span class="fn">09</span><h3>Four Clear Choices</h3><p class="sub">Keep none, use it, use it with changes, or search again</p><p>Each slot has Keep None, Use Selected, Approve with Comment and Request Revision. That covers no photo here, this photo as is, this photo adjusted, or none of these.</p></div><div class="fig" aria-hidden="true"><div class="row wrap"><span class="mb">Keep None</span><span class="mb on">Use Selected</span><span class="mb">Approve with Comment</span><span class="mb">Request Revision</span></div></div></article><article class="feat" id="f10"><div class="fx"><span class="fn">10</span><h3>Say How to Use It</h3><p class="sub">Ask for a crop, caption or different placement</p><p>Approve with Comment opens a box for how the photo should be used, like a tighter crop, a caption or a different position on the page.</p></div><div class="fig" aria-hidden="true"><div class="col"><div class="row"><span class="mb on">Approve with Comment</span></div><div class="cbox">crop tighter, add a caption<span class="caret"></span></div></div></div></article><article class="feat" id="f11"><div class="fx"><span class="fn">11</span><h3>Search Again</h3><p class="sub">None of these? Say what to look for instead</p><p>Request Revision means start over for that slot, in a different direction. Your comment says what to try: another subject, mood or source.</p></div><div class="fig" aria-hidden="true"><div class="col"><div class="row"><span class="mb on">Request Revision</span></div><div class="cbox">too staged, try something outdoors<span class="caret"></span></div></div></div></article><article class="feat" id="f12"><div class="fx"><span class="fn">12</span><h3>Readable in Both Themes</h3><p class="sub">Comment boxes and status colors work in light and dark</p><p>Every status color has its own dark-mode version, so your own notes stay readable whichever theme your device uses.</p></div><div class="fig" aria-hidden="true"><div class="two mid"><div class="code"><span>REVISE</span><span>try something outdoors</span></div><div class="col chk"><span><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 8.5l3.2 3L13 4.5"/></svg> light</span><span><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 8.5l3.2 3L13 4.5"/></svg> dark</span></div></div></div></article><article class="feat" id="f13"><div class="fx"><span class="fn">13</span><h3>Always Know Where You Are</h3><p class="sub">A progress bar stays in view as you go</p><p>A bar pinned to the bottom shows how many slots you&#x27;ve reviewed and a count for each decision.</p></div><div class="fig" aria-hidden="true"><div class="bottom"><span>5 of 8 slots</span><span class="tally"><b class="ok">3</b><b class="mid">1</b><b class="mute">1</b></span><span class="mb on sm">Copy</span></div></div></article><article class="feat" id="f14"><div class="fx"><span class="fn">14</span><h3>One Paste Back</h3><p class="sub">Copy My Decisions sends every pick to Claude</p><p>One button copies a plain summary headed with the gallery&#x27;s name, listing each slot&#x27;s decision, chosen option and comments. You paste it into chat and it can&#x27;t be confused with another review.</p></div><div class="fig" aria-hidden="true"><div class="col"><div class="row"><span class="mb on acc">Copy My Decisions</span></div><pre class="ex">[Garden Articles · Photo Picker]
 1. Intro · ACCEPT (Option B)
@@ -249,117 +181,5 @@ a.bx-skill:hover{border-color:var(--accent)}
     var io=new IntersectionObserver(function(es){es.forEach(function(en){if(en.isIntersecting){links.forEach(function(a){a.classList.remove('on')});var a=map[en.target.id];if(a)a.classList.add('on')}})},{rootMargin:'-30% 0px -60% 0px'});
     document.querySelectorAll('.feat').forEach(function(f){io.observe(f)});
   }
-})();
-</script>
-<script>
-(function(){
-  var RM = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
-  var IO = 'IntersectionObserver' in window;
-  function ease(t){return t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2}
-  /* A label shows in full while its side fills most of the frame (FADE_HI or more)
-     and is gone by FADE_LO, so the label always names the picture you see. */
-  var FADE_LO=.35, FADE_HI=.65;
-  function fade(share){ var t=Math.max(0,Math.min(1,(share-FADE_LO)/(FADE_HI-FADE_LO))); return t*t*(3-2*t); }
-  /* Auto-sweep: hold on Before, sweep to After, hold, sweep back. */
-  var LO=.03, HI=.97, HOLD_B=1100, SWEEP=1700, HOLD_A=1500, CYCLE=HOLD_B+SWEEP+HOLD_A+SWEEP;
-  function at(t){
-    t%=CYCLE;
-    if(t<HOLD_B) return HI;
-    t-=HOLD_B; if(t<SWEEP) return HI-(HI-LO)*ease(t/SWEEP);
-    t-=SWEEP; if(t<HOLD_A) return LO;
-    t-=HOLD_A; return LO+(HI-LO)*ease(t/SWEEP);
-  }
-  [].forEach.call(document.querySelectorAll('[data-ba]'), function(el){
-    var l=el.querySelector('.ba-lbl.l'), r=el.querySelector('.ba-lbl.r');
-    var auto=!RM, run=false, raf=0, cur=.5;
-    function set(p){
-      p=Math.max(0,Math.min(1,p)); cur=p;
-      el.style.setProperty('--p',p);
-      var v=Math.round((1-p)*100);
-      el.setAttribute('aria-valuenow',v); el.setAttribute('aria-valuetext',v+'% after');
-      l.style.opacity=fade(p); r.style.opacity=fade(1-p);
-    }
-    /* One clock for the whole page, so every slider sweeps in step with the others. */
-    function tick(now){ if(!run) return; set(at(now)); raf=requestAnimationFrame(tick); }
-    function start(){ if(!auto||run) return; run=true; raf=requestAnimationFrame(tick); }
-    function stop(){ run=false; cancelAnimationFrame(raf); }
-    function grab(){ auto=false; stop(); el.classList.add('held'); }
-    if(auto){
-      set(HI);
-      if(IO){ new IntersectionObserver(function(es){es.forEach(function(en){en.isIntersecting?start():stop()})},{threshold:.35}).observe(el); }
-      else start();
-    } else { set(.5); l.style.opacity=1; r.style.opacity=1; }
-    function fromX(x){ var b=el.getBoundingClientRect(); set((x-b.left)/b.width); }
-    var drag=false;
-    el.addEventListener('pointerdown',function(ev){ grab(); drag=true; try{el.setPointerCapture(ev.pointerId)}catch(_){} fromX(ev.clientX); });
-    el.addEventListener('pointermove',function(ev){ if(drag) fromX(ev.clientX); });
-    function up(){ drag=false; }
-    el.addEventListener('pointerup',up); el.addEventListener('pointercancel',up);
-    el.addEventListener('keydown',function(ev){
-      var p=cur, k=ev.key, step=null;
-      if(k==='ArrowLeft'||k==='ArrowDown') step=-.05; else if(k==='ArrowRight'||k==='ArrowUp') step=.05;
-      else if(k==='PageDown') step=-.2; else if(k==='PageUp') step=.2;
-      else if(k==='Home'){ grab(); set(1); ev.preventDefault(); return; }
-      else if(k==='End'){ grab(); set(0); ev.preventDefault(); return; }
-      if(step===null) return;
-      /* The value counts how much After shows, so Right or Up shows more of it. */
-      grab(); set(p-step); ev.preventDefault();
-    });
-  });
-  /* Show the first few examples; one button opens the rest in place, and closes them again. */
-  [].forEach.call(document.querySelectorAll('[data-shown]'), function(g){
-    var n=+g.getAttribute('data-shown'), btn=g.nextElementSibling, kids=[].slice.call(g.children), all=btn.textContent, open=false;
-    function paint(){ kids.forEach(function(k,i){ k.hidden=!open&&i>=n; }); btn.textContent=open?'Show fewer':all; btn.setAttribute('aria-expanded',open?'true':'false'); }
-    btn.hidden=false; btn.addEventListener('click',function(){ open=!open; paint(); if(!open) g.scrollIntoView({block:'start'}); });
-    paint();
-  });
-  [].forEach.call(document.querySelectorAll('[data-steps]'), function(el){
-    var imgs=el.querySelectorAll('.st-img'), btns=el.querySelectorAll('.st-b'), n=imgs.length;
-    var i=0, auto=!RM, run=false, raf=0, t0=0, el0=0, STEP=2600;
-    function show(k){
-      i=(k+n)%n;
-      for(var j=0;j<n;j++){ imgs[j].classList.toggle('on',j===i); btns[j].classList.toggle('on',j===i); btns[j].setAttribute('aria-pressed',j===i?'true':'false'); btns[j].style.removeProperty('--t'); }
-    }
-    function tick(now){
-      if(!run) return; var d=now-t0;
-      if(d>=STEP){ show(i+1); t0=now; d=0; }
-      btns[i].style.setProperty('--t',(d/STEP*100)+'%'); el0=d;
-      raf=requestAnimationFrame(tick);
-    }
-    function start(){ if(!auto||run) return; run=true; t0=performance.now()-el0; raf=requestAnimationFrame(tick); }
-    function stop(){ run=false; cancelAnimationFrame(raf); }
-    [].forEach.call(btns,function(b,k){ b.addEventListener('click',function(){ auto=false; stop(); show(k); }); });
-    if(auto){
-      if(IO){ new IntersectionObserver(function(es){es.forEach(function(en){en.isIntersecting?start():stop()})},{threshold:.35}).observe(el); }
-      else start();
-    }
-  });
-  /* Home gallery on a laptop: one example at a time beside the list of titles. It moves on by
-     itself, always on a slider's Before hold, until someone clicks, drags or presses a key in it. */
-  [].forEach.call(document.querySelectorAll('[data-fx]'), function(g){
-    var picks=[].slice.call(g.querySelectorAll('.fx-pick')), cards=[].slice.call(g.querySelectorAll('.bx-grid>.bx'));
-    var DESK=window.matchMedia?matchMedia('(min-width:901px)'):{matches:true};
-    var cur=0, auto=!RM, vis=!IO, t0=0, due=0;
-    function sel(k){ cur=k;
-      picks.forEach(function(b,j){ b.classList.toggle('on',j===k); b.setAttribute('aria-selected',j===k?'true':'false'); });
-      cards.forEach(function(c,j){ c.classList.toggle('on',j===k); }); }
-    function dwell(k){ var st=cards[k].querySelector('[data-steps]'); return st?st.querySelectorAll('.st-img').length*2600:CYCLE; }
-    function plan(now){ t0=now; due=Math.ceil((now+dwell(cur)-3000)/CYCLE)*CYCLE; }
-    function stop(){ auto=false; g.classList.remove('auto'); }
-    picks.forEach(function(b,j){ b.addEventListener('click',function(){ stop(); sel(j); }); });
-    g.addEventListener('pointerdown',stop); g.addEventListener('keydown',stop);
-    g.classList.add('fx-on'); sel(0);
-    if(!auto) return;
-    g.classList.add('auto');
-    if(IO) new IntersectionObserver(function(es){ vis=es[0].isIntersecting; },{threshold:.3}).observe(g);
-    function tick(now){
-      if(!auto) return;
-      if(!DESK.matches||!vis||!due) plan(now);
-      else if(now>=due){ sel((cur+1)%picks.length); plan(now); }
-      g.style.setProperty('--t',Math.min(1,(now-t0)/Math.max(1,due-t0)));
-      requestAnimationFrame(tick);
-    }
-    requestAnimationFrame(tick);
-  });
 })();
 </script>

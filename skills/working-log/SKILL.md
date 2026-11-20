@@ -1,6 +1,6 @@
 ---
 name: working-log
-version: 1.9.0
+version: 1.10.0
 description: Use when the user cannot reliably read terminal output, prefers a durable page to chat, is stepping away, and the first time a session has something waiting on them — keeps one session page (waiting on you, checks, log, decided) at one URL. It owns that page and the log; questions and qa-checklist write its other sections.
 ---
 
@@ -79,7 +79,16 @@ into the wrong session. The session name is the only field that differs, so:
   session is exactly the thing being prevented, and the paste is where it happens.
 
 Take it from the session's own name if it has one; otherwise name it for the work
-(`credential-rotation`, `pr-qa-review`) and keep it stable for the life of the page.
+(`credential-rotation`, `pr-qa-review`).
+
+**Follow renames.** The user renames sessions as the work changes, and a page still
+carrying the old name is the wrong-session paste waiting to happen. Before every
+republish, read the session's current name: a rename notice in the conversation, or the
+"This session is …" line from listing agents. If it changed, update `session` and the
+`<title>`, keep publishing to the same file path so the URL stays, and say so in one log
+entry. The `localStorage` key changes with the name, so earlier ticks reset; mention it.
+A name taken from a handoff note is a guess, not the session's name; check before the
+first publish.
 
 ## Building it: the shared builder
 
@@ -182,6 +191,35 @@ second page already exists:
 
 The same lookup recovers any other page whose link was lost — a decisions review, a
 field check — by its title.
+
+## When the session is done: clean up after yourself
+
+A finished session should leave nothing behind but its results. Pages, scratch
+folders, worktrees and handoff notes pile up across sessions until nobody can tell
+what is live, so the session that made them removes them.
+
+**Keep the list as you go.** Every time the session creates something that would
+outlive it, note it in the spec's `details` or a log entry: a published page (title
+and link), a local folder, a git worktree or branch, a handoff or memory note. Only
+what this session made goes on the list; another session's pages and files are never
+yours to remove, even when they look abandoned.
+
+**Ask once, at the end.** When nothing is waiting on the user, put one question in
+Waiting on you that shows the whole list and offers **Delete all of it** /
+**Keep some (note)** / **Keep everything**, with what each item is and its size. Say
+plainly that deletes cannot be undone. Results the user keeps using (videos, files
+on their desktop, merged code) are not on the list.
+
+**Then do it, in this order:** local renders and scratch files; worktrees and merged
+branches; handoff notes (move any still-useful fact, such as where source files live,
+into a lasting note first); other published pages; **the session page last**, since it
+is how the user follows along. Report what was removed and what was kept, and why,
+in chat and as the page's final entry before it goes. If an item turns out to hold
+unfinished work, keep it and say so instead of deleting it.
+
+Deleting a published page asks the user to confirm each one, and that prompt may only
+appear in a terminal, not on a phone. Ask where they are before a batch of deletes;
+if they cannot confirm, give them the links to delete from instead.
 
 ## Where the page goes
 

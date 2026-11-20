@@ -1,5 +1,6 @@
 # Changelog
 
+- **1.6.1** (2026-11-19): Screenshots and photos show on older iPhones again (Safari before iOS 14 showed a broken "?"). Each WebP image now carries a PNG or JPEG fallback in a `<picture>`, and an image used more than once is filled in from a JSON map instead of a CSS variable older Safari could not read back. Pages are a little larger, by the size of the fallbacks.
 - **1.6.0** (2026-11-19): The page's header now starts with the proofs mark and a `design-review` pill, then the project and the session (accented), on a slim line above the heading. Fill `project.session`; a page without it still builds, with a warning.
 - **1.5.0** (2026-11-19): Fonts go in `assets` and are used from `css`, never pasted into the spec as base64 (one font was about 28,000 tokens). The builder embeds each asset once and converts screenshots to WebP: the smaller of lossy (quality 70) and lossless, shrunk to 1600 px wide only when that makes the file smaller. Delivers the page as "Where the page goes" says rather than always via artifacts. Says plainly that it needs the whole plugin.
 - **1.4.1** (2026-11-18): Description trimmed to the trigger and how it differs from its nearest sibling; the detail it used to carry is in the body. No change in behavior.

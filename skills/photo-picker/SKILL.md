@@ -1,6 +1,6 @@
 ---
 name: photo-picker
-version: 1.2.0
+version: 1.2.1
 description: Use when the user wants real photos found for an article or page and wants to pick from candidates before any is added, such as "find some photos for this" or "show me options for the hero image". Differs from design-review; it compares sourced, licensed photographs for one spot, not coded layouts, then uploads the winner.
 ---
 

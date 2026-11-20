@@ -552,6 +552,7 @@ class BuildAndCheck(unittest.TestCase):
 
 
 MAGICK = shutil.which("magick")
+WEBP = MAGICK or shutil.which("cwebp")
 
 
 def write_png(path, width, height):
@@ -606,17 +607,122 @@ class Assets(unittest.TestCase):
 
     def test_one_html_use_is_inlined_without_a_variable(self):
         text, _ = self.built('<img alt="a" src="{{asset:shot}}">', env={"PROOFS_IMAGE_QUALITY": ""})
-        self.assertEqual(len(re.findall(r"data:image/(?:webp|png);base64", text)), 1)
+        self.assertEqual(len(re.findall(r"data:image/webp;base64", text)), 1 if WEBP else 0)
+        self.assertEqual(len(re.findall(r"data:image/(?:png|jpeg);base64", text)), 1)
         self.assertNotIn("--asset-shot", text)
         self.assertNotIn("data-rp-asset", text)
+        self.assertNotIn('id="rp-assets"', text)
 
     def test_many_uses_share_one_copy(self):
         body = '<img alt="a" src="{{asset:shot}}"><img alt="b" src="{{asset:shot}}"><div style="background:url({{asset:shot}})"></div>'
         text, _ = self.built(body)
-        self.assertEqual(len(re.findall(r"data:image/(?:webp|png);base64", text)), 1)
-        self.assertEqual(text.count('data-rp-asset="src shot"'), 2)
+        self.assertEqual(len(re.findall(r"data:image/webp;base64", text)), 1 if WEBP else 0)
+        self.assertEqual(text.count('data-rp-asset="src shot img"'), 2)
         self.assertIn("background:var(--asset-shot)", text)
+        self.assertRegex(text, r"--asset-shot:url\(data:image/(?:png|jpeg);")  # CSS gets the format every browser shows
         self.assertNotIn("{{asset:", text)
+        self.assertEqual(review_page.image_errors(text), [])
+
+    @unittest.skipUnless(WEBP, "no WebP encoder installed")
+    def test_webp_img_is_a_picture_with_a_fallback_old_safari_can_show(self):
+        # Regression: older iOS Safari (before 14) cannot decode WebP and showed a "?".
+        text, _ = self.built('<img class="rp-shot" alt="Card grid" loading="lazy" src="{{asset:shot}}">')
+        pic = re.search(r'<picture class="rp-pic">(<source [^>]*>)(<img [^>]*>)</picture>', text)
+        self.assertIsNotNone(pic, "no <picture> around the screenshot")
+        self.assertIn('type="image/webp" srcset="data:image/webp;base64,', pic.group(1))
+        self.assertRegex(pic.group(2), r'src="data:image/(?:png|jpeg);base64,')
+        for attr in ('class="rp-shot"', 'alt="Card grid"', 'loading="lazy"'):
+            self.assertIn(attr, pic.group(2))
+        self.assertEqual(review_page.image_errors(text), [])
+
+    @unittest.skipUnless(WEBP, "no WebP encoder installed")
+    def test_repeated_images_fill_from_a_json_map_not_a_css_variable(self):
+        # Regression: repeated images were read back with getComputedStyle(), which
+        # returned nothing usable on older iOS Safari, so every one stayed blank.
+        text, _ = self.built('<img alt="a" src="{{asset:shot}}"><img alt="b" src="{{asset:shot}}">')
+        self.assertNotIn("getComputedStyle", text)
+        self.assertNotIn("--asset-shot", text)
+        m = re.search(r'<script type="application/json" id="rp-assets">(.*?)</script>', text, re.S)
+        shared = json.loads(m.group(1))["shot"]
+        self.assertTrue(shared["webp"].startswith("data:image/webp;base64,"))
+        self.assertRegex(shared["img"], r"^data:image/(?:png|jpeg);base64,")
+        self.assertEqual(text.count(shared["webp"]), 1)
+        self.assertEqual(text.count(shared["img"]), 1)
+        self.assertEqual(text.count('<source type="image/webp" data-rp-asset="srcset shot webp">'), 2)
+        self.assertEqual(text.count('data-rp-asset="src shot img"'), 2)
+        self.assertEqual(review_page.image_errors(text), [])
+
+    @unittest.skipUnless(NODE, "node is not installed")
+    def test_fill_script_sets_every_shared_attribute(self):
+        text, _ = self.built('<img alt="a" src="{{asset:shot}}"><img alt="b" src="{{asset:shot}}">')
+        m = re.search(r'<script type="application/json" id="rp-assets">(.*?)</script>', text, re.S)
+        driver = (
+            "const map = %s; const els = [];"
+            "function El(a){this.a=a;} El.prototype.getAttribute=function(k){return this.a[k];};"
+            "El.prototype.setAttribute=function(k,v){this.a[k]=v;};"
+            "%s.forEach(function(a){els.push(new El(a));});"
+            "global.document={getElementById:function(){return {textContent:JSON.stringify(map)};},"
+            "querySelectorAll:function(){return els;}};"
+            "%s\nconsole.log(JSON.stringify(els.map(function(e){return e.a;})));"
+        ) % (m.group(1), json.dumps([{"data-rp-asset": d} for d in re.findall(r'data-rp-asset="([^"]*)"', text)]),
+             review_page.ASSET_FILL)
+        r = subprocess.run([NODE, "-e", driver], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        for el in json.loads(r.stdout):
+            attr = el["data-rp-asset"].split(" ")[0]
+            self.assertTrue(el.get(attr, "").startswith("data:image/"), el["data-rp-asset"])
+            self.assertNotIn("image/gif", el[attr])
+
+    def test_check_catches_a_picture_without_a_usable_fallback(self):
+        webp = '<picture class="rp-pic"><source type="image/webp" srcset="data:image/webp;base64,AA"><img src="data:image/webp;base64,AA"></picture>'
+        none = '<picture><source type="image/webp" srcset="data:image/webp;base64,AA"></picture>'
+        self.assertIn("falls back to WebP", review_page.image_errors(webp)[0])
+        self.assertIn("no <img src> fallback", review_page.image_errors(none)[0])
+        blank = '<img src="%s" alt="x">' % review_page.BLANK_GIF
+        self.assertIn("blank placeholder", review_page.image_errors(blank)[0])
+        orphan = '<img src="%s" data-rp-asset="src gone img">' % review_page.BLANK_GIF
+        self.assertIn("nothing in rp-assets", review_page.image_errors(orphan)[0])
+
+    def test_a_webp_asset_with_no_fallback_is_a_warning(self):
+        (self.tmp / "pic.webp").write_bytes(b"RIFF\x00\x00\x00\x00WEBPVP8 ")
+        self.built('<img alt="a" src="{{asset:w}}">', assets={"w": "pic.webp"})
+        self.assertTrue(any("older Safari" in w for w in review_page.warnings(self.tmp / "page.html")))
+
+    def stub_fallback(self, sizes):
+        """Replace the fallback encoder with one returning sizes[(width, fmt)] bytes."""
+        calls = []
+        def fake(path, quality, width, fmt):
+            calls.append((width, fmt))
+            n = sizes.get((width, fmt))
+            return None if n is None else b"x" * n
+        real = review_page.encode_fallback
+        review_page.encode_fallback = fake
+        self.addCleanup(setattr, review_page, "encode_fallback", real)
+        return calls
+
+    def test_fallback_is_the_smallest_of_jpeg_shrunk_png_and_the_original(self):
+        src = self.tmp / "shot.png"  # 400 px wide, opaque
+        size = src.stat().st_size
+        calls = self.stub_fallback({(None, "jpg"): size - 5, (200, "jpg"): size - 50, (200, "png"): size - 20})
+        data, mime = review_page.to_fallback(src, {"quality": 70, "max_width": 200})
+        self.assertEqual((len(data), mime), (size - 50, "image/jpeg"))
+        self.assertEqual(sorted(calls, key=str), sorted([(None, "jpg"), (200, "jpg"), (200, "png")], key=str))
+        self.stub_fallback({(None, "jpg"): size + 5})
+        data, mime = review_page.to_fallback(src, {"quality": 70, "max_width": 4000})
+        self.assertEqual((data, mime), (src.read_bytes(), "image/png"))
+
+    def test_fallback_never_turns_a_transparent_png_into_a_jpeg(self):
+        import struct, zlib
+        src = self.tmp / "alpha.png"
+        def chunk(t, d):
+            return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xFFFFFFFF)
+        src.write_bytes(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 2, 1, 8, 6, 0, 0, 0))
+                        + chunk(b"IDAT", zlib.compress(b"\x00" + b"\x00" * 8)) + chunk(b"IEND", b""))
+        self.assertTrue(review_page.has_alpha(src))
+        self.assertFalse(review_page.has_alpha(self.tmp / "shot.png"))
+        calls = self.stub_fallback({})
+        review_page.to_fallback(src, {"quality": 70, "max_width": 1})
+        self.assertNotIn("jpg", [f for _, f in calls])
 
     def test_unused_asset_is_left_out(self):
         text, _ = self.built("<p>x</p>")
@@ -647,6 +753,7 @@ class Assets(unittest.TestCase):
     def test_missing_tool_keeps_the_original_and_says_so(self):
         text, out = self.built('<img alt="a" src="{{asset:shot}}">', env={"PATH": "/nonexistent"})
         self.assertIn("data:image/png;base64," + self.b64("shot.png"), text)
+        self.assertNotIn("<picture", text)  # nothing to fall back from
         self.assertIn("no magick or cwebp found", out)
 
     @unittest.skipUnless(MAGICK or shutil.which("cwebp"), "no WebP encoder installed")
@@ -654,6 +761,7 @@ class Assets(unittest.TestCase):
         text, out = self.built('<img alt="a" src="{{asset:shot}}">')
         self.assertIn("data:image/webp;base64,", text)
         self.assertIn("lossy at quality %d and lossless" % review_page.DEFAULT_IMAGE_QUALITY, out)
+        self.assertIn("fallback for older Safari", out)
 
     @unittest.skipUnless(MAGICK, "ImageMagick is not installed")
     def test_downscales_when_wider_never_upscales(self):
@@ -707,7 +815,7 @@ class Assets(unittest.TestCase):
         self.assertEqual(sorted(calls, key=str), [(None, False), (None, True)])
 
     def test_size_warning_names_the_largest_assets(self):
-        spec = {"_assets": {"big": "x" * 4000000, "small": "y" * 10}}
+        spec = {"_assets": {"big": {"img": "x" * 3000000, "webp": "w" * 1000000}, "small": {"img": "y" * 10, "webp": None}}}
         line = review_page.size_warning("z" * (4 * 1024 * 1024), spec)
         self.assertIn("big (3906 KB)", line)
         self.assertIsNone(review_page.size_warning("z" * 1000, spec))

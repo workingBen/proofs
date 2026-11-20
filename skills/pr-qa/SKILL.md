@@ -1,6 +1,6 @@
 ---
 name: pr-qa
-version: 1.4.5
+version: 1.5.0
 description: Use when open pull requests, especially ones an AI agent made unattended, need checking before merge and the user wants to see the change rather than read a diff, such as "QA the PRs", "check the agent's work" or screenshots before approving. Differs from visual-qa; it shows a PR's before and after, not a live page's problems.
 ---
 
@@ -122,7 +122,10 @@ why, because an omission that looks like coverage is worse than a gap.
 
 `python3 scripts/pr_qa_page.py --meta <dir>/meta.json --out <file>.html` renders
 that skeleton into the Artifact described below (`--project` and `--repo` set the
-top bar; both have defaults taken from the origin remote).
+top bar; both have defaults taken from the origin remote). Always pass `--session`, the
+session name taken the way the `working-log` skill does: the bar starts with the proofs
+mark and a `pr-qa` pill, then project · session · repo, so the user can tell which
+session's QA this is.
 
 `python3 scripts/pr_qa_findings.py --dir <evidence dir>` turns a PR's before and
 after measurements (`before.json`, `after.json`, each a list of `shots`) into the
@@ -326,7 +329,7 @@ phone. **A QA that only confirms is not a QA.**
 
 Structure, in order:
 
-1. **Project bar** — brand · `owner/repo` · "PR QA". Read them from `CLAUDE.md` and
+1. **Project bar** — proofs mark and `pr-qa` pill · brand · session · `owner/repo`. Read them from `CLAUDE.md` and
    `git remote -v`; never guess a repo slug.
 2. **Verdict table up top** — PR, ticket, cost, test result, your recommendation.
    The user should be able to stop reading here and still decide.

@@ -17,6 +17,13 @@ how you rebuild the next round.
 
 ## What every page gets, built in
 
+- A header naming the page: the **proofs** wordmark, a pill with the skill's name,
+  and the project and session (`project.name`, `project.session`, session accented).
+  It starts the top bar on session, log and questions pages and adds no height; a
+  review page, which has no top bar, gets it as a slim line above the heading. On a
+  phone the wordmark drops and the pill stays. Screen readers hear "Proofs, design-review".
+  A review or questions page with no `project.session` still builds, with a warning:
+  the session is how the reader matches a page to the chat it belongs to.
 - Decision buttons per item, one active at a time, all starting unselected, with
   `aria-pressed`. Choices that need a comment open the comment box and focus it; a
   comment typed under any other choice is still kept and exported.
@@ -50,6 +57,8 @@ Common fields:
 | `assets` | `{"name": "path/to/file.png"}`: the builder reads the files, so their bytes never pass through your context. Use one as `{{asset:name}}` (in an attribute, or in `css` as `url({{asset:name}})`) or as `var(--asset-name)`; each is embedded **once** however often it is used. PNG and JPEG become WebP when `magick` or `cwebp` is installed: the smaller of lossy (at `image_quality`) and lossless, or the original if that is smaller still (without either tool they are kept, and the build says so) |
 | `image_quality`, `image_max_width` | WebP quality (1–100, default 70) and the widest a screenshot may be, in pixels (default 1600): applied only when the shrunk file is actually smaller, and never upscales. Env vars `PROOFS_IMAGE_QUALITY` and `PROOFS_IMAGE_MAX_WIDTH` win over the spec |
 | `storage_key` | the `localStorage` key, if the default is not stable enough |
+| `project` | `{name, session, repo}` for the header, on every mode; take the session name the way the `working-log` skill does. Questions pages also use `stream`, `round`, `artifact` |
+| `skill` | the skill named in the header's pill. Defaults: session and log pages `working-log`; questions pages `qa-checklist` when they hold only checks, else `questions`; review pages from the decisions preset (`design-review`, `copy-edit` → `article-copy-edit`, `style-guide`, `photo-picker`), and no pill for a custom set with no preset. `""` shows the wordmark alone |
 
 ### Frame and sections
 
@@ -62,8 +71,8 @@ contributes its own block to the export, in page order:
 | `review` | decision items (below) | one `N. label — DECISION…` line per item |
 | `questions` | questions with radio options | `Q qid (raised rN) \| ask` blocks |
 | `qa` | PASS / FAIL / COULDN'T TEST checks | `--- QA results ---` then `QA qaid \| check` blocks |
-| `log` | log entries | `M6  [read]  title` lines with answers and notes |
-| `links` | `{label, status, url, link_text}`: other pages waiting on the reader, one line each | none |
+| `log` | log entries | `M6  [read]  Nov 19 - 3:54PM  title` lines (the time only when the entry has `when`) with answers and notes |
+| `links` | `{label, status, url, link_text, state}`: other pages waiting on the reader, one line each. `state` is `open` (default: the status and an **Open it** link) or `in-progress` (the reader has answered and you are working: a muted *In progress* pill and a small **View page** link, listed after the open ones; when every link is in progress the heading becomes "Pages Claude is working on") | none |
 | `decided` | `{id, title, decision, when}`: settled items, folded (`"open": true` unfolds) | none |
 
 Every section takes `id` (default `s1`, `s2`, …), `kind` (default: the mode's own
@@ -127,10 +136,10 @@ word-level diffs.
 ### `questions` mode
 
 A standalone questions page (the `questions` skill) or checklist (the `qa-checklist`
-skill). `project`: `name`, `stream`, `round`, `artifact` (the published URL).
+skill). `project`: `name`, `session`, `stream`, `round`, `artifact` (the published URL).
 `format` defaults to `questions v1.3`, or `qa-checklist v1.0` on a page with checks
 and no questions, whose export says `results` instead of `answers`.
-`bar_title_html` sets the sticky bar.
+`bar_title_html` sets the sticky bar's title (default `project.name`); the session follows it.
 
 `questions` and `qa` sections, or the flat `questions` and `qa` lists:
 
@@ -174,7 +183,7 @@ status bar's version marker. `details`: `[[key, value], …]` printed after proj
 session and repo in the export. `facts`: `[[label, html], …]`. Make `title` lead
 with the session: `SESSION · PROJECT log`.
 
-A `log` section, or the flat `entries` list, newest first: `[{id, title, status, lede, detail_html, questions: [{q, label, options: [text, …]}]}]`.
+A `log` section, or the flat `entries` list, newest first: `[{id, title, status, when, lede, detail_html, questions: [{q, label, options: [text, …]}]}]`. `when` is the author's local time as ISO 8601 (`2026-11-19T15:54`), shown after the title and in the export as `Nov 19 - 3:54PM`; it is reformatted, never converted between time zones. Read entries keep it on their one-line row, except on phones.
 Each entry gets a note field and a "Read this" tick (a ticked entry folds to one line under "Read" at the bottom of the log); the page ends with an
 "Anything else" box. The export is `WORKING LOG — my replies`, the details block,
 `exported:` (local time), then `M6  [read]  title` per entry with `answer:` per

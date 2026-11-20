@@ -3,7 +3,7 @@
    through the spec's "css", styles the mockups without restyling the chrome. */
 :root {
   --rp-bg:#f7f6f3; --rp-card:#ffffff; --rp-sunk:#efede8; --rp-ink:#1c1b19; --rp-soft:#5b5852; --rp-faint:#8a867e;
-  --rp-rule:#dcd8d0; --rp-accent:#2563eb; --rp-accent-ink:#ffffff;
+  --rp-rule:#dcd8d0; --rp-accent:#2563eb; --rp-accent-ink:#ffffff; --rp-brand:#c2410c; --rp-sess:#6d28d9;
   --rp-deny:#b42318; --rp-accept:#067647; --rp-comment:#1d4ed8; --rp-revise:#b54708; --rp-later:#0e7490;
   --rp-amber-bg:#fef3c7; --rp-amber-ink:#5a3a03; --rp-rec:#067647; --rp-notrec:#b42318;
   --rp-sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; --rp-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
@@ -11,14 +11,14 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --rp-bg:#141413; --rp-card:#1d1c1a; --rp-sunk:#262522; --rp-ink:#eeece8; --rp-soft:#b5b1a9; --rp-faint:#8a867e;
-    --rp-rule:#3a3834; --rp-accent:#7aa2ff; --rp-accent-ink:#0b1020;
+    --rp-rule:#3a3834; --rp-accent:#7aa2ff; --rp-accent-ink:#0b1020; --rp-brand:#f08a54; --rp-sess:#c4a7ff;
     --rp-deny:#f97066; --rp-accept:#47cd89; --rp-comment:#84adff; --rp-revise:#fdb022; --rp-later:#22ccee;
     --rp-amber-bg:#3d2a05; --rp-amber-ink:#fde68a; --rp-rec:#47cd89; --rp-notrec:#f97066;
   }
 }
 :root[data-theme="dark"] {
   --rp-bg:#141413; --rp-card:#1d1c1a; --rp-sunk:#262522; --rp-ink:#eeece8; --rp-soft:#b5b1a9; --rp-faint:#8a867e;
-  --rp-rule:#3a3834; --rp-accent:#7aa2ff; --rp-accent-ink:#0b1020;
+  --rp-rule:#3a3834; --rp-accent:#7aa2ff; --rp-accent-ink:#0b1020; --rp-brand:#f08a54; --rp-sess:#c4a7ff;
   --rp-deny:#f97066; --rp-accept:#47cd89; --rp-comment:#84adff; --rp-revise:#fdb022; --rp-later:#22ccee;
   --rp-amber-bg:#3d2a05; --rp-amber-ink:#fde68a; --rp-rec:#47cd89; --rp-notrec:#f97066;
 }
@@ -137,6 +137,28 @@ ins.rp-ins, .rp-panes ins { background:color-mix(in srgb, var(--rp-accept) 18%, 
 .rp-flash.on { opacity:1; }
 @media (prefers-reduced-motion: reduce) { .rp-flash { transition:none; } }
 
+/* brand: the proofs wordmark and a skill pill, starting the top bar (or, on review
+   pages, a slim line above the heading), so one skill's page reads apart from another's */
+.rp-brand { display:inline-flex; align-items:center; gap:10px; vertical-align:middle; line-height:1; white-space:nowrap;
+  --rp-brand-ink:var(--rp-ink); --rp-brand-rule:var(--rp-rule); }
+.rp-wm { font:600 19px/1 Georgia,Charter,"Iowan Old Style",serif; letter-spacing:-.01em; color:var(--rp-brand-ink); }
+.rp-wm i { color:var(--rp-brand); font-style:italic; }
+.rp-sk { font:600 12.5px/1.4 var(--rp-mono); color:var(--rp-brand); border:1px solid color-mix(in srgb, var(--rp-brand) 55%, transparent);
+  border-radius:999px; padding:1px 9px; }
+.rp-brand-sep { width:1px; height:18px; background:var(--rp-brand-rule); margin:0 4px 0 2px; }
+.rp-sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); clip-path:inset(50%); white-space:nowrap; }
+/* the project bar and the questions bar are dark whatever the theme */
+.rp-projectbar .rp-brand, .rp-mode-questions .bar .rp-brand { --rp-brand:#f08a54; --rp-brand-ink:#f3eee6; --rp-brand-rule:rgba(255,255,255,.22); }
+/* negative block margins keep the taller wordmark from growing the bar's line */
+.rp-projectbar .rp-brand { margin:-4px 6px -4px 0; }
+.rp-brandline { height:28px; display:flex; align-items:center; margin:-10px 0 8px; font-size:15px; color:var(--rp-soft);
+  white-space:nowrap; min-width:0; }
+.rp-brandline .rp-brand { margin-right:6px; }
+.rp-where { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.rp-brandline .rp-session { color:var(--rp-sess); }
+.rp-brandline .rp-brand:last-child .rp-brand-sep { display:none; }
+.rp-mode-questions .bar .rp-session { color:#c4a7ff; font-weight:700; }
+
 /* log mode */
 .rp-topbars { position:sticky; top:0; z-index:30; }
 .rp-projectbar { background:#16161c; color:#d7d7de; padding:10px 28px; font-size:15px; }
@@ -161,10 +183,12 @@ ins.rp-ins, .rp-panes ins { background:color-mix(in srgb, var(--rp-accept) 18%, 
 .rp-entry.rp-is-read .rp-entry-head { flex:1 1 auto; min-width:0; flex-wrap:nowrap; margin:0; }
 .rp-entry.rp-is-read .rp-entry-head h3 { font-size:16px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
 .rp-entry.rp-is-read .rp-status { margin-left:auto; flex:none; }
+.rp-entry.rp-is-read .rp-when { flex:none; }
 .rp-entry.rp-is-read .rp-lede, .rp-entry.rp-is-read .rp-detail, .rp-entry.rp-is-read .rp-opts,
 .rp-entry.rp-is-read .rp-note-label { display:none; }
 .rp-entry.rp-is-read .rp-entry-foot { margin:0; flex:none; }
 .rp-status { margin-left:auto; color:var(--rp-soft); }
+.rp-when { font-size:14px; color:var(--rp-faint); white-space:nowrap; font-variant-numeric:tabular-nums; }
 .rp-status-your-move { color:var(--rp-revise); }
 .rp-status-done { color:var(--rp-accept); }
 .rp-lede { font-size:17.5px; margin:0 0 8px; }
@@ -208,6 +232,10 @@ body.rp {
 .rp-links li { font-size:16.5px; }
 .rp-links a { color:var(--rp-accent); font-weight:650; margin-left:6px; }
 .rp-link-status { color:var(--rp-ink); }
+.rp-link-wip, .rp-link-wip .rp-link-status { color:var(--rp-soft); }
+.rp-wip { font-size:13px; font-weight:650; padding:1px 9px; border-radius:999px; border:1px solid var(--rp-rule);
+  color:var(--rp-soft); background:var(--rp-sunk); margin-left:4px; white-space:nowrap; }
+.rp-links a.rp-link-quiet { font-weight:400; font-size:15px; color:var(--rp-soft); text-decoration:underline; }
 .rp-decided summary { cursor:pointer; color:var(--rp-soft); font-size:15.5px; padding:6px 0; }
 .rp-decided ul { margin:8px 0 0; padding-left:20px; color:var(--rp-soft); font-size:15.5px; }
 .rp-decided li { margin:0 0 6px; }
@@ -216,6 +244,9 @@ body.rp {
 .rp-mode-questions .rp-links li, .rp-mode-questions .rp-decided li, .rp-mode-questions .rp-decided summary { color:var(--ink-soft); }
 .rp-mode-questions .rp-link-status, .rp-mode-questions .rp-decided-what { color:var(--ink); }
 .rp-mode-questions .rp-links a { color:var(--accent); }
+.rp-mode-questions .rp-link-wip, .rp-mode-questions .rp-link-wip .rp-link-status, .rp-mode-questions .rp-wip,
+.rp-mode-questions .rp-links a.rp-link-quiet { color:var(--ink-soft); }
+.rp-mode-questions .rp-wip { border-color:var(--rule); background:var(--sunk); }
 .rp-mode-questions .rp-context { border-top-color:var(--rule); }
 .rp-mode-questions .rp-context .rp-h1 { font-size:26px; }
 
@@ -285,7 +316,7 @@ body.rp-mode-questions, :root[data-theme] body.rp-mode-questions {
   .rp-bar, .rp-projectbar, .rp-statusbar { padding-left:16px; padding-right:16px; }
   .rp-item, .rp-entry { padding:16px; }
   .rp-entry.rp-is-read { padding:8px 12px; gap:8px; }
-  .rp-entry.rp-is-read .rp-status { display:none; }
+  .rp-entry.rp-is-read .rp-status, .rp-entry.rp-is-read .rp-when { display:none; }
   .rp-entry.rp-is-read .rp-tick-l { display:none; }
   .rp-read { margin-left:0; }
   .rp-mode-questions .rp-main { padding:28px 16px 96px; }
@@ -297,6 +328,18 @@ body.rp-mode-questions, :root[data-theme] body.rp-mode-questions {
     padding:8px 10px 8px 16px; align-self:stretch; display:flex; align-items:center; }
   .rp-projectbar .rp-pb-x, .rp-statusbar .rp-marker, .rp-statusbar .rp-copy-x { display:none; }
   .rp-projectbar .rp-session { overflow:hidden; text-overflow:ellipsis; }
+  /* the pill alone names the page on a phone */
+  .rp-projectbar .rp-wm, .rp-projectbar .rp-brand-sep { display:none; }
+  .rp-projectbar .rp-brand { margin-right:8px; flex:none; }
+  .rp-projectbar { max-width:55%; }
+  .rp-projectbar .rp-sk, .rp-mode-questions .bar .rp-sk { font-size:11px; padding:1px 6px; }
+  /* the questions bar keeps its rows: the pill shares the title's, and a long title ellipsizes */
+  .rp-mode-questions .bar .rp-wm, .rp-mode-questions .bar .rp-brand-sep { display:none; }
+  .rp-mode-questions .bar .rp-brand { margin-right:-8px; }
+  /* review pages on a phone: the pill, then project · session, as on the session page */
+  .rp-brandline .rp-brand:has(.rp-sk):not(:last-child) .rp-wm, .rp-brandline .rp-brand-sep, .rp-brandline .rp-pb-x { display:none; }
+  .rp-mode-questions .bar-title > span:not(.rp-sess) { display:none; }
+  .rp-mode-questions .bar-title { flex:1 1 180px; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .rp-statusbar { flex:1 1 0; min-width:0; flex-wrap:nowrap; padding:6px 16px 6px 10px; border-bottom:0; }
   .rp-statusbar #rp-tally { flex:1 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:14px; }
   .rp-statusbar .rp-copy { flex:none; min-height:44px; padding:8px 14px; }

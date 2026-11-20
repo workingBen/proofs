@@ -18,6 +18,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 
 SEVERITY_RANK = {"blocker": 0, "warning": 1, "good": 2}
 
@@ -205,10 +206,10 @@ DECISIONS = [
 ]
 
 
-def render(prs, dropped, project, repo):
+def render(prs, dropped, project, repo, session=None):
     """The whole page, as one self-contained string."""
     payload = {
-        "project": project, "repo": repo, "dropped": dropped,
+        "project": project, "repo": repo, "session": session, "dropped": dropped,
         "decisions": [{"value": v, "consequence": c} for v, c in DECISIONS],
         "prs": [{
             "number": pr.get("number"), "title": pr.get("title", ""),
@@ -267,7 +268,7 @@ def validate_meta(meta):
                 f"-- valid values are {', '.join(VALID_RECOMMENDATIONS)}")
 
 
-def build(meta_path, out_path, project, repo):
+def build(meta_path, out_path, project, repo, session=None):
     with open(meta_path, encoding="utf-8") as handle:
         meta = json.load(handle)
     validate_meta(meta)
@@ -278,7 +279,7 @@ def build(meta_path, out_path, project, repo):
         prs.append(dict(entry, evidence=evidence,
                         verdict=effective_verdict(evidence, human)))
     embedded, dropped = embed(prs)
-    page = render(embedded, dropped, project, repo)
+    page = render(embedded, dropped, project, repo, session)
     with open(out_path, "w", encoding="utf-8") as handle:
         handle.write(page)
     return page
@@ -301,10 +302,14 @@ def main(argv=None):
     parser.add_argument("--out", required=True)
     parser.add_argument("--project", help="name for the page's top bar; default: the repo name")
     parser.add_argument("--repo", help="owner/name; default: read from the origin remote")
+    parser.add_argument("--session", help="this session's name, shown in the top bar so the page can be "
+                                          "matched to its session")
     args = parser.parse_args(argv)
     repo = args.repo or repo_slug() or ""
     project = args.project or (repo.split("/")[-1] if repo else "Project")
-    page = build(args.meta, args.out, project, repo)
+    if not args.session:
+        print("warning: no --session: the reader can't tell which session this page belongs to", file=sys.stderr)
+    page = build(args.meta, args.out, project, repo, args.session)
     print(f"==> {args.out}: {len(page)} bytes")
     return 0
 
@@ -337,6 +342,7 @@ PAGE_TEMPLATE = """<!doctype html>
     --accent: #0d7377;
     --accent-ink: #ffffff;
     --focus: #0d7377;
+    --brand: #c2410c; --session: #6d28d9;
     --radius: 12px;
     --shadow: 0 1px 2px rgba(23,27,33,.06), 0 10px 28px rgba(23,27,33,.07);
   }
@@ -345,6 +351,7 @@ PAGE_TEMPLATE = """<!doctype html>
       --bg: #10151a; --surface: #1a2029; --surface-alt: #212a34;
       --ink: #edf1f5; --muted: #9aa6b4; --border: #2c3542;
       --accent: #3ad8cb; --accent-ink: #08211f; --focus: #3ad8cb;
+      --brand: #f08a54; --session: #c4a7ff;
       --shadow: 0 1px 2px rgba(0,0,0,.35), 0 10px 28px rgba(0,0,0,.4);
     }
   }
@@ -352,12 +359,14 @@ PAGE_TEMPLATE = """<!doctype html>
     --bg: #10151a; --surface: #1a2029; --surface-alt: #212a34;
     --ink: #edf1f5; --muted: #9aa6b4; --border: #2c3542;
     --accent: #3ad8cb; --accent-ink: #08211f; --focus: #3ad8cb;
+      --brand: #f08a54; --session: #c4a7ff;
     --shadow: 0 1px 2px rgba(0,0,0,.35), 0 10px 28px rgba(0,0,0,.4);
   }
   :root[data-theme="light"] {
     --bg: #f4f6f8; --surface: #ffffff; --surface-alt: #eaeef2;
     --ink: #171b21; --muted: #566173; --border: #d8dee5;
     --accent: #0d7377; --accent-ink: #ffffff; --focus: #0d7377;
+    --brand: #c2410c; --session: #6d28d9;
     --shadow: 0 1px 2px rgba(23,27,33,.06), 0 10px 28px rgba(23,27,33,.07);
   }
   * , *::before, *::after { box-sizing: border-box; }
@@ -381,6 +390,16 @@ PAGE_TEMPLATE = """<!doctype html>
     background: var(--surface); border-bottom: 1px solid var(--border);
   }
   .bar .brand { font-weight: 800; font-size: 1.3rem; }
+  /* the proofs mark and skill pill, as on every proofs page */
+  .pf { display: inline-flex; align-items: center; gap: 10px; line-height: 1; white-space: nowrap; }
+  .pf-wm { font: 600 19px/1 Georgia, Charter, "Iowan Old Style", serif; letter-spacing: -.01em; color: var(--ink); }
+  .pf-wm i { color: var(--brand); font-style: italic; }
+  .pf-sk { font: 600 12.5px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--brand);
+           border: 1px solid color-mix(in srgb, var(--brand) 55%, transparent); border-radius: 999px; padding: 1px 9px; }
+  .pf-sep { width: 1px; height: 18px; background: var(--border); margin: 0 2px; }
+  .pf-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .bar .session { color: var(--session); font-weight: 700; }
+  @media (max-width: 600px) { .pf-wm, .pf-sep { display: none; } }
   .bar .tag { color: var(--muted); }
   .bar .repo { color: var(--muted); font-size: 1rem; }
   .bar .counter {
@@ -814,11 +833,17 @@ const DATA = __PAYLOAD__;
   }
 
   function buildBar() {
-    return el("header", { class: "bar" },
+    var mark = el("span", { class: "pf" },
+      el("span", { class: "pf-wm", "aria-hidden": "true" }, "pro", el("i", { text: "o" }), "fs"),
+      el("span", { class: "pf-sk", "aria-hidden": "true", text: "pr-qa" }),
+      el("span", { class: "pf-sr", text: "Proofs, pr-qa" }),
+      el("span", { class: "pf-sep", "aria-hidden": "true" }));
+    return el("header", { class: "bar" }, mark,
       el("span", { class: "brand", text: DATA.project }),
+      DATA.session ? el("span", { class: "tag", text: "\\u00b7" }) : null,
+      DATA.session ? el("span", { class: "session", text: DATA.session }) : null,
       el("span", { class: "tag", text: "\\u00b7" }),
       el("span", { class: "repo", text: DATA.repo }),
-      el("span", { class: "tag", text: "\\u00b7 PR QA" }),
       el("span", { class: "counter", "data-counter": "",
         text: "0 of " + DATA.prs.length + " decided" }));
   }

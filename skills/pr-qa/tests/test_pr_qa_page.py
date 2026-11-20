@@ -322,6 +322,10 @@ out.hasUnreviewedNotice = Array.prototype.some.call(
   doc.querySelectorAll('.notice.warn'),
   function (n) { return n.textContent.indexOf('not yet read by a reviewer') !== -1; });
 out.hasEmptyState = !!doc.querySelector('.empty');
+var bar = doc.querySelector('header.bar');
+out.barText = bar ? bar.textContent : '';
+out.barSession = bar && bar.querySelector('.session') ? bar.querySelector('.session').textContent : null;
+out.barFirst = bar && bar.firstElementChild ? bar.firstElementChild.className : '';
 var withSrc = doc.querySelectorAll('[src]');
 out.srcCount = withSrc.length;
 out.badSrc = Array.prototype.filter.call(withSrc, function (n) {
@@ -403,6 +407,15 @@ class RenderTest(unittest.TestCase):
     def test_the_project_bar_names_the_real_repo(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertIn("acme/widgets", self._page(tmp))
+
+    def test_the_bar_starts_with_the_proofs_mark_skill_and_session(self):
+        page = render([], [], "Sample Project", "acme/widgets", "pr-qa-review")
+        out = self._run_dom_checks(page)
+        self.assertEqual(out["barFirst"], "pf")
+        self.assertIn("proofspr-qaProofs, pr-qaSample Project", out["barText"])
+        self.assertEqual(out["barSession"], "pr-qa-review")
+        # an older call with no session still renders, just without it
+        self.assertIsNone(self._run_dom_checks(render([], [], "P", "o/r"))["barSession"])
 
     def test_empty_state_renders_only_with_no_open_prs(self):
         """"Nothing waiting" also lives unconditionally in PAGE_TEMPLATE, so

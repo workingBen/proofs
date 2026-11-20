@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Try Proofs</title>
+<meta name="description" content="15 minutes: install Proofs in Claude Code, run one design review, and tell me where you got stuck.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Proofs">
+<meta property="og:title" content="Try Proofs">
+<meta property="og:description" content="15 minutes: install it in Claude Code, run one design review, and tell me where you got stuck.">
+<meta property="og:url" content="https://workingben.github.io/proofs/try/">
+<meta property="og:image" content="https://workingben.github.io/proofs/try/preview.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Try Proofs: Claude Code skills that show their work">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Try Proofs">
+<meta name="twitter:description" content="15 minutes: install it in Claude Code, run one design review, and tell me where you got stuck.">
+<meta name="twitter:image" content="https://workingben.github.io/proofs/try/preview.png">
+<meta name="robots" content="noindex">
+<link rel="icon" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: one reading column, steps as a numbered sequence (they are one), answers form at the end. */
+:root {
+  --bg: #f4efe7; --card: #fffdf9; --fg: #1d1b17; --muted: #5f5a51; --line: #ddd5c8; --accent: #c2410c; --code-bg: #1d1b17; --code-fg: #f3eee6;
+  --display: "Instrument Serif", Georgia, serif;
+  --body: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #15130f; --card: #1e1c18; --fg: #eeeae2; --muted: #b0a99c; --line: #38342d; --accent: #f08a54; --code-bg: #0d0c0a; --code-fg: #eeeae2; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #15130f; --card: #1e1c18; --fg: #eeeae2; --muted: #b0a99c; --line: #38342d; --accent: #f08a54; --code-bg: #0d0c0a; --code-fg: #eeeae2; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--fg); font: 19px/1.6 var(--body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 72px }
+main { max-width: 920px; margin: 0 auto; display: grid; gap: 34px }
+.mark { font: 600 22px var(--display); letter-spacing: -.01em } .mark i { color: var(--accent) }
+h1 { font: 400 clamp(40px, 7vw, 68px)/1.05 var(--display); margin: 6px 0 12px; text-wrap: balance }
+h1 em { color: var(--accent) }
+h2 { font: 400 30px/1.15 var(--display); margin: 0 0 10px; text-wrap: balance }
+p { margin: 0 } .lead { font-size: 20px; color: var(--muted); max-width: 64ch }
+.facts { display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: 15px; color: var(--muted) }
+.facts b { color: var(--fg) }
+ol.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 26px; counter-reset: s }
+ol.steps > li { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 4px 14px; counter-increment: s }
+ol.steps > li::before { content: counter(s); font: 400 30px/1 var(--display); color: var(--accent); grid-row: span 2 }
+ol.steps > li > * { grid-column: 2; min-width: 0 }
+.step-t { font-weight: 650; font-size: 18px }
+.step-b { display: grid; gap: 10px; color: var(--fg) }
+.step-b .note { color: var(--muted); font-size: 15.5px }
+.code { position: relative; background: var(--code-bg); color: var(--code-fg); border-radius: 10px; padding: 14px 92px 14px 16px; font: 500 14.5px/1.6 var(--mono); overflow-x: auto; white-space: pre }
+.code .ph { color: #f6a77a }
+.copy { position: absolute; top: 9px; right: 9px; font: 600 13px var(--body); padding: 6px 12px; border-radius: 7px; border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.08); color: var(--code-fg); cursor: pointer }
+.copy:focus-visible, button:focus-visible, textarea:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px }
+.tip { border-top: 1px solid var(--line); padding-top: 14px; font-size: 15.5px; color: var(--muted); display: grid; gap: 6px }
+.tip b { color: var(--fg) }
+form { display: grid; gap: 18px }
+label { display: grid; gap: 6px; font-weight: 600 }
+label span { font-weight: 400; color: var(--muted); font-size: 15px }
+textarea { font: 16px/1.5 var(--body); padding: 10px 12px; border-radius: 9px; border: 1px solid var(--line); background: var(--card); color: var(--fg); min-height: 88px; resize: vertical; width: 100% }
+.send { justify-self: start; font: 700 16px var(--body); padding: 12px 20px; border-radius: 10px; border: 0; background: var(--accent); color: #fff; cursor: pointer }
+.status { font-size: 15px; color: var(--muted); min-height: 1.5em }
+.fallback { width: 100%; min-height: 140px; font: 14px/1.5 var(--mono) }
+</style>
+
+</head>
+<body>
+<main>
+  <header>
+    <div class="mark">pro<i>o</i>fs</div>
+    <h1>Try Proofs, then tell me <em>where you got stuck</em></h1>
+    <p class="lead">Proofs is a free plugin for Claude Code. Instead of describing a redesign in text, Claude shows you real mockups next to your live page, you pick with buttons, and you paste your picks back. You'd be one of the first people besides me to use it, so anything that confuses you is exactly what I need to hear.</p>
+  </header>
+
+  <div class="facts"><span><b>About 15 minutes</b></span><span><b>You need</b> Claude Code installed</span><span><b>Any web page</b> works, even one you don't own</span></div>
+
+  <section>
+    <h2>Four steps</h2>
+    <ol class="steps">
+      <li><div class="step-t">Install it</div>
+        <div class="step-b"><p>In Claude Code, run these two commands:</p>
+          <div class="code"><button type="button" class="copy" data-copy="/plugin marketplace add workingBen/proofs
+/plugin install proofs@proofs">Copy</button>/plugin marketplace add workingBen/proofs
+/plugin install proofs@proofs</div>
+          <p class="note">If it asks you to restart Claude Code, do that.</p></div></li>
+      <li><div class="step-t">Ask for a design review</div>
+        <div class="step-b"><p>Paste this, with a real web address in place of the bracket. Your own site, a work page, or any public page you think could look better:</p>
+          <div class="code"><button type="button" class="copy" data-copy="Use the design-review skill to propose two or three design updates for the page [YOUR URL]">Copy</button>Use the design-review skill to propose two or three design updates for the page <span class="ph">[YOUR URL]</span></div></div></li>
+      <li><div class="step-t">Open the page it gives you and decide</div>
+        <div class="step-b"><p>Claude captures the page and builds two or three real redesigns, then gives you a link to a review page. Look at each option, press a button on each (keep, use, comment, or ask for another try), then press <b>Copy My Decisions</b>.</p>
+          <p class="note">This takes a few minutes. If you get a file instead of a link, open the file in your browser.</p></div></li>
+      <li><div class="step-t">Paste your picks back</div>
+        <div class="step-b"><p>Paste what you copied into Claude Code. If the page is in a project you have open, Claude builds exactly what you picked. If it isn't your page, stop here; the review is the part I want feedback on.</p></div></li>
+    </ol>
+  </section>
+
+  <div class="tip"><p><b>If Claude just describes ideas in text</b> instead of making a page, say "use the design-review skill" again. That alone is useful to tell me.</p>
+    <p><b>Curious about the rest?</b> There are 12 skills; the list is at <a href="https://workingben.github.io/proofs/" target="_blank" rel="noopener" style="color:var(--accent)">workingben.github.io/proofs</a>.</p></div>
+
+  <section>
+    <h2>Three questions</h2>
+    <form id="answers">
+      <label for="q1">1. Where did you get stuck or confused?<span>Install, the prompt, the page, the buttons, pasting back. Even small things.</span><textarea id="q1"></textarea></label>
+      <label for="q2">2. Did the redesigns look like real improvements to your page?<span>Which option did you pick, and why?</span><textarea id="q2"></textarea></label>
+      <label for="q3">3. Would you use this again? For what?<span>Be blunt. "No, because…" helps as much as yes.</span><textarea id="q3"></textarea></label>
+      <button type="submit" class="send">Copy my answers</button>
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+      <textarea class="fallback" id="fallback" hidden readonly aria-label="Your answers, ready to copy"></textarea>
+    </form>
+    <p class="step-b note" style="margin-top:12px">Then paste them into a message to me. Thank you.</p>
+  </section>
+</main>
+
+<script>
+(function () {
+  function copy(text, done, fail) {
+    try { navigator.clipboard.writeText(text).then(done, fail); } catch (e) { fail(); }
+  }
+  document.querySelectorAll('.copy').forEach(function (b) {
+    b.addEventListener('click', function () {
+      copy(b.dataset.copy, function () { b.textContent = 'Copied'; setTimeout(function () { b.textContent = 'Copy'; }, 1600); },
+        function () { b.textContent = 'Select it'; });
+    });
+  });
+  var KEY = 'try-proofs-answers';
+  var ids = ['q1', 'q2', 'q3'];
+  try { var saved = JSON.parse(localStorage.getItem(KEY) || '{}'); ids.forEach(function (id) { if (saved[id]) document.getElementById(id).value = saved[id]; }); } catch (e) {}
+  ids.forEach(function (id) {
+    document.getElementById(id).addEventListener('input', function () {
+      try { var o = {}; ids.forEach(function (k) { o[k] = document.getElementById(k).value; }); localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) {}
+    });
+  });
+  document.getElementById('answers').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var labels = ['Where I got stuck', 'Did the redesigns look like improvements', 'Would I use it again'];
+    var text = 'Proofs feedback\n\n' + ids.map(function (id, i) { return labels[i] + ':\n' + (document.getElementById(id).value.trim() || '(nothing)'); }).join('\n\n');
+    var status = document.getElementById('status'), fb = document.getElementById('fallback');
+    copy(text, function () { status.textContent = 'Copied. Paste it into a message to me.'; fb.hidden = true; },
+      function () { fb.value = text; fb.hidden = false; fb.focus(); fb.select(); status.textContent = 'Copying was blocked here. The text is selected below: copy it with Cmd+C or Ctrl+C.'; });
+  });
+})();
+</script>
+
+</body>
+</html>

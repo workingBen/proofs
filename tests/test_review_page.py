@@ -381,6 +381,14 @@ class BuildAndCheck(unittest.TestCase):
         self.assertNotIn('href="#questions" target', text)
         self.assertIn('href="https://x.test/r" target="_blank" rel="noopener">Open it</a>', text)
 
+    def test_check_catches_an_in_page_link_with_nothing_to_land_on(self):
+        spec = dict(self.SESSION, entries=[{"id": "L3", "title": "One"}],
+                    links=[{"label": "Repos", "status": "answered", "url": "#questions"}])
+        page = self.tmp / "p.html"
+        page.write_text(self.page_text(spec))
+        errs = review_page.check(page)
+        self.assertTrue(any("link to #questions" in e for e in errs), errs)
+
     def test_session_shows_only_sections_with_content(self):
         spec = dict(self.SESSION, questions=[], qa=[], links=[], decided=[],
                     entries=[{"id": "M1", "title": "One"}])

@@ -113,6 +113,7 @@ Proofs is a small, tested codebase, not just a folder of prompts.
 
 **Repo checks.**
 - `bin/check-skills` holds every skill to the same rules: a description that says when to use it, a version and a changelog.
+- `bin/bump-version` bumps the plugin version whenever a commit changes what ships (skills, shared code, references, hooks), so `claude plugin update` sees every release. `bin/install-hooks` runs it, with the other checks, on every commit and merge.
 - `bin/privacy-scan` blocks private names and details from ever reaching a public commit, since the examples come from real projects.
 
 ## Works with Superpowers

@@ -1,5 +1,7 @@
 #!/bin/sh
-# Install this repo's own pre-commit hook: privacy scan on staged files, then skill checks.
+# Install this repo's own pre-commit hook: privacy scan on staged files, skill checks, then the
+# plugin version bump (bin/bump-version). The same hook runs as pre-merge-commit, so merging
+# origin/main into a branch re-bumps a version another merge already took.
 # Refuses to overwrite a different existing pre-commit hook unless --force is passed.
 set -e
 root=$(git rev-parse --show-toplevel)
@@ -12,12 +14,19 @@ cat > "$new" <<'HOOK'
 root=$(git rev-parse --show-toplevel)
 python3 "$root/bin/privacy-scan" --staged || exit 1
 python3 "$root/bin/check-skills" || exit 1
+python3 "$root/bin/bump-version" || exit 1
 HOOK
 if [ -e "$hooks/pre-commit" ] && ! cmp -s "$new" "$hooks/pre-commit" && [ "$1" != "--force" ]; then
   rm -f "$new"
   echo "A different pre-commit hook already exists in $hooks. Re-run with --force to replace it." >&2
   exit 1
 fi
+if [ -e "$hooks/pre-merge-commit" ] && ! cmp -s "$new" "$hooks/pre-merge-commit" && [ "$1" != "--force" ]; then
+  rm -f "$new"
+  echo "A different pre-merge-commit hook already exists in $hooks. Re-run with --force to replace it." >&2
+  exit 1
+fi
+cp "$new" "$hooks/pre-merge-commit"
 mv "$new" "$hooks/pre-commit"
-chmod +x "$hooks/pre-commit"
-echo "pre-commit hook installed"
+chmod +x "$hooks/pre-commit" "$hooks/pre-merge-commit"
+echo "pre-commit and pre-merge-commit hooks installed"

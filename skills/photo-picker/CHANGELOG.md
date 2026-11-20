@@ -1,5 +1,6 @@
 # Changelog
 
+- **1.2.0** (2026-11-19): The page's header now starts with the proofs mark and a `photo-picker` pill, then the project and the session (accented), on a slim line above the heading. Fill `project.session`; a page without it still builds, with a warning.
 - **1.1.2** (2026-11-19): Delivers the page as "Where the page goes" says rather than always via artifacts. Says plainly that it needs the whole plugin. Candidate images used in several places are embedded once.
 - **1.1.1** (2026-11-18): Description trimmed to the trigger and how it differs from its nearest sibling; the detail it used to carry is in the body. No change in behavior.
 - **1.1.0** (2026-11-18): The gallery is now built by the shared, tested builder (`shared/review_page`), with images embedded from `assets` and a smoke test that fails on any image that did not load. Same page and export for the reviewer.

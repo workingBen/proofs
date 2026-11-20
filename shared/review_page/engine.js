@@ -90,7 +90,7 @@
     log: function (sec, ss) {
       var read = ss.read || {}, ans = ss.ans || {}, notes = ss.notes || {}, lines = [];
       sec.items.forEach(function (e) {
-        lines.push(e.id + "  [" + (read[e.id] ? "read" : "unread") + "]  " + e.title);
+        lines.push(e.id + "  [" + (read[e.id] ? "read" : "unread") + "]  " + (e.when ? e.when + "  " : "") + e.title);
         e.groups.forEach(function (q) {
           lines.push("      answer" + (e.groups.length > 1 ? " (" + q + ")" : "") + ": " + (ans[e.id + "::" + q] || "(unanswered)"));
         });

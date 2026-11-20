@@ -1,6 +1,6 @@
 ---
 name: todos
-version: 1.1.5
+version: 1.2.0
 description: Use when the user wants to see and work their open to-do list ("show my todos", "what's still open"), tick items off and archive the done ones with evidence, or adopt the convention in a repo whose TODO.md has grown into a decision log. Differs from review-cycle; it closes existing items, not a stream of new requests.
 ---
 
@@ -73,7 +73,9 @@ renaming an item clears its tick and note, because a rewritten title is usually 
 rewritten item. The first page built after a rename starts blank for that item.
 
 `todos_page.py` takes `TODO.md`, the output path, a project name and a repo slug as
-positional arguments, in that order, all optional. With none, it reads the project
+positional arguments, in that order, all optional, plus `--session NAME` anywhere: always
+pass it, the session name taken the way the `working-log` skill does, since the bar shows
+the proofs mark, a `todos` pill, the project and the session. With none, it reads the project
 name from the bold name under "About This App" in `CLAUDE.md` (falling back to the
 repository name) and the repo slug from `git remote get-url origin`, and refuses to
 guess if it can find neither. If the status bar reads `18 open · 3 unparsed`

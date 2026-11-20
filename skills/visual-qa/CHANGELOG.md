@@ -1,5 +1,6 @@
 # Changelog
 
+- **1.2.0** (2026-11-19): Its review page sets `"skill": "visual-qa"`, so the header's pill names this skill rather than design-review, and fills `project.session`.
 - **1.1.5** (2026-11-19): Says plainly that it needs the whole plugin, for anyone who copies one skill folder on its own.
 - **1.1.4** (2026-11-18): Description trimmed to the trigger and how it differs from its nearest sibling; the detail it used to carry is in the body. No change in behavior.
 - **1.1.3** (2026-11-18): Moved 'Where the page goes' to a shared reference file and the changelog to CHANGELOG.md; no change in behavior.

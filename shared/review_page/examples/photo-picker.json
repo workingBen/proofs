@@ -1,6 +1,7 @@
 {
   "mode": "review",
   "title": "How-To Guides — Photo Picker",
+  "project": {"name": "Acme app", "session": "trail-guide-photos", "repo": "acme/app"},
   "decisions": "photo-picker",
   "assets": {"a": "sample.png"},
   "items": [

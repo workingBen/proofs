@@ -77,6 +77,8 @@ ins.rp-ins, .rp-panes ins { background:color-mix(in srgb, var(--rp-accept) 18%, 
 .rp-variant[aria-pressed="true"] .rp-vcheck { border-color:var(--rp-accent); background:radial-gradient(var(--rp-accent) 45%, transparent 50%); }
 .rp-vbody { overflow-x:auto; }
 .rp-vbody img { max-width:100%; height:auto; display:block; }
+/* the builder wraps a WebP screenshot and its fallback in a picture element; lay it out as the bare img */
+picture.rp-pic { display:contents; }
 .rp-vnote { font-size:15px; color:var(--rp-soft); margin-top:8px; }
 
 /* decision buttons */

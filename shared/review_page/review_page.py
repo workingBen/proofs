@@ -121,6 +121,10 @@ def data_uri(path, data=None, mime=None):
 
 # Screenshots (PNG and JPEG assets) are converted to WebP when the page is built,
 # which makes a page of screenshots several times lighter with no visible change.
+# Older Safari (before iOS 14 and macOS Big Sur) cannot decode WebP, so every
+# converted screenshot also carries a fallback (a JPEG, a shrunk PNG or the
+# original, whichever is smallest) and an <img> becomes
+# <picture><source type="image/webp" ...><img src="fallback"></picture>.
 # The spec keys image_quality / image_max_width and the env vars
 # PROOFS_IMAGE_QUALITY / PROOFS_IMAGE_MAX_WIDTH override these (env first, then
 # spec, then these). The width limit is used only when the shrunk file is smaller.
@@ -213,7 +217,54 @@ def to_webp(path, settings, tool):
     return best
 
 
+def has_alpha(path):
+    """True when a PNG may have transparent pixels (an alpha channel or a tRNS chunk)."""
+    data = path.read_bytes()
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        return False
+    return data[25] in (4, 6) or data.find(b"tRNS", 0, max(data.find(b"IDAT"), 0)) != -1
+
+
+def encode_fallback(path, quality, width, fmt):
+    """JPEG or PNG bytes from ImageMagick (resized to width when given), or None on failure."""
+    exe = shutil.which("magick")
+    if not exe:
+        return None
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp) / ("out." + fmt)
+        cmd = ([exe, str(path)] + (["-resize", "%dx" % width] if width else [])
+               + (["-quality", str(quality)] if fmt == "jpg" else []) + ["-strip", str(out)])
+        r = subprocess.run(cmd, capture_output=True)
+        if r.returncode != 0 or not out.is_file():
+            return None
+        return out.read_bytes()
+
+
+def to_fallback(path, settings):
+    """(bytes, mime) of the smallest image every browser can show, for older Safari.
+
+    Tries a JPEG at the quality setting (never for a PNG with transparency, which a
+    JPEG would turn black), and for a screenshot wider than max_width the shrunk
+    JPEG and shrunk PNG too. The original wins when it is smallest, and is all
+    there is without ImageMagick."""
+    q, mw = settings["quality"], settings["max_width"]
+    ext = path.suffix.lower()
+    best = (path.read_bytes(), "image/png" if ext == ".png" else "image/jpeg")
+    width = image_width(path)
+    widths = [None] + ([mw] if mw and width and width > mw else [])
+    fmts = (["jpg"] if ext != ".png" or not has_alpha(path) else []) + (["png"] if ext == ".png" else [])
+    for w in widths:
+        for fmt in fmts:
+            if fmt == "png" and w is None:
+                continue  # the original PNG is already a candidate
+            data = encode_fallback(path, q, w, fmt)
+            if data is not None and len(data) < len(best[0]):
+                best = (data, "image/jpeg" if fmt == "jpg" else "image/png")
+    return best
+
+
 def embed_asset(path, settings, tool, report):
+    """{"img": data URI every browser shows, "webp": WebP data URI or None}."""
     size = path.stat().st_size
     if path.suffix.lower() in CONVERTIBLE:
         if tool is None:
@@ -221,11 +272,13 @@ def embed_asset(path, settings, tool, report):
         else:
             data = to_webp(path, settings, tool)
             if data is not None:
+                fb, mime = to_fallback(path, settings)
                 report["converted"] += 1
                 report["before"] += size
                 report["after"] += len(data)
-                return data_uri(path, data, "image/webp")
-    return data_uri(path)
+                report["fallback"] += len(fb)
+                return {"img": data_uri(path, fb, mime), "webp": data_uri(path, data, "image/webp")}
+    return {"img": data_uri(path), "webp": None}
 
 
 def load_spec(spec_path):
@@ -241,7 +294,7 @@ def load_spec(spec_path):
     assets = {}
     settings = image_settings(spec)
     tool = image_tool()
-    report = {"converted": 0, "before": 0, "after": 0, "missing_tool": False, "settings": settings}
+    report = {"converted": 0, "before": 0, "after": 0, "fallback": 0, "missing_tool": False, "settings": settings}
     for name, rel in (spec.get("assets") or {}).items():
         p = (path.parent / rel).resolve()
         if not p.is_file():
@@ -734,45 +787,75 @@ def page(spec):
 
 
 def place_assets(text, assets):
-    """Put each asset's bytes in the page exactly once. A font in @font-face is
-    inlined there; other CSS uses (url({{asset:x}}) or var(--asset-x)) read the :root variable; a single HTML use with no CSS use
-    gets the data URI inline; several HTML uses point at the variable and a small
-    script copies it into each attribute when the page loads."""
-    root, fill = [], False
+    """Put each asset's bytes in the page once (a fallback for older browsers
+    aside). A font in @font-face is inlined there. CSS uses (url({{asset:x}}) or
+    var(--asset-x)) read a :root variable holding the format every browser shows.
+    An <img src="{{asset:x}}"> of a WebP-converted screenshot becomes a <picture>
+    whose <source> offers the WebP and whose <img> keeps the fallback, so older
+    Safari still shows it. A single HTML use is inlined and works without
+    JavaScript; several uses carry data-rp-asset="ATTR NAME FORMAT" and a small
+    script copies the data URI in from one JSON map (#rp-assets) when the page loads."""
+    root, shared = [], {}
     # @font-face cannot read CSS variables, so a font's data URI goes inline there.
     text = re.sub(r"@font-face\s*\{(?:[^{}]|\{\{asset:[\w-]+\}\})*\}",
                   lambda m: re.sub(r"\{\{asset:([\w-]+)\}\}",
-                                   lambda a: assets.get(a.group(1), a.group(0)), m.group(0)), text)
+                                   lambda a: assets[a.group(1)]["img"] if a.group(1) in assets else a.group(0),
+                                   m.group(0)), text)
+    uses = {}
     for k, v in assets.items():
         ph = "{{asset:%s}}" % k
         for q in ("", "'", '"'):
             text = text.replace("url(%s%s%s)" % (q, ph, q), "var(--asset-%s)" % k)
-        css_use = ("var(--asset-%s)" % k) in text
-        html_uses = text.count(ph)
-        if html_uses == 1 and not css_use:
-            text = text.replace(ph, v)
-            continue
-        if html_uses:
-            text, n = re.subn(r'([\w-]+)=(\\?)"%s\\?"' % re.escape(ph),
-                              lambda m: '%s=%s"%s%s" data-rp-asset=%s"%s %s%s"' % (
-                                  m.group(1), m.group(2), BLANK_GIF, m.group(2), m.group(2), m.group(1), k, m.group(2)),
-                              text)
-            fill = fill or n > 0
-            text = text.replace(ph, v)  # anything left is not an attribute: inline it
-        if css_use or html_uses:
-            root.append("--asset-%s:url(%s);" % (k, v))
+        if ("var(--asset-%s)" % k) in text:
+            root.append("--asset-%s:url(%s);" % (k, v["img"]))
+        uses[k] = text.count(ph)
+
+    def fill(k, attr, fmt):
+        """Attribute text for one use: the data URI inline, or a placeholder the script fills."""
+        if uses[k] == 1:
+            return '%s="%s"' % (attr, assets[k][fmt])
+        shared.setdefault(k, {})[fmt] = assets[k][fmt]
+        # A <source> with no srcset is skipped, so the <img> shows until the script runs.
+        blank = 'src="%s" ' % BLANK_GIF if attr == "src" else ""
+        return '%sdata-rp-asset="%s %s %s"' % (blank, attr, k, fmt)
+
+    def picture(m):
+        tag = m.group(0)
+        src = re.search(r'\ssrc="\{\{asset:([\w-]+)\}\}"', tag)
+        if not src or src.group(1) not in assets or not assets[src.group(1)]["webp"]:
+            return tag
+        k = src.group(1)
+        img = tag[:src.start()] + " " + fill(k, "src", "img") + tag[src.end():]
+        source = '<source type="image/webp" %s>' % fill(k, "srcset", "webp")
+        return '<picture class="rp-pic">%s%s</picture>' % (source, img)
+
+    text = re.sub(r"<img\b[^<>]*>", picture, text, flags=re.I)
+    for k, v in assets.items():
+        ph = "{{asset:%s}}" % k
+        if uses[k] > 1:
+            def attr(m, k=k):
+                shared.setdefault(k, {})["img"] = assets[k]["img"]
+                e = m.group(2)
+                return '%s=%s"%s%s" data-rp-asset=%s"%s %s img%s"' % (m.group(1), e, BLANK_GIF, e, e, m.group(1), k, e)
+            text = re.sub(r'([\w-]+)=(\\?)"%s\\?"' % re.escape(ph), attr, text)
+        text = text.replace(ph, v["img"])  # anything left is not an attribute: inline it
     text = text.replace("/*rp-assets*/", "".join(root), 1)
-    if fill:
-        text = text.replace("</body></html>", "<script>\n%s\n</script>\n</body></html>" % ASSET_FILL, 1)
+    if shared:
+        text = text.replace("</body></html>", '<script type="application/json" id="rp-assets">%s</script>\n'
+                            "<script>\n%s\n</script>\n</body></html>" % (json.dumps(shared), ASSET_FILL), 1)
     return text
 
 
-ASSET_FILL = """document.querySelectorAll("[data-rp-asset]").forEach(function (el) {
-  var p = el.getAttribute("data-rp-asset").split(" ");
-  var v = getComputedStyle(document.documentElement).getPropertyValue("--asset-" + p[1]).trim();
-  var m = v.match(/^url\\(["']?([\\s\\S]*?)["']?\\)$/);
-  if (m) el.setAttribute(p[0], m[1]);
-});"""
+# Old Safari is the reason this exists, so it is plain ES5 with no NodeList.forEach
+# and no CSS-variable read back (getComputedStyle returned nothing usable there).
+ASSET_FILL = """(function () {
+  var map = JSON.parse(document.getElementById("rp-assets").textContent);
+  var els = document.querySelectorAll("[data-rp-asset]");
+  for (var i = 0; i < els.length; i++) {
+    var p = els[i].getAttribute("data-rp-asset").split(" "), a = map[p[1]];
+    if (a && a[p[2]]) els[i].setAttribute(p[0], a[p[2]]);
+  }
+})();"""
 
 
 def size_warning(text, spec):
@@ -780,8 +863,9 @@ def size_warning(text, spec):
     total = len(text.encode())
     if total <= WARN_PAGE_BYTES:
         return None
-    big = sorted(spec["_assets"].items(), key=lambda kv: -len(kv[1]))[:3]
-    names = ", ".join("%s (%d KB)" % (k, len(v) // 1024) for k, v in big)
+    size = lambda v: len(v) if isinstance(v, str) else sum(len(x or "") for x in v.values())
+    big = sorted(spec["_assets"].items(), key=lambda kv: -size(kv[1]))[:3]
+    names = ", ".join("%s (%d KB)" % (k, size(v) // 1024) for k, v in big)
     return ("warning: the page is %.1f MB, over %d MB. Largest assets: %s. Lower image_quality "
             "or set image_max_width, or split the review." % (total / 1048576, WARN_PAGE_BYTES // 1048576, names or "none"))
 
@@ -789,10 +873,11 @@ def size_warning(text, spec):
 def image_line(spec):
     r = spec.get("_image_report") or {}
     if r.get("converted"):
-        return "images: %d converted to WebP (smaller of lossy at quality %d and lossless%s) (%d KB -> %d KB)" % (
+        return ("images: %d converted to WebP (smaller of lossy at quality %d and lossless%s) (%d KB -> %d KB), "
+                "plus a %d KB fallback for older Safari, which cannot show WebP") % (
             r["converted"], r["settings"]["quality"],
             ", max width %d" % r["settings"]["max_width"] if r["settings"]["max_width"] else "",
-            r["before"] // 1024, r["after"] // 1024)
+            r["before"] // 1024, r["after"] // 1024, r.get("fallback", 0) // 1024)
     if r.get("missing_tool"):
         return "images: no magick or cwebp found, so screenshots were embedded as they are (install ImageMagick or libwebp to shrink them)"
     return None
@@ -936,6 +1021,33 @@ def check(path):
             errs.append("page has no items in any section")
     for name in re.findall(r"\{\{asset:([\w-]+)\}\}", text):
         errs.append("unresolved asset placeholder {{asset:%s}}" % name)
+    errs.extend(image_errors(text))
+    return errs
+
+
+def image_errors(text):
+    """Images older Safari would show as a broken "?": a <picture> with no non-WebP
+    <img> fallback, or a placeholder the fill script has nothing to fill from."""
+    errs = []
+    m = re.search(r'<script type="application/json" id="rp-assets">(.*?)</script>', text, re.S)
+    try:
+        shared = json.loads(m.group(1)) if m else {}
+    except ValueError as e:
+        return ["rp-assets is not valid JSON: %s" % e]
+    for i, pic in enumerate(re.findall(r"<picture\b.*?</picture>", text, re.S), 1):
+        img = re.search(r"<img\b[^<>]*>", pic)
+        src = img and re.search(r'\ssrc="([^"]*)"', img.group(0))
+        if not src:
+            errs.append("picture %d has no <img src> fallback" % i)
+        elif src.group(1).startswith("data:image/webp"):
+            errs.append("picture %d falls back to WebP, which older Safari cannot show" % i)
+    for tag in re.findall(r"<[a-z]+\b[^<>]*\bdata-rp-asset=\"[^\"]*\"[^<>]*>", text):
+        attr, name, fmt = (re.search(r'data-rp-asset="([^"]*)"', tag).group(1).split(" ") + ["", "", ""])[:3]
+        if not (shared.get(name) or {}).get(fmt):
+            errs.append("shared image %r (%s) has nothing in rp-assets to fill it from" % (name, fmt or "?"))
+    for tag in re.findall(r"<img\b[^<>]*>", text):
+        if BLANK_GIF in tag and "data-rp-asset=" not in tag:
+            errs.append("an <img> is left with the blank placeholder and nothing fills it")
     return errs
 
 
@@ -949,7 +1061,14 @@ def warnings(path):
         spec = json.loads(m.group(1)) if m else {}
     except ValueError:
         return []
-    return [NO_SESSION] if spec.get("mode") in ("review", "questions") and not spec.get("session") else []
+    out = [NO_SESSION] if spec.get("mode") in ("review", "questions") and not spec.get("session") else []
+    text = Path(path).read_text()
+    bare = [t for t in re.findall(r"<img\b[^<>]*>", re.sub(r"<picture\b.*?</picture>", "", text, flags=re.S))
+            if 'src="data:image/webp' in t]
+    if bare:
+        out.append("%d <img> show WebP with no fallback, so older Safari shows a broken image "
+                   "(use a PNG or JPEG asset and the builder adds one)" % len(bare))
+    return out
 
 
 def find_playwright(arg):

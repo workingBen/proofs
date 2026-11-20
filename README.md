@@ -32,9 +32,9 @@ Screenshots shrink automatically when ImageMagick or libwebp (`cwebp`) is instal
 
 **[Browse the site](https://workingben.github.io/proofs/)** for all 12 skills and 230+ features, each with a short write-up.
 
-<p align="center"><a href="assets/clips/proofs-30s.mp4"><img src="assets/clips/proofs-30s.gif" width="100%" alt="The 30-second Proofs tour: real pages wipe from before to after under short captions, from Done? Prove it. to Tap. Paste. Done., ending on the two install commands."></a></p>
+<p align="center"><a href="assets/clips/proofs-tour.mp4"><img src="assets/clips/proofs-tour.gif" width="100%" alt="The 30-second Proofs tour: a design review shows the live page beside two coded options, each with a Pick this button; a before and after wipe; a page checked on a phone with its fixes; Tap. Paste. Done.; ending on the two install commands."></a></p>
 
-<p align="center"><sub>The 30-second tour. Every picture is a real page, before and after. <a href="assets/clips/proofs-30s.mp4">Full-size MP4</a> (1920x1080, silent).</sub></p>
+<p align="center"><sub>The 30-second tour. Every picture is a real page, before and after. <a href="assets/clips/proofs-tour.mp4">Full-size MP4</a> (1920x1080, silent).</sub></p>
 
 <p align="center"><a href="https://youtube.com/shorts/LGoRROsziv8">Watch the one-minute tour on YouTube</a></p>
 

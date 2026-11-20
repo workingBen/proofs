@@ -398,43 +398,6 @@
     }
    ],
    "gif": "assets/examples/d-movie-page/wipe.gif"
-  },
-  {
-   "id": "c-hero-photos-3step",
-   "title": "Hero photo, picked",
-   "skill": "photo-picker",
-   "caption": "A hazy hero, a photo picker, then a lupine hero.",
-   "use": "hero",
-   "view": "desktop",
-   "w": 1200,
-   "h": 771,
-   "frames": [
-    {
-     "name": "before",
-     "label": "Before · old hero",
-     "widths": [
-      480,
-      960
-     ]
-    },
-    {
-     "name": "picker",
-     "label": "Photo picker",
-     "widths": [
-      480,
-      960
-     ]
-    },
-    {
-     "name": "after",
-     "label": "After · rebuilt hero",
-     "widths": [
-      480,
-      960
-     ]
-    }
-   ],
-   "gif": "assets/examples/c-hero-photos-3step/wipe.gif"
   }
  ]
 }

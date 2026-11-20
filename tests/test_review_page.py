@@ -367,6 +367,20 @@ class BuildAndCheck(unittest.TestCase):
         self.assertLess(log.index("rp-read-head"), log.index('data-entry="M1"'))
         self.assertIn('<span class="rp-tick-l">Read this</span>', log)
 
+    def test_in_page_links_stay_on_the_page_and_say_where_they_go(self):
+        spec = dict(self.SESSION, questions=[{"qid": "q1", "ask": "Which?", "options": [{"label": "A"}]}],
+                    entries=[{"id": "L3", "title": "One"}],
+                    links=[{"label": "Repos", "status": "1 question", "url": "#questions"},
+                           {"label": "Brief", "url": "#L3"},
+                           {"label": "Review", "url": "https://x.test/r"}])
+        text = self.page_text(spec)
+        self.assertIn('<section class="rp-section rp-kind-questions" data-section="s1" id="questions">', text)
+        self.assertIn('id="L3" data-entry="L3"', text)
+        self.assertIn('<a href="#questions">Open questions above</a>', text)
+        self.assertIn('<a href="#L3">See it in the log below</a>', text)
+        self.assertNotIn('href="#questions" target', text)
+        self.assertIn('href="https://x.test/r" target="_blank" rel="noopener">Open it</a>', text)
+
     def test_session_shows_only_sections_with_content(self):
         spec = dict(self.SESSION, questions=[], qa=[], links=[], decided=[],
                     entries=[{"id": "M1", "title": "One"}])

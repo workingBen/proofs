@@ -352,7 +352,7 @@ def sections_of(spec):
 
 class Ctx:
     def __init__(self, spec, secs):
-        self.spec, self.n, self.seen = spec, 0, set()
+        self.spec, self.n, self.seen, self.anchors = spec, 0, set(), set()
         self.cats = []
         for sec in secs:
             if sec["kind"] == "review":
@@ -463,7 +463,7 @@ def render_log(sec, ctx):
         ctx.claim(eid, "entry id")
         status = e.get("status", "Background")
         when = short_when(e["when"]) if e.get("when") else None
-        out.append('<article class="rp-entry" data-entry="%s">' % esc(eid))
+        out.append('<article class="rp-entry" id="%s" data-entry="%s">' % (esc(eid), esc(eid)))
         out.append('<header class="rp-entry-head"><span class="rp-num">%s</span><h3>%s</h3>%s'
                    '<span class="rp-status rp-status-%s">%s</span></header>'
                    % (esc(eid), esc(e.get("title", "")),
@@ -496,12 +496,23 @@ def render_log(sec, ctx):
     return out, {"items": items}
 
 
+IN_PAGE_TEXT = {"questions": "Open questions above", "checks": "Open checks above", "log": "See the log below"}
+SECTION_ANCHOR = {"questions": "questions", "qa": "checks", "log": "log", "decided": "decided"}
+
+
 def render_links(sec, ctx):
     out = ['<ul class="rp-links">']
     for ln in sec["items"]:
         if not ln.get("label") or not ln.get("url"):
             raise SpecError("every link needs a label and a url")
         status = ': <span class="rp-link-status">%s</span>' % esc(ln["status"]) if ln.get("status") else ""
+        # A link into this same page (#questions, #checks, #log, #L12) stays on the page and
+        # says where it goes; "Open it" would just reload the page the reader is already on.
+        if ln["url"].startswith("#"):
+            target = ln["url"][1:]
+            text = ln.get("link_text") or IN_PAGE_TEXT.get(target, "See it in the log below")
+            out.append('<li><b>%s</b>%s <a href="%s">%s</a></li>' % (esc(ln["label"]), status, esc(ln["url"]), esc(text)))
+            continue
         if ln.get("state") == "in-progress":
             out.append('<li class="rp-link-wip"><b>%s</b>%s <span class="rp-wip">In progress</span>'
                        ' <a class="rp-link-quiet" href="%s" target="_blank" rel="noopener">%s</a></li>'
@@ -561,7 +572,11 @@ def render_sections(spec):
         if not sec["items"] and (mode == "session" or kind in READ_ONLY_KINDS
                                  or (kind in ("questions", "qa") and not sec.get("title"))):
             continue  # a section shows only when it has content
-        h = ['<section class="rp-section rp-kind-%s" data-section="%s">' % (kind, esc(sec["id"]))]
+        anchor = SECTION_ANCHOR.get(kind)
+        anchor = ' id="%s"' % anchor if anchor and anchor not in ctx.anchors else ""
+        if anchor:
+            ctx.anchors.add(SECTION_ANCHOR[kind])
+        h = ['<section class="rp-section rp-kind-%s" data-section="%s"%s>' % (kind, esc(sec["id"]), anchor)]
         title = sec.get("title") or DEFAULT_TITLE.get(kind)
         if title:
             count = ""

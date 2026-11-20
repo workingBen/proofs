@@ -908,6 +908,12 @@ def check(path):
     dup = sorted({i for i in ids if ids.count(i) > 1})
     if dup:
         errs.append("duplicate element ids: %s" % ", ".join(dup))
+    # An in-page link must land somewhere: "Open questions above" with no questions
+    # left on the page sends the reader to nothing (a stale link after they answered).
+    for target in re.findall(r'<li[^>]*>.*?<a href="#([^"]+)"', text):
+        if target not in ids:
+            errs.append("link to #%s, but nothing on the page has that id (answered already? mark the link in-progress)"
+                        % target)
     if spec:
         mode, secs = spec.get("mode"), spec.get("sections") or []
         for sec in secs:

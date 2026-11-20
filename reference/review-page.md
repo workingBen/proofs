@@ -54,7 +54,7 @@ Common fields:
 | `css` | your CSS, appended after the chrome: the target site's tokens, fonts, mockup styles. Fonts come from `assets`: `@font-face{src:url({{asset:name}}) format('woff2')}`; never paste base64 into the spec |
 | `vars` | CSS variables set on `:root`, to retune the chrome's light values. Dark values go in `css` under `@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {…} }` and `:root[data-theme="dark"]`; give every color you change a dark pair, and a filled box its own text color (as `--rp-amber-ink` does), or it goes unreadable in dark mode |
 | `head_html` | extra `<head>` markup |
-| `assets` | `{"name": "path/to/file.png"}`: the builder reads the files, so their bytes never pass through your context. Use one as `{{asset:name}}` (in an attribute, or in `css` as `url({{asset:name}})`) or as `var(--asset-name)`; each is embedded **once** however often it is used. PNG and JPEG become WebP when `magick` or `cwebp` is installed: the smaller of lossy (at `image_quality`) and lossless, or the original if that is smaller still (without either tool they are kept, and the build says so) |
+| `assets` | `{"name": "path/to/file.png"}`: the builder reads the files, so their bytes never pass through your context. Use one as `{{asset:name}}` (in an attribute, or in `css` as `url({{asset:name}})`) or as `var(--asset-name)`; each is embedded **once** however often it is used. PNG and JPEG become WebP when `magick` or `cwebp` is installed: the smaller of lossy (at `image_quality`) and lossless, or the original if that is smaller still (without either tool they are kept, and the build says so). Older Safari (before iOS 14) cannot show WebP, so a converted image also carries a **fallback**: the smallest of a JPEG at `image_quality`, a PNG shrunk to `image_max_width`, or the original (a PNG with transparency never becomes a JPEG; without `magick` the fallback is the original). An `<img src="{{asset:name}}">` becomes `<picture class="rp-pic"><source type="image/webp" srcset="…"><img src="fallback" …></picture>`, keeping every attribute on the `<img>` (`picture.rp-pic` is `display:contents`, but style the `<img>` by class, not with a `>` child selector). CSS uses (`url(…)`, `var(--asset-name)`) get the fallback, since CSS has no per-format fallback that older Safari reads. One HTML use is inlined and needs no JavaScript; repeated uses are filled in at load from one JSON map (`#rp-assets`) |
 | `image_quality`, `image_max_width` | WebP quality (1–100, default 70) and the widest a screenshot may be, in pixels (default 1600): applied only when the shrunk file is actually smaller, and never upscales. Env vars `PROOFS_IMAGE_QUALITY` and `PROOFS_IMAGE_MAX_WIDTH` win over the spec |
 | `storage_key` | the `localStorage` key, if the default is not stable enough |
 | `project` | `{name, session, repo}` for the header, on every mode; take the session name the way the `working-log` skill does. Questions pages also use `stream`, `round`, `artifact` |
@@ -194,18 +194,20 @@ option group (`answer (q):` when there are several, `(unanswered)` when empty) a
 
 The build runs `--check` itself: it extracts the page's script and runs
 `node --check`, then confirms the item cards and decision buttons match the spec,
-ids are unique, every `{{asset:…}}` resolved, a log or session page's title leads
+ids are unique, every `{{asset:…}}` resolved, every `<picture>` ends in a PNG or JPEG `<img>`
+and every shared image has something to fill it from, a log or session page's title leads
 with the session, open questions are the first thing in the page's main column, and a
 session page's sections are in order. It exits 1 and says why when anything fails.
 
-The build also prints how many screenshots became WebP and how much smaller they got, and **warns (without failing) when the page passes 3 MB**, naming the largest assets. Large pages load slowly on a phone and can hit a viewer's size limit; lower `image_quality`, set `image_max_width`, or split the review.
+The build also prints how many screenshots became WebP and how much smaller they got, and how big their fallbacks are, and **warns (without failing) when the page passes 3 MB**, naming the largest assets. Large pages load slowly on a phone and can hit a viewer's size limit; lower `image_quality`, set `image_max_width`, or split the review.
 
 `--smoke` needs Playwright (`--playwright DIR`, `PROOFS_PLAYWRIGHT`, or one
 resolvable from the current folder). It clicks a variant and every decision on the
 first item (or answers the first question and check, and ticks the first entry),
 types a comment, ticks read, confirms open questions sit directly under the sticky
 bar, copies, reloads to prove persistence,
-forces a clipboard failure to prove the fallback, checks every image loaded (shared images included), and
+forces a clipboard failure to prove the fallback, checks every image loaded (shared images included, none left
+blank) and every `<picture>` has a PNG or JPEG `<img>` fallback, and
 checks for sideways scroll at 1280 and 390. Without Playwright, open the page in a
 browser and do those clicks yourself.
 

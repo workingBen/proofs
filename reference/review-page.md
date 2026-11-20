@@ -72,7 +72,7 @@ contributes its own block to the export, in page order:
 | `questions` | questions with radio options | `Q qid (raised rN) \| ask` blocks |
 | `qa` | PASS / FAIL / COULDN'T TEST checks | `--- QA results ---` then `QA qaid \| check` blocks |
 | `log` | log entries | `M6  [read]  Nov 19 - 3:54PM  title` lines (the time only when the entry has `when`) with answers and notes |
-| `links` | `{label, status, url, link_text, state}`: other pages waiting on the reader, one line each. `state` is `open` (default: the status and an **Open it** link) or `in-progress` (the reader has answered and you are working: a muted *In progress* pill and a small **View page** link, listed after the open ones; when every link is in progress the heading becomes "Pages Claude is working on") | none |
+| `links` | `{label, status, url, link_text, state}`: other pages waiting on the reader, one line each. `state` is `open` (default: the status and an **Open it** link) or `in-progress` (the reader has answered and you are working: a muted *In progress* pill and a small **View page** link, listed after the open ones; when every link is in progress the heading becomes "Pages Claude is working on"). A `url` starting with `#` points into this page (`#questions`, `#checks`, `#log`, or a log entry id such as `#L12`): it opens in place and reads "Open questions above", "Open checks above" or "See it in the log below" | none |
 | `decided` | `{id, title, decision, when}`: settled items, folded (`"open": true` unfolds) | none |
 
 Every section takes `id` (default `s1`, `s2`, …), `kind` (default: the mode's own

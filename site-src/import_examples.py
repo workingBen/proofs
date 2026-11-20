@@ -43,7 +43,7 @@ ORDER = [
     "c-retreat-look", "d-booking-dates", "x-copy-edit", "a-report-stacks",
     "e-card-back", "b-supplement-chart", "a-organ-table-to-gauges", "b-bbi-plan",
     "a-biowell-table-to-chart", "b-nine-devices", "d-book-cover-wall", "b-bed-map-report",
-    "d-movie-page", "c-hero-photos-3step",
+    "d-movie-page",
     "d-collection-slideshow",
 ]
 # Left out of the site even when the manifest lists them. To bring one back, delete it
@@ -54,6 +54,7 @@ SKIP = {
     "e-flyer-photo": "dropped",
     "a-standards-scales": "dropped",
     "a-improvement-scale": "dropped",
+    "c-hero-photos-3step": "dropped: the picker step showed a different UI before and after",
 }
 IMG_EXT = (".jpg", ".jpeg", ".png", ".webp")
 DEFAULT_LABELS = {"before": "Before", "picker": "The picker", "after": "After"}

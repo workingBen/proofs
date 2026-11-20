@@ -25,6 +25,7 @@ CSS = r"""  :root {
     --ground:#faf8f4; --surface:#fff; --surface-2:#f2efe8;
     --border:#e3ded1; --border-strong:#cdc6b4;
     --ink:#1f1e1a; --ink-muted:#6b665b; --ink-faint:#948d7e;
+    --pf-brand:#f08a54; --pf-session:#c4a7ff;
     --accent:#a35c06; --accent-soft:#fdf3e2;
     --good:#0f6f66; --good-soft:#e5f4f1;
     --warn:#a8301f; --warn-soft:#fdece9;
@@ -36,6 +37,7 @@ CSS = r"""  :root {
     --ground:#1a1916; --surface:#22211d; --surface-2:#2a2823;
     --border:#35332c; --border-strong:#4a4740;
     --ink:#ece9e1; --ink-muted:#a09a8c; --ink-faint:#7d776b;
+    --pf-brand:#c2410c; --pf-session:#6d28d9;
     --accent:#f0a422; --accent-soft:#33280f;
     --good:#4ac4b1; --good-soft:#14302c;
     --warn:#f0907e; --warn-soft:#3a201b;
@@ -44,6 +46,7 @@ CSS = r"""  :root {
     --ground:#1a1916; --surface:#22211d; --surface-2:#2a2823;
     --border:#35332c; --border-strong:#4a4740;
     --ink:#ece9e1; --ink-muted:#a09a8c; --ink-faint:#7d776b;
+    --pf-brand:#c2410c; --pf-session:#6d28d9;
     --accent:#f0a422; --accent-soft:#33280f;
     --good:#4ac4b1; --good-soft:#14302c;
     --warn:#f0907e; --warn-soft:#3a201b;
@@ -52,6 +55,7 @@ CSS = r"""  :root {
     --ground:#faf8f4; --surface:#fff; --surface-2:#f2efe8;
     --border:#e3ded1; --border-strong:#cdc6b4;
     --ink:#1f1e1a; --ink-muted:#6b665b; --ink-faint:#948d7e;
+    --pf-brand:#f08a54; --pf-session:#c4a7ff;
     --accent:#a35c06; --accent-soft:#fdf3e2;
     --good:#0f6f66; --good-soft:#e5f4f1;
     --warn:#a8301f; --warn-soft:#fdece9;
@@ -65,7 +69,16 @@ CSS = r"""  :root {
   .projbar-inner{max-width:50rem;margin:0 auto;padding:.5rem 1.25rem;display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
   .projbar .brand{font-family:var(--mono);font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;font-weight:700;color:var(--accent)}
   .projbar .repo{font-family:var(--mono);font-size:.72rem;letter-spacing:.06em;color:var(--ground);opacity:.72}
-  .projbar .kind{font-family:var(--mono);font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;margin-left:auto;color:var(--ground);opacity:.6}
+  /* the proofs mark and skill pill, as on every proofs page; the bar is drawn in
+     --ink, so its colors invert with the theme (--pf-brand, --pf-session) */
+  .pf{display:inline-flex;align-items:center;gap:10px;line-height:1;white-space:nowrap;margin:-4px .3rem -4px 0}
+  .pf-wm{font:600 19px/1 Georgia,Charter,"Iowan Old Style",serif;letter-spacing:-.01em;color:var(--ground)}
+  .pf-wm i{color:var(--pf-brand);font-style:italic}
+  .pf-sk{font:600 12.5px/1.4 var(--mono);color:var(--pf-brand);border:1px solid color-mix(in srgb,var(--pf-brand) 55%,transparent);border-radius:999px;padding:1px 9px}
+  .pf-sep{width:1px;height:18px;background:color-mix(in srgb,var(--ground) 25%,transparent)}
+  .pf-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+  .projbar .session{font-family:var(--mono);font-size:.72rem;letter-spacing:.06em;font-weight:700;color:var(--pf-session)}
+  @media (max-width:600px){.pf-wm,.pf-sep{display:none}}
   .statusbar{position:sticky;top:2.05rem;z-index:20;background:color-mix(in srgb,var(--ground) 94%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);margin-bottom:2.5rem}
   .statusbar-inner{max-width:50rem;margin:0 auto;padding:.7rem 1.25rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
   .meter-label{font-family:var(--mono);font-size:.72rem;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
@@ -438,9 +451,9 @@ PAGE = """<title>Todos &middot; %(project)s</title>
 
 <div class="projbar">
   <div class="projbar-inner">
-    <span class="brand">%(project)s</span>
+    <span class="pf"><span class="pf-wm" aria-hidden="true">pro<i>o</i>fs</span><span class="pf-sk" aria-hidden="true">todos</span><span class="pf-sr">Proofs, todos</span><span class="pf-sep" aria-hidden="true"></span></span>
+    <span class="brand">%(project)s</span>%(session)s
     <span class="repo">%(repo)s</span>
-    <span class="kind">Todos</span>
   </div>
 </div>
 
@@ -486,7 +499,7 @@ PAGE = """<title>Todos &middot; %(project)s</title>
 """
 
 
-def render(data, project, repo):
+def render(data, project, repo, session=None):
     items, unparsed = data["items"], data["unparsed"]
     count = "%d open" % len(items)
     if unparsed:
@@ -503,15 +516,16 @@ def render(data, project, repo):
             % (esc(group), len(rows), "".join(rows)))
     return PAGE % {
         "css": CSS, "script": SCRIPT, "project": esc(project), "repo": esc(repo),
+        "session": '\n    <span class="session">%s</span>' % esc(session) if session else "",
         "count": count, "stepinit": "0 / %d done" % len(items), "banner": _banner(unparsed),
         "groups": "".join(groups_html) or "<p>Nothing open.</p>",
     }
 
 
-def build(todo_path, out_path, project, repo):
+def build(todo_path, out_path, project, repo, session=None):
     with open(todo_path, encoding="utf-8") as handle:
         data = parse(handle.read())
-    html = render(data, project, repo)
+    html = render(data, project, repo, session)
     folder = os.path.dirname(out_path)
     if folder:
         os.makedirs(folder, exist_ok=True)
@@ -641,11 +655,25 @@ def resolve_identity(argv, cwd="."):
 DEFAULT_OUT = ".proofs/pages/todos.html"
 
 
+def take_session(argv):
+    """(argv without `--session NAME`, NAME or None): the session's name is a flag,
+    so it can be given without spelling out the positional project and repo."""
+    if "--session" not in argv:
+        return list(argv), None
+    i = argv.index("--session")
+    if i + 1 >= len(argv):
+        raise SystemExit("--session needs a name")
+    return argv[:i] + argv[i + 2:], argv[i + 1]
+
+
 def main(argv):
+    argv, session = take_session(argv)
+    if not session:
+        print("warning: no --session: the reader can't tell which session this page belongs to", file=sys.stderr)
     todo_path = argv[1] if len(argv) > 1 else "TODO.md"
     out_path = argv[2] if len(argv) > 2 else DEFAULT_OUT
     project, repo = resolve_identity(argv)
-    build(todo_path, out_path, project, repo)
+    build(todo_path, out_path, project, repo, session)
     print(out_path)
     return 0
 

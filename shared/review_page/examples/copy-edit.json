@@ -1,6 +1,7 @@
 {
   "mode": "review",
   "title": "Pricing Page — Copy-Edit Review",
+  "project": {"name": "Acme app", "session": "pricing-copy", "repo": "acme/app"},
   "decisions": "copy-edit",
   "sections": [
     {"title": "Claims & Compliance", "items": [], "empty_html": "No compliance concerns found in this pass."},

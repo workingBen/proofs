@@ -21,7 +21,14 @@ The session's artifact is its record **from the first item, not the last**. A us
 
    **No button on a shipped card is pre-selected.** A card nobody has touched exports as "(no decision yet)", never as approval: a pre-selected default makes a skipped card look like a considered yes, and the page can't tell the difference. An untouched card is not a reason to revert or revise anything.
 5. **One `Copy My Decisions` export covering every card in any state**, plain text, pasted back into chat. A note on a *Reported* card is a scope change to fold in before building; a note on a *Shipped* card is a revision item on top of it.
-6. **The header carries the counts** (reported / in progress / shipped / flagged) and each card its state badge, so a glance on a phone answers "what has happened."
+6. **The docked bar starts with the proofs mark, the skill name, the project and the session**, as every proofs page does, so the user can tell this tab from a working log or another session's tracking page at a glance. Take the session name the way the `working-log` skill does. Reuse this markup and its CSS (from `../../shared/review_page/style.css`, the `.rp-brand` rules) rather than inventing a header:
+
+   ```html
+   <span class="rp-brand"><span class="rp-wm" aria-hidden="true">pro<i>o</i>fs</span><span class="rp-sk" aria-hidden="true">review-cycle</span><span class="rp-sr">Proofs, review-cycle</span><span class="rp-brand-sep" aria-hidden="true"></span></span>
+   Project · <b class="rp-session">session-name</b>
+   ```
+
+   **The header carries the counts** (reported / in progress / shipped / flagged) and each card its state badge, so a glance on a phone answers "what has happened."
 7. **It must be navigable, not just complete.** By item 20 the page is longer than anything anyone will scroll on a phone, and a card that needs the user is indistinguishable from twenty that do not. So the page carries:
    - **A docked bar**: `position: sticky; top: 0`, never `position: fixed`. A fixed bar overlays the document and **intercepts clicks on whatever sits under it**, which is how a decision button at the foot of a page becomes unclickable; a sticky bar occupies real space and cannot.
    - **Filter buttons with live counts**: Needs you / Being built / Merged / All, defaulting to **Needs you**, so the page opens on the user's work and not on the archive.

@@ -1,6 +1,6 @@
 ---
 name: questions
-version: 1.1.0
+version: 1.2.0
 description: Use when you need the user to answer or decide anything — one question or several piling up in chat, including decisions to answer later or from a phone — as real answer controls with a recommended pick and a copy-back export. On working-log's session page they still come from here, at the top. Checks: qa-checklist.
 ---
 
@@ -55,6 +55,7 @@ Read `../../reference/review-page.md` first. Do not hand-write the page's JavaSc
 - **Standalone:** `"mode": "questions"` with a `questions` list, built with
   `python3 ../../shared/review_page/review_page.py spec.json --out questions.html`.
   `../../shared/review_page/examples/questions.json` is a working example.
+  Fill `project` with `name`, `session` and `repo`, taking the session name the way the `working-log` skill does (the session's own name, else one named for the work, kept for the life of the page): the page's header shows the proofs mark, this skill's name, the project and the session, so the user can match the page to its session at a glance.
 
 The builder supplies real radio controls, a notes field on every question ("Or in
 your own words", which invites the answer you didn't offer), the sticky "N of M

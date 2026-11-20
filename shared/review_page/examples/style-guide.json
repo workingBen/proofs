@@ -1,6 +1,7 @@
 {
   "mode": "review",
   "title": "Style Guide Audit — 2026-01-15",
+  "project": {"name": "Acme app", "session": "site-consistency", "repo": "acme/app"},
   "decisions": "style-guide",
   "filters": true,
   "preview_toggle": true,

@@ -1,6 +1,6 @@
 ---
 name: design-review
-version: 1.5.0
+version: 1.6.0
 description: Use when the user wants to see and choose between rendered options for a visual or layout change before it is built, such as a redesign, a layout bug or "make this section nicer". Differs from visual-qa, which finds what is wrong, and article-copy-edit, which reviews wording; this compares coded mockups with the current page.
 ---
 
@@ -58,7 +58,7 @@ Each item is one section or component:
 
 **Needs the whole plugin.** This skill reads shared files at `../../reference/` and `../../shared/`, relative to its folder. If they are missing, the skill was copied on its own: install the whole plugin (`/plugin install proofs@proofs`) rather than recreating them.
 
-Write the content; the builder writes the page. Read `../../reference/review-page.md` first: it documents the spec and the command, `python3 ../../shared/review_page/review_page.py spec.json --out page.html`, with `"decisions": "design-review"`. Do not hand-write the page's JavaScript. Follow any design guidance your environment provides for published pages: "utilitarian but polished," not a landing page.
+Write the content; the builder writes the page. Read `../../reference/review-page.md` first: it documents the spec and the command, `python3 ../../shared/review_page/review_page.py spec.json --out page.html`, with `"decisions": "design-review"`. Do not hand-write the page's JavaScript. Follow any design guidance your environment provides for published pages: "utilitarian but polished," not a landing page. Fill `project` with `name`, `session` and `repo`, taking the session name the way the `working-log` skill does (the session's own name, else one named for the work, kept for the life of the page): the page's header shows the proofs mark, this skill's name, the project and the session, so the user can match the page to its session at a glance.
 
 - **Reuse the target page's own design system** for the mockups (the spec's `css`). Read the project's style guide for its colors and fonts, including dark mode if it has one, rather than trusting a list in this skill, and build against its tokens so the mockups render correctly in every theme the site supports. Give mockup panes their own explicit background rather than letting them inherit the review page's. If the project deliberately darkened its grays to pass contrast, don't "fix" a mockup by reaching back to stock framework grays.
 - **Fonts and images.** Review pages cannot load web fonts from a font service, so download the real fonts (the `woff2` weights you need) and list them in `assets`, then point `@font-face` at them from `css` with `src: url({{asset:name}}) format('woff2')`. **Never paste a font's base64 into the spec**: one 22 KB font is about 28,000 tokens, while an asset costs none. Put photos and the before screenshot in `assets` too. The builder embeds every asset **once**, however many mockups use it, and converts PNG and JPEG screenshots to WebP (`image_quality`, `image_max_width`; see the builder reference).

@@ -1,6 +1,6 @@
 ---
 name: working-log
-version: 1.10.0
+version: 1.10.1
 description: Use when the user cannot reliably read terminal output, prefers a durable page to chat, is stepping away, and the first time a session has something waiting on them — keeps one session page (waiting on you, checks, log, decided) at one URL. It owns that page and the log; questions and qa-checklist write its other sections.
 ---
 
@@ -202,7 +202,10 @@ what is live, so the session that made them removes them.
 outlive it, note it in the spec's `details` or a log entry: a published page (title
 and link), a local folder, a git worktree or branch, a handoff or memory note. Only
 what this session made goes on the list; another session's pages and files are never
-yours to remove, even when they look abandoned.
+yours to remove, even when they look abandoned. A page or folder you **resumed** from a
+handoff was made by earlier sessions and may still hold other topics' work (another
+project's steps in old log entries, for example): read it before listing it, and if it
+does, name those topics in the question so the user knows what a delete takes with it.
 
 **Ask once, at the end.** When nothing is waiting on the user, put one question in
 Waiting on you that shows the whole list and offers **Delete all of it** /

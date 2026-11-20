@@ -5,7 +5,7 @@
   --rp-bg:#f7f6f3; --rp-card:#ffffff; --rp-sunk:#efede8; --rp-ink:#1c1b19; --rp-soft:#5b5852; --rp-faint:#8a867e;
   --rp-rule:#dcd8d0; --rp-accent:#2563eb; --rp-accent-ink:#ffffff; --rp-brand:#c2410c; --rp-sess:#6d28d9;
   --rp-deny:#b42318; --rp-accept:#067647; --rp-comment:#1d4ed8; --rp-revise:#b54708; --rp-later:#0e7490;
-  --rp-amber-bg:#fef3c7; --rp-amber-ink:#5a3a03; --rp-rec:#067647; --rp-notrec:#b42318;
+  --rp-amber-bg:#fef3c7; --rp-amber-ink:#5a3a03; --rp-rec:#067647; --rp-notrec:#b42318; --rp-link:#1d4ed8;
   --rp-sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; --rp-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
 }
 @media (prefers-color-scheme: dark) {
@@ -13,17 +13,20 @@
     --rp-bg:#141413; --rp-card:#1d1c1a; --rp-sunk:#262522; --rp-ink:#eeece8; --rp-soft:#b5b1a9; --rp-faint:#8a867e;
     --rp-rule:#3a3834; --rp-accent:#7aa2ff; --rp-accent-ink:#0b1020; --rp-brand:#f08a54; --rp-sess:#c4a7ff;
     --rp-deny:#f97066; --rp-accept:#47cd89; --rp-comment:#84adff; --rp-revise:#fdb022; --rp-later:#22ccee;
-    --rp-amber-bg:#3d2a05; --rp-amber-ink:#fde68a; --rp-rec:#47cd89; --rp-notrec:#f97066;
+    --rp-amber-bg:#3d2a05; --rp-amber-ink:#fde68a; --rp-rec:#47cd89; --rp-notrec:#f97066; --rp-link:#8ab4ff;
   }
 }
 :root[data-theme="dark"] {
   --rp-bg:#141413; --rp-card:#1d1c1a; --rp-sunk:#262522; --rp-ink:#eeece8; --rp-soft:#b5b1a9; --rp-faint:#8a867e;
   --rp-rule:#3a3834; --rp-accent:#7aa2ff; --rp-accent-ink:#0b1020; --rp-brand:#f08a54; --rp-sess:#c4a7ff;
   --rp-deny:#f97066; --rp-accept:#47cd89; --rp-comment:#84adff; --rp-revise:#fdb022; --rp-later:#22ccee;
-  --rp-amber-bg:#3d2a05; --rp-amber-ink:#fde68a; --rp-rec:#47cd89; --rp-notrec:#f97066;
+  --rp-amber-bg:#3d2a05; --rp-amber-ink:#fde68a; --rp-rec:#47cd89; --rp-notrec:#f97066; --rp-link:#8ab4ff;
 }
 *, *::before, *::after { box-sizing: border-box; }
 body.rp { margin:0; background:var(--rp-bg); color:var(--rp-ink); font-family:var(--rp-sans); font-size:17px; line-height:1.55; }
+/* Links inside item text, notes and questions: readable in both themes. :where() keeps this at
+   zero specificity, so every class rule that colors a link (.rp-links a, buttons) still wins. */
+:where(body.rp) a { color:var(--rp-link); }
 .rp-main { max-width:1180px; margin:0 auto; padding:28px 28px 120px; }
 .rp-h1 { font-size:34px; line-height:1.15; letter-spacing:-.02em; margin:0 0 12px; }
 .rp-intro { color:var(--rp-soft); max-width:88ch; margin-bottom:20px; }
@@ -258,7 +261,7 @@ body.rp-mode-questions, :root[data-theme] body.rp-mode-questions {
   --accent:#a855f7; --accent-soft:rgba(168,85,247,.14); --accent-ink:#ffffff; --good:#4ade80; --good-soft:rgba(74,222,128,.13);
   --warn:#fbbf24; --warn-soft:rgba(251,191,36,.13); --shadow:0 1px 2px rgba(0,0,0,.5), 0 10px 30px rgba(0,0,0,.4);
   --serif:Charter,"Bitstream Charter","Iowan Old Style",Georgia,serif;
-  --rp-bg:#0e0e14; --rp-card:#16161f; --rp-ink:#ececf1;
+  --rp-bg:#0e0e14; --rp-card:#16161f; --rp-ink:#ececf1; --rp-link:#c4a7ff;
   background:var(--ground); color:var(--ink); font-family:var(--serif); font-size:19px; line-height:1.62;
 }
 .rp-mode-questions .rp-main { max-width:74ch; padding:40px 24px 96px; }

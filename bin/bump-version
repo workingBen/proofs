@@ -1,0 +1,131 @@
+#!/usr/bin/env python3
+"""Bump the plugin version in .claude-plugin/plugin.json when shipped files change.
+
+`claude plugin update` compares only that version string, so a merged skill change
+without a plugin bump never reaches anyone who already has proofs installed.
+
+Run by the pre-commit and pre-merge-commit hooks (bin/install-hooks). It looks at
+everything staged on this branch since it left the base (origin/main when it exists,
+else HEAD). If any shipped path changed (skills/, shared/, reference/, hooks/), the
+plugin version must be newer than the base's: one level per the largest skill bump
+on the branch (a new skill counts as minor; non-skill files as patch). It writes the
+new version and stages plugin.json, so the bump rides in the commit being made.
+Comparing against the base's tip, not where the branch started, means a branch whose
+version was taken by another merge gets bumped again after it merges origin/main.
+
+Usage: bump-version [--check] [--base REF]
+  --check   report instead of writing; exit 1 if a bump is needed
+Exit 0 when the version is already new enough or was bumped.
+"""
+import json
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+SHIPPED = ("skills/", "shared/", "reference/", "hooks/")
+MANIFEST = ".claude-plugin/plugin.json"
+SEMVER = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
+LEVELS = ("patch", "minor", "major")
+
+
+def git(*args, check=True):
+    r = subprocess.run(["git", *args], capture_output=True, text=True)
+    if check and r.returncode:
+        raise SystemExit("bump-version: git %s failed: %s" % (" ".join(args), r.stderr.strip()))
+    return r.stdout if r.returncode == 0 else None
+
+
+def parse(v):
+    m = SEMVER.match(v or "")
+    return tuple(int(x) for x in m.groups()) if m else None
+
+
+def bump(v, level):
+    major, minor, patch = v
+    if level == "major":
+        return (major + 1, 0, 0)
+    if level == "minor":
+        return (major, minor + 1, 0)
+    return (major, minor, patch + 1)
+
+
+def show(ref, path):
+    """File text at ref (":" + path for the index), or None if it is not there."""
+    return git("show", "%s:%s" % (ref, path) if ref else ":" + path, check=False)
+
+
+def manifest_version(text):
+    return parse(json.loads(text).get("version", "")) if text else None
+
+
+def skill_version(text):
+    m = re.match(r"---\n(.*?)\n---\n", text or "", re.S)
+    v = re.search(r"^version:\s*[\"']?([\d.]+)", m.group(1), re.M) if m else None
+    return parse(v.group(1)) if v else None
+
+
+def skill_level(before, after):
+    """How far a skill's version moved: None if it did not, else patch/minor/major."""
+    if after is None:
+        return None
+    if before is None:
+        return "minor"
+    if after[0] > before[0]:
+        return "major"
+    if after[:2] > before[:2]:
+        return "minor"
+    return "patch" if after > before else None
+
+
+def main(argv):
+    check_only = "--check" in argv
+    base = argv[argv.index("--base") + 1] if "--base" in argv else None
+    root = git("rev-parse", "--show-toplevel").strip()
+    os.chdir(root)
+    if base is None:
+        base = "origin/main" if git("rev-parse", "--verify", "-q", "origin/main", check=False) else "HEAD"
+    if git("rev-parse", "--verify", "-q", base, check=False) is None:
+        return 0  # first commit: nothing to compare against
+    head = "HEAD" if git("rev-parse", "--verify", "-q", "HEAD", check=False) else base
+    fork = (git("merge-base", head, base, check=False) or base).strip()
+    # MERGE_HEAD (during a merge) counts as already merged in, so its changes do not count here.
+    changed = [p for p in git("diff", "--cached", "--name-only", fork).splitlines() if p.startswith(SHIPPED)]
+    merging = git("rev-parse", "--verify", "-q", "MERGE_HEAD", check=False)
+    if merging:
+        theirs = set(git("diff", "--name-only", fork, merging.strip()).splitlines())
+        ours = set(git("diff", "--name-only", fork, "HEAD").splitlines())
+        changed = [p for p in changed if p in ours or p not in theirs]
+    if not changed:
+        return 0
+    level = "patch"
+    for path in changed:
+        if path.startswith("skills/") and path.endswith("/SKILL.md"):
+            moved = skill_level(skill_version(show(fork, path)), skill_version(show(None, path)))
+            if moved and LEVELS.index(moved) > LEVELS.index(level):
+                level = moved
+    base_v = manifest_version(show(base, MANIFEST))
+    staged_text = show(None, MANIFEST)
+    current = manifest_version(staged_text)
+    if base_v is None or current is None:
+        print("bump-version: %s has no semver version" % MANIFEST, file=sys.stderr)
+        return 1
+    want = bump(base_v, level)
+    if current >= want:
+        return 0
+    old, new = ".".join(map(str, current)), ".".join(map(str, want))
+    if check_only:
+        print("bump-version: shipped files changed; plugin version %s should be %s (run bin/bump-version)" % (old, new))
+        return 1
+    path = Path(MANIFEST)
+    text = path.read_text()
+    updated = re.sub(r'("version"\s*:\s*")[^"]*(")', r"\g<1>%s\g<2>" % new, text, count=1)
+    path.write_text(updated)
+    git("add", MANIFEST)
+    print("bump-version: plugin %s -> %s (%s; shipped files changed)" % (old, new, level))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

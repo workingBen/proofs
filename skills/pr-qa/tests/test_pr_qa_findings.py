@@ -113,6 +113,26 @@ class TapTargetTest(unittest.TestCase):
         self.assertTrue(found[0]["evidence"]["rise"])
         self.assertEqual(found[0]["detail"].count('"Edit"'), 3)
 
+    def test_relabel_same_count_is_not_a_rise(self):
+        def link(text):
+            return {"tag": "a", "text": text, "width": 20, "height": 18}
+        before = [shot("before", size="desktop", client=1440, small=[link("Updated 3 min ago")])]
+        after = [shot(size="desktop", client=1440, small=[link("Updated 4 min ago")])]
+        found = [f for f in compare(before, after) if f["title"].endswith("new small tap targets")]
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0]["severity"], "warning")
+        self.assertIn("Updated 4 min ago", found[0]["detail"])
+        self.assertFalse(found[0]["evidence"].get("rise"))
+
+    def test_count_rise_sets_rise(self):
+        def link(text):
+            return {"tag": "a", "text": text, "width": 20, "height": 18}
+        before = [shot("before", size="desktop", client=1440, small=[link("Updated 3 min ago")])]
+        after = [shot(size="desktop", client=1440,
+                      small=[link("Updated 4 min ago"), link("Edit")])]
+        found = [f for f in compare(before, after) if f["title"].endswith("new small tap targets")]
+        self.assertTrue(found[0]["evidence"]["rise"])
+
     def test_no_finding_when_counts_flat(self):
         small = [{"tag": "a", "text": "x", "width": 10, "height": 10}]
         text = [{"text": "tiny", "px": 11}]

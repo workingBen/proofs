@@ -8,6 +8,7 @@ Run:  python3 -m unittest discover skills/pr-qa/tests
 """
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -807,8 +808,49 @@ class SkippedTest(unittest.TestCase):
             self.assertEqual(load_meta(meta), ([{"number": 1}], []))
 
 
+    def _load(self, data):
+        with tempfile.TemporaryDirectory() as tmp:
+            meta = os.path.join(tmp, "m.json")
+            with open(meta, "w", encoding="utf-8") as handle:
+                json.dump(data, handle)
+            return load_meta(meta)
+
+    def test_dict_meta_without_a_prs_list_is_rejected(self):
+        for bad in ({"skipped": []}, {"prs": "nope"}, {"prs": {"number": 1}}):
+            with self.assertRaises(SystemExit) as ctx:
+                self._load(bad)
+            self.assertIn("prs", str(ctx.exception))
+
+    def test_dict_meta_with_unknown_keys_is_rejected(self):
+        with self.assertRaises(SystemExit) as ctx:
+            self._load({"prs": [], "skiped": []})
+        self.assertIn("skiped", str(ctx.exception))
+
+
 class SmokeTest(unittest.TestCase):
     """--smoke drives the built page in a real browser."""
+
+    def test_smoke_cli_browser_launch_failure_exits_2(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("node not installed")
+        with tempfile.TemporaryDirectory() as tmp:
+            fake = os.path.join(tmp, "fakepw")
+            os.makedirs(fake)
+            with open(os.path.join(fake, "package.json"), "w", encoding="utf-8") as handle:
+                json.dump({"name": "playwright", "main": "index.js"}, handle)
+            with open(os.path.join(fake, "index.js"), "w", encoding="utf-8") as handle:
+                handle.write("exports.chromium = { launch: async () => { throw new Error('boom'); } };\n")
+            page = os.path.join(tmp, "page.html")
+            with open(page, "w", encoding="utf-8") as handle:
+                handle.write("<html></html>")
+            script = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                  "scripts", "pr_qa_page.py")
+            r = subprocess.run([sys.executable, script, "--smoke", page, "--playwright", fake],
+                               capture_output=True, text=True)
+            self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+            self.assertIn("browser could not start", (r.stdout + r.stderr).lower())
+            self.assertIn("playwright@1.61.1", r.stdout + r.stderr)
 
     def _page(self, tmp, real_images=True, prs=True):
         evidence = os.path.join(tmp, "ev")

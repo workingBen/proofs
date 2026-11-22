@@ -5,12 +5,24 @@
 // `pr_qa_page.py --smoke PAGE` rather than directly.
 const path = require("path");
 const { chromium } = require(process.argv[2]);
-const { launchChromium } = require("../../../shared/review_page/launch.cjs");
+const { launchChromium, HOW_TO } = require("../../../shared/review_page/launch.cjs");
 const file = "file://" + path.resolve(process.argv[3]);
 
 (async () => {
   const problems = [];
-  const browser = await launchChromium(chromium, process.env);
+  let browser;
+  try {
+    browser = await launchChromium(chromium, process.env);
+  } catch (e) {
+    // A missing browser is not a page problem: exit 2 so the caller says so
+    // instead of looping on a fix.
+    const msg = String((e && e.message) || e);
+    console.log(JSON.stringify({
+      ok: false, launchFailed: true,
+      problems: ["Browser could not start: " + msg + (msg.includes(HOW_TO) ? "" : "\n" + HOW_TO)],
+    }));
+    process.exit(2);
+  }
   try {
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     page.on("pageerror", (e) => problems.push("page error: " + e.message));

@@ -327,7 +327,14 @@ def load_meta(meta_path):
     with open(meta_path, encoding="utf-8") as handle:
         meta = json.load(handle)
     if isinstance(meta, dict):
-        return meta.get("prs") or [], meta.get("skipped") or []
+        unknown = sorted(set(meta) - {"prs", "skipped"})
+        if unknown:
+            raise SystemExit(f"{meta_path}: unknown top-level key(s) {', '.join(unknown)}; "
+                             'only "prs" and "skipped" are allowed.')
+        if not isinstance(meta.get("prs"), list):
+            raise SystemExit(f'{meta_path}: an object meta needs a "prs" list '
+                             '(or give a bare list of PR entries).')
+        return meta["prs"], meta.get("skipped") or []
     return meta, []
 
 
@@ -376,6 +383,8 @@ def smoke(page_path, playwright=None):
         result = json.loads(r.stdout.strip().splitlines()[-1])
     except (ValueError, IndexError):
         return False, {"ok": False, "problems": [(r.stdout + r.stderr).strip()[-2000:] or "smoke printed nothing"]}
+    if result.get("launchFailed"):
+        return None, {"error": (result.get("problems") or ["browser could not start"])[0]}
     return not result.get("problems"), result
 
 

@@ -106,20 +106,24 @@ def compare(before, after):
                 {"before": old_overflow, "after": new_overflow}))
 
         fresh = fresh_targets(old, shot)
+        targets_rose = item_count(shot, "smallTargets", "smallTargetCount") > \
+            item_count(old, "smallTargets", "smallTargetCount")
         if fresh:
             findings.append(finding(
                 "warning", f"{where}: new small tap targets",
                 f"Under the {MIN_TAP_TARGET}px that reads as reliably tappable: "
                 f"{name_items([target_label(t) for t in fresh])}.",
-                {"targets": fresh[:4], "rise": True}))
+                dict({"targets": fresh[:4]}, **({"rise": True} if targets_rose else {}))))
 
         fresh_text = fresh_small_text(old, shot)
+        text_rose = item_count(shot, "smallText", "smallTextCount") > \
+            item_count(old, "smallText", "smallTextCount")
         if fresh_text:
             findings.append(finding(
                 "warning", f"{where}: new text below the size floor",
                 "Text smaller than the floor the page is held to: "
                 f"{name_items([text_label(t) for t in fresh_text])}.",
-                {"text": fresh_text[:4], "rise": True}))
+                dict({"text": fresh_text[:4]}, **({"rise": True} if text_rose else {}))))
 
         fresh_errors = [e for e in shot.get("errors") or []
                         if e not in ((old or {}).get("errors") or [])]
@@ -173,6 +177,17 @@ def fresh_by_count(old_items, new_items, keyfn):
         else:
             fresh.append(item)
     return fresh
+
+
+def item_count(shot, list_key, count_key):
+    """How many such items a shot holds: its count field when present (the
+    list may be capped), else the list length. A missing shot is zero."""
+    if not shot:
+        return 0
+    count = shot.get(count_key)
+    if isinstance(count, int):
+        return count
+    return len(shot.get(list_key) or [])
 
 
 def fresh_targets(old, shot):

@@ -26,6 +26,8 @@ In Claude Code:
 /plugin install proofs@proofs
 ```
 
+In unattended `claude -p` runs a skill will not start until the [Allow Proofs](#allow-proofs) block below is in your settings; interactive sessions just ask.
+
 Install the whole plugin, not single skill folders. The skills share a page builder and reference files at the plugin root; a skill copied on its own into `.claude/skills/` can't find them, and says so.
 
 <!-- allow-proofs:start -->

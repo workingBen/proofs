@@ -129,6 +129,15 @@ class SmokeGuidance(unittest.TestCase):
         self.assertIn("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install", src)
 
 
+class ReadmeInstall(unittest.TestCase):
+    def test_install_paragraph_warns_that_claude_p_needs_the_allow_block(self):
+        readme = (REPO / "README.md").read_text()
+        after_install = readme.split("/plugin install proofs@proofs\n```\n", 1)[1].lstrip().splitlines()[0]
+        self.assertIn("claude -p", after_install)
+        self.assertIn("Allow Proofs", after_install)
+        self.assertIn("will not start", after_install)
+
+
 class ChromeLines(unittest.TestCase):
     def test_every_chrome_line_turns_off_code_sign_clone(self):
         seen = 0

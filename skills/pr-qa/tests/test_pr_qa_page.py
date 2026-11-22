@@ -106,6 +106,31 @@ class EffectiveVerdictTest(unittest.TestCase):
         self.assertEqual(effective_verdict(evidence, human), "hold")
 
 
+class NotMeasuredTest(unittest.TestCase):
+    UNMEASURED = {"present": True, "verdict": "unknown", "measured": False}
+
+    def test_unmeasured_evidence_with_a_human_warning_reads_look_first(self):
+        self.assertEqual(effective_verdict(self.UNMEASURED, [{"severity": "warning"}]), "look")
+
+    def test_unmeasured_evidence_without_human_findings_stays_unknown(self):
+        self.assertEqual(effective_verdict(self.UNMEASURED, []), "unknown")
+
+    def test_old_findings_files_count_as_measured(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write_evidence(tmp)
+            self.assertIs(load_evidence(tmp)["measured"], True)
+
+    def test_not_measured_note_is_on_the_page(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write_evidence(tmp, findings={
+                "findings": [], "counts": {}, "verdict": "unknown", "measured": False,
+                "note": "not measured: nothing to compare"})
+            evidence = load_evidence(tmp)
+        pr = {"number": 1, "title": "T", "verdict": "unknown", "evidence": evidence}
+        self.assertIn("not measured: nothing to compare",
+                      render([pr], [], "Sample Project", "acme/widgets"))
+
+
 class OrderTest(unittest.TestCase):
     def test_worst_first_and_unknown_outranks_clean(self):
         prs = [{"number": 1, "verdict": "clean"}, {"number": 2, "verdict": "hold"},

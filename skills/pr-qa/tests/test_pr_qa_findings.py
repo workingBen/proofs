@@ -6,7 +6,12 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"))
 
-from pr_qa_findings import compare, summarize
+import json
+import tempfile
+from io import StringIO
+from contextlib import redirect_stdout
+
+from pr_qa_findings import compare, summarize, measured, main
 
 
 def shot(label="after", slug="admin-contacts-14", size="phone", overflow=0,
@@ -116,6 +121,43 @@ class SummaryTest(unittest.TestCase):
         # A QA that covered less than it looks like must say so.
         out = summarize([], {"unmatched_changes": ["app/views/new.html.erb"], "pages": []})
         self.assertEqual(out["unmapped_changes"], ["app/views/new.html.erb"])
+
+
+def bare(label="after", redirected=False):
+    return {"label": label, "slug": "x", "size": "phone", "path": "/x",
+            "file": f"{label}-x-phone.png", "redirected": redirected}
+
+
+class NotMeasuredTest(unittest.TestCase):
+    def test_no_shots_is_not_measured(self):
+        out = summarize(compare([], []), measured=measured([], []))
+        self.assertEqual(out["verdict"], "unknown")
+        self.assertFalse(out["measured"])
+
+    def test_shots_without_measurements_are_not_measured(self):
+        before, after = [bare("before")], [bare("after")]
+        out = summarize(compare(before, after), measured=measured(before, after))
+        self.assertEqual(out["verdict"], "unknown")
+        self.assertIn("not measured", out["note"])
+
+    def test_only_after_measured_is_not_measured(self):
+        self.assertFalse(measured([bare("before")], [shot(overflow=0)]))
+
+    def test_a_redirect_blocker_still_holds_when_unmeasured(self):
+        before, after = [bare("before")], [bare("after", redirected=True)]
+        out = summarize(compare(before, after), measured=measured(before, after))
+        self.assertEqual(out["verdict"], "hold")
+
+    def test_measured_clean_is_still_clean(self):
+        before, after = [shot("before")], [shot("after")]
+        out = summarize(compare(before, after), measured=measured(before, after))
+        self.assertEqual(out["verdict"], "clean")
+        self.assertTrue(out["measured"])
+
+    def test_cli_writes_not_measured_for_an_empty_folder(self):
+        with tempfile.TemporaryDirectory() as tmp, redirect_stdout(StringIO()) as buf:
+            main(["--dir", tmp])
+        self.assertEqual(json.loads(buf.getvalue())["verdict"], "unknown")
 
 
 if __name__ == "__main__":

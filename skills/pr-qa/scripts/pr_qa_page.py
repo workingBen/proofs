@@ -55,6 +55,9 @@ def load_evidence(directory):
         "present": True,
         "dir": directory,
         "verdict": findings.get("verdict", "unknown"),
+        # Older findings files predate this field; they were measured.
+        "measured": findings.get("measured", True),
+        "note": findings.get("note", ""),
         "findings": findings.get("findings", []),
         "counts": findings.get("counts", {}),
         "unmapped_changes": findings.get("unmapped_changes", []),
@@ -80,6 +83,10 @@ def effective_verdict(evidence, human_findings):
     if not evidence.get("present"):
         return "unknown"
     verdict = evidence.get("verdict", "unknown")
+    if (verdict == "unknown" and evidence.get("measured", True) is False
+            and human_findings):
+        # Nothing was measured, but a reviewer looked and wrote something down.
+        return "look"
     if worst == 1 and VERDICT_RANK.get(verdict, 9) > VERDICT_RANK["look"]:
         return "look"
     return verdict
@@ -228,6 +235,9 @@ def render(prs, dropped, project, repo, session=None):
             "absent": not (pr.get("evidence") or {}).get("present"),
             "absentReason": pr.get("absent_reason", ""),
             "unmapped": (pr.get("evidence") or {}).get("unmapped_changes", []),
+            "machineNote": ((pr.get("evidence") or {}).get("note") or "")
+                           if (pr.get("evidence") or {}).get("measured", True) is False
+                           else "",
             "findings": merge_findings(pr.get("evidence") or {},
                                        pr.get("human_findings") or []),
             "pairs": pr.get("pairs", []),
@@ -748,6 +758,10 @@ const DATA = __PAYLOAD__;
     }
     card.appendChild(buildViewer(pr));
     card.appendChild(el("h3", { text: "Findings" }));
+    if (pr.machineNote) {
+      card.appendChild(el("p", { class: "notice warn",
+        text: "Machine check: " + pr.machineNote }));
+    }
     card.appendChild(buildFindings(pr.findings));
     card.appendChild(el("h3", { text: "Your decision" }));
     card.appendChild(buildDecisions(pr));

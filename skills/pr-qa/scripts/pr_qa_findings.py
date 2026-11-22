@@ -12,6 +12,10 @@ the one the PR caused. A finding is raised when the after is worse than the
 before for the same page at the same size.
 
     python3 scripts/pr_qa_findings.py --dir work/pr-7 > findings.json
+
+With no layout measurements in before.json and after.json the verdict is
+"unknown" ("not measured"), never "clean": absence of measurements is not
+evidence that nothing broke.
 """
 import argparse
 import json
@@ -22,6 +26,14 @@ import sys
 # arithmetic, not a layout that broke.
 OVERFLOW_NOISE_PX = 2
 MIN_TAP_TARGET = 44
+
+# The keys a shot carries when the capture step actually measured the layout.
+# A shot with none of them (just label, size, path, file) proves nothing, and a
+# comparison of two such lists would otherwise read as "clean".
+MEASURES = ("overflow", "scrollWidth", "clientWidth", "smallTargets", "errors")
+
+NOT_MEASURED_NOTE = ("not measured: before.json and after.json hold no layout "
+                     "measurements, so no regression could be checked")
 
 
 def load(directory, label):
@@ -115,13 +127,28 @@ def compare(before, after):
     return sorted(findings, key=lambda f: order.get(f["severity"], 9))
 
 
-def summarize(findings, plan=None):
+def measured(before, after):
+    """True only when both sides hold at least one shot with a measurement."""
+    def has(shots):
+        return any(key_ in shot for shot in shots for key_ in MEASURES)
+    return has(before) and has(after)
+
+
+def summarize(findings, plan=None, measured=True):
     counts = {"blocker": 0, "warning": 0, "good": 0}
     for item in findings:
         counts[item["severity"]] = counts.get(item["severity"], 0) + 1
-    out = {"findings": findings, "counts": counts,
-           "verdict": "hold" if counts["blocker"] else
-                      ("look" if counts["warning"] else "clean")}
+    if counts["blocker"]:
+        verdict = "hold"
+    elif not measured:
+        # Nothing was measured, so "clean" would be a claim with no evidence.
+        verdict = "unknown"
+    else:
+        verdict = "look" if counts["warning"] else "clean"
+    out = {"findings": findings, "counts": counts, "verdict": verdict,
+           "measured": bool(measured)}
+    if not measured:
+        out["note"] = NOT_MEASURED_NOTE
     if plan:
         # An unmapped view means the QA covered less than it appears to. Saying
         # so is the difference between a gap and a silent gap.
@@ -141,7 +168,9 @@ def main(argv=None):
         with open(args.plan, encoding="utf-8") as handle:
             plan = json.load(handle)
 
-    result = summarize(compare(load(args.dir, "before"), load(args.dir, "after")), plan)
+    before = load(args.dir, "before")
+    after = load(args.dir, "after")
+    result = summarize(compare(before, after), plan, measured=measured(before, after))
     print(json.dumps(result, indent=2))
     # Never fail the build. A blocker is a thing for a person to decide about,
     # and a red X on the PR would say "the agent's change is broken" when what

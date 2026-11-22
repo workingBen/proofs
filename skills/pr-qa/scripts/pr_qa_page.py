@@ -350,6 +350,8 @@ def build(meta_path, out_path, project, repo, session=None):
                         verdict=effective_verdict(evidence, human)))
     embedded, dropped = embed(prs)
     page = render(embedded, dropped, project, repo, session, skipped)
+    # The first run in a project has no .proofs/pages yet.
+    os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as handle:
         handle.write(page)
     return page

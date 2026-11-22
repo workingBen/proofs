@@ -674,6 +674,17 @@ class BuildValidationTest(unittest.TestCase):
             build(meta_path, out_path, "Sample Project", "acme/widgets")
             self.assertTrue(os.path.exists(out_path))
 
+    def test_build_creates_a_missing_pages_folder(self):
+        # First run in a project: .proofs/pages does not exist yet.
+        with tempfile.TemporaryDirectory() as tmp:
+            meta_path = self._write_meta(tmp, [{
+                "number": 3, "title": "T", "branch": "b", "dir": None,
+                "absent_reason": "no run", "cost": "", "tests": "", "narrative": "",
+                "recommendation": "wait", "human_findings": []}])
+            out_path = os.path.join(tmp, ".proofs", "pages", "pr-qa.html")
+            build(meta_path, out_path, "Sample Project", "acme/widgets")
+            self.assertTrue(os.path.exists(out_path))
+
     def test_validate_meta_directly_names_offending_value_and_pr(self):
         with self.assertRaises(ValueError) as ctx:
             validate_meta([{"number": 42, "recommendation": "nope",

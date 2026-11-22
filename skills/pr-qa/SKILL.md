@@ -58,12 +58,12 @@ The whole flow for a PR whose app runs with one start command. The goal is a bui
 
 1. **List every command once, up front, in one message**, with the exact text and literal paths (no variables): the ten lines below, the `cp .env <base folder>/<app-dir>/.env` line if the app has a `.env` (it goes before the install in the base folder), the install in the checkout (`npm ci`) if its `node_modules` is missing or the PR's diff touches `package.json` or the lockfile (run it after `gh pr checkout`, before the after capture), and the Playwright install line if `capture.cjs` reports Playwright missing. Playwright lives in `~/.cache/proofs-playwright`, one install per machine (`npm install --prefix ~/.cache/proofs-playwright playwright@1.61.1`); do not install it in the system temp folder or the project. Then run them without further narration.
 2. **Write `.proofs/capture/pages.json`** with the Write tool: the pages the diff touches (`pr_qa_plan.py` when a map exists), each with a `name` and `path`.
-3. **Run the commands in order.** Replace `<n>` with the PR number, `<base>` with its target branch and `<app-dir>` with the folder holding `package.json` (use `.` when it is the root), and the ports with free high ones. The first line, `printenv PROOFS_BASE_DIR`, prints the `PROOFS_BASE_DIR` setting, or nothing (exit 1) when it is not set. If it printed a path, use `<PROOFS_BASE_DIR>/<repo folder>-pr-qa-base` as the base folder, written literally in every line that names it; otherwise the base folder is `.proofs/base`. If the app has a `.env`, copy it with one extra Bash call (`cp .env <base folder>/<app-dir>/.env`, literal paths) before the install; never Read or Write it, because secrets must not enter the transcript. **`gh pr checkout <n>` is not optional: the after shot must be the PR's code.** If the session is already on the PR branch it still runs (it is a no-op), so the path is the same every time. If the PR's diff touches `package.json` or the lockfile, run the project's install (`npm ci`) in the checkout now, before the after capture; this is a stated extra, not one of the ten.
+3. **Run the commands in order.** Replace `<n>` with the PR number, `<base>` with its target branch and `<app-dir>` with the folder holding `package.json` (use `.` when it is the root), and the ports with free high ones. The first line, `printenv PROOFS_BASE_DIR`, prints the `PROOFS_BASE_DIR` setting, or nothing (exit 1) when it is not set. If it printed a path, use `<PROOFS_BASE_DIR>/<repo folder>-pr-qa-base` as the base folder, written literally in every line that names it; otherwise the base folder is `.proofs/base`. If the app has a `.env`, copy it with one extra Bash call (`cp .env <base folder>/<app-dir>/.env`, literal paths) before the install; never Read or Write it, because secrets must not enter the transcript. **`gh pr checkout <n>` is not optional: the after shot must be the PR's code.** If the session is already on the PR branch it still runs (it is a no-op), so the path is the same every time. If the PR's diff touches `package.json` or the lockfile, run the project's install (`npm ci`) in the checkout now, before the after capture; this is a stated extra, not one of the ten. **No GitHub PR (branches compared locally):** the same ten lines, with the local `<base>` branch in place of `origin/<base>` (`--detach` lets it be the branch checked out now), `git switch <branch>` in place of `gh pr checkout <n>`, and the branch name in place of `<n>`; skip `git fetch origin` (there is no remote).
 
 ```bash
 printenv PROOFS_BASE_DIR
 git fetch origin
-git worktree add .proofs/base origin/<base>
+git worktree add --detach .proofs/base origin/<base>
 npm ci --prefix .proofs/base/<app-dir>
 python3 ${CLAUDE_PLUGIN_ROOT}/shared/capture/with_server.py --cwd .proofs/base/<app-dir> --start "npm run dev -- -p 3411" --url http://localhost:3411/ -- node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs .proofs/capture/pages.json --out .proofs/evidence/pr-<n> --sizes 390,1440 --evidence before
 git worktree remove --force .proofs/base
@@ -148,7 +148,7 @@ no token, no network, or no open PR, so it can never keep a session from startin
 
    ```bash
    git fetch origin
-   git worktree add <base-dir> origin/<base>
+   git worktree add --detach <base-dir> origin/<base>
    ```
 
    (`<base>` here is the PR's target branch.) Copy untracked settings (`.env`) into `<base-dir>`, then

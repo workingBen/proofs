@@ -223,6 +223,14 @@ class PrQaGuidance(unittest.TestCase):
         self.assertNotIn("git check-ignore", text)
         self.assertIn("adds `.proofs/` to `.git/info/exclude`", text)
 
+    def test_default_path_says_how_to_compare_local_branches(self):
+        # 2026-11-22 headless check: no GitHub PR, and the base branch checked out in the project.
+        text = section("pr-qa", "Default path")
+        fence = text.split("```bash", 1)[1].split("```", 1)[0]
+        self.assertIn("git worktree add --detach .proofs/base origin/<base>", fence)
+        self.assertIn("git switch <branch>", text)
+        self.assertIn("in place of `gh pr checkout <n>`", text)
+
     def test_every_worktree_remove_says_force(self):
         # Step 3 removes the base worktree with --force; Common Mistakes must give the same command.
         mistakes = section("pr-qa", "Common Mistakes")
@@ -231,7 +239,7 @@ class PrQaGuidance(unittest.TestCase):
 
     def test_pr_qa_base_worktree_lives_under_dot_proofs(self):
         text = section("pr-qa", "The Sequence")
-        self.assertIn("git worktree add <base-dir>", text)
+        self.assertIn("git worktree add --detach <base-dir>", text)
         self.assertIn(".proofs/base", text)
         self.assertIn("info/exclude", text)
 

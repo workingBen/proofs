@@ -41,6 +41,8 @@ python3 "$(ls -d "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/plugins/cache/proofs/proo
 
 Put the output in `~/.claude/settings.json` for every project, or `.claude/settings.local.json` for one. If you use a custom `CLAUDE_CONFIG_DIR`, put the rules in that folder's `settings.json` instead of `~/.claude/settings.json`. Never put it in a project's committed `.claude/settings.json`: it holds your home path. If the file already has a `permissions` key, don't paste a second one. Add `--lines` to the command to print just the rules, and add them to your existing `permissions.allow` list (or add them one at a time with `/permissions` in Claude Code).
 
+If you added the marketplace from a local folder (`/plugin marketplace add <folder>`), Claude Code runs the plugin from that folder rather than the cache, and the output adds the same rules for that folder.
+
 Example of the output; run the command above to get yours. `/YOUR/HOME` stands for your home folder, and these lines do nothing until it's replaced, which is why the command exists:
 
 ```json
@@ -72,7 +74,7 @@ python3 "$(ls -d "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/plugins/cache/proofs/proo
 
 Leave it out for normal, attended use: Claude Code then asks before each server start, and you can see the command it is about to run.
 
-**Allow your project's commands too (optional, never part of the standard block).** The skills also run a few commands of your project's, not the plugin's: the install (`npm install`, `npm ci`), the type check (`npx tsc --noEmit`), the pr-qa base worktree (`git fetch origin`, `git worktree add` and `git worktree remove` on `.proofs/base`, plus `cp .env` into it), the pr-qa PR checkout and listing (`gh pr checkout`, `gh pr list`), and the one-time Playwright install into `~/.cache/proofs-playwright`. With `PROOFS_BASE_DIR` set, the base-folder lines carry an absolute path, which no home-path-free rule can cover, so those still ask. Add `--project` to print just those rules:
+**Allow your project's commands too (optional, never part of the standard block).** The skills also run a few commands of your project's, not the plugin's: the install (`npm install`, `npm ci`), the type check (`npx tsc --noEmit`), the pr-qa base worktree (`git fetch origin`, `git worktree add` and `git worktree remove` on `.proofs/base`, plus `cp .env` into it), the pr-qa PR checkout and listing (`gh pr checkout`, `gh pr list`, or `git switch` for a branch with no PR), and the one-time Playwright install into `~/.cache/proofs-playwright`. With `PROOFS_BASE_DIR` set, the base-folder lines carry an absolute path, which no home-path-free rule can cover, so those still ask. Add `--project` to print just those rules:
 
 ```
 python3 "$(ls -d "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/plugins/cache/proofs/proofs/*/ | sort -V | tail -1)shared/allow_block.py" --project

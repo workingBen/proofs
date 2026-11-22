@@ -111,12 +111,13 @@ class CommandFormsTest(unittest.TestCase):
             "npm install `pwd`",
             "git fetch origin; ls",
             "npm install\nls",
-            "git worktree add .proofs/base $X",
+            "git worktree add --detach .proofs/base $X",
             'npm install "${X}"',
             "npm install ${X}",
-            "git worktree add .proofs/base *",
-            "git worktree add .proofs/base {a,b}",
-            "git worktree add .proofs/base ?",
+            "git worktree add --detach .proofs/base *",
+            "git worktree add --detach .proofs/base {a,b}",
+            "git worktree add --detach .proofs/base ?",
+            "git switch fix-nav; ls",
         ):
             with self.subTest(command=cmd):
                 self.assertFalse(allowed(cmd))
@@ -128,7 +129,9 @@ class CommandFormsTest(unittest.TestCase):
         for cmd in (
             capture,
             "npm install --prefix ~/.cache/proofs-playwright playwright@1.61.1",
-            "git worktree add .proofs/base origin/main",
+            "git worktree add --detach .proofs/base origin/main",
+            "git worktree add --detach .proofs/base main",
+            "git switch fix-nav",
             "npm ci --prefix .proofs/base/web",
             "git worktree remove --force .proofs/base",
             "printenv PROOFS_BASE_DIR",

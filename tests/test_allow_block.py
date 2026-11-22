@@ -5,6 +5,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -168,7 +169,8 @@ class AllowBlockTest(unittest.TestCase):
                          allow_block.rules("/opt/claude-home", None, headless=True) + allow_block.PROJECT_RULES)
 
     def test_project_rules_cover_the_pr_qa_commands(self):
-        for cmd in ("printenv PROOFS_BASE_DIR", "gh pr checkout 7", "gh pr list --state open", "cp .env .proofs/base/web/.env"):
+        for cmd in ("printenv PROOFS_BASE_DIR", "gh pr checkout 7", "gh pr list --state open", "cp .env .proofs/base/web/.env",
+                    "git worktree add --detach .proofs/base main", "git switch fix-nav"):
             self.assertTrue(check_skills.claude_code_allows(allow_block.PROJECT_RULES, cmd), cmd)
         self.assertFalse(check_skills.claude_code_allows(allow_block.PROJECT_RULES, "cp .env /opt/claude-home/base/web/.env"))
 
@@ -228,6 +230,41 @@ class AllowBlockTest(unittest.TestCase):
             env["CLAUDE_CONFIG_DIR"] = config_dir
         return subprocess.run([sys.executable, str(REPO / "shared" / "allow_block.py"), *args],
                               capture_output=True, text=True, env=env)
+
+    def _directory_marketplace(self, config, source):
+        (Path(config) / "plugins").mkdir(parents=True)
+        (Path(config) / "plugins" / "known_marketplaces.json").write_text(json.dumps(
+            {"proofs": {"source": source, "installLocation": source.get("path", "/x")}}))
+
+    def test_directory_marketplace_adds_rules_for_its_source_folder(self):
+        # A marketplace added from a local folder runs the plugin from that folder, not the cache:
+        # the 2026-11-22 headless check had with_server.py denied for exactly this reason.
+        with tempfile.TemporaryDirectory() as config:
+            self._directory_marketplace(config, {"source": "directory", "path": "/src/proofs"})
+            r = self._cli("/opt/claude-home", config, "--headless")
+            self.assertEqual(r.returncode, 0, r.stderr)
+            allow = json.loads(r.stdout)["permissions"]["allow"]
+            base = allow_block.rules("/opt/claude-home", config, headless=True)
+        cmd = ("python3 /src/proofs/shared/capture/with_server.py --start \"python3 -m http.server 3411\" "
+               "--url http://localhost:3411/ -- node /src/proofs/skills/visual-qa/scripts/capture.cjs "
+               ".proofs/capture/pages.json --out .proofs/evidence/pr-1 --sizes 390,1440 --evidence before")
+        self.assertTrue(check_skills.claude_code_allows(allow, cmd), allow)
+        self.assertIn("Read(//src/proofs/**)", allow)
+        self.assertEqual(allow[:len(base)], base)
+
+    def test_directory_rules_follow_the_headless_flag(self):
+        with tempfile.TemporaryDirectory() as config:
+            self._directory_marketplace(config, {"source": "directory", "path": "/src/proofs"})
+            allow = json.loads(self._cli("/opt/claude-home", config).stdout)["permissions"]["allow"]
+        self.assertFalse(any("/src/proofs/shared/capture/with_server.py" in r for r in allow), allow)
+        self.assertIn("Bash(python3 /src/proofs/skills/pr-qa/scripts/pr_qa_page.py *)", allow)
+
+    def test_a_github_marketplace_adds_no_folder_rules(self):
+        with tempfile.TemporaryDirectory() as config:
+            self._directory_marketplace(config, {"source": "github", "repo": "workingBen/proofs"})
+            r = self._cli("/opt/claude-home", config, "--headless")
+            base = allow_block.rules("/opt/claude-home", config, headless=True)
+        self.assertEqual(json.loads(r.stdout)["permissions"]["allow"], base)
 
     def test_cli_prints_the_block_for_this_home(self):
         r = self._cli("/opt/claude-home")

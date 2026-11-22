@@ -22,6 +22,8 @@ The scripts come from each skill's allowed-tools list, read at run time, so ther
 no second list to keep in step. Claude Code fills in ~ in Read rules but matches Bash
 rules against the command text, which holds the absolute path, so Bash lines carry
 the home folder (or $CLAUDE_CONFIG_DIR when it is set) and a * for the version folder.
+A proofs marketplace added from a local folder (`/plugin marketplace add <folder>`) runs
+from that folder, not the cache, so its rules are added too, with that folder's path.
 """
 import json
 import os
@@ -52,7 +54,11 @@ PROJECT_RULES = [
     # The default base folder only; a PROOFS_BASE_DIR base is an absolute path, so it still asks.
     "Bash(cp .env .proofs/base/*)",
     "Bash(git fetch origin)",
-    "Bash(git worktree add .proofs/base *)",
+    # --detach: works when the base branch is the one checked out in the project.
+    "Bash(git worktree add --detach .proofs/base *)",
+    # pr-qa with no GitHub PR: the after shot's branch, in place of gh pr checkout.
+    # (git switch refuses to drop local changes unless told to with --discard-changes.)
+    "Bash(git switch *)",
     "Bash(git worktree remove --force .proofs/base)",
     "Bash(npm install --prefix ~/.cache/proofs-playwright playwright@1.61.1)",
 ]
@@ -105,6 +111,43 @@ def rules(home, config_dir, headless=False):
     return [read, SKILL_RULE] + bash + extra
 
 
+def local_roots(home, config_dir):
+    """Plugin folders of a proofs marketplace added from a local folder.
+
+    Claude Code runs such a plugin from that folder, not from plugins/cache, so the cache
+    rules never match its commands."""
+    base = Path(config_dir) if config_dir else Path(home) / ".claude"
+    try:
+        known = json.loads((base / "plugins" / "known_marketplaces.json").read_text())
+    except (OSError, ValueError):
+        return []
+    roots = []
+    for entry in known.values() if isinstance(known, dict) else []:
+        source = entry.get("source") if isinstance(entry, dict) else None
+        if not isinstance(source, dict) or source.get("source") != "directory" or not source.get("path"):
+            continue
+        folder = Path(source["path"])
+        try:
+            plugins = json.loads((folder / ".claude-plugin" / "marketplace.json").read_text()).get("plugins", [])
+        except (OSError, ValueError, AttributeError):
+            plugins = []
+        sub = next((p.get("source") for p in plugins if isinstance(p, dict) and p.get("name") == "proofs"), "./")
+        if not isinstance(sub, str):
+            continue
+        root = os.path.normpath(str(folder / sub))
+        if root not in roots:
+            roots.append(root)
+    return roots
+
+
+def folder_rules(root, headless=False):
+    """Read and Bash rules for a plugin run from a local folder (no version folder)."""
+    root = root.rstrip("/")
+    bash = sorted("Bash(%s %s/%s *)" % (interp, root, path) for interp, path in scripts())
+    extra = ["Bash(%s %s/%s *)" % (HEADLESS_SCRIPT[0], root, HEADLESS_SCRIPT[1])] if headless else []
+    return ["Read(/%s/**)" % root] + bash + extra
+
+
 def main(argv):
     args = argv[1:]
     if len(set(args)) != len(args) or not set(args) <= {"--lines", "--headless", "--project"}:
@@ -118,6 +161,8 @@ def main(argv):
         allow = list(PROJECT_RULES)
     else:
         allow = rules(home, config_dir, headless="--headless" in args)
+        for root in local_roots(home, config_dir):
+            allow += folder_rules(root, headless="--headless" in args)
         if "--project" in args:
             allow += PROJECT_RULES
     if "--lines" in args:

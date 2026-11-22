@@ -2,7 +2,8 @@
 description drawn under it, as docs/cards/tiles/<skill>.jpg. A README cannot style text, and only pictures wrap
 from two across (laptop) to one per row (phone). Run after changing a card or a line below:
     python3 site-src/skill_tiles.py
-Keep the README's alt text in step with these lines."""
+Since 2026-11-21 the README lists the skills as grouped text instead of these tiles, so nothing links
+them now; they are kept in case the README goes back to pictures."""
 import os
 import subprocess
 import sys

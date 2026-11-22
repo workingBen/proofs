@@ -1,6 +1,6 @@
 # Changelog
 
-- **1.12.0** (2026-11-22): Opens its page through the form the unattended allow rule matches, and adds house rule 4: use the helpers' own checks, never `file`, `magick`, `identify` or `sips`, and change files with Edit or Write, never `sed -i`.
+- **1.12.0** (2026-11-22): Opens its saved page with exactly `open .proofs/pages/<name>.html`, which the opt-in `--project` allow block pre-approves; if `open` is refused it prints the path instead of retrying. Adds house rule 4: use the helpers' own checks, never `file`, `magick`, `identify` or `sips`, and change files with Edit or Write, never `sed -i`.
 
 - **1.11.1** (2026-11-22): Says to run `--smoke` every time: if it reports Playwright missing, run the one-line install it prints (no browser download) and run it again; if it still cannot run, say on the page and in chat that the self-check did not run. It no longer reads as optional when Playwright is absent.
 - **1.11.0** (2026-11-22): Runs its scripts (`review_page.py`) through `${CLAUDE_PLUGIN_ROOT}` and pre-approves them and reads of the plugin's own files, so a session no longer asks permission for each one.

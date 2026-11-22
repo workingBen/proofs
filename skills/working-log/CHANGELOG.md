@@ -1,5 +1,6 @@
 # Changelog
 
+- **1.11.0** (2026-11-22): Runs its scripts (`review_page.py`) through `${CLAUDE_PLUGIN_ROOT}` and pre-approves them and reads of the plugin's own files, so a session no longer asks permission for each one.
 - **1.10.2** (2026-11-19): Cleanup reads a page or folder resumed from a handoff before listing it, and names any other topics it still holds, so a delete doesn't silently take another project's steps with it.
 - **1.10.1** (2026-11-19): The build check fails a page whose in-page link (say "Open questions above") points at a section that is no longer on it, the stale link left after the reader answered.
 - **1.10.0** (2026-11-19): The page follows session renames: it reads the session's current name before every republish and updates the title and project bar, keeping the same URL. A new section, "When the session is done", has the session keep a list of everything it creates (pages, folders, worktrees, handoff notes), ask once at the end with the whole list, and delete what the user approves, with the session page last.

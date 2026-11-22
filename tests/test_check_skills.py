@@ -1,3 +1,5 @@
+import importlib.machinery
+import importlib.util
 import subprocess
 import sys
 import tempfile
@@ -20,7 +22,7 @@ LOG = "# Changelog\n\n- **1.2.0** (2026-01-01): first merged version.\n"
 REF = "# Where the page goes\n\nSet `PROOFS_PAGES` to artifact, file or wifi.\n"
 
 
-class CheckCase(unittest.TestCase):
+class CheckBase(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
@@ -43,6 +45,9 @@ class CheckCase(unittest.TestCase):
         return subprocess.run([sys.executable, str(CHECK), str(self.skills)],
                               capture_output=True, text=True)
 
+
+
+class CheckCase(CheckBase):
     def test_good_skill_passes(self):
         self.skill("alpha")
         r = self.run_check()
@@ -93,9 +98,10 @@ class CheckCase(unittest.TestCase):
     def test_bare_script_path_rejected(self):
         self.skill("alpha", body="Run `scripts/capture.cjs` now.")
         self.assertEqual(self.run_check().returncode, 1)
-        self.skill("alpha", body="Run `node scripts/capture.cjs` now and `python3 scripts/x.py`.")
+        self.skill("alpha", body="Run `node scripts/capture.cjs` now.")
         r = self.run_check()
-        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("run plugin scripts through ${CLAUDE_PLUGIN_ROOT}", r.stdout)
 
     def test_skill_references_resolve(self):
         self.skill("alpha", body="This needs the `beta` skill first.")
@@ -188,7 +194,7 @@ class CheckCase(unittest.TestCase):
         self.assertIn("does not exist", r.stdout)
 
     def test_plugin_root_paths_must_exist(self):
-        self.skill("alpha", body="**Needs the whole plugin.**\n\nRun `python3 ../../shared/missing.py` first.")
+        self.skill("alpha", body="**Needs the whole plugin.**\n\nRead `../../shared/missing.py` first.")
         r = self.run_check()
         self.assertEqual(r.returncode, 1)
         self.assertIn("../../shared/missing.py", r.stdout)
@@ -235,7 +241,7 @@ class CheckCase(unittest.TestCase):
                 "`python3 \"scripts/x.py\"` and `python3 scripts/sub/x.py`.")
         self.skill("alpha", body=body)
         r = self.run_check()
-        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertNotIn("must run through python3 or node", r.stdout)
 
     def test_bare_nested_and_flagged_paths_still_rejected(self):
         self.skill("alpha", body="Run `scripts/sub/x.py` now.")
@@ -250,6 +256,104 @@ class CheckCase(unittest.TestCase):
         self.assertIn("changelog", r.stdout.lower())
         self.skill("alpha", log=LOG.replace("**1.2.0** (2026-01-01)", "1.2.0 (2026)"))
         self.assertEqual(self.run_check().returncode, 0, self.run_check().stdout)
+
+
+ROOT = "${CLAUDE_PLUGIN_ROOT}"
+PAGE = ROOT + "/shared/review_page/review_page.py"
+APPLY = ROOT + "/skills/todos/scripts/todos_apply.py"
+WHOLE = "**Needs the whole plugin.**\n\n"
+
+
+def fm(rules):
+    items = "".join("\n  - " + r for r in rules)
+    return GOOD.format(name="alpha", body="{body}").replace("version: 1.2.0\n", "version: 1.2.0\nallowed-tools:" + items + "\n")
+
+
+class PluginRootScripts(CheckBase):
+    def setUp(self):
+        super().setUp()
+        for rel in ("shared/review_page/review_page.py", "skills/todos/scripts/todos_apply.py"):
+            f = Path(self._tmp.name) / rel
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text("")
+
+    def alpha(self, body, rules=None):
+        text = fm(rules).replace("{body}", WHOLE + body) if rules is not None else None
+        self.skill("alpha", text=text, body=WHOLE + body)
+        return self.run_check()
+
+    def test_relative_script_call_is_rejected(self):
+        r = self.alpha("Run `python3 ../../shared/review_page/review_page.py spec.json --out p.html`.")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("run plugin scripts through ${CLAUDE_PLUGIN_ROOT}", r.stdout)
+
+    def test_skill_folder_relative_script_call_is_rejected(self):
+        r = self.alpha("Run `python3 scripts/todos_page.py`.")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("run plugin scripts through ${CLAUDE_PLUGIN_ROOT}", r.stdout)
+
+    def test_plugin_root_call_to_missing_file_is_rejected(self):
+        r = self.alpha("Run `python3 " + ROOT + "/shared/nope.py`.")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("path " + ROOT + "/shared/nope.py does not exist", r.stdout)
+
+    def test_quoted_plugin_root_call_is_rejected(self):
+        r = self.alpha('Run `python3 "' + PAGE + '" x`.')
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("unquoted", r.stdout)
+
+    def test_call_not_covered_by_allowed_tools_is_rejected(self):
+        r = self.alpha("Run `python3 " + PAGE + " spec.json`.")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("not covered by allowed-tools", r.stdout)
+
+    def test_covered_call_passes(self):
+        rules = ["Bash(python3 " + PAGE + " *)", "Read(/" + ROOT + "/**)", "Skill(proofs:alpha)"]
+        r = self.alpha("Run `python3 " + PAGE + " spec.json --out p.html`.", rules)
+        self.assertEqual(r.returncode, 0, r.stdout)
+
+    def test_single_line_allowed_tools_is_read(self):
+        text = GOOD.format(name="alpha", body=WHOLE + "Run `python3 " + PAGE + " x`.").replace(
+            "version: 1.2.0\n", "version: 1.2.0\nallowed-tools: Bash(python3 " + PAGE + " *) Read(/" + ROOT + "/**)\n")
+        self.skill("alpha", text=text)
+        r = self.run_check()
+        self.assertEqual(r.returncode, 0, r.stdout)
+
+    def test_never_preapproved_script_may_be_called_uncovered(self):
+        r = self.alpha("Run `python3 " + APPLY + " --all`.")
+        self.assertEqual(r.returncode, 0, r.stdout)
+
+    def test_never_preapproved_script_in_allowed_tools_is_rejected(self):
+        r = self.alpha("Run `python3 " + APPLY + "`.", ["Bash(python3 " + APPLY + " *)", "Read(/" + ROOT + "/**)"])
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("must keep prompting", r.stdout)
+
+    def test_root_wildcard_rule_is_rejected(self):
+        r = self.alpha("Plain text.", ["Bash(python3 " + ROOT + "/*)", "Read(/" + ROOT + "/**)"])
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("name one script", r.stdout)
+
+    def test_allowed_tools_without_read_rule_is_rejected(self):
+        r = self.alpha("Run `python3 " + PAGE + " x`.", ["Bash(python3 " + PAGE + " *)"])
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("missing Read(/${CLAUDE_PLUGIN_ROOT}/**)", r.stdout)
+
+    def test_plugin_root_without_whole_plugin_line_is_rejected(self):
+        self.skill("alpha", body="Run `python3 " + APPLY + "`.")
+        r = self.run_check()
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("Needs the whole plugin", r.stdout)
+
+    def test_rule_matches_semantics(self):
+        loader = importlib.machinery.SourceFileLoader("check_skills", str(CHECK))
+        mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("check_skills", loader))
+        loader.exec_module(mod)
+        rm = mod.rule_matches
+        rule = "Bash(python3 /r/a.py *)"
+        self.assertTrue(rm(rule, "python3 /r/a.py x --out y"))
+        self.assertTrue(rm(rule, "python3 /r/a.py"))
+        self.assertFalse(rm(rule, "python3 /r/a.pyc"))
+        self.assertFalse(rm(rule, 'python3 "/r/a.py" x'))
 
 
 if __name__ == "__main__":

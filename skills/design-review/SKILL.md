@@ -1,6 +1,6 @@
 ---
 name: design-review
-version: 1.8.2
+version: 1.8.3
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -93,7 +93,7 @@ Write the content; the builder writes the page. Read `../../reference/review-pag
 
 Deliver the page as "Where the page goes" below says (with `artifact`, that means publishing it with the `Artifact` tool). Redeploy to the same file path across revisions of the *same* review page; don't mint a new URL for revisions the user is already looking at.
 
-**Verify before publishing, every time and not just the first.** The build runs its own check (script syntax, card and button counts); run `--smoke` too when Playwright is available. Then screenshot the page at a desktop and a phone width and check your coded mockups don't add sideways scroll or overlap. Only publish after all of it passes.
+**Verify before publishing, every time and not just the first.** The build runs its own check (script syntax, card and button counts). Run `--smoke`. If it reports Playwright missing, run the one-line install it prints (it uses your installed Google Chrome and downloads no browser), then run `--smoke` again; if it still cannot run, say on the page and in chat that the self-check did not run. Then screenshot the page at a desktop and a phone width and check your coded mockups don't add sideways scroll or overlap. Only publish after all of it passes.
 
 ### 5. Applying the decisions
 

@@ -104,6 +104,31 @@ class HelperCalls(unittest.TestCase):
                     self.fail(f"{path}: with_server.py rejects the example: {err.getvalue().strip()}")
 
 
+SMOKE_SENTENCE = (
+    'Run `--smoke`. If it reports Playwright missing, run the one-line install it prints (it uses your installed Google Chrome and downloads no browser), then run `--smoke` again; if it still cannot run, say on the page and in chat that the self-check did not run.'
+)
+PAGE_SKILLS = ("article-copy-edit", "design-review", "photo-picker", "qa-checklist", "questions", "style-guide", "working-log")
+
+
+class SmokeGuidance(unittest.TestCase):
+    def test_every_page_skill_says_to_install_and_rerun_smoke(self):
+        paths = [REPO / "skills" / s / "SKILL.md" for s in PAGE_SKILLS] + [REPO / "reference" / "review-page.md"]
+        for path in paths:
+            with self.subTest(path=path.relative_to(REPO)):
+                self.assertIn(SMOKE_SENTENCE, path.read_text())
+
+    def test_no_skill_lets_smoke_be_skipped(self):
+        for path in guidance_files():
+            text = path.read_text()
+            self.assertNotIn("when Playwright is available", text, path)
+            self.assertNotIn("Without Playwright", text, path)
+
+    def test_the_builder_prints_the_install_line_the_sentence_points_to(self):
+        src = (REPO / "shared" / "review_page" / "review_page.py").read_text()
+        self.assertIn("Playwright not found. \" + HOW_TO_PY", src)
+        self.assertIn("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install", src)
+
+
 class ChromeLines(unittest.TestCase):
     def test_every_chrome_line_turns_off_code_sign_clone(self):
         seen = 0

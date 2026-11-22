@@ -1,6 +1,6 @@
 ---
 name: working-log
-version: 1.11.0
+version: 1.11.1
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -168,7 +168,7 @@ Publish with `Artifact`, and **republish to the same file path every time** — 
 
 **"Same path" includes the folder, and that is easier to break than it sounds.** Publishing from `/work/checkout-a/docs/log.html` and later from `/work/checkout-b/docs/log.html` is TWO paths: the second mints a new URL and silently strands the tab the user is working from, along with its `localStorage` ticks. So do not delete the folder you published from (for example by removing a git worktree) while the page is still live. The fix is cheap once you know it: recreate a folder at the ORIGINAL path, copy the file back, republish, and the original URL returns.
 
-**Verify before every publish, including updates.** The build runs its own check (script syntax, section order, questions first, and that the `<title>` leads with the session name). Run `--smoke` when Playwright is available: it ticks, answers, types a note, copies, reloads, confirms the questions sit directly under the sticky bar, and checks for sideways scroll at 1280 and 390. Then take one screenshot of your content at a desktop and a phone width: the checks prove behavior, not that your own HTML (a grid in `detail_html`, a mockup) is readable. A grid child with no `grid-column` is auto-placed into the narrow first column, so set the default the safe way round (`.steps > li > * { grid-column: 2 }` with the number opting out). If you need a browser, the `pr-qa` skill explains how to get a headless one working.
+**Verify before every publish, including updates.** The build runs its own check (script syntax, section order, questions first, and that the `<title>` leads with the session name). `--smoke` ticks, answers, types a note, copies, reloads, confirms the questions sit directly under the sticky bar, and checks for sideways scroll at 1280 and 390. Run `--smoke`. If it reports Playwright missing, run the one-line install it prints (it uses your installed Google Chrome and downloads no browser), then run `--smoke` again; if it still cannot run, say on the page and in chat that the self-check did not run. Then take one screenshot of your content at a desktop and a phone width: the checks prove behavior, not that your own HTML (a grid in `detail_html`, a mockup) is readable. A grid child with no `grid-column` is auto-placed into the narrow first column, so set the default the safe way round (`.steps > li > * { grid-column: 2 }` with the number opting out). If you need a browser, the `pr-qa` skill explains how to get a headless one working.
 
 Keep the spec and page where the project keeps its artifact sources (its own notes say where, and whether they are committed). The source is the only way to update a published artifact in place — a later session cannot always read the page back.
 

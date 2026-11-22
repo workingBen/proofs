@@ -1,6 +1,6 @@
 ---
 name: design-review
-version: 1.6.1
+version: 1.6.2
 description: Use when the user wants to see and choose between rendered options for a visual or layout change before it is built, such as a redesign, a layout bug or "make this section nicer". Differs from visual-qa, which finds what is wrong, and article-copy-edit, which reviews wording; this compares coded mockups with the current page.
 ---
 
@@ -35,7 +35,7 @@ for i in $(seq 1 20); do code=$(curl -s -o /dev/null -w "%{http_code}" http://lo
 Take the screenshot with the first of these that the project has:
 
 1. **A browser-automation tool** the project already uses (Playwright or similar). Best: scriptable, repeatable, and it can also measure the page.
-2. **Headless Chrome from the command line**, which needs nothing running. Use your platform's Chrome binary with `--headless --hide-scrollbars --virtual-time-budget=8000 --window-size=1200,2200 --screenshot=out.png URL`, then crop the section out with an image tool. It also screenshots `file://` URLs, which is how you look at the built review page itself (step 4).
+2. **Headless Chrome from the command line**, which needs nothing running. Use your platform's Chrome binary with `--headless --disable-features=MacAppCodeSignClone --hide-scrollbars --virtual-time-budget=8000 --window-size=1200,2200 --screenshot=out.png URL`, then crop the section out with an image tool. Keep the `MacAppCodeSignClone` flag: on a Mac, Google Chrome copies its whole app (about 1.4 GB) into a temp folder on every launch and deletes the copy only when quit normally, so each screenshot without the flag can leave one behind. It also screenshots `file://` URLs, which is how you look at the built review page itself (step 4).
 3. **The Chrome browser extension tools** (open a tab, navigate, resize, screenshot). These need the extension actually connected. If it isn't, every call fails with a "not connected" error and there is nothing you can do about it from here. Don't burn turns retrying; fall back to option 2.
 
 **Rebuild before screenshotting.** If the project compiles its styles (a CSS build step), run that build and restart the server first. Otherwise the screenshot shows the old look and you will review a design that isn't what you built. A stale stylesheet producing a misleading "before" picture happens in every stack.

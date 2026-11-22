@@ -1,6 +1,6 @@
 ---
 name: pr-qa
-version: 1.5.0
+version: 1.5.1
 description: Use when open pull requests, especially ones an AI agent made unattended, need checking before merge and the user wants to see the change rather than read a diff, such as "QA the PRs", "check the agent's work" or screenshots before approving. Differs from visual-qa; it shows a PR's before and after, not a live page's problems.
 ---
 
@@ -269,8 +269,10 @@ next environment may genuinely lack a browser.
 ```bash
 # Redirect, never pipe -- a pipeline is a subshell and the exports are lost.
 source path/to/pr-qa/setup-browser.sh > /dev/null   # sets CHROME_BIN, LD_LIBRARY_PATH
+# MacAppCodeSignClone off: on a Mac, Google Chrome copies its whole app (~1.4 GB)
+# into a temp folder per launch and can leave it behind. Harmless elsewhere.
 "$CHROME_BIN" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage \
-  --hide-scrollbars --screenshot=out.png --window-size=1440,900 "$URL"
+  --disable-features=MacAppCodeSignClone --hide-scrollbars --screenshot=out.png --window-size=1440,900 "$URL"
 ```
 
 **Two traps that cost real time**, both worth knowing before your first screenshot:

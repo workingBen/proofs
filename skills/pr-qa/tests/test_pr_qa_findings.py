@@ -103,6 +103,16 @@ class TapTargetTest(unittest.TestCase):
         self.assertIn('"New d" 10px', found[0]["detail"])
         self.assertNotIn("Old a", found[0]["detail"])
 
+    def test_repeated_label_rise_detected(self):
+        edit = {"tag": "a", "text": "Edit", "width": 20, "height": 18}
+        before = [shot("before", size="desktop", client=1440, small=[edit])]
+        after = [shot(size="desktop", client=1440, small=[edit] * 4)]
+        found = [f for f in compare(before, after) if f["title"].endswith("new small tap targets")]
+        self.assertEqual(len(found), 1)
+        self.assertIn("Edit", found[0]["detail"])
+        self.assertTrue(found[0]["evidence"]["rise"])
+        self.assertEqual(found[0]["detail"].count('"Edit"'), 3)
+
     def test_no_finding_when_counts_flat(self):
         small = [{"tag": "a", "text": "x", "width": 10, "height": 10}]
         text = [{"text": "tiny", "px": 11}]

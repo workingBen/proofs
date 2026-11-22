@@ -282,6 +282,14 @@ def validate_meta(meta):
 MERGE_RECOMMENDATIONS = ("merge-and-push", "merge-hold-push")
 
 
+def has_rise(finding):
+    for name in ("evidence", "data"):
+        value = finding.get(name)
+        if isinstance(value, dict) and value.get("rise"):
+            return True
+    return False
+
+
 def check_rise(entry, evidence):
     """Refuse a merge recommendation over a finding that rose, unless the
     session named why it is acceptable. The page must not say "merge" while its
@@ -289,7 +297,7 @@ def check_rise(entry, evidence):
     if entry.get("recommendation") not in MERGE_RECOMMENDATIONS:
         return
     found = list(evidence.get("findings") or []) + list(entry.get("human_findings") or [])
-    risen = [f for f in found if (f.get("evidence") or f.get("data") or {}).get("rise")]
+    risen = [f for f in found if has_rise(f)]
     if risen and not (entry.get("rise_explained") or "").strip():
         titles = "; ".join(f.get("title", "") for f in risen[:3])
         raise SystemExit(

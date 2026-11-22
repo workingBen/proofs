@@ -21,6 +21,7 @@ With no layout measurements in before.json and after.json the verdict is
 evidence that nothing broke.
 """
 import argparse
+from collections import Counter
 import json
 import os
 import sys
@@ -157,10 +158,27 @@ def text_label(t):
     return f'"{t.get("text")}" {t.get("px")}px'
 
 
+def fresh_by_count(old_items, new_items, keyfn):
+    """Items in new_items beyond what old_items already had, per key.
+
+    A multiset comparison: one "Edit" link becoming four is three new items,
+    even though the label was already seen.
+    """
+    budget = Counter(keyfn(t) for t in old_items)
+    fresh = []
+    for item in new_items:
+        k = keyfn(item)
+        if budget[k] > 0:
+            budget[k] -= 1
+        else:
+            fresh.append(item)
+    return fresh
+
+
 def fresh_targets(old, shot):
-    seen = {(t.get("text"), t.get("tag")) for t in (old or {}).get("smallTargets") or []}
-    return [t for t in shot.get("smallTargets") or []
-            if (t.get("text"), t.get("tag")) not in seen]
+    return fresh_by_count((old or {}).get("smallTargets") or [],
+                          shot.get("smallTargets") or [],
+                          lambda t: (t.get("text"), t.get("tag")))
 
 
 def fresh_small_text(old, shot):
@@ -168,8 +186,9 @@ def fresh_small_text(old, shot):
     # measured", not "zero", so it cannot be compared.
     if old is not None and "smallText" not in old:
         return []
-    seen = {t.get("text") for t in (old or {}).get("smallText") or []}
-    return [t for t in shot.get("smallText") or [] if t.get("text") not in seen]
+    return fresh_by_count((old or {}).get("smallText") or [],
+                          shot.get("smallText") or [],
+                          lambda t: t.get("text"))
 
 
 def is_measured(shot):

@@ -710,6 +710,13 @@ class RiseGateTest(unittest.TestCase):
                 self.assertIn("17", str(ctx.exception))
                 self.assertIn("rise_explained", str(ctx.exception))
 
+    def test_rise_check_tolerates_string_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._build(tmp, "merge-and-push",
+                        rise_explained="Footer links only.",
+                        human_findings=[{"severity": "good", "title": "x",
+                                         "detail": "y", "evidence": "see shot 3"}])
+
     def test_send_back_with_a_rise_is_fine(self):
         with tempfile.TemporaryDirectory() as tmp:
             self._build(tmp, "send-back")

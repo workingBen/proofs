@@ -35,32 +35,38 @@ and colors (mockups reuse them), and anything already decided that must not be "
 
 ## 1. Capture real pages, real data, real states
 
+**House rules.** Same as every proofs capture skill; full text in `../../reference/house-rules.md`.
+
+1. **Finish in this turn.** Build, smoke-check and screenshot before you reply; the next turn re-reads the whole session and costs more each time. Write big files (HTML, spec JSON, scripts) with the Write tool and never print them back with `cat`, `head` or `Read`; the helpers print short summaries.
+2. **Stay in two folders.** Read only inside the project (the folder Claude Code started in) and the plugin folder. Do not read parent folders: their `CLAUDE.md` is already loaded for you. Write specs, scratch scripts, screenshots and pages only under `.proofs/` in the project, never the system temp folder, `$TMPDIR` or `~`. The one exception is the Playwright install in `~/.cache/proofs-playwright`.
+3. **One command per Bash call.** No pipes, redirects, `;`, `&&`, `cd`, `$(...)` or `VAR=` in front: Claude Code matches its allow rules against the whole command, and any of those makes it ask (or, in `claude -p`, refuse).
+
+- **Print "Commands this review will run"** before the first Bash call: one short list with the exact forms (the install, for example `npm install`; the capture line below; the type check if the project has one, for example `npx tsc --noEmit`). Then run them without further narration. The README's optional project block can pre-approve them.
 - Run the branch under test on its own port, following the project's notes for how to
   start the site (never another session's server).
 - Make the data look like production (realistic counts, long names, missing values), touching
   only the feature's own tables. **Note the starting state first and put it back after.**
-- Write a `pages.json` in a scratch folder (start from the example pages file bundled in this
+- Write `.proofs/visual-qa/pages.json` with the Write tool (start from the example pages file bundled in this
   skill's scripts folder). One entry per page × state. **States to cover:** full, empty, long text, missing values, each role, and
   every sheet, dialog, open `<details>` and partial-page update, reached by clicking (`actions`) the way
   a person would. A partial-page update can leave a page no plain `goto` ever shows.
 - Sign in through the real form with a `setup` hook (a sign-in example is bundled in the scripts folder). Read the
   password from the untracked env file inside the hook; never print it. If a page shows a
   secret, replace it in the DOM before capture.
-- Run it exactly as written; Claude Code fills in `${CLAUDE_PLUGIN_ROOT}`, and the allow rule only matches the unquoted form:
+- Run it exactly as written; Claude Code fills in `${CLAUDE_PLUGIN_ROOT}`, and the allow rule only matches the unquoted form. With the site already running:
 
   ```bash
-  node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs pages.json --out before
+  node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs .proofs/visual-qa/pages.json --out .proofs/visual-qa/before
   ```
 
-  Three viewports (1440×900, 1280×800, 390×844), a first-screen and a full-page PNG each,
-  named `<page>-<state>-<width>[-full].png`, plus `measures.json` and a printed summary table.
-  Playwright is looked up in the project's `node_modules`, then in `PLAYWRIGHT_PATH`
-  (a path to a `node_modules/playwright` directory), then in `~/.cache/proofs-playwright`.
-  It launches Playwright's own browser if one is installed and otherwise your installed
-  Google Chrome, so it downloads no browser, and every launch carries
-  `--disable-features=MacAppCodeSignClone` (it stops Chrome on a Mac copying its whole
-  app into a temp folder each time). If Playwright is missing, the error prints the
-  one-line install.
+  If the project needs a started server, wrap it as `design-review` step 2 does (`with_server.py` with `--start`, `--url`, then `--` and the capture command).
+  Three viewports (1440, 1280, 390 CSS px; `--sizes 390,1280` picks some), a first-screen and a full-page PNG each,
+  named `<page>-<state>-<width>[-full].png`, plus `measures.json`, `summary.md` and a printed table.
+  The 390 view is a true 390 px viewport, and the overflow is measured three ways. Playwright is looked up in the
+  project's `node_modules`, then `PROOFS_PLAYWRIGHT`, then `~/.cache/proofs-playwright`; its
+  own browser is used if installed, else your Google Chrome (no download). If Playwright is
+  missing, the error prints the one-line install; run it once and rerun. If the install is declined, say the phone view is
+  "not measured"; never fake it with Chrome `--window-size` below 500 (macOS headless Chrome lays the page out at 500 px).
 
 ## 2. Compare against the targets
 
@@ -68,7 +74,7 @@ The script measures and flags the first six; the rest come from `items` stats an
 
 | Measure | Target |
 |---|---|
-| Sideways scroll | 0 (wide tables scroll inside their own box) |
+| Sideways scroll | 0, including content hidden by `overflow-x: hidden` (the `clipped` signal); wide tables scroll inside their own box |
 | Content width ÷ viewport (desktop) | ≥ 70%, capped near 1200 px and centered |
 | Text size | ≥ `minText` (SVG text measured in rendered pixels) |
 | Tap targets | ≥ `minTap` both ways; links inside running text exempt |
@@ -89,12 +95,14 @@ that repeats the name beside it, a missing way back, a task that takes two steps
 do, a page inconsistent with its neighbors. **The session that will say "done" opens every
 screenshot itself.** A helper's "looks fine" is not a look.
 
+A carousel that shows part of the next slide inside an `overflow: hidden` box may read as clipped; check it by eye.
+
 Check the in-between widths (768 and 1024) for anything that changes at a breakpoint, such as
 charts and grids.
 
 ## 4. Write the audit
 
-`<scratch>/audit.md`: one table per page (measure, target, value, PASS/FAIL), then the
+`.proofs/visual-qa/audit.md`: one table per page (measure, target, value, PASS/FAIL), then the
 problems ranked by how much they hurt a person using the page. Each problem names its page,
 viewport, screenshot, the number, what is wrong in plain words, and a proposed fix.
 
@@ -116,7 +124,7 @@ Follow the `design-review` skill's page mechanics, with these additions:
 ## 6. After the picks: build, re-capture, show BEFORE → AFTER
 
 Build the approved fixes on a branch (following the project's notes for branching, tests
-and review), rerun steps 1–3 with `--out after` and the
+and review), rerun steps 1–3 with `--out .proofs/visual-qa/after` and the
 same `pages.json`, so the files line up name for name. Send AFTER screenshots beside BEFORE with
 a table of the key numbers (BEFORE → AFTER) before merging. Pin any number worth keeping in a
 test (a query budget, a row count).

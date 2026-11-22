@@ -62,8 +62,12 @@ class DesignReviewGuidance(unittest.TestCase):
         for flag in flags:
             self.assertIn(f'"{flag}"', helper)
 
-    def test_chrome_is_set_inside_the_capture_command(self):
-        self.assertIn("""-- sh -c 'CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"; "$CHROME" --headless""", self.step2())
+    def test_capture_is_capture_cjs_after_with_server(self):
+        # design-review's example runs the one default capture helper after `--`.
+        # (pr-qa joins this list in Task 4.)
+        for skill in ("design-review",):
+            calls = [c for p, c in helper_calls() if p.parent.name == skill]
+            self.assertTrue(any(re.search(r" -- node \$\{CLAUDE_PLUGIN_ROOT\}/skills/visual-qa/scripts/capture\.cjs ", c) for c in calls), skill)
 
 
 def helper_calls():
@@ -184,6 +188,48 @@ class PrQaGuidance(unittest.TestCase):
         self.assertLess(text.index("--cwd <base-dir>"), remove)
         self.assertLess(remove, text.index("3. **Run the branch for real**"))
         self.assertLess(remove, text.index("4. **Run the PR's own tests**"))
+
+
+HOUSE_RULE_SKILLS = ("design-review", "visual-qa", "working-log")
+
+
+class HouseRules(unittest.TestCase):
+    def test_house_rules_in_capture_skills(self):
+        for skill in HOUSE_RULE_SKILLS:
+            text = (REPO / "skills" / skill / "SKILL.md").read_text()
+            for rule in ("**Finish in this turn.**", "**Stay in two folders.**", "**One command per Bash call.**"):
+                with self.subTest(skill=skill, rule=rule):
+                    self.assertIn(rule, text)
+
+    def test_house_rules_reference_exists(self):
+        text = (REPO / "reference" / "house-rules.md").read_text()
+        self.assertIn("~/.cache/proofs-playwright", text)
+
+    def test_no_phone_window_size_below_500(self):
+        # pr-qa joins in Task 4.
+        for path in [p for p in guidance_files() if p.parent.name != "pr-qa"]:
+            for m in re.finditer(r"--window-size=(\d+),", path.read_text()):
+                self.assertGreaterEqual(int(m.group(1)), 500, f"{path}: {m.group(0)}")
+
+    def test_no_gitignore_advice(self):
+        for path in guidance_files():
+            text = path.read_text()
+            self.assertIsNone(re.search(r"(?i)add it to `?\.gitignore", text), str(path))
+
+    def test_no_parent_claude_md(self):
+        for path in guidance_files():
+            for line in path.read_text().splitlines():
+                if "../CLAUDE.md" in line:
+                    self.assertRegex(line, r"(?i)never|do not|don't", f"{path}: {line[:80]}")
+
+    def test_examples_have_no_shell_tricks(self):
+        for skill in HOUSE_RULE_SKILLS:
+            in_fence = False
+            for line in (REPO / "skills" / skill / "SKILL.md").read_text().splitlines():
+                if line.lstrip().startswith("```"):
+                    in_fence = line.lstrip().startswith("```bash") and not in_fence
+                elif in_fence:
+                    self.assertIsNone(re.search(r"^[A-Z_]+=|\||&&|;|\$\(|^cd ", line), f"{skill}: {line[:80]}")
 
 
 if __name__ == "__main__":

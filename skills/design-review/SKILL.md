@@ -1,6 +1,6 @@
 ---
 name: design-review
-version: 1.7.0
+version: 1.8.0
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -27,23 +27,30 @@ The user wants to change a page's visual design or layout (not its copy) and wan
 
 Confirm the live route, and which specific section(s) are in scope. A whole-page redesign may still be broken into multiple numbered items, one per section, rather than one giant item.
 
-### 2. Capture "before": a real screenshot, not a description
+### 2. Capture "before": always from the running app
 
-Start the site locally using this project's own start command and port (check the project's notes, `CLAUDE.md`, for how). Free the port first only if a stale process of your own is holding it; never kill a process you did not start. Then poll until the route answers with a 200 before proceeding:
+The "before" is a screenshot of the page as the running app serves it today. Do not use images committed in the repo as the "before" because they happen to be there: they show an older page, and the user will review a design against something that is no longer live.
+
+1. **Find the project's start command and port** (`CLAUDE.md`, `package.json`, `Procfile`, `bin/dev`). If dependencies are missing (no `node_modules`, no installed bundle), install them with the project's own install command. Do not fall back to repo images because of that.
+2. **Rebuild first.** If the project compiles its styles (a CSS build step), run that build before the capture, or the screenshot shows the old look.
+3. **Start, wait, capture and stop in one call to the helper.** It starts the server, waits until the URL answers, runs your capture command with `PROOFS_BASE_URL` set to that URL, then always stops the server. It is not pre-approved, so the user may get one permission prompt; that is expected. Example, with Chrome from the command line (set `CHROME` to this machine's Chrome binary first):
 
 ```bash
-for i in $(seq 1 20); do code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:PORT/ROUTE); [ "$code" = "200" ] && break; sleep 1; done
+python3 ${CLAUDE_PLUGIN_ROOT}/shared/capture/with_server.py --start "npm run dev -- -p 3311" \
+  --url http://localhost:3311/ -- sh -c '"$CHROME" --headless --disable-features=MacAppCodeSignClone \
+  --hide-scrollbars --virtual-time-budget=8000 --window-size=390,2200 --screenshot=before-390.png "$PROOFS_BASE_URL"'
 ```
 
-Take the screenshot with the first of these that the project has:
-
-1. **A browser-automation tool** the project already uses (Playwright or similar). Best: scriptable, repeatable, and it can also measure the page.
-2. **Headless Chrome from the command line**, which needs nothing running. Use your platform's Chrome binary with `--headless --disable-features=MacAppCodeSignClone --hide-scrollbars --virtual-time-budget=8000 --window-size=1200,2200 --screenshot=out.png URL`, then crop the section out with an image tool. Keep the `MacAppCodeSignClone` flag: on a Mac, Google Chrome copies its whole app (about 1.4 GB) into a temp folder on every launch and deletes the copy only when quit normally, so each screenshot without the flag can leave one behind. It also screenshots `file://` URLs, which is how you look at the built review page itself (step 4).
-3. **The Chrome browser extension tools** (open a tab, navigate, resize, screenshot). These need the extension actually connected. If it isn't, every call fails with a "not connected" error and there is nothing you can do about it from here. Don't burn turns retrying; fall back to option 2.
-
-**Rebuild before screenshotting.** If the project compiles its styles (a CSS build step), run that build and restart the server first. Otherwise the screenshot shows the old look and you will review a design that isn't what you built. A stale stylesheet producing a misleading "before" picture happens in every stack.
+   Use `--cwd DIR` when the server starts from another folder. Exit code 0 means the capture worked; 3 means the server never answered (read `.proofs/server.log`), 4 means it exited early, 5 means another run holds the lock. A headless capture at 390 px wide works; do not tell the user it cannot. A project's own browser automation (Playwright or similar) also works as the capture command, and is better when you need to measure the page: pass it after `--` the same way, and launch Chrome with `--disable-features=MacAppCodeSignClone` in its `args`.
+4. **Never start the server yourself with `run_in_background` or `&`.** In `claude -p` the turn then never ends, and when the turn is stopped the server dies with it. The helper owns the server for exactly as long as the capture runs and leaves nothing running.
+5. **Why the Chrome flag stays.** On a Mac, Google Chrome copies its whole app (about 1.4 GB) into a temp folder on every launch and deletes the copy only when quit normally, so each screenshot without `--disable-features=MacAppCodeSignClone` can leave one behind. The flag is in every command above. Headless Chrome also screenshots `file://` URLs, which is how you look at the built review page itself (step 4). The Chrome browser extension tools are a last resort, and only when connected: if every call fails with "not connected", stop retrying.
 
 **Match the live wording.** Local test data drifts from what editors have since changed on the live site, so a local screenshot can show different text than the user is looking at. Bring the real live text into the local copy before capturing, or the "before" pane won't match the picture in the user's head.
+
+**Only when the app cannot run** (the helper exits 3 or 4 and you cannot fix it, or the project has no way to run), a committed screenshot may stand in. Then:
+
+- Take its date from `git log -1 --format=%cs -- <file>`, and write in that item's Reason: "committed screenshot, last changed YYYY-MM-DD".
+- Tell the user in chat, and on the review page, that the "before" is a committed screenshot and not the live page, with why the app could not run.
 
 Screenshot each in-scope section at whichever viewport width(s) matter for this review (desktop, mobile, or both). The builder embeds each one as a data URI (step 4): no external image hosting, which keeps the page self-contained wherever it is opened.
 

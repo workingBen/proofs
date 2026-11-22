@@ -1,5 +1,6 @@
 # Changelog
 
+- **1.3.1** (2026-11-22): `capture.cjs` launches the browser the way the review-page smoke check does (shared `launch.cjs`): Playwright's own browser if installed, else the installed Google Chrome, with no browser download, and `--disable-features=MacAppCodeSignClone` on every launch so a Mac run no longer leaves a 1.4 GB copy of Chrome in the temp folder. It also finds Playwright in `~/.cache/proofs-playwright`, and a missing Playwright prints the no-download install line.
 - **1.3.0** (2026-11-22): Runs its scripts (`capture.cjs`) through `${CLAUDE_PLUGIN_ROOT}` and pre-approves them and reads of the plugin's own files, so a session no longer asks permission for each one.
 - **1.2.0** (2026-11-19): Its review page sets `"skill": "visual-qa"`, so the header's pill names this skill rather than design-review, and fills `project.session`.
 - **1.1.5** (2026-11-19): Says plainly that it needs the whole plugin, for anyone who copies one skill folder on its own.

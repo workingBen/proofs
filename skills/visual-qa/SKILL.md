@@ -1,6 +1,6 @@
 ---
 name: visual-qa
-version: 1.3.0
+version: 1.3.1
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs *)
@@ -55,7 +55,12 @@ and colors (mockups reuse them), and anything already decided that must not be "
   Three viewports (1440×900, 1280×800, 390×844), a first-screen and a full-page PNG each,
   named `<page>-<state>-<width>[-full].png`, plus `measures.json` and a printed summary table.
   Playwright is looked up in the project's `node_modules`, then in `PLAYWRIGHT_PATH`
-  (a path to a `node_modules/playwright` directory).
+  (a path to a `node_modules/playwright` directory), then in `~/.cache/proofs-playwright`.
+  It launches Playwright's own browser if one is installed and otherwise your installed
+  Google Chrome, so it downloads no browser, and every launch carries
+  `--disable-features=MacAppCodeSignClone` (it stops Chrome on a Mac copying its whole
+  app into a temp folder each time). If Playwright is missing, the error prints the
+  one-line install.
 
 ## 2. Compare against the targets
 

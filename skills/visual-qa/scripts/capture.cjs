@@ -19,17 +19,30 @@
 // Prints only the summary table, so the run stays small in context.
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
+
+// Same launch order as the review-page smoke check: Playwright's own browser if it is
+// installed, else the installed Google Chrome (no download), with the flag that stops
+// Chrome on macOS copying its whole app (about 1.4 GB) into a temp folder per launch.
+const LAUNCH = path.join(__dirname, '..', '..', '..', 'shared', 'review_page', 'launch.cjs');
+let launchChromium, HOW_TO;
+try {
+  ({ launchChromium, HOW_TO } = require(LAUNCH));
+} catch (_) {
+  console.error(`Cannot find ${LAUNCH}. Install the whole Proofs plugin, not the visual-qa folder on its own.`);
+  process.exit(2);
+}
 
 function loadPlaywright() {
   const tries = [
     'playwright',
     path.join(process.cwd(), 'node_modules/playwright'),
     process.env.PLAYWRIGHT_PATH,
+    path.join(os.homedir(), '.cache', 'proofs-playwright', 'node_modules', 'playwright'),
   ].filter(Boolean);
   for (const t of tries) { try { return require(t); } catch (_) {} }
-  console.error('Playwright not found. Set PLAYWRIGHT_PATH to a node_modules/playwright directory,\n' +
-    'or install it once in a scratch dir: npm i playwright && npx playwright install chromium');
+  console.error('Playwright not found. Set PLAYWRIGHT_PATH to a node_modules/playwright directory, or install it once.\n' + HOW_TO);
   process.exit(2);
 }
 
@@ -197,7 +210,7 @@ function verdicts(m, vpLabel) {
   const setup = cfg.setup ? require(path.resolve(path.dirname(cfgPath), cfg.setup)) : null;
 
   const { chromium } = loadPlaywright();
-  const browser = await chromium.launch();
+  const browser = await launchChromium(chromium, process.env);
   const results = [];
   const errors = [];
 

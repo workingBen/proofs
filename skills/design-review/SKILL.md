@@ -1,6 +1,6 @@
 ---
 name: design-review
-version: 1.8.0
+version: 1.8.1
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -31,17 +31,23 @@ Confirm the live route, and which specific section(s) are in scope. A whole-page
 
 The "before" is a screenshot of the page as the running app serves it today. Do not use images committed in the repo as the "before" because they happen to be there: they show an older page, and the user will review a design against something that is no longer live.
 
-1. **Find the project's start command and port** (`CLAUDE.md`, `package.json`, `Procfile`, `bin/dev`). If dependencies are missing (no `node_modules`, no installed bundle), install them with the project's own install command. Do not fall back to repo images because of that.
+1. **Find the project's start command.** Look in the project's `CLAUDE.md` or README first, then `package.json` scripts, `Procfile`, `bin/dev`, or `manage.py runserver`. If none of them gives one, **ask the user** for it; do not switch to screenshots on your own. If dependencies are missing (no `node_modules`, no installed bundle), install them with the project's own install command; that is not a reason to fall back to repo images.
+   **Pick a free port.** Check that nothing answers on it (`curl -s -o /dev/null http://localhost:PORT/` fails), and start the server on that port. The helper treats a server that already answers at `--url` as ready and leaves it running, so a stale or unrelated app on a reused port would be captured as the "before" and left running.
 2. **Rebuild first.** If the project compiles its styles (a CSS build step), run that build before the capture, or the screenshot shows the old look.
-3. **Start, wait, capture and stop in one call to the helper.** It starts the server, waits until the URL answers, runs your capture command with `PROOFS_BASE_URL` set to that URL, then always stops the server. It is not pre-approved, so the user may get one permission prompt; that is expected. Example, with Chrome from the command line (set `CHROME` to this machine's Chrome binary first):
+3. **Start, wait, capture and stop in one call to the helper.** It starts the server, waits until the URL answers, runs your capture command with `PROOFS_BASE_URL` set to that URL, then always stops the server. It is not pre-approved, so the user may get one permission prompt; that is expected. Example, with Chrome from the command line. Set `CHROME` in the same command: a variable set in an earlier Bash call is gone by the next one. Pick the binary that exists: `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome` (macOS), `google-chrome`, `google-chrome-stable` or `chromium` (Linux).
 
 ```bash
+CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
 python3 ${CLAUDE_PLUGIN_ROOT}/shared/capture/with_server.py --start "npm run dev -- -p 3311" \
   --url http://localhost:3311/ -- sh -c '"$CHROME" --headless --disable-features=MacAppCodeSignClone \
   --hide-scrollbars --virtual-time-budget=8000 --window-size=390,2200 --screenshot=before-390.png "$PROOFS_BASE_URL"'
 ```
 
-   Use `--cwd DIR` when the server starts from another folder. Exit code 0 means the capture worked; 3 means the server never answered (read `.proofs/server.log`), 4 means it exited early, 5 means another run holds the lock. A headless capture at 390 px wide works; do not tell the user it cannot. A project's own browser automation (Playwright or similar) also works as the capture command, and is better when you need to measure the page: pass it after `--` the same way, and launch Chrome with `--disable-features=MacAppCodeSignClone` in its `args`.
+   - Use `--cwd DIR` when the server starts from another folder. For several widths, chain the Chrome commands inside one `sh -c`: each helper call restarts the server.
+   - Exit codes: 3 means the server never answered (read `.proofs/server.log`), 4 means it exited early, 5 means another run holds the lock; any other nonzero code is the capture command's own.
+   - Exit 0 only means the capture command succeeded: headless Chrome also exits 0 on a blank or error page. Read the PNG and confirm it shows the route you meant.
+   - The helper writes its log, pid and lock files to `.proofs/` in the project. Leave that folder untracked (add it to `.gitignore` if the project has one).
+   - A headless capture at 390 px wide works. A project's own browser automation (Playwright or similar) also works as the capture command, and is better when you need to measure the page: pass it after `--` the same way, and launch Chrome with `--disable-features=MacAppCodeSignClone` in its `args`.
 4. **Never start the server yourself with `run_in_background` or `&`.** In `claude -p` the turn then never ends, and when the turn is stopped the server dies with it. The helper owns the server for exactly as long as the capture runs and leaves nothing running.
 5. **Why the Chrome flag stays.** On a Mac, Google Chrome copies its whole app (about 1.4 GB) into a temp folder on every launch and deletes the copy only when quit normally, so each screenshot without `--disable-features=MacAppCodeSignClone` can leave one behind. The flag is in every command above. Headless Chrome also screenshots `file://` URLs, which is how you look at the built review page itself (step 4). The Chrome browser extension tools are a last resort, and only when connected: if every call fails with "not connected", stop retrying.
 

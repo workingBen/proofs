@@ -49,6 +49,18 @@ class DesignReviewGuidance(unittest.TestCase):
     def test_no_free_standing_poll_loop(self):
         self.assertNotIn("seq 1 20", self.step2())
 
+    def test_helper_flags_in_the_example_exist(self):
+        helper = (REPO / "shared" / "capture" / "with_server.py").read_text()
+        block = re.sub(r"\\\n\s*", " ", self.step2())
+        used = set(re.findall(r"with_server\.py(.*?) -- ", block))
+        flags = {f for chunk in used for f in re.findall(r"(?<!\S)(--[a-z-]+)", chunk)}
+        self.assertIn("--start", flags)
+        for flag in flags:
+            self.assertIn(f'"{flag}"', helper)
+
+    def test_chrome_is_set_in_the_same_command(self):
+        self.assertRegex(self.step2(), r'CHROME="[^"]+" \\\n?\s*python3')
+
 
 class ChromeLines(unittest.TestCase):
     def test_every_chrome_line_turns_off_code_sign_clone(self):

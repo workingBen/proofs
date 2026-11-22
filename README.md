@@ -19,10 +19,10 @@
 
 Stop reading walls of terminal text. Every skill here includes a page you can look at, click through and decide on, then hand back to Claude in one paste. Design reviews, visual QA, copy edits and decision pages for [Claude Code](https://claude.com/claude-code): Claude builds the review, you choose from real options, and Claude builds what you chose.
 
-In Claude Code:
+In Claude Code (the HTTPS form works without a GitHub SSH key):
 
 ```
-/plugin marketplace add workingBen/proofs
+/plugin marketplace add https://github.com/workingBen/proofs.git
 /plugin install proofs@proofs
 ```
 

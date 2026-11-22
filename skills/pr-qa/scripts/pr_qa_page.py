@@ -365,8 +365,11 @@ def smoke(page_path, playwright=None):
     node = shutil.which("node")
     if not node:
         return None, {"error": "node not found on PATH"}
-    r = subprocess.run([node, SMOKE_CJS, pw, os.path.abspath(page_path)],
-                       capture_output=True, text=True, timeout=180)
+    try:
+        r = subprocess.run([node, SMOKE_CJS, pw, os.path.abspath(page_path)],
+                           capture_output=True, text=True, timeout=180)
+    except subprocess.TimeoutExpired:
+        return False, {"ok": False, "problems": ["smoke timed out"]}
     try:
         result = json.loads(r.stdout.strip().splitlines()[-1])
     except (ValueError, IndexError):
@@ -965,6 +968,9 @@ const DATA = __PAYLOAD__;
       wrap.appendChild(el("div", { class: "empty" },
         el("h2", { text: "Nothing waiting" }),
         el("p", { text: "No open pull requests need a decision right now." })));
+      if (DATA.skippedLine) {
+        wrap.appendChild(el("p", { class: "notice skipped", text: DATA.skippedLine }));
+      }
       app.appendChild(wrap);
       return;
     }

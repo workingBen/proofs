@@ -769,6 +769,30 @@ class SkippedTest(unittest.TestCase):
                 self.assertNotIn("Other open PRs: #", page)
                 self.assertIn('"skippedLine": ""', page)
 
+    def test_skipped_line_shows_with_zero_prs(self):
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                        "..", "..", "..", "shared", "review_page"))
+        import review_page
+        pw = review_page.find_playwright(None)
+        if not pw:
+            self.skipTest("Playwright is not installed")
+        with tempfile.TemporaryDirectory() as tmp:
+            self._build(tmp, [{"number": 2, "reason": "not requested"}], prs=False)
+            script = os.path.join(tmp, "dom.cjs")
+            with open(script, "w", encoding="utf-8") as handle:
+                handle.write(
+                    "const {chromium}=require(process.argv[2]);"
+                    "const {launchChromium}=require(process.argv[4]);"
+                    "(async()=>{const b=await launchChromium(chromium,process.env);"
+                    "const p=await b.newPage();await p.goto('file://'+process.argv[3]);"
+                    "console.log(await p.locator('#app').innerText());await b.close()})()")
+            launch = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..",
+                                                  "shared", "review_page", "launch.cjs"))
+            r = subprocess.run(["node", script, pw, os.path.join(tmp, "page.html"), launch],
+                               capture_output=True, text=True)
+            self.assertIn("Other open PRs: #2 (not requested)", r.stdout, r.stderr)
+            self.assertIn("Nothing waiting", r.stdout)
+
     def test_a_bare_list_meta_still_loads(self):
         with tempfile.TemporaryDirectory() as tmp:
             meta = os.path.join(tmp, "m.json")

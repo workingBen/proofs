@@ -12,6 +12,10 @@ the one the PR caused. A finding is raised when the after is worse than the
 before for the same page at the same size.
 
     python3 scripts/pr_qa_findings.py --dir work/pr-7 > findings.json
+
+With no layout measurements in before.json and after.json the verdict is
+"unknown" ("not measured"), never "clean": absence of measurements is not
+evidence that nothing broke.
 """
 import argparse
 import json
@@ -22,6 +26,14 @@ import sys
 # arithmetic, not a layout that broke.
 OVERFLOW_NOISE_PX = 2
 MIN_TAP_TARGET = 44
+
+# The keys a shot carries when the capture step actually measured the layout.
+# A shot with none of them (just label, size, path, file) proves nothing, and a
+# comparison of two such lists would otherwise read as "clean".
+MEASURES = ("overflow", "scrollWidth", "clientWidth", "smallTargets", "errors")
+
+NOT_MEASURED_NOTE = ("not measured: before.json and after.json hold no layout "
+                     "measurements, so no regression could be checked")
 
 
 def load(directory, label):
@@ -47,7 +59,7 @@ def compare(before, after):
 
     for shot in after:
         old = olds.get(key(shot))
-        where = f'{shot.get("pageLabel") or shot.get("path")} at {shot.get("size")}'
+        where = where_of(shot)
 
         # A shot of the wrong page is not evidence, and saying so beats
         # publishing it silently.
@@ -57,6 +69,12 @@ def compare(before, after):
                 f'Asked for {shot.get("path")} and landed on {shot.get("landedOn")}. '
                 "Treat this pair as no evidence at all.",
                 {"path": shot.get("path"), "landedOn": shot.get("landedOn")}))
+            continue
+
+        # No measurements on either side: nothing to compare, and defaulting
+        # the missing fields to 0 would invent a baseline. unmeasured_routes()
+        # reports these.
+        if not is_measured(shot) or (old is not None and not is_measured(old)):
             continue
 
         new_overflow = shot.get("overflow", 0)
@@ -115,13 +133,61 @@ def compare(before, after):
     return sorted(findings, key=lambda f: order.get(f["severity"], 9))
 
 
-def summarize(findings, plan=None):
+def is_measured(shot):
+    return any(name in shot for name in MEASURES)
+
+
+def where_of(shot):
+    return f'{shot.get("pageLabel") or shot.get("path")} at {shot.get("size")}'
+
+
+def unmeasured_routes(before, after):
+    """Routes (page at size) whose before or after shot holds no measurements.
+
+    Decided per route and per side: a bare shot on either side means that route
+    could not be compared, and must never read as clean or as a 0 baseline.
+    A redirected shot is skipped; it is already a blocker.
+    """
+    olds = {key(s): s for s in before}
+    names = []
+    for shot in after:
+        if shot.get("redirected"):
+            continue
+        old = olds.get(key(shot))
+        if not is_measured(shot) or (old is not None and not is_measured(old)):
+            names.append(where_of(shot))
+    return names
+
+
+def measured(before, after):
+    """True only when at least one after shot is measured and no compared
+    route is missing measurements on either side."""
+    return (any(is_measured(s) for s in after)
+            and not unmeasured_routes(before, after))
+
+
+def summarize(findings, plan=None, measured=True, unmeasured=None):
     counts = {"blocker": 0, "warning": 0, "good": 0}
     for item in findings:
         counts[item["severity"]] = counts.get(item["severity"], 0) + 1
-    out = {"findings": findings, "counts": counts,
-           "verdict": "hold" if counts["blocker"] else
-                      ("look" if counts["warning"] else "clean")}
+    if counts["blocker"]:
+        verdict = "hold"
+    elif counts["warning"]:
+        verdict = "look"
+    elif not measured:
+        # Something was not measured, so "clean" would be a claim with no evidence.
+        verdict = "unknown"
+    else:
+        verdict = "clean"
+    out = {"findings": findings, "counts": counts, "verdict": verdict,
+           "measured": bool(measured)}
+    if not measured:
+        out["note"] = NOT_MEASURED_NOTE
+        if unmeasured:
+            out["unmeasured"] = list(unmeasured)
+            out["note"] = ("not measured: " + ", ".join(unmeasured) +
+                           " hold no layout measurements in before.json or "
+                           "after.json, so no regression could be checked there")
     if plan:
         # An unmapped view means the QA covered less than it appears to. Saying
         # so is the difference between a gap and a silent gap.
@@ -141,7 +207,10 @@ def main(argv=None):
         with open(args.plan, encoding="utf-8") as handle:
             plan = json.load(handle)
 
-    result = summarize(compare(load(args.dir, "before"), load(args.dir, "after")), plan)
+    before = load(args.dir, "before")
+    after = load(args.dir, "after")
+    result = summarize(compare(before, after), plan, measured=measured(before, after),
+                       unmeasured=unmeasured_routes(before, after))
     print(json.dumps(result, indent=2))
     # Never fail the build. A blocker is a thing for a person to decide about,
     # and a red X on the PR would say "the agent's change is broken" when what

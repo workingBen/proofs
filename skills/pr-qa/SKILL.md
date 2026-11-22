@@ -1,6 +1,6 @@
 ---
 name: pr-qa
-version: 1.7.2
+version: 1.7.3
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/skills/pr-qa/scripts/pr_qa_page.py *)
@@ -196,6 +196,9 @@ after measurements (`before.json`, `after.json`, each a list of `shots`) into th
 findings a machine can be sure of. It reports a *regression* (the after is worse
 than the before for the same page at the same size), not a state the page was
 already in.
+With no layout measurements in `before.json` and `after.json` (`overflow`,
+`scrollWidth`, `smallTargets`, `errors`), the verdict is `unknown`, "not measured",
+never `clean`. Save its output with `> <dir>/findings.json`.
 
 `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pr-qa/scripts/pr_qa_plan.py --map pr_qa_pages.json --ids ids.json` decides which
 URLs to photograph for a PR, from the list of changed files (on stdin, or

@@ -1,5 +1,6 @@
 # Changelog
 
+- **1.7.3** (2026-11-22): `pr_qa_findings.py` says "not measured" instead of "clean" when the evidence holds no measurements, decided per route so a partly measured run never reads clean.
 - **1.7.2** (2026-11-22): New `PROOFS_BASE_DIR` setting moves the before-shot base worktree to `$PROOFS_BASE_DIR/<repo folder name>-pr-qa-base`, for setups that block `git worktree add` inside code folders. Unset, it stays `.proofs/base`.
 - **1.7.1** (2026-11-22): Names the helper's log for each run (`.proofs/base/.proofs/server.log` for the before run, `.proofs/server.log` for the after run) and which `node_modules` the before capture resolves Playwright from.
 - **1.7.0** (2026-11-22): Before shots come from a worktree at `.proofs/base`, with its own installed dependencies, and every capture runs through the start-capture-stop helper.

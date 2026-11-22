@@ -217,6 +217,12 @@ class AllowBlockTest(unittest.TestCase):
         self.assertNotIn("/opt/claude-home", r.stdout)
         self.assertFalse(set(allow_block.COMMIT_RULES) & set(allow_block.PROJECT_RULES))
 
+    def test_lines_commit(self):
+        r = self._cli("/opt/claude-home", None, "--lines", "--commit")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn("permissions", r.stdout)
+        self.assertEqual(json.loads("[" + r.stdout + "]"), allow_block.COMMIT_RULES)
+
     def test_commit_combines(self):
         r = self._cli("/opt/claude-home", None, "--project", "--commit")
         self.assertEqual(r.returncode, 0, r.stderr)

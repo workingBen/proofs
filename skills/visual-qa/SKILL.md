@@ -1,6 +1,6 @@
 ---
 name: visual-qa
-version: 1.3.1
+version: 1.4.0
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs *)
@@ -40,6 +40,7 @@ and colors (mockups reuse them), and anything already decided that must not be "
 1. **Finish in this turn.** Build, smoke-check and screenshot before you reply; the next turn re-reads the whole session and costs more each time. Write big files (HTML, spec JSON, scripts) with the Write tool and never print them back with `cat`, `head` or `Read`; the helpers print short summaries.
 2. **Stay in two folders.** Read only inside the project (the folder Claude Code started in) and the plugin folder. Do not read parent folders: their `CLAUDE.md` is already loaded for you. Write specs, scratch scripts, screenshots and pages only under `.proofs/` in the project, never the system temp folder, `$TMPDIR` or `~`. The exceptions are the Playwright install in `~/.cache/proofs-playwright` and pr-qa's `PROOFS_BASE_DIR` base folder, when it is set.
 3. **One command per Bash call.** No pipes, redirects, `;`, `&&`, `cd`, `$(...)` or `VAR=` in front: Claude Code matches its allow rules against the whole command, and any of those makes it ask (or, in `claude -p`, refuse).
+4. **Use the helpers' own checks, not ad hoc tools.** Capture prints each shot's size and overflow; never run `file`, `magick`/`identify` or `sips`, and change your own mockups with Edit or Write, never `sed -i`.
 
 - **Print "Commands this review will run"** before the first Bash call: one short list with the exact forms (the install, for example `npm install`; the capture line below; the style build if the project compiles styles; the type check if the project has one, for example `npx tsc --noEmit`). Then run them without further narration. The README's optional project block can pre-approve them.
 - Run the branch under test on its own port (3311), never another session's server. Find the start command in the project's notes; install missing dependencies with the project's own command.

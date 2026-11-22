@@ -10,14 +10,15 @@ permissions.allow list. --headless adds one more rule, for unattended (claude -p
 only: it pre-approves shared/capture/with_server.py, which runs whatever --start command
 it is given, so it is never in the standard output. --project prints a separate,
 opt-in block for the project's own commands (installs, the type check, the pr-qa base
-worktree, the one-time Playwright install) and nothing else; it holds no home path, so
+worktree, the one-time Playwright install, opening pages under .proofs/pages) and
+nothing else; it holds no home path, so
 it may go in a committed .claude/settings.json, but its npm install and npm ci run the
 project's package scripts. --project may be combined with --headless (the output is both
 sets, so it holds the home folder again). --commit prints a second opt-in block for
 saving and sharing work (git add, git commit, git push -u origin HEAD, gh pr create). It
 is opt-in, never part of --project, because git push and gh pr create reach GitHub; it
-holds no home path and combines with every other flag. For the default and --headless output use
-~/.claude/settings.json (every project; with a custom $CLAUDE_CONFIG_DIR, that folder's
+holds no home path and combines with every other flag. For the default and --headless
+output use ~/.claude/settings.json (every project; with a custom $CLAUDE_CONFIG_DIR, that folder's
 settings.json) or a project's .claude/settings.local.json, never a committed
 .claude/settings.json: those Bash lines hold your home folder.
 

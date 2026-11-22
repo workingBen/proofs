@@ -762,6 +762,12 @@ class SkippedTest(unittest.TestCase):
                           {"number": 5, "reason": "draft"}]),
             "Other open PRs: #2 (not requested); #5 (draft)")
 
+    def test_skipped_line_ignores_entries_without_a_number(self):
+        self.assertEqual(
+            skipped_line([{"reason": "draft"}, {"number": None}, {"number": 5, "reason": "draft"}]),
+            "Other open PRs: #5 (draft)")
+        self.assertEqual(skipped_line([{"reason": "draft"}]), "")
+
     def test_skipped_empty_renders_nothing(self):
         for skipped in (None, []):
             with tempfile.TemporaryDirectory() as tmp:

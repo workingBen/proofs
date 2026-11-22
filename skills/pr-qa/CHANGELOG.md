@@ -1,5 +1,7 @@
 # Changelog
 
+- **1.8.0** (2026-11-22): The page lists the other open PRs it skipped, even when there are no PRs to cover, and entries without a number are left out. A rise in small text or tap targets, including repeated small labels, now holds back a merge recommendation until it is explained. The `--smoke` self-check has a timeout, the unattended run opens pages through the allowed form, and the call counts are true (the no-PR path counts the extra `cp .env`). House rule 4: use the helpers' own checks, not `file`, `magick` or `sed -i`.
+
 - **1.7.5** (2026-11-22): Removes the `.proofs/base` worktree right after the before shots are taken and read, before checking out the branch or running its tests, so test runners and linters that walk the tree cannot pick up the base copy. Common Mistakes keeps the cleanup as a backstop.
 - **1.7.4** (2026-11-22): The capture example sets `CHROME` inside the `sh -c` capture command instead of in front of `python3`, so the command matches the unattended allow rule for the helper.
 - **1.7.3** (2026-11-22): `pr_qa_findings.py` says "not measured" instead of "clean" when the evidence holds no measurements, decided per route so a partly measured run never reads clean.

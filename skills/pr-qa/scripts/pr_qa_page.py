@@ -220,6 +220,8 @@ def skipped_line(skipped):
     for item in skipped or []:
         reason = (item.get("reason") or "").strip() if isinstance(item, dict) else ""
         number = item.get("number") if isinstance(item, dict) else item
+        if number is None or number == "":
+            continue
         parts.append(f"#{number} ({reason})" if reason else f"#{number}")
     return "Other open PRs: " + "; ".join(parts) if parts else ""
 

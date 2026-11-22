@@ -1,6 +1,6 @@
 ---
 name: design-review
-version: 1.8.3
+version: 1.9.0
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)

@@ -73,10 +73,44 @@ class TapTargetTest(unittest.TestCase):
         small = [{"tag": "button", "text": "Clear", "width": 31, "height": 20}]
         self.assertEqual(compare([shot("before", small=small)], [shot(small=small)]), [])
 
-    def test_small_controls_on_desktop_are_ignored(self):
-        after = [shot(size="desktop", client=1440,
-                      small=[{"tag": "a", "text": "x", "width": 10, "height": 10}])]
-        self.assertEqual(compare([shot("before", size="desktop", client=1440)], after), [])
+    def test_small_targets_named_at_desktop(self):
+        def t(n):
+            return {"tag": "a", "text": f"Link {n}", "width": 20, "height": 18}
+        before = [shot("before", size="desktop", client=1440, small=[t(0)])]
+        after = [shot(size="desktop", client=1440, small=[t(0), t(1), t(2), t(3)])]
+        found = [f for f in compare(before, after) if f["title"].endswith("new small tap targets")]
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0]["severity"], "warning")
+        self.assertTrue(found[0]["evidence"]["rise"])
+        for n in (1, 2, 3):
+            self.assertIn(f'"Link {n}" 20x18px', found[0]["detail"])
+        self.assertNotIn("Link 0", found[0]["detail"])
+
+    def test_small_target_detail_caps_at_four_and_counts_the_rest(self):
+        small = [{"tag": "a", "text": f"L{n}", "width": 10, "height": 10} for n in range(6)]
+        found = compare([shot("before")], [shot(small=small)])
+        self.assertIn("and 2 more", found[0]["detail"])
+
+    def test_small_text_rise_named(self):
+        old = [{"text": "Old a", "px": 11}, {"text": "Old b", "px": 11}]
+        new = [{"text": "New c", "px": 11.5}, {"text": "New d", "px": 10}]
+        before = [dict(shot("before"), smallText=old, smallTextCount=2)]
+        after = [dict(shot(), smallText=old + new, smallTextCount=4)]
+        found = [f for f in compare(before, after) if f["title"].endswith("new text below the size floor")]
+        self.assertEqual(len(found), 1)
+        self.assertTrue(found[0]["evidence"]["rise"])
+        self.assertIn('"New c" 11.5px', found[0]["detail"])
+        self.assertIn('"New d" 10px', found[0]["detail"])
+        self.assertNotIn("Old a", found[0]["detail"])
+
+    def test_no_finding_when_counts_flat(self):
+        small = [{"tag": "a", "text": "x", "width": 10, "height": 10}]
+        text = [{"text": "tiny", "px": 11}]
+        before = [dict(shot("before", size="desktop", client=1440, small=small),
+                       smallText=text, smallTextCount=1)]
+        after = [dict(shot(size="desktop", client=1440, small=small),
+                      smallText=text, smallTextCount=1)]
+        self.assertEqual(compare(before, after), [])
 
 
 class EvidenceIntegrityTest(unittest.TestCase):

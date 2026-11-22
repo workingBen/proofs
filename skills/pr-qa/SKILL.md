@@ -207,6 +207,7 @@ why, because an omission that looks like coverage is worse than a gap.
 | `tests` | The PR's own test result, and whether it added tests |
 | `narrative` | One or two sentences: what changed and why |
 | `recommendation` | One of `merge-and-push`, `merge-hold-push`, `send-back`, `wait` |
+| `rise_explained` | Only when a merge is recommended over a finding that rose: one sentence naming the elements and why they are acceptable. Renders under "Why merge anyway" |
 | `human_findings` | What Step 5 found that the machine could not |
 
 `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pr-qa/scripts/pr_qa_page.py --meta <dir>/meta.json --out <file>.html` renders
@@ -451,6 +452,10 @@ own test. Compare the full string, or hash the source files.
 State the *action*, not the label — "merge" is ambiguous, and the difference
 matters when pushing to the main branch needs permission. How this project merges,
 pushes and deploys is in its own notes; follow them.
+
+Never recommend a merge when a finding rose and you have not named the elements
+and said why it is acceptable (`rise_explained`); otherwise recommend `send-back`
+or `wait`. The page builder refuses the combination.
 
 | Option | What you actually do |
 |---|---|

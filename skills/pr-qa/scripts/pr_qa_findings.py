@@ -104,17 +104,21 @@ def compare(before, after):
                 f"{old_overflow}px of overflow before, {new_overflow}px after.",
                 {"before": old_overflow, "after": new_overflow}))
 
-        old_small = {(t.get("text"), t.get("tag")) for t in (old or {}).get("smallTargets") or []}
-        fresh = [t for t in shot.get("smallTargets") or []
-                 if (t.get("text"), t.get("tag")) not in old_small]
-        if fresh and shot.get("size") == "phone":
-            worst = min(fresh, key=lambda t: min(t.get("width", 0), t.get("height", 0)))
+        fresh = fresh_targets(old, shot)
+        if fresh:
             findings.append(finding(
-                "warning", f"{where}: a new control is small for a finger",
-                f'"{worst.get("text") or worst.get("tag")}" is '
-                f'{worst.get("width")}x{worst.get("height")}px, under the {MIN_TAP_TARGET}px '
-                "that reads as reliably tappable.",
-                {"targets": fresh[:4]}))
+                "warning", f"{where}: new small tap targets",
+                f"Under the {MIN_TAP_TARGET}px that reads as reliably tappable: "
+                f"{name_items([target_label(t) for t in fresh])}.",
+                {"targets": fresh[:4], "rise": True}))
+
+        fresh_text = fresh_small_text(old, shot)
+        if fresh_text:
+            findings.append(finding(
+                "warning", f"{where}: new text below the size floor",
+                "Text smaller than the floor the page is held to: "
+                f"{name_items([text_label(t) for t in fresh_text])}.",
+                {"text": fresh_text[:4], "rise": True}))
 
         fresh_errors = [e for e in shot.get("errors") or []
                         if e not in ((old or {}).get("errors") or [])]
@@ -134,6 +138,38 @@ def compare(before, after):
 
     order = {"blocker": 0, "warning": 1, "good": 2}
     return sorted(findings, key=lambda f: order.get(f["severity"], 9))
+
+
+def name_items(items, limit=4):
+    """Up to `limit` items joined by "; ", then "and N more"."""
+    out = "; ".join(items[:limit])
+    if len(items) > limit:
+        out += f"; and {len(items) - limit} more"
+    return out
+
+
+def target_label(t):
+    name = t.get("text") or t.get("tag")
+    return f'"{name}" {t.get("width")}x{t.get("height")}px'
+
+
+def text_label(t):
+    return f'"{t.get("text")}" {t.get("px")}px'
+
+
+def fresh_targets(old, shot):
+    seen = {(t.get("text"), t.get("tag")) for t in (old or {}).get("smallTargets") or []}
+    return [t for t in shot.get("smallTargets") or []
+            if (t.get("text"), t.get("tag")) not in seen]
+
+
+def fresh_small_text(old, shot):
+    # A before shot from an older capture has no smallText at all; that is "not
+    # measured", not "zero", so it cannot be compared.
+    if old is not None and "smallText" not in old:
+        return []
+    seen = {t.get("text") for t in (old or {}).get("smallText") or []}
+    return [t for t in shot.get("smallText") or [] if t.get("text") not in seen]
 
 
 def is_measured(shot):

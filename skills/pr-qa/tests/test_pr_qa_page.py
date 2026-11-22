@@ -681,5 +681,46 @@ class BuildValidationTest(unittest.TestCase):
         self.assertIn("nope", str(ctx.exception))
 
 
+class RiseGateTest(unittest.TestCase):
+    """A merge recommendation over a finding that rose needs a stated reason."""
+
+    RISE = {"findings": [{"severity": "warning", "title": "X at desktop: new small tap targets",
+                          "detail": '"A" 10x10px', "evidence": {"rise": True}}],
+            "counts": {"blocker": 0, "warning": 1, "good": 0}, "verdict": "look",
+            "unmapped_changes": [], "pages_covered": ["/x"]}
+
+    def _build(self, tmp, recommendation, **extra):
+        evidence = os.path.join(tmp, "ev")
+        write_evidence(evidence, findings=self.RISE)
+        entry = {"number": 17, "title": "T", "branch": "b", "dir": evidence,
+                 "absent_reason": "", "cost": "", "tests": "", "narrative": "",
+                 "recommendation": recommendation, "human_findings": []}
+        entry.update(extra)
+        meta = os.path.join(tmp, "meta.json")
+        with open(meta, "w", encoding="utf-8") as handle:
+            json.dump([entry], handle)
+        out = os.path.join(tmp, "page.html")
+        return build(meta, out, "Sample Project", "acme/widgets")
+
+    def test_merge_with_unexplained_rise_refuses(self):
+        for rec in ("merge-and-push", "merge-hold-push"):
+            with tempfile.TemporaryDirectory() as tmp:
+                with self.assertRaises(SystemExit) as ctx:
+                    self._build(tmp, rec)
+                self.assertIn("17", str(ctx.exception))
+                self.assertIn("rise_explained", str(ctx.exception))
+
+    def test_send_back_with_a_rise_is_fine(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._build(tmp, "send-back")
+
+    def test_merge_with_rise_explained_renders_reason(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            page = self._build(tmp, "merge-and-push",
+                               rise_explained="The new links are footer legal text.")
+            self.assertIn("Why merge anyway", page)
+            self.assertIn("The new links are footer legal text.", page)
+
+
 if __name__ == "__main__":
     unittest.main()

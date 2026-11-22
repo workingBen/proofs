@@ -231,6 +231,7 @@ def render(prs, dropped, project, repo, session=None):
             "color": CHIP.get(pr.get("verdict", "unknown"), CHIP["unknown"])[1],
             "recommendation": pr.get("recommendation") or "wait",
             "narrative": pr.get("narrative", ""),
+            "riseExplained": pr.get("rise_explained") or "",
             "reviewed": bool(pr.get("human_findings")),
             "absent": not (pr.get("evidence") or {}).get("present"),
             "absentReason": pr.get("absent_reason", ""),
@@ -278,6 +279,26 @@ def validate_meta(meta):
                 f"-- valid values are {', '.join(VALID_RECOMMENDATIONS)}")
 
 
+MERGE_RECOMMENDATIONS = ("merge-and-push", "merge-hold-push")
+
+
+def check_rise(entry, evidence):
+    """Refuse a merge recommendation over a finding that rose, unless the
+    session named why it is acceptable. The page must not say "merge" while its
+    own capture got worse."""
+    if entry.get("recommendation") not in MERGE_RECOMMENDATIONS:
+        return
+    found = list(evidence.get("findings") or []) + list(entry.get("human_findings") or [])
+    risen = [f for f in found if (f.get("evidence") or f.get("data") or {}).get("rise")]
+    if risen and not (entry.get("rise_explained") or "").strip():
+        titles = "; ".join(f.get("title", "") for f in risen[:3])
+        raise SystemExit(
+            f"PR #{entry.get('number')}: recommendation {entry.get('recommendation')!r} "
+            f"over a finding that rose ({titles}). Name the elements and add "
+            '"rise_explained": "<one sentence on why it is acceptable>" to this PR\'s '
+            "meta entry, or recommend send-back or wait.")
+
+
 def build(meta_path, out_path, project, repo, session=None):
     with open(meta_path, encoding="utf-8") as handle:
         meta = json.load(handle)
@@ -286,6 +307,7 @@ def build(meta_path, out_path, project, repo, session=None):
     for entry in meta:
         evidence = load_evidence(entry.get("dir"))
         human = entry.get("human_findings") or []
+        check_rise(entry, evidence)
         prs.append(dict(entry, evidence=evidence,
                         verdict=effective_verdict(evidence, human)))
     embedded, dropped = embed(prs)
@@ -742,6 +764,10 @@ const DATA = __PAYLOAD__;
       el("span", { text: "Cost " + (pr.cost || "--") }),
       el("span", { text: "Tests " + (pr.tests || "--") })));
     if (pr.narrative) card.appendChild(el("p", { class: "narrative", text: pr.narrative }));
+    if (pr.riseExplained) {
+      card.appendChild(el("p", { class: "notice warn" },
+        el("strong", { text: "Why merge anyway: " }), pr.riseExplained));
+    }
     if (!pr.reviewed) {
       card.appendChild(el("p", { class: "notice warn",
         text: "This PR is not yet read by a reviewer -- the findings below are machine-only." }));

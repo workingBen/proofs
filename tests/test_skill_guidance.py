@@ -184,11 +184,11 @@ class PrQaGuidance(unittest.TestCase):
         self.assertIn("~/.cache/proofs-playwright", text)
         self.assertIn("not measured", text)
 
-    def test_default_path_has_at_most_nine_bash_calls(self):
+    def test_default_path_has_at_most_ten_bash_calls(self):
         text = section("pr-qa", "Default path")
         fence = text.split("```bash", 1)[1].split("```", 1)[0]
         calls = [l for l in fence.splitlines() if l.strip() and not l.startswith("#")]
-        self.assertLessEqual(len(calls), 9, calls)
+        self.assertLessEqual(len(calls), 10, calls)
 
     def test_default_path_checks_out_the_pr_before_the_after_capture(self):
         section_text = section("pr-qa", "Default path")
@@ -202,8 +202,21 @@ class PrQaGuidance(unittest.TestCase):
 
     def test_default_path_honors_the_base_dir_setting(self):
         text = section("pr-qa", "Default path")
-        self.assertIn("PROOFS_BASE_DIR", text)
+        fence = text.split("```bash", 1)[1].split("```", 1)[0]
+        self.assertEqual(fence.strip().splitlines()[0], "printenv PROOFS_BASE_DIR")
         self.assertIn("<PROOFS_BASE_DIR>/<repo folder>-pr-qa-base", text)
+        sequence = section("pr-qa", "The Sequence")
+        self.assertIn("printenv PROOFS_BASE_DIR", sequence)
+        self.assertNotIn("echo \"${PROOFS_BASE_DIR", self.pr_qa())
+        self.assertNotIn("Read tool", text.split("PROOFS_BASE_DIR", 1)[1].split("gh pr checkout", 1)[0])
+
+    def test_default_path_copies_env_with_cp_and_reinstalls_after_checkout(self):
+        text = section("pr-qa", "Default path")
+        self.assertIn("cp .env", text)
+        self.assertNotIn("copy it into the base folder's `<app-dir>` with the Read", text)
+        after_checkout = text.split("gh pr checkout <n>` is not optional", 1)[1]
+        self.assertIn("package.json", after_checkout)
+        self.assertIn("lockfile", after_checkout)
 
     def test_exclude_one_liner_is_gone(self):
         text = self.pr_qa()
@@ -304,10 +317,10 @@ class HouseRules(unittest.TestCase):
                 if line.lstrip().startswith("```"):
                     in_fence = line.lstrip().startswith("```bash") and not in_fence
                 elif in_fence:
-                    code = re.sub(r"<[^<>\s]+>", "X", line.split(" #", 1)[0]).lstrip()
+                    code = re.sub(r"<[^<>\s][^<>]{0,30}>", "X", line.split(" #", 1)[0]).lstrip()
                     if code.startswith("#"):
                         continue
-                    self.assertIsNone(re.search(r"^[A-Z_]+=|\||&&|;|\$\(|^cd |(?<![-=])>{1,2}(\s|$)|(^|\s)<\s", code), f"{path.name}: {line[:80]}")
+                    self.assertIsNone(re.search(r"^[A-Z_]+=|\||&&|;|\$\(|^cd |(?<![-=])\d*>{1,2}|&>|(^|\s)<\s", code), f"{path.name}: {line[:80]}")
 
 
 if __name__ == "__main__":

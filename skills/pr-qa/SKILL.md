@@ -56,11 +56,12 @@ The whole flow for a PR whose app runs with one start command. The goal is a bui
 
 **Steps.**
 
-1. **List every command once, up front, in one message**, with the exact text and literal paths (no variables): the nine lines below, the install in the checkout (`npm ci`) if its `node_modules` is missing, and the Playwright install line if `capture.cjs` reports Playwright missing. Playwright lives in `~/.cache/proofs-playwright`, one install per machine (`npm install --prefix ~/.cache/proofs-playwright playwright@1.61.1`); do not install it in the system temp folder or the project. Then run them without further narration.
+1. **List every command once, up front, in one message**, with the exact text and literal paths (no variables): the ten lines below, the install in the checkout (`npm ci`) if its `node_modules` is missing or the PR's diff touches `package.json` or the lockfile (run it after `gh pr checkout`, before the after capture), and the Playwright install line if `capture.cjs` reports Playwright missing. Playwright lives in `~/.cache/proofs-playwright`, one install per machine (`npm install --prefix ~/.cache/proofs-playwright playwright@1.61.1`); do not install it in the system temp folder or the project. Then run them without further narration.
 2. **Write `.proofs/capture/pages.json`** with the Write tool: the pages the diff touches (`pr_qa_plan.py` when a map exists), each with a `name` and `path`.
-3. **Run the commands in order.** Replace `<n>` with the PR number, `<base>` with its target branch and `<app-dir>` with the folder holding `package.json` (use `.` when it is the root), and the ports with free high ones. `.proofs/base` is the base folder: if the `PROOFS_BASE_DIR` setting is set (read the `env` block of `.claude/settings.json` with the Read tool), use `<PROOFS_BASE_DIR>/<repo folder>-pr-qa-base` instead, written literally in every line that names it. If the app has a `.env`, copy it into the base folder's `<app-dir>` with the Read and Write tools before the install. **`gh pr checkout <n>` is not optional: the after shot must be the PR's code.** If the session is already on the PR branch it still runs (it is a no-op), so the path is the same every time.
+3. **Run the commands in order.** Replace `<n>` with the PR number, `<base>` with its target branch and `<app-dir>` with the folder holding `package.json` (use `.` when it is the root), and the ports with free high ones. The first line, `printenv PROOFS_BASE_DIR`, prints the `PROOFS_BASE_DIR` setting, or nothing (exit 1) when it is not set. If it printed a path, use `<PROOFS_BASE_DIR>/<repo folder>-pr-qa-base` as the base folder, written literally in every line that names it; otherwise the base folder is `.proofs/base`. If the app has a `.env`, copy it with one extra Bash call (`cp .env <base folder>/<app-dir>/.env`, literal paths) before the install; never Read or Write it, because secrets must not enter the transcript. **`gh pr checkout <n>` is not optional: the after shot must be the PR's code.** If the session is already on the PR branch it still runs (it is a no-op), so the path is the same every time. If the PR's diff touches `package.json` or the lockfile, run the project's install (`npm ci`) in the checkout now, before the after capture; this is a stated extra, not one of the ten.
 
 ```bash
+printenv PROOFS_BASE_DIR
 git fetch origin
 git worktree add .proofs/base origin/<base>
 npm ci --prefix .proofs/base/<app-dir>
@@ -134,7 +135,7 @@ no token, no network, or no open PR, so it can never keep a session from startin
    code folders except one sanctioned folder; for them, set `PROOFS_BASE_DIR` to
    that folder, as an absolute path (no `~`, no relative path), in the `env` block
    of `.claude/settings.json` (project or user level). Resolve it **once**
-   (`echo "${PROOFS_BASE_DIR:-}"`), confirm the folder exists, and write the
+   (`printenv PROOFS_BASE_DIR`, which prints nothing when it is unset), confirm the folder exists, and write the
    **literal resolved path** in every later command (`git worktree add`, `--cwd`,
    the log path `<base-dir>/.proofs/server.log`,
    `git worktree remove`): shell variables do not survive between Bash calls, and

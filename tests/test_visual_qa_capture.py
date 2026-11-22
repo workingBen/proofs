@@ -44,7 +44,7 @@ class CaptureLaunch(unittest.TestCase):
             (pkg / "index.js").write_text(FAKE)
             (tmp / "pages.json").write_text(json.dumps({"base": "http://localhost:9", "pages": [{"name": "x", "path": "/"}]}))
             log = tmp / "launch.log"
-            env = {k: v for k, v in os.environ.items() if k not in ("NODE_PATH", "PLAYWRIGHT_PATH", "PROOFS_BROWSER_CHANNEL")}
+            env = {k: v for k, v in os.environ.items() if k not in ("NODE_PATH", "PLAYWRIGHT_PATH", "PROOFS_PLAYWRIGHT", "PROOFS_BROWSER_CHANNEL")}
             env.update(HOME=str(tmp), FAKE_LOG=str(log), FAKE_SCRIPT=json.dumps(script), **(extra_env or {}))
             r = subprocess.run([NODE, str(CAPTURE), str(tmp / "pages.json"), "--out", str(tmp / "out")],
                                cwd=tmp, env=env, capture_output=True, text=True, timeout=60)
@@ -186,6 +186,45 @@ class PhoneWidth(unittest.TestCase):
             self.assertGreaterEqual(m["sideways"], 65)
             self.assertIn("clipped", r.stdout)
 
+    def test_clipping_wrapper_does_not_hide_overflow(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            r, out = self.capture(tmp, "wrapper-clip.html", "--sizes", "390")
+            m = self.result(out)["measures"]
+            self.assertGreaterEqual(m["widestRight"], 455)
+            self.assertIn("clipped", r.stdout)
+
+    def test_offscreen_drawer_is_not_overflow(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, out = self.capture(tmp, "drawer.html", "--sizes", "390")
+            self.assertEqual(self.result(out)["measures"]["sideways"], 0)
+
+    def test_scrolling_carousel_is_not_overflow(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, out = self.capture(tmp, "carousel.html", "--sizes", "390")
+            self.assertEqual(self.result(out)["measures"]["sideways"], 0)
+
+    def test_default_sizes_give_unique_pr_qa_keys(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.capture(tmp, "fits.html", "--evidence", "before")
+            self.capture(tmp, "wide-nav.html", "--evidence", "after")
+            out = Path(tmp) / "out"
+            for label in ("before", "after"):
+                shots = json.loads((out / f"{label}.json").read_text())["shots"]
+                keys = [(s["slug"], s["size"]) for s in shots]
+                self.assertEqual(len(keys), 3)
+                self.assertEqual(len(set(keys)), 3, keys)
+            r = subprocess.run(["python3", str(FINDINGS), "--dir", str(out)], capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertIn("sideways", r.stdout)
+
+    def test_evidence_carries_small_targets_and_culprit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.capture(tmp, "wide-nav.html", "--sizes", "390", "--evidence", "after")
+            shot = json.loads((Path(tmp) / "out" / "after.json").read_text())["shots"][0]
+            self.assertIn("smallTargets", shot)
+            self.assertGreaterEqual(shot["overflowing"][0]["past"], 65)
+            self.assertEqual(shot["overflowing"][0]["tag"], "nav")
+
     def test_fitting_page_passes(self):
         with tempfile.TemporaryDirectory() as tmp:
             _, out = self.capture(tmp, "fits.html", "--sizes", "390")
@@ -233,6 +272,40 @@ class CaptureOptions(unittest.TestCase):
             subprocess.run([NODE, str(CAPTURE), str(tmp / "pages.json"), "--out", str(tmp / "out"), "--sizes", "390"],
                            cwd=tmp, env=env, capture_output=True, text=True, timeout=60)
             self.assertEqual(log.read_text().split(), ["http://127.0.0.1:4567/p"])
+
+    def test_untrusted_width_exits_3(self):
+        fake = r"""
+const page = { on() {}, goto: async () => {}, click: async () => {}, waitForSelector: async () => {},
+  screenshot: async () => {},
+  evaluate: async (fn, arg) => (arg && 'minText' in arg ? { innerWidth: 500 } : undefined) };
+const context = { newPage: async () => page, close: async () => {} };
+module.exports = { chromium: { launch: async () => ({ newContext: async () => context, close: async () => {} }) } };
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            pkg = tmp / "node_modules" / "playwright"
+            pkg.mkdir(parents=True)
+            (pkg / "package.json").write_text('{"name": "playwright", "main": "index.js"}')
+            (pkg / "index.js").write_text(fake)
+            (tmp / "pages.json").write_text(json.dumps({"base": "http://localhost:9", "pages": [{"name": "x", "path": "/"}]}))
+            env = {k: v for k, v in os.environ.items() if k not in ("NODE_PATH", "PLAYWRIGHT_PATH", "PROOFS_PLAYWRIGHT")}
+            env["HOME"] = str(tmp)
+            r = subprocess.run([NODE, str(CAPTURE), str(tmp / "pages.json"), "--out", str(tmp / "out"), "--sizes", "390"],
+                               cwd=tmp, env=env, capture_output=True, text=True, timeout=60)
+            self.assertEqual(r.returncode, 3, r.stderr)
+            self.assertIn("the browser laid the page out at 500 px, not 390 px; the capture is not trustworthy", r.stderr)
+            self.assertFalse((tmp / "out" / "measures.json").exists())
+
+    def test_not_found_message_names_proofs_playwright(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "pages.json").write_text('{"base": "http://localhost:9", "pages": []}')
+            env = {k: v for k, v in os.environ.items() if k not in ("NODE_PATH", "PLAYWRIGHT_PATH", "PROOFS_PLAYWRIGHT")}
+            env["HOME"] = tmp
+            r = subprocess.run([NODE, str(CAPTURE), str(Path(tmp) / "pages.json")], cwd=tmp, env=env,
+                               capture_output=True, text=True, timeout=60)
+        if "Playwright not found" not in r.stderr:
+            self.skipTest("a real Playwright is resolvable from the plugin folder")
+        self.assertIn("PROOFS_PLAYWRIGHT", r.stderr)
 
     def test_how_to_has_no_env_prefix(self):
         import re

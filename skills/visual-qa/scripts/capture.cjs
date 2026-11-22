@@ -41,14 +41,14 @@ try {
 
 function loadPlaywright() {
   const tries = [
-    'playwright',
-    path.join(process.cwd(), 'node_modules/playwright'),
     process.env.PROOFS_PLAYWRIGHT,
     process.env.PLAYWRIGHT_PATH,
+    'playwright',
+    path.join(process.cwd(), 'node_modules/playwright'),
     path.join(os.homedir(), '.cache', 'proofs-playwright', 'node_modules', 'playwright'),
   ].filter(Boolean);
   for (const t of tries) { try { return require(t); } catch (_) {} }
-  console.error('Playwright not found. Set PLAYWRIGHT_PATH to a node_modules/playwright directory, or install it once.\n' + HOW_TO);
+  console.error('Playwright not found. Set PROOFS_PLAYWRIGHT (or PLAYWRIGHT_PATH) to a node_modules/playwright directory, or install it once.\n' + HOW_TO);
   process.exit(2);
 }
 
@@ -77,23 +77,32 @@ function measure({ items, minText, minTap }) {
   };
 
   // Sideways scroll. scrollWidth alone misses content that `overflow-x: hidden` clips, so also
-  // take the right edge of the widest visible element. An element inside its own scroller
-  // (carousel, wide table) is not the page's overflow, so those are skipped.
+  // take the right edge of the widest visible element. Not counted: an element that starts at or
+  // past the screen edge (a closed drawer), one inside an auto/scroll box (a carousel the person
+  // can swipe), and one entirely past a hidden/clip ancestor's right edge (a cut-off slide). A
+  // partly visible element in a clipping wrapper still counts: that is the bug.
   const scrollWidth = document.documentElement.scrollWidth;
   const sideways = scrollWidth - vw;
-  const insideScroller = (el) => {
-    const r = el.getBoundingClientRect();
+  const skippedByAncestor = (el, r) => {
     for (let a = el.parentElement; a && a !== document.body && a !== document.documentElement; a = a.parentElement) {
       const ox = getComputedStyle(a).overflowX;
-      if (ox !== 'visible' && r.right > a.getBoundingClientRect().right + 1) return true;
+      if (ox === 'visible') continue;
+      const ar = a.getBoundingClientRect();
+      if ((ox === 'auto' || ox === 'scroll') && r.right > ar.right + 1) return true;
+      if ((ox === 'hidden' || ox === 'clip') && r.left >= ar.right - 1) return true;
     }
     return false;
   };
   let widestRight = 0;
+  const overflowing = [];
   for (const el of document.querySelectorAll('body *')) {
-    if (!visible(el) || insideScroller(el)) continue;
-    widestRight = Math.max(widestRight, el.getBoundingClientRect().right);
+    if (!visible(el)) continue;
+    const r = el.getBoundingClientRect();
+    if (r.left >= vw - 1 || skippedByAncestor(el, r)) continue;
+    widestRight = Math.max(widestRight, r.right);
+    if (r.right > vw + 1) overflowing.push({ text: label(el), tag: el.tagName.toLowerCase(), past: Math.round(r.right - vw) });
   }
+  overflowing.sort((x, y) => y.past - x.past);
 
   // Main column width
   const main = document.querySelector('main') || document.body;
@@ -139,7 +148,7 @@ function measure({ items, minText, minTap }) {
     const inline = getComputedStyle(el).display === 'inline' && el.closest('p,li');
     if (inline) continue; // links inside running text are exempt
     if (r.width < minTap - 0.5 || r.height < minTap - 0.5) {
-      smallTaps.push({ el: label(el), w: Math.round(r.width), h: Math.round(r.height) });
+      smallTaps.push({ el: label(el), tag: el.tagName.toLowerCase(), w: Math.round(r.width), h: Math.round(r.height) });
     }
   }
 
@@ -192,7 +201,7 @@ function measure({ items, minText, minTap }) {
   return {
     viewport: { w: vw, h: vh },
     innerWidth: window.innerWidth, dpr: window.devicePixelRatio,
-    scrollWidth, clientWidth: vw, widestRight: Math.round(widestRight),
+    scrollWidth, clientWidth: vw, widestRight: Math.round(widestRight), overflowing: overflowing.slice(0, 5),
     pageHeight: document.documentElement.scrollHeight,
     sideways,
     contentWidth: Math.round(contentWidth),
@@ -318,10 +327,11 @@ function verdicts(m, vpLabel) {
   if (evidence) {
     const shots = results.filter((r) => !r.error).map((r) => ({
       label: r.viewport, size: r.viewport === '390' ? 'phone' : 'desktop',
-      slug: `${r.page}-${r.state}`, pageLabel: r.page,
+      slug: `${r.page}-${r.state}${r.viewport === '1280' ? '-1280' : ''}`, pageLabel: r.page,
       path: cfg.pages.find((p) => p.name === r.page && (p.state || 'default') === r.state).path,
       file: `${r.file}-full.png`,
-      overflow: r.measures.sideways, scrollWidth: r.measures.scrollWidth, clientWidth: r.measures.clientWidth,
+      overflow: r.measures.sideways, overflowing: r.measures.overflowing,
+      smallTargets: r.measures.smallTaps.map((t) => ({ text: t.el, tag: t.tag, width: t.w, height: t.h })), scrollWidth: r.measures.scrollWidth, clientWidth: r.measures.clientWidth,
       widestRight: r.measures.widestRight, pngWidth: r.measures.pngWidth, innerWidth: r.measures.innerWidth,
       errors: errors.filter((e) => e.startsWith(`${r.viewport}:`)),
     }));

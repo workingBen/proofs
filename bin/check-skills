@@ -123,8 +123,10 @@ def why_not_allowed(rules, command):
             quote = ch
         elif ch == quote:
             quote = None
-        elif quote != "'" and (ch == "`" or two == "$("):
-            return "command substitution (%s) is not matched by an allow rule" % ("`" if ch == "`" else "$(")
+        elif quote != "'" and (ch == "`" or ch == "$"):
+            return "%r expands at run time (variable or command substitution), so the text a rule saw is not what runs" % ch
+        elif quote is None and ch in "*?[{":
+            return "unquoted %r is a glob or brace expansion, so the text a rule saw is not what runs" % ch
         elif quote is None and ch == "#" and (i == 0 or command[i - 1].isspace()):
             return "an unquoted # starts a comment, which is not part of what the rule matched"
         elif quote is None and ch in "|;&<>()":

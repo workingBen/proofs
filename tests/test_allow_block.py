@@ -161,8 +161,16 @@ class AllowBlockTest(unittest.TestCase):
             self.assertFalse(set(plain) & set(allow_block.PROJECT_RULES))
         self.assertFalse(set(readme_block()["permissions"]["allow"]) & set(allow_block.PROJECT_RULES))
 
-    def test_project_and_headless_do_not_mix(self):
-        self.assertEqual(self._cli("/opt/claude-home", None, "--project", "--headless").returncode, 2)
+    def test_project_and_headless_combine_into_one_block(self):
+        r = self._cli("/opt/claude-home", None, "--project", "--headless")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(json.loads(r.stdout)["permissions"]["allow"],
+                         allow_block.rules("/opt/claude-home", None, headless=True) + allow_block.PROJECT_RULES)
+
+    def test_project_rules_cover_the_pr_qa_commands(self):
+        for cmd in ("printenv PROOFS_BASE_DIR", "gh pr checkout 7", "gh pr list --state open", "cp .env .proofs/base/web/.env"):
+            self.assertTrue(check_skills.claude_code_allows(allow_block.PROJECT_RULES, cmd), cmd)
+        self.assertFalse(check_skills.claude_code_allows(allow_block.PROJECT_RULES, "cp .env /opt/claude-home/base/web/.env"))
 
     def test_readme_offers_the_project_block_labeled_and_apart(self):
         text = (REPO / "README.md").read_text()

@@ -12,10 +12,11 @@ it is given, so it is never in the standard output. --project prints a separate,
 opt-in block for the project's own commands (installs, the type check, the pr-qa base
 worktree, the one-time Playwright install) and nothing else; it holds no home path, so
 it may go in a committed .claude/settings.json, but its npm install and npm ci run the
-project's package scripts. Use ~/.claude/settings.json (every
-project; with a custom $CLAUDE_CONFIG_DIR, that folder's settings.json) or a project's
-.claude/settings.local.json, never a committed .claude/settings.json: the Bash lines hold
-your home folder.
+project's package scripts. --project may be combined with --headless (the output is both
+sets, so it holds the home folder again). For the default and --headless output use
+~/.claude/settings.json (every project; with a custom $CLAUDE_CONFIG_DIR, that folder's
+settings.json) or a project's .claude/settings.local.json, never a committed
+.claude/settings.json: those Bash lines hold your home folder.
 
 The scripts come from each skill's allowed-tools list, read at run time, so there is
 no second list to keep in step. Claude Code fills in ~ in Read rules but matches Bash
@@ -41,8 +42,15 @@ SKILL_RULE = "Skill(proofs:*)"
 PROJECT_RULES = [
     "Bash(npm install)",
     "Bash(npm ci)",
+    # The * also accepts .proofs/base/../other; low risk in an opt-in block.
     "Bash(npm ci --prefix .proofs/base/*)",
     "Bash(npx tsc --noEmit)",
+    # pr-qa: resolve the base folder, list open PRs, switch to the PR branch.
+    "Bash(printenv PROOFS_BASE_DIR)",
+    "Bash(gh pr list *)",
+    "Bash(gh pr checkout *)",
+    # The default base folder only; a PROOFS_BASE_DIR base is an absolute path, so it still asks.
+    "Bash(cp .env .proofs/base/*)",
     "Bash(git fetch origin)",
     "Bash(git worktree add .proofs/base *)",
     "Bash(git worktree remove --force .proofs/base)",
@@ -99,18 +107,19 @@ def rules(home, config_dir, headless=False):
 
 def main(argv):
     args = argv[1:]
-    if (len(set(args)) != len(args) or not set(args) <= {"--lines", "--headless", "--project"}
-            or {"--headless", "--project"} <= set(args)):
+    if len(set(args)) != len(args) or not set(args) <= {"--lines", "--headless", "--project"}:
         print(__doc__.strip(), file=sys.stderr)
         return 0 if args in (["-h"], ["--help"]) else 2
     home = os.environ.get("HOME") or str(Path.home())
     config_dir = os.environ.get("CLAUDE_CONFIG_DIR") or None
     if config_dir:
         config_dir = os.path.abspath(os.path.expanduser(config_dir))
-    if "--project" in args:
+    if "--project" in args and "--headless" not in args:
         allow = list(PROJECT_RULES)
     else:
         allow = rules(home, config_dir, headless="--headless" in args)
+        if "--project" in args:
+            allow += PROJECT_RULES
     if "--lines" in args:
         print(",\n".join(json.dumps(r) for r in allow))
     else:

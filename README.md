@@ -72,13 +72,13 @@ python3 "$(ls -d "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/plugins/cache/proofs/proo
 
 Leave it out for normal, attended use: Claude Code then asks before each server start, and you can see the command it is about to run.
 
-**Allow your project's commands too (optional, never part of the standard block).** The skills also run a few commands of your project's, not the plugin's: the install (`npm install`, `npm ci`), the type check (`npx tsc --noEmit`), the pr-qa base worktree (`git fetch origin`, `git worktree add` and `git worktree remove` on `.proofs/base`) and the one-time Playwright install into `~/.cache/proofs-playwright`. Add `--project` to print just those rules:
+**Allow your project's commands too (optional, never part of the standard block).** The skills also run a few commands of your project's, not the plugin's: the install (`npm install`, `npm ci`), the type check (`npx tsc --noEmit`), the pr-qa base worktree (`git fetch origin`, `git worktree add` and `git worktree remove` on `.proofs/base`, plus `cp .env` into it), the pr-qa PR checkout and listing (`gh pr checkout`, `gh pr list`), and the one-time Playwright install into `~/.cache/proofs-playwright`. With `PROOFS_BASE_DIR` set, the base-folder lines carry an absolute path, which no home-path-free rule can cover, so those still ask. Add `--project` to print just those rules:
 
 ```
 python3 "$(ls -d "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/plugins/cache/proofs/proofs/*/ | sort -V | tail -1)shared/allow_block.py" --project
 ```
 
-The one risk: `npm install` and `npm ci` run your project's package scripts, so only turn this on for a project you trust. These rules hold no home path, so they can go in `.claude/settings.local.json` (the default) or, if the team wants them, the committed `.claude/settings.json`. It does not run dev servers or any other command.
+The one risk: `npm install` and `npm ci` run your project's package scripts, so only turn this on for a project you trust. These rules hold no home path, so they can go in `.claude/settings.local.json` (the default) or, if the team wants them, the committed `.claude/settings.json`. It does not run dev servers or any other command. To get both this and the `--headless` rule in one go, give both flags (that output holds your home folder again, so keep it out of a committed file).
 <!-- allow-proofs:end -->
 
 Screenshots shrink automatically when ImageMagick or libwebp (`cwebp`) is installed: they're converted to WebP as each page is built. Without either, pages still work, just heavier.

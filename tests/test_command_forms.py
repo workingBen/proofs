@@ -24,8 +24,17 @@ _loader.exec_module(check_skills)
 
 HOME = "/opt/claude-home"
 VERSION_ROOT = HOME + "/.claude/plugins/cache/proofs/proofs/1.9.9"
-FIRST_WORDS = {"python3", "node", "npm", "npx", "git"}
-CHROME = re.compile(r"/(?:Applications|usr|opt)/\S*(?:Chrome|chrome)\S*")
+# Fences tagged with one of these hold commands Claude Code will run; every line must be
+# matched by the rules or be listed in EXPECTED_TO_ASK. Untagged and `text` fences are prose.
+SHELL_FENCES = {"bash", "sh", "shell"}
+# Command lines that are NOT covered on purpose, each with its reason. Keep this small: a new
+# uncovered command must fail the gate, not slip in here.
+EXPECTED_TO_ASK = {
+    "ls /ms-playwright/": "pr-qa last-resort fallback, only when the launch fails, attended",
+    "source path/to/pr-qa/setup-browser.sh": "pr-qa Linux last-resort fallback, runs a script",
+    '"$CHROME_BIN"': "pr-qa Linux last-resort fallback, Chrome path from a variable",
+    "python3 %s/skills/pr-qa/scripts/install_session_hook.py" % VERSION_ROOT: "keeps asking on purpose: edits .claude/settings.json",
+}
 FENCE = re.compile(r"^\s*```(\S*)\s*$")
 
 
@@ -65,13 +74,9 @@ def example_commands():
                 pending = line[:-1].rstrip()
                 continue
             pending = ""
-            words = line.split()
-            if not words or not (words[0] in FIRST_WORDS or CHROME.fullmatch(words[0])):
+            if not line or line.startswith("#") or fence not in SHELL_FENCES:
                 continue
-            cmd = substitute(line)
-            if any(name in cmd for name in check_skills.NEVER_PREAPPROVED if "with_server" not in name):
-                continue
-            out.append((path.relative_to(REPO).as_posix(), cmd))
+            out.append((path.relative_to(REPO).as_posix(), substitute(line)))
     return out
 
 
@@ -79,10 +84,18 @@ class CommandFormsTest(unittest.TestCase):
     def test_every_example_command_is_allowed(self):
         found = example_commands()
         self.assertGreater(len(found), 10)
+        asked = set()
         for rel, cmd in found:
             with self.subTest(file=rel, command=cmd):
+                key = next((k for k in EXPECTED_TO_ASK if cmd.startswith(k)), None)
+                if key:
+                    asked.add(key)
+                    self.assertFalse(allowed(cmd), "listed in EXPECTED_TO_ASK but now allowed: " + cmd)
+                    continue
                 why = check_skills.why_not_allowed(all_rules(), cmd)
                 self.assertIsNone(why, "%s: %s\n  %s" % (rel, why, cmd))
+
+        self.assertEqual(asked, set(EXPECTED_TO_ASK), "stale EXPECTED_TO_ASK entry")
 
     def test_matcher_rejects_the_forms_that_failed_in_run_2b(self):
         wp = HOME + "/.claude/plugins/cache/proofs/proofs/1.4.1/shared/capture/with_server.py"
@@ -98,6 +111,12 @@ class CommandFormsTest(unittest.TestCase):
             "npm install `pwd`",
             "git fetch origin; ls",
             "npm install\nls",
+            "git worktree add .proofs/base $X",
+            'npm install "${X}"',
+            "npm install ${X}",
+            "git worktree add .proofs/base *",
+            "git worktree add .proofs/base {a,b}",
+            "git worktree add .proofs/base ?",
         ):
             with self.subTest(command=cmd):
                 self.assertFalse(allowed(cmd))
@@ -112,6 +131,10 @@ class CommandFormsTest(unittest.TestCase):
             "git worktree add .proofs/base origin/main",
             "npm ci --prefix .proofs/base/web",
             "git worktree remove --force .proofs/base",
+            "printenv PROOFS_BASE_DIR",
+            "gh pr checkout 7",
+            "gh pr list --state open --json number,title",
+            "cp .env .proofs/base/web/.env",
         ):
             with self.subTest(command=cmd):
                 self.assertTrue(allowed(cmd), cmd)
@@ -124,6 +147,9 @@ class CommandFormsTest(unittest.TestCase):
         # Quoted operator characters are one argument, not a shell operator.
         self.assertTrue(check_skills.claude_code_allows(["Bash(git worktree add *)"], 'git worktree add "a|b" x'))
         self.assertFalse(check_skills.claude_code_allows(["Bash(git worktree add *)"], 'git worktree add "$(pwd)" x'))
+        # A $ inside single quotes is literal (the sh -c examples); outside them it expands.
+        self.assertTrue(check_skills.claude_code_allows(["Bash(sh -c *)"], "sh -c 'echo $CHROME'"))
+        self.assertFalse(check_skills.claude_code_allows(["Bash(sh -c *)"], 'sh -c "echo $CHROME"'))
         self.assertFalse(check_skills.claude_code_allows([rule], "cd x"))
 
     def test_project_rules_hold_no_home_path(self):

@@ -1,6 +1,6 @@
 ---
 name: pr-qa
-version: 1.7.1
+version: 1.7.2
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/skills/pr-qa/scripts/pr_qa_page.py *)
@@ -105,6 +105,20 @@ no token, no network, or no open PR, so it can never keep a session from startin
    `node_modules`: Next.js with Turbopack returned HTTP 500 through a symlinked one.
    Build the stylesheet there too. Capture the before pair through the helper
    (step 3) with `--cwd .proofs/base`.
+
+   **Setting: `PROOFS_BASE_DIR`.** Some setups block `git worktree add` inside
+   code folders except one sanctioned folder. Set `PROOFS_BASE_DIR` in the `env`
+   block of `.claude/settings.json` (project or user level) and the base worktree
+   goes to `$PROOFS_BASE_DIR/<repo folder name>-pr-qa-base` instead (repo folder
+   name = basename of `git rev-parse --show-toplevel`); the `info/exclude` step
+   is not needed then. Unset, nothing changes: `.proofs/base`.
+   Resolve the path **once** (`echo "${PROOFS_BASE_DIR:-}"`), call the result
+   `<base>`, and write the **literal** resolved path in every later command
+   (`git worktree add`, `--cwd`, the log path `<base>/.proofs/server.log`,
+   `NODE_PATH=<base>/node_modules`, `git worktree remove`): shell variables do not
+   survive between Bash calls, and hooks read literal paths. If `<base>` already
+   shows in `git worktree list`, run `git worktree remove --force <base>` only if
+   it is this repo's own leftover pr-qa base; otherwise stop and ask.
 3. **Run the branch for real**: check it out, migrate if needed, and capture the
    after pair through the same helper from the PR checkout (no `--cwd`). Both
    shots use the helper, which starts the server, waits for the URL, runs the
@@ -128,7 +142,7 @@ no token, no network, or no open PR, so it can never keep a session from startin
    ```
 
    The helper is not pre-approved, so the user may get one permission prompt. Exit
-   codes: 3 the server never answered (read the log: `.proofs/base/.proofs/server.log` for the before run, because the
+   codes: 3 the server never answered (read the log: `<base>/.proofs/server.log` for the before run, because the
    helper writes it under `--cwd`, and `.proofs/server.log` for the after run), 4 it
    exited early, 5 another run holds the lock; anything else is the capture's own. Exit 0
    does not prove the page is right: read each PNG and confirm it shows the route
@@ -259,8 +273,8 @@ order; each works where the other does not:
 
 1. Run it with the project's module path set, from the project root:
    `NODE_PATH=./node_modules node <your capture script>` (or keep the script inside
-   the project). For the before run that root is `.proofs/base`, where the
-   dependencies were installed: use `NODE_PATH=.proofs/base/node_modules`.
+   the project). For the before run that root is `<base>` (`.proofs/base` by
+   default), where the dependencies were installed: use `NODE_PATH=<base>/node_modules`.
 2. If the project has no `package.json` at all, find the copy in the `npx` cache:
 
 ```js
@@ -466,7 +480,8 @@ pushes and deploys is in its own notes; follow them.
 - **Screenshotting the main branch twice.** Confirm the branch is actually checked
   out and migrated; identical before/after pairs are the giveaway.
 - **Leaving the repo dirty.** Migrations rolled back, the main branch checked out,
-  the base worktree removed with `git worktree remove .proofs/base`
+  the base worktree removed with `git worktree remove .proofs/base` (or
+  `<base>` when `PROOFS_BASE_DIR` is set; use its literal path)
   (add `--force` if the install left files behind), so `git worktree list` is
   clean. Someone else may be using this machine.
 - **Recommending a merge you did not run.** If the app would not boot, say that.

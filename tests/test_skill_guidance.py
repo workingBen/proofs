@@ -89,6 +89,14 @@ class PrQaGuidance(unittest.TestCase):
     def test_pr_qa_captures_through_the_helper_with_cwd(self):
         self.assertIn("with_server.py --cwd .proofs/base", section("pr-qa", "The Sequence"))
 
+    def test_pr_qa_names_the_base_dir_setting(self):
+        text = section("pr-qa", "The Sequence")
+        self.assertIn("PROOFS_BASE_DIR", text)
+        self.assertIn("-pr-qa-base", text)
+
+    def test_pr_qa_says_to_use_the_literal_base_path(self):
+        self.assertIn("literal", section("pr-qa", "The Sequence"))
+
     def test_pr_qa_cleanup_removes_the_base_worktree(self):
         self.assertIn("git worktree remove .proofs/base", section("pr-qa", "Common Mistakes"))
 

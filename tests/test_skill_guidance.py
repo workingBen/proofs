@@ -74,5 +74,24 @@ class ChromeLines(unittest.TestCase):
         self.assertGreater(seen, 0)
 
 
+class PrQaGuidance(unittest.TestCase):
+    def test_pr_qa_base_worktree_lives_under_dot_proofs(self):
+        text = section("pr-qa", "The Sequence")
+        self.assertIn("git worktree add .proofs/base", text)
+        self.assertIn("info/exclude", text)
+
+    def test_pr_qa_installs_dependencies_instead_of_symlinking(self):
+        self.assertIn("npm ci", section("pr-qa", "The Sequence"))
+        text = section("pr-qa", "The four things")
+        self.assertNotIn("Link or copy them in", text)
+        self.assertIn("do not symlink `node_modules`", text)
+
+    def test_pr_qa_captures_through_the_helper_with_cwd(self):
+        self.assertIn("with_server.py --cwd .proofs/base", section("pr-qa", "The Sequence"))
+
+    def test_pr_qa_cleanup_removes_the_base_worktree(self):
+        self.assertIn("git worktree remove .proofs/base", section("pr-qa", "Common Mistakes"))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -77,7 +77,8 @@ class ChromeLines(unittest.TestCase):
 class PrQaGuidance(unittest.TestCase):
     def test_pr_qa_base_worktree_lives_under_dot_proofs(self):
         text = section("pr-qa", "The Sequence")
-        self.assertIn("git worktree add .proofs/base", text)
+        self.assertIn("git worktree add <base-dir>", text)
+        self.assertIn(".proofs/base", text)
         self.assertIn("info/exclude", text)
 
     def test_pr_qa_installs_dependencies_instead_of_symlinking(self):
@@ -87,7 +88,7 @@ class PrQaGuidance(unittest.TestCase):
         self.assertIn("do not symlink `node_modules`", text)
 
     def test_pr_qa_captures_through_the_helper_with_cwd(self):
-        self.assertIn("with_server.py --cwd .proofs/base", section("pr-qa", "The Sequence"))
+        self.assertIn("with_server.py --cwd <base-dir>", section("pr-qa", "The Sequence"))
 
     def test_pr_qa_names_the_base_dir_setting(self):
         text = section("pr-qa", "The Sequence")
@@ -95,10 +96,10 @@ class PrQaGuidance(unittest.TestCase):
         self.assertIn("-pr-qa-base", text)
 
     def test_pr_qa_says_to_use_the_literal_base_path(self):
-        self.assertIn("literal", section("pr-qa", "The Sequence"))
+        self.assertIn("literal resolved path", section("pr-qa", "The Sequence"))
 
     def test_pr_qa_cleanup_removes_the_base_worktree(self):
-        self.assertIn("git worktree remove .proofs/base", section("pr-qa", "Common Mistakes"))
+        self.assertIn("git worktree remove <base-dir>", section("pr-qa", "Common Mistakes"))
 
 
 if __name__ == "__main__":

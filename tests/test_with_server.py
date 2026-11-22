@@ -120,9 +120,9 @@ class WithServerTest(unittest.TestCase):
     def args(self, start, capture, *extra):
         return [sys.executable, HELPER, "--start", start, "--url", self.url, "--cwd", str(self.dir), *extra, "--", *capture]
 
-    def run_helper(self, start, capture, *extra, timeout=60):
+    def run_helper(self, start, capture, *extra, timeout=60, env=None):
         return subprocess.run(self.args(start, capture, *extra), cwd=self.dir, capture_output=True,
-                              text=True, timeout=timeout, stdin=subprocess.DEVNULL)
+                              text=True, timeout=timeout, stdin=subprocess.DEVNULL, env=env)
 
     def tree_pids(self):
         parent, child = read_pid(self.dir / "parent.pid"), read_pid(self.dir / "child.pid")
@@ -451,6 +451,55 @@ class WithServerTest(unittest.TestCase):
                         kill(pid, signal.SIGKILL)
                     except (ProcessLookupError, PermissionError):
                         pass
+
+    def test_server_left_by_a_helper_killed_during_boot_is_reaped(self):
+        # SIGKILL the helper while `sh -c` is still sleeping, before it execs the real server:
+        # the process's command changes after the pidfile was written, its start time does not.
+        pidfile = self.dir / ".proofs" / "server.pid"
+        start = "sleep 3; exec %s -m http.server %d --bind 127.0.0.1" % (PY, self.port)
+        out = self.dir / "out.txt"
+        p = self.start_bg(start, ["true"], out)
+        try:
+            self.assertTrue(wait_for(out, "server: started pid"), out.read_text())
+            leftover = read_pid(pidfile)
+            self._leftovers.append(leftover)
+            time.sleep(1)
+            p.kill()
+            p.wait()
+        finally:
+            if p.poll() is None:
+                p.kill()
+                p.wait()
+        end = time.monotonic() + 10  # let the leftover finish booting, so it really answers
+        while port_closed(self.port, wait=0) and time.monotonic() < end:
+            time.sleep(0.05)
+        self.assertFalse(port_closed(self.port, wait=0), "the leftover server never came up")
+        r = self.run_helper(self.simple_server(), ["true"], "--grace", "1")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("server: reaped a leftover server (pid %d) from an earlier run" % leftover, r.stdout)
+        self.assertNotIn("not started by this helper", r.stdout)
+        self.assertTrue(gone(leftover), "the leftover server %d survived the next run" % leftover)
+        self.assertTrue(port_closed(self.port))
+
+    def test_lock_timeout_has_its_own_exit_code(self):
+        import fcntl
+        (self.dir / ".proofs").mkdir()
+        with open(self.dir / ".proofs" / "server.pid.lock", "w") as fh:
+            fcntl.flock(fh, fcntl.LOCK_EX)
+            r = self.run_helper("touch started", ["sh", "-c", "touch captured"], "--timeout", "1")
+        self.assertEqual(r.returncode, 5, r.stdout + r.stderr)
+        self.assertIn("another run still holds", r.stderr)
+        self.assertFalse((self.dir / "started").exists())
+        self.assertFalse((self.dir / "captured").exists())
+
+    def test_missing_ps_warns_that_reaping_is_off(self):
+        empty = self.dir / "empty-bin"
+        empty.mkdir()
+        env = dict(os.environ, PATH=str(empty))
+        r = self.run_helper(self.simple_server(), [sys.executable, "-c", "pass"], env=env)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("ps not found", r.stderr)
+        self.assertTrue(port_closed(self.port))
 
     def test_bad_usage_exits_2(self):
         r = subprocess.run([sys.executable, HELPER, "--start", "true", "--url", self.url], capture_output=True, text=True,

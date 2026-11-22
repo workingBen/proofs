@@ -25,8 +25,9 @@ This helper owns the server for exactly as long as the capture runs:
   life (the kernel drops it even on SIGKILL) and a second run waits up to --timeout for it.
 - SIGKILL to the helper is the one exit nothing can catch: the server keeps running (its
   output goes to the log, so it holds no pipe) until the next run in that folder reaps it.
-  The pidfile records the server's start time and command, and the reap kills only a
-  process that still matches them, so a recycled pid is never touched.
+  The pidfile records the server's pid and exact start time (read by ps in UTC, so a time
+  zone change between runs cannot alter it), and the reap kills only a process that still
+  has both, so a recycled pid is never touched. Without ps, reaping is off (with a warning).
 
 Ready means any HTTP response below 500 (redirects count, and are not followed). Connection
 errors and 5xx mean not ready yet. The capture gets PROOFS_BASE_URL=<url> in its environment
@@ -34,8 +35,9 @@ and runs in the current folder; the server runs in --cwd. --log and --pidfile de
 .proofs/server.log and .proofs/server.pid under --cwd (else the current folder).
 
 Exit codes: the capture's own code when the server came up; 3 the server never answered below
-500 within --timeout (or another run held the folder that long); 4 the server exited before
-answering; 127 the capture command could not be run; 128 + signal number when the helper was
+500 within --timeout; 4 the server exited before answering; 5 another run still held the
+pidfile's lock after --timeout (the wait for it comes before, and on top of, the server's own
+--timeout); 127 the capture command could not be run; 128 + signal number when the helper was
 stopped by SIGINT, SIGTERM or SIGHUP (129 when its parent died); 2 bad usage.
 
 POSIX only (macOS and Linux): it relies on process groups, killpg, flock, getppid and ps.
@@ -46,6 +48,7 @@ Python 3 standard library only.
 import argparse
 import fcntl
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -56,6 +59,7 @@ import urllib.request
 
 EXIT_NOT_READY = 3
 EXIT_SERVER_EXITED = 4
+EXIT_LOCKED = 5
 EXIT_NO_CAPTURE = 127
 STOP_SIGNALS = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
 POLL = 0.5
@@ -205,32 +209,25 @@ def stop(proc, grace):
 def _ps(field, pid):
     try:
         r = subprocess.run(["ps", "-o", field + "=", "-p", str(pid)], capture_output=True, text=True,
-                           stdin=subprocess.DEVNULL, timeout=10, env=dict(os.environ, LC_ALL="C"))
+                           stdin=subprocess.DEVNULL, timeout=10, env=dict(os.environ, LC_ALL="C", TZ="UTC"))
     except (OSError, subprocess.SubprocessError):
         return None
     out = r.stdout.strip()
     return out if r.returncode == 0 and out else None
 
 
-def pid_identity(pid):
-    """(start time, command) of a live pid from ps, or None when there is no such process."""
-    started = _ps("lstart", pid)
-    command = _ps("command", pid)
-    return (started, command) if started and command else None
+def pid_started(pid):
+    """Exact start time of a live pid (ps lstart, in UTC and the C locale), or None.
+
+    Only the start time identifies the process: its command changes when `sh -c` execs the
+    real server or a server rewrites its title, but its start time never does."""
+    return _ps("lstart", pid)
 
 
-def pidfile_text(pid, commands=()):
-    """The pidfile: the pid on line 1 (so `kill $(head -1 ...)` works), then what identifies it.
-
-    A server's command can change once (sh -c exec-ing the real server), so every command
-    seen is recorded, and the reap accepts any of them alongside the start time."""
-    ident = pid_identity(pid)
-    lines = ["%d" % pid]
-    if ident:
-        lines.append("started " + ident[0])
-        seen = list(commands) + [ident[1]]
-        lines += ["command " + c for c in dict.fromkeys(seen)]
-    return "\n".join(lines) + "\n"
+def pidfile_text(pid):
+    """The pidfile: the pid on line 1 (so `kill $(head -1 ...)` works), then its start time."""
+    started = pid_started(pid)
+    return "%d\n" % pid + ("started %s\n" % started if started else "")
 
 
 def _read_pidfile(path):
@@ -240,8 +237,7 @@ def _read_pidfile(path):
     except (OSError, ValueError, IndexError):
         return None
     started = next((ln[8:] for ln in lines[1:] if ln.startswith("started ")), None)
-    commands = [ln[8:] for ln in lines[1:] if ln.startswith("command ")]
-    return pid, started, commands
+    return pid, started
 
 
 def _write_pidfile(path, text):
@@ -254,14 +250,13 @@ def _write_pidfile(path, text):
 def _reap_stale(pidfile, grace):
     """Kill the server a SIGKILLed earlier run left behind. Call only while holding the lock.
 
-    The lock proves the run that wrote the pidfile is dead; the start time and command prove
-    the pid still names its server and not a process that reused the number."""
+    The lock proves the run that wrote the pidfile is dead; the start time proves the pid
+    still names its server and not a process that reused the number."""
     try:
         rec = _read_pidfile(pidfile)
         if rec and rec[0] > 1 and rec[1]:
-            pid, started, commands = rec
-            now = pid_identity(pid)
-            if now and now[0] == started and now[1] in commands and _stop_group(pid, grace):
+            pid, started = rec
+            if pid_started(pid) == started and _stop_group(pid, grace):
                 say("server: reaped a leftover server (pid %d) from an earlier run" % pid)
     finally:
         try:
@@ -347,7 +342,11 @@ def _background(target, *args):
 
 def _parse(argv):
     p = argparse.ArgumentParser(prog="with_server.py",
-                                description="Start a dev server, run one capture command, always stop the server.")
+                                description="Start a dev server, run one capture command, always stop the server.",
+                                epilog="exit codes: the capture's own code once the server answers; 3 the server never "
+                                       "answered below 500 within --timeout; 4 the server exited before answering; "
+                                       "5 another run still held the pidfile's lock after --timeout; 127 the capture "
+                                       "could not be run; 128 + signal number when stopped by a signal; 2 bad usage")
     p.add_argument("--start", required=True, help="shell command that starts the server, in the foreground")
     p.add_argument("--url", required=True, help="URL that answers once the server is up")
     p.add_argument("--cwd", help="folder to start the server in (default: the current folder)")
@@ -394,7 +393,10 @@ def _run(args, capture, state):
     state["lock"] = _take_lock(args.pidfile + ".lock", time.monotonic() + args.timeout)
     if state["lock"] is None:
         say("server: another run still holds %s.lock after %gs" % (args.pidfile, args.timeout), err=True)
-        return EXIT_NOT_READY
+        return EXIT_LOCKED
+    if shutil.which("ps") is None:
+        say("server: warning: ps not found, so a server left by a killed earlier run cannot be "
+            "identified and will not be reaped", err=True)
     _reap_stale(args.pidfile, args.grace)
 
     status = probe(args.url, timeout=1.0)
@@ -426,9 +428,6 @@ def _run(args, capture, state):
         if srv.poll() is not None and not _group_alive(srv.pid):
             say("server: warning: the start command exited and the server left its process group, so this "
                 "helper cannot stop it; run the server in the foreground", err=True)
-        else:  # now that any `sh -c` has exec'd, record the command the server really runs
-            rec = _read_pidfile(args.pidfile)
-            _write_pidfile(args.pidfile, pidfile_text(srv.pid, rec[2] if rec else ()))
         say("server: ready after %.1fs (HTTP %d)" % (time.monotonic() - t0, status))
 
     env = dict(os.environ, PROOFS_BASE_URL=args.url)

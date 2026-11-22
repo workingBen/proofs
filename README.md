@@ -28,6 +28,41 @@ In Claude Code:
 
 Install the whole plugin, not single skill folders. The skills share a page builder and reference files at the plugin root; a skill copied on its own into `.claude/skills/` can't find them, and says so.
 
+<!-- allow-proofs:start -->
+## Allow Proofs
+
+Proofs reads its own reference files and runs its own scripts, which sit outside your project, so Claude Code asks each time; in `claude -p` it simply refuses. These rules stop that:
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "Read(~/.claude/plugins/cache/proofs/**)",
+      "Skill(proofs:*)",
+      "Bash(node ~/.claude/plugins/cache/proofs/proofs/*/skills/visual-qa/scripts/capture.cjs *)",
+      "Bash(python3 ~/.claude/plugins/cache/proofs/proofs/*/shared/review_page/review_page.py *)",
+      "Bash(python3 ~/.claude/plugins/cache/proofs/proofs/*/skills/pr-qa/scripts/pr_qa_findings.py *)",
+      "Bash(python3 ~/.claude/plugins/cache/proofs/proofs/*/skills/pr-qa/scripts/pr_qa_page.py *)",
+      "Bash(python3 ~/.claude/plugins/cache/proofs/proofs/*/skills/pr-qa/scripts/pr_qa_plan.py *)",
+      "Bash(python3 ~/.claude/plugins/cache/proofs/proofs/*/skills/todos/scripts/todos_page.py *)"
+    ]
+  }
+}
+```
+
+Claude Code fills in `~` in the Read line but not in Bash lines. This prints the block with your home folder filled in (and uses `$CLAUDE_CONFIG_DIR` when you set one):
+
+```
+python3 "$(ls -d ~/.claude/plugins/cache/proofs/proofs/*/ | sort -V | tail -1)shared/allow_block.py"
+```
+
+Paste it into `~/.claude/settings.json` for every project, or `.claude/settings.local.json` for one. Never put it in a project's committed `.claude/settings.json`: it holds your home path.
+
+The `Skill(proofs:*)` line matters: skills that pre-approve their own scripts make Claude Code ask before the skill itself runs, and `claude -p` refuses it outright. The `*` in the middle of each Bash line is the plugin's version folder, so the rules keep working after an update. A Bash rule only covers a command that is that script alone: `review_page.py ... ; something-else` still asks.
+
+Four scripts still ask every time, on purpose, because they change your files or reach out with your credentials: `todos_apply.py` and `todos_adopt.py` (rewrite `TODO.md`), `install_session_hook.py` (edits `.claude/settings.json`) and `pr_qa_collect.py` (calls GitHub with your token).
+<!-- allow-proofs:end -->
+
 Screenshots shrink automatically when ImageMagick or libwebp (`cwebp`) is installed: they're converted to WebP as each page is built. Without either, pages still work, just heavier.
 
 **[Browse the site](https://workingben.github.io/proofs/)** for all 12 skills and 230+ features, each with a short write-up.

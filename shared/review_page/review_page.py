@@ -1053,6 +1053,87 @@ def image_errors(text):
 
 NO_SESSION = "no session name: the reader can't tell which session this page belongs to (set project.session)"
 
+# British spelling (regex, word-bounded and case-insensitive) -> American form of the stem.
+# The stem is the literal text before the first "(" in the key.
+BRITISH = {
+    r"behaviour(s)?": "behavior",
+    r"colour(s|ed|ing|ful)?": "color",
+    r"favour(s|ed|ing|ite|ites)?": "favor",
+    r"honour(s|ed|ing)?": "honor",
+    r"labour": "labor",
+    r"neighbour(s|hood)?": "neighbor",
+    r"flavour(s)?": "flavor",
+    r"labell(ed|ing)": "label",
+    r"modell(ed|ing)": "model",
+    r"travell(ed|ing|er)": "travel",
+    r"grey(s|er|ish)?": "gray",
+    r"centre(s)?": "center",
+    r"centred": "centered",
+    r"metre(s)?": "meter",
+    r"litre(s)?": "liter",
+    r"fibre(s)?": "fiber",
+    r"theatre(s)?": "theater",
+    r"defence(s)?": "defense",
+    r"catalogue(s)?": "catalog",
+    r"catalogued": "cataloged",
+    r"analys(e|ed|ing)": "analyz",
+    **{r"%sis(e|es|ed|ing|ation|ations)" % stem: stem + "iz" for stem in (
+        "organ", "recogn", "real", "priorit", "summar", "normal", "anonym", "custom",
+        "optim", "minim", "maxim", "standard", "categor", "emphas")},
+}
+_BRITISH_RE = [(re.compile(r"\b(?:%s)\b" % pat, re.I), re.match(r"[a-z]+", pat).group(), us)
+               for pat, us in BRITISH.items()]
+_SKIP_KEYS = {"css", "assets", "href", "src", "id", "mode", "repo", "q", "key", "image", "file"}
+
+
+def _visible_text(value):
+    value = re.sub(r"<(style|code)\b.*?</\1>", " ", value, flags=re.S | re.I)
+    return html.unescape(re.sub(r"<[^>]*>", " ", value))
+
+
+def _scan(text, where, seen, out):
+    for rx, stem, us in _BRITISH_RE:
+        for m in rx.finditer(text):
+            key = m.group(0).lower()
+            if key not in seen:
+                seen.add(key)
+                out.append('british spelling "%s" (American: "%s") in %s' % (key, us + key[len(stem):], where))
+
+
+def spelling_warnings(spec):
+    """One line per distinct British spelling in what the reader sees (not css, assets, URLs, code)."""
+    seen, out = set(), []
+
+    def walk(node, where):
+        if isinstance(node, str):
+            _scan(_visible_text(node), where, seen, out)
+        elif isinstance(node, dict):
+            here = str(node.get("id") or node.get("title") or where)
+            for k, v in node.items():
+                if k not in _SKIP_KEYS:
+                    walk(v, here)
+        elif isinstance(node, list):
+            for v in node:
+                walk(v, where)
+
+    walk(spec, "the page")
+    return out
+
+
+def page_spelling_warnings(text):
+    """The same check on a built page, where the reader's text lives (rp-spec keeps only a
+    trimmed spec). Scripts, styles and code are dropped, tags go with their URLs, and each
+    hit is named by the nearest preceding element id."""
+    text = re.sub(r"<(script|style|code)\b.*?</\1>", " ", text, flags=re.S | re.I)
+    seen, out, where = set(), [], "the page"
+    for chunk in re.split(r"(<[^>]*>)", text):
+        if chunk.startswith("<"):
+            m = re.search(r'\sid="([^"]+)"', chunk)
+            where = m.group(1) if m else where
+        else:
+            _scan(html.unescape(chunk), where, seen, out)
+    return out
+
 
 def warnings(path):
     """Problems worth saying that still leave a working page: older specs keep building."""
@@ -1068,6 +1149,8 @@ def warnings(path):
     if bare:
         out.append("%d <img> show WebP with no fallback, so older Safari shows a broken image "
                    "(use a PNG or JPEG asset and the builder adds one)" % len(bare))
+    if os.environ.get("PROOFS_SPELLING") == "american":
+        out.extend(page_spelling_warnings(text))
     return out
 
 

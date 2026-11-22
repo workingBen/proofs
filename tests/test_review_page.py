@@ -931,11 +931,79 @@ class BrowserLaunch(unittest.TestCase):
             self.assertIn("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1", res["error"])
 
 
+class Spelling(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.tmp = Path(self._tmp.name)
+        self._old = os.environ.get("PROOFS_SPELLING")
+        os.environ["PROOFS_SPELLING"] = "american"
+        self.addCleanup(self._restore)
+
+    def _restore(self):
+        if self._old is None:
+            os.environ.pop("PROOFS_SPELLING", None)
+        else:
+            os.environ["PROOFS_SPELLING"] = self._old
+
+    def page(self, mutate):
+        spec = json.loads((EXAMPLES / "log.json").read_text())
+        mutate(spec)
+        shutil.copy(EXAMPLES / "sample.png", self.tmp / "sample.png")
+        src = self.tmp / "spec.json"
+        src.write_text(json.dumps(spec))
+        out = self.tmp / "page.html"
+        r = subprocess.run([sys.executable, str(BUILD), str(src), "--out", str(out)], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        return out
+
+    def spelling(self, page):
+        return [w for w in review_page.warnings(page) if "british spelling" in w]
+
+    def test_british_word_in_an_entry_warns(self):
+        page = self.page(lambda s: s["entries"][1].update(lede="the old behaviour"))
+        self.assertEqual(self.spelling(page),
+                         ['british spelling "behaviour" (American: "behavior") in M5'])
+
+    def test_spelling_ignores_css_urls_and_assets(self):
+        def mutate(s):
+            s["css"] = ".grey-card{}"
+            s["entries"][1]["detail_html"] = '<p><a href="/colour-guide">guide</a> <code>centre</code></p>'
+            s["assets"] = {"centre.png": "sample.png"}
+        self.assertEqual(self.spelling(self.page(mutate)), [])
+
+    def test_analyses_is_not_flagged(self):
+        page = self.page(lambda s: s["entries"][1].update(lede="two analyses"))
+        self.assertEqual(self.spelling(page), [])
+
+    def test_spelling_is_off_by_default(self):
+        page = self.page(lambda s: s["entries"][1].update(lede="the old behaviour"))
+        for val in (None, "off", "british"):
+            if val is None:
+                os.environ.pop("PROOFS_SPELLING", None)
+            else:
+                os.environ["PROOFS_SPELLING"] = val
+            self.assertEqual(self.spelling(page), [], val)
+
+    def test_spelling_opt_in(self):
+        page = self.page(lambda s: s["entries"][1].update(lede="organisation and colours"))
+        found = self.spelling(page)
+        self.assertEqual(len(found), 2, found)
+        self.assertIn('(American: "organization")', found[0] + found[1])
+
+    def test_examples_have_no_british_spelling(self):
+        for spec in sorted(EXAMPLES.glob("*.json")):
+            self.assertEqual(self.spelling(build(spec.stem, self.tmp)), [], spec.name)
+
+
+
 def playwright_dir():
     return review_page.find_playwright(None)
 
 
-@unittest.skipUnless(NODE and playwright_dir(), "Playwright not found (set PROOFS_PLAYWRIGHT)")
+@unittest.skipUnless(NODE and playwright_dir(), "Playwright not found: set PROOFS_PLAYWRIGHT, or install it where "
+                     "the builder looks (~/.cache/proofs-playwright) with no browser download: "
+                     "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install --prefix ~/.cache/proofs-playwright playwright@1.61.1")
 class ClickThrough(unittest.TestCase):
     """Drive every example in real Chromium: decisions, variants, comments, read
     switch, export, reload persistence, clipboard fallback, images, no sideways scroll."""

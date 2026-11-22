@@ -197,7 +197,47 @@ class AllowBlockTest(unittest.TestCase):
         usage = next(l for l in allow_block.__doc__.splitlines() if "allow_block.py [" in l)
         self.assertIn("[--headless]", usage)
         self.assertIn("[--project]", usage)
+        self.assertIn("[--commit]", usage)
         self.assertNotIn("|", usage)
+
+    def test_project_allows_opening_pages(self):
+        self.assertIn("Bash(open .proofs/pages/*)", allow_block.PROJECT_RULES)
+        self.assertIn("Bash(xdg-open .proofs/pages/*)", allow_block.PROJECT_RULES)
+        for cmd in ("open .proofs/pages/review.html", "xdg-open .proofs/pages/review.html"):
+            self.assertTrue(check_skills.claude_code_allows(allow_block.PROJECT_RULES, cmd), cmd)
+        r = self._cli("/opt/claude-home", None, "--project")
+        self.assertIn("Bash(open .proofs/pages/*)", json.loads(r.stdout)["permissions"]["allow"])
+
+    def test_commit_block_alone(self):
+        self.assertEqual(allow_block.COMMIT_RULES, ["Bash(git add *)", "Bash(git commit *)",
+                                                    "Bash(git push -u origin HEAD)", "Bash(gh pr create *)"])
+        r = self._cli("/opt/claude-home", None, "--commit")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(json.loads(r.stdout), {"permissions": {"allow": allow_block.COMMIT_RULES}})
+        self.assertNotIn("/opt/claude-home", r.stdout)
+        self.assertFalse(set(allow_block.COMMIT_RULES) & set(allow_block.PROJECT_RULES))
+
+    def test_lines_commit(self):
+        r = self._cli("/opt/claude-home", None, "--lines", "--commit")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn("permissions", r.stdout)
+        self.assertEqual(json.loads("[" + r.stdout + "]"), allow_block.COMMIT_RULES)
+
+    def test_commit_combines(self):
+        r = self._cli("/opt/claude-home", None, "--project", "--commit")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        allow = json.loads(r.stdout)["permissions"]["allow"]
+        self.assertEqual(allow, allow_block.PROJECT_RULES + allow_block.COMMIT_RULES)
+        r = self._cli("/opt/claude-home", None, "--headless", "--project", "--commit")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        allow = json.loads(r.stdout)["permissions"]["allow"]
+        self.assertEqual(allow, allow_block.rules("/opt/claude-home", None, headless=True)
+                         + allow_block.PROJECT_RULES + allow_block.COMMIT_RULES)
+        self.assertEqual(len(allow), len(set(allow)))
+
+    def test_unknown_flag_still_rejected(self):
+        self.assertEqual(self._cli("/opt/claude-home", None, "--commit", "--everything").returncode, 2)
+        self.assertEqual(self._cli("/opt/claude-home", None, "--commit", "--commit").returncode, 2)
 
     def test_cli_rejects_unknown_flags(self):
         self.assertEqual(self._cli("/opt/claude-home", None, "--everything").returncode, 2)

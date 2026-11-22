@@ -192,11 +192,11 @@ class PrQaGuidance(unittest.TestCase):
         self.assertIn("~/.cache/proofs-playwright", text)
         self.assertIn("not measured", text)
 
-    def test_default_path_has_at_most_ten_bash_calls(self):
+    def test_default_path_has_at_most_eleven_bash_calls(self):
         text = section("pr-qa", "Default path")
         fence = text.split("```bash", 1)[1].split("```", 1)[0]
         calls = [l for l in fence.splitlines() if l.strip() and not l.startswith("#")]
-        self.assertLessEqual(len(calls), 10, calls)
+        self.assertLessEqual(len(calls), 11, calls)
 
     def test_default_path_checks_out_the_pr_before_the_after_capture(self):
         section_text = section("pr-qa", "Default path")
@@ -249,11 +249,10 @@ class PrQaGuidance(unittest.TestCase):
         # Final review M3: a static site has no package.json, so npm ci only fails.
         self.assertIn("has no `package.json`", section("pr-qa", "Default path"))
 
-    def test_unattended_run_prints_the_page_path_instead_of_open(self):
-        # Final review I3: `open` has no rule, so it is a denial in claude -p.
-        line = "In an unattended run (`claude -p`), do not open the page; print its path."
-        self.assertIn(line, (REPO / "reference" / "where-the-page-goes.md").read_text())
-        self.assertIn("print its path", section("pr-qa", "Default path"))
+    def test_a_refused_open_prints_the_path_and_does_not_retry(self):
+        # `open .proofs/pages/*` is allowed now; a refusal is not retried.
+        self.assertIn("do not retry: print the path and the command", (REPO / "reference" / "where-the-page-goes.md").read_text())
+        self.assertIn("do not retry: print the path and the command", section("pr-qa", "Default path"))
 
     def test_own_tests_need_preapproval_in_claude_p(self):
         # Final review M4: the project's test command is in no rule.
@@ -379,6 +378,36 @@ class HouseRules(unittest.TestCase):
                     if code.startswith("#"):
                         continue
                     self.assertIsNone(re.search(r"^[A-Z_]+=|\||&&|;|\$\(|^cd |(?<![-=])\d*>{1,2}|&>|(^|\s)<\s", code), f"{path.name}: {line[:80]}")
+
+
+class AdHocShellAndOpen(unittest.TestCase):
+    def test_house_rules_forbid_ad_hoc_tools(self):
+        text = (REPO / "reference" / "house-rules.md").read_text()
+        for word in ("sed -i", "magick", "`file`"):
+            self.assertIn(word, text)
+
+    def test_open_uses_allowed_form(self):
+        text = (REPO / "reference" / "where-the-page-goes.md").read_text()
+        self.assertIn("open .proofs/pages/", text)
+        self.assertNotIn("do not open the page", text)
+
+    def test_pr_qa_open_matches_where_the_page_goes(self):
+        text = (REPO / "skills" / "pr-qa" / "SKILL.md").read_text()
+        self.assertIn("open .proofs/pages/pr-qa.html", text)
+        self.assertNotIn("do not `open` the page", text)
+
+    def test_no_skill_tells_the_model_to_run_ad_hoc_tools(self):
+        for path in sorted((REPO / "skills").glob("*/SKILL.md")):
+            in_fence = False
+            for line in path.read_text().splitlines():
+                if line.lstrip().startswith("```"):
+                    in_fence = not in_fence
+                elif in_fence:
+                    self.assertIsNone(re.match(r"\s*(sed -i|magick|identify|file|sips)\b", line), f"{path.parent.name}: {line[:80]}")
+
+    def test_design_review_points_at_the_helpers_checks(self):
+        text = (REPO / "skills" / "design-review" / "SKILL.md").read_text()
+        self.assertIn("helpers' own checks", text)
 
 
 if __name__ == "__main__":

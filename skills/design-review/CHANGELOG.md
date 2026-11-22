@@ -1,5 +1,7 @@
 # Changelog
 
+- **1.9.0** (2026-11-22): Opens its saved page with exactly `open .proofs/pages/<name>.html`, which the opt-in `--project` allow block pre-approves; if `open` is refused it prints the path instead of retrying. Adds house rule 4: use the capture helper's own size and overflow checks, never `file`, `magick`, `identify` or `sips`, and change mockups with Edit or Write, never `sed -i`.
+
 - **1.8.3** (2026-11-22): Says to run `--smoke` every time: if it reports Playwright missing, run the one-line install it prints (no browser download) and run it again; if it still cannot run, say on the page and in chat that the self-check did not run. It no longer reads as optional when Playwright is absent.
 - **1.8.2** (2026-11-22): The capture example sets `CHROME` inside the `sh -c` capture command instead of in front of `python3`. Claude Code does not strip a `CHROME=` prefix before matching a Bash rule, so the old example never matched the unattended allow rule for the helper.
 - **1.8.1** (2026-11-22): The capture example sets `CHROME` in the same command (a variable from an earlier Bash call is gone) and lists the usual Chrome paths. Says how to find the start command, to ask the user when there is none, and to pick an unused port so a stale app is not captured. Also: read the PNG to confirm the route, chain widths in one call, leave `.proofs/` untracked.

@@ -2,7 +2,7 @@
 """Print the Claude Code permission rules that let Proofs read its own files and run
 its own page builders without asking, for this machine.
 
-    python3 <plugin root>/shared/allow_block.py [--lines] [--headless] [--project]
+    python3 <plugin root>/shared/allow_block.py [--lines] [--headless] [--project] [--commit]
 
 Prints {"permissions": {"allow": [...]}} for a settings file that has no permissions
 key yet, or with --lines just the rules, comma-separated, to add to an existing
@@ -10,11 +10,15 @@ permissions.allow list. --headless adds one more rule, for unattended (claude -p
 only: it pre-approves shared/capture/with_server.py, which runs whatever --start command
 it is given, so it is never in the standard output. --project prints a separate,
 opt-in block for the project's own commands (installs, the type check, the pr-qa base
-worktree, the one-time Playwright install) and nothing else; it holds no home path, so
+worktree, the one-time Playwright install, opening pages under .proofs/pages) and
+nothing else; it holds no home path, so
 it may go in a committed .claude/settings.json, but its npm install and npm ci run the
 project's package scripts. --project may be combined with --headless (the output is both
-sets, so it holds the home folder again). For the default and --headless output use
-~/.claude/settings.json (every project; with a custom $CLAUDE_CONFIG_DIR, that folder's
+sets, so it holds the home folder again). --commit prints a second opt-in block for
+saving and sharing work (git add, git commit, git push -u origin HEAD, gh pr create). It
+is opt-in, never part of --project, because git push and gh pr create reach GitHub; it
+holds no home path and combines with every other flag. For the default and --headless
+output use ~/.claude/settings.json (every project; with a custom $CLAUDE_CONFIG_DIR, that folder's
 settings.json) or a project's .claude/settings.local.json, never a committed
 .claude/settings.json: those Bash lines hold your home folder.
 
@@ -59,6 +63,16 @@ PROJECT_RULES = [
     "Bash(git worktree add --detach .proofs/base *)",
     "Bash(git worktree remove --force .proofs/base)",
     "Bash(npm install --prefix ~/.cache/proofs-playwright playwright@1.61.1)",
+    # Open a page the skills just built (macOS, then Linux); only under .proofs/pages.
+    "Bash(open .proofs/pages/*)",
+    "Bash(xdg-open .proofs/pages/*)",
+]
+# Opt-in (--commit), never part of --project: git push and gh pr create reach GitHub.
+COMMIT_RULES = [
+    "Bash(git add *)",
+    "Bash(git commit *)",
+    "Bash(git push -u origin HEAD)",
+    "Bash(gh pr create *)",
 ]
 # Starts a dev server from an arbitrary command, so it is opt-in (--headless), never default.
 HEADLESS_SCRIPT = ("python3", "shared/capture/with_server.py")
@@ -152,21 +166,23 @@ def folder_rules(root, headless=False):
 
 def main(argv):
     args = argv[1:]
-    if len(set(args)) != len(args) or not set(args) <= {"--lines", "--headless", "--project"}:
+    if len(set(args)) != len(args) or not set(args) <= {"--lines", "--headless", "--project", "--commit"}:
         print(__doc__.strip(), file=sys.stderr)
         return 0 if args in (["-h"], ["--help"]) else 2
     home = os.environ.get("HOME") or str(Path.home())
     config_dir = os.environ.get("CLAUDE_CONFIG_DIR") or None
     if config_dir:
         config_dir = os.path.abspath(os.path.expanduser(config_dir))
-    if "--project" in args and "--headless" not in args:
-        allow = list(PROJECT_RULES)
+    if "--headless" not in args and ("--project" in args or "--commit" in args):
+        allow = list(PROJECT_RULES) if "--project" in args else []
     else:
         allow = rules(home, config_dir, headless="--headless" in args)
         for root in local_roots(home, config_dir):
             allow += folder_rules(root, headless="--headless" in args)
         if "--project" in args:
             allow += PROJECT_RULES
+    if "--commit" in args:
+        allow += COMMIT_RULES
     if "--lines" in args:
         print(",\n".join(json.dumps(r) for r in allow))
     else:

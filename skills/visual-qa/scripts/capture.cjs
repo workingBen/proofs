@@ -350,7 +350,8 @@ function verdicts(m, vpLabel) {
       path: cfg.pages.find((p) => p.name === r.page && (p.state || 'default') === r.state).path,
       file: `${r.file}-full.png`,
       overflow: r.measures.sideways, overflowing: r.measures.overflowing,
-      smallTargets: r.measures.smallTaps.map((t) => ({ text: t.el, tag: t.tag, width: t.w, height: t.h })), scrollWidth: r.measures.scrollWidth, clientWidth: r.measures.clientWidth,
+      smallTargets: r.measures.smallTaps.map((t) => ({ text: t.el, tag: t.tag, width: t.w, height: t.h })), smallText: r.measures.smallText, smallTextCount: r.measures.smallTextCount,
+      scrollWidth: r.measures.scrollWidth, clientWidth: r.measures.clientWidth,
       widestRight: r.measures.widestRight, pngWidth: r.measures.pngWidth, innerWidth: r.measures.innerWidth,
       errors: errors.filter((e) => e.startsWith(`${r.viewport}:`)),
     }));

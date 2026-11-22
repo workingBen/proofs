@@ -1,6 +1,6 @@
 ---
 name: review-cycle
-version: 1.12.0
+version: 1.13.0
 description: Use when the user opens a review session ("starting a review cycle", "let's do a review pass") and feeds a stream of bug reports and requests, often from a phone, to be triaged and handled without questions; fixes ship, design calls go to design-review, big features become to-dos. Not for a single one-off request.
 ---
 
@@ -39,7 +39,7 @@ A queue-processing workflow for a live review session: the user reports issues o
      git fetch origin main                            # from the session's working copy
      git checkout -b <type>/<short-slug> origin/main   # fresh off main, not off the last item
      # ... commit the work, explicit paths only ...
-     git push origin <branch>
+     git push -u origin HEAD                           # HEAD is the item's branch
      gh pr create --fill                               # body: the report, the fix, test evidence
      gh pr merge <n> --merge                           # NOT --delete-branch; see below
      git push origin --delete <branch>

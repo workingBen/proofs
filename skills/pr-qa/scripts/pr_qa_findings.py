@@ -21,6 +21,7 @@ With no layout measurements in before.json and after.json the verdict is
 evidence that nothing broke.
 """
 import argparse
+from collections import Counter
 import json
 import os
 import sys
@@ -104,17 +105,25 @@ def compare(before, after):
                 f"{old_overflow}px of overflow before, {new_overflow}px after.",
                 {"before": old_overflow, "after": new_overflow}))
 
-        old_small = {(t.get("text"), t.get("tag")) for t in (old or {}).get("smallTargets") or []}
-        fresh = [t for t in shot.get("smallTargets") or []
-                 if (t.get("text"), t.get("tag")) not in old_small]
-        if fresh and shot.get("size") == "phone":
-            worst = min(fresh, key=lambda t: min(t.get("width", 0), t.get("height", 0)))
+        fresh = fresh_targets(old, shot)
+        targets_rose = item_count(shot, "smallTargets", "smallTargetCount") > \
+            item_count(old, "smallTargets", "smallTargetCount")
+        if fresh:
             findings.append(finding(
-                "warning", f"{where}: a new control is small for a finger",
-                f'"{worst.get("text") or worst.get("tag")}" is '
-                f'{worst.get("width")}x{worst.get("height")}px, under the {MIN_TAP_TARGET}px '
-                "that reads as reliably tappable.",
-                {"targets": fresh[:4]}))
+                "warning", f"{where}: new small tap targets",
+                f"Under the {MIN_TAP_TARGET}px that reads as reliably tappable: "
+                f"{name_items([target_label(t) for t in fresh])}.",
+                dict({"targets": fresh[:4]}, **({"rise": True} if targets_rose else {}))))
+
+        fresh_text = fresh_small_text(old, shot)
+        text_rose = item_count(shot, "smallText", "smallTextCount") > \
+            item_count(old, "smallText", "smallTextCount")
+        if fresh_text:
+            findings.append(finding(
+                "warning", f"{where}: new text below the size floor",
+                "Text smaller than the floor the page is held to: "
+                f"{name_items([text_label(t) for t in fresh_text])}.",
+                dict({"text": fresh_text[:4]}, **({"rise": True} if text_rose else {}))))
 
         fresh_errors = [e for e in shot.get("errors") or []
                         if e not in ((old or {}).get("errors") or [])]
@@ -134,6 +143,67 @@ def compare(before, after):
 
     order = {"blocker": 0, "warning": 1, "good": 2}
     return sorted(findings, key=lambda f: order.get(f["severity"], 9))
+
+
+def name_items(items, limit=4):
+    """Up to `limit` items joined by "; ", then "and N more"."""
+    out = "; ".join(items[:limit])
+    if len(items) > limit:
+        out += f"; and {len(items) - limit} more"
+    return out
+
+
+def target_label(t):
+    name = t.get("text") or t.get("tag")
+    return f'"{name}" {t.get("width")}x{t.get("height")}px'
+
+
+def text_label(t):
+    return f'"{t.get("text")}" {t.get("px")}px'
+
+
+def fresh_by_count(old_items, new_items, keyfn):
+    """Items in new_items beyond what old_items already had, per key.
+
+    A multiset comparison: one "Edit" link becoming four is three new items,
+    even though the label was already seen.
+    """
+    budget = Counter(keyfn(t) for t in old_items)
+    fresh = []
+    for item in new_items:
+        k = keyfn(item)
+        if budget[k] > 0:
+            budget[k] -= 1
+        else:
+            fresh.append(item)
+    return fresh
+
+
+def item_count(shot, list_key, count_key):
+    """How many such items a shot holds: its count field when present (the
+    list may be capped), else the list length. A missing shot is zero."""
+    if not shot:
+        return 0
+    count = shot.get(count_key)
+    if isinstance(count, int):
+        return count
+    return len(shot.get(list_key) or [])
+
+
+def fresh_targets(old, shot):
+    return fresh_by_count((old or {}).get("smallTargets") or [],
+                          shot.get("smallTargets") or [],
+                          lambda t: (t.get("text"), t.get("tag")))
+
+
+def fresh_small_text(old, shot):
+    # A before shot from an older capture has no smallText at all; that is "not
+    # measured", not "zero", so it cannot be compared.
+    if old is not None and "smallText" not in old:
+        return []
+    return fresh_by_count((old or {}).get("smallText") or [],
+                          shot.get("smallText") or [],
+                          lambda t: t.get("text"))
 
 
 def is_measured(shot):

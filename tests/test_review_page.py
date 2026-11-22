@@ -972,6 +972,13 @@ class Spelling(unittest.TestCase):
             s["assets"] = {"centre.png": "sample.png"}
         self.assertEqual(self.spelling(self.page(mutate)), [])
 
+    def test_alt_and_title_text_is_scanned(self):
+        page = self.page(lambda s: s["entries"][1].update(
+            detail_html='<p><img alt="a grey box" src="sample.png"> <span title="the centre">x</span></p>'))
+        found = " ".join(self.spelling(page))
+        self.assertIn('"grey"', found)
+        self.assertIn('"centre"', found)
+
     def test_analyses_is_not_flagged(self):
         page = self.page(lambda s: s["entries"][1].update(lede="two analyses"))
         self.assertEqual(self.spelling(page), [])

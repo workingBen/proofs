@@ -1083,12 +1083,6 @@ BRITISH = {
 }
 _BRITISH_RE = [(re.compile(r"\b(?:%s)\b" % pat, re.I), re.match(r"[a-z]+", pat).group(), us)
                for pat, us in BRITISH.items()]
-_SKIP_KEYS = {"css", "assets", "href", "src", "id", "mode", "repo", "q", "key", "image", "file"}
-
-
-def _visible_text(value):
-    value = re.sub(r"<(style|code)\b.*?</\1>", " ", value, flags=re.S | re.I)
-    return html.unescape(re.sub(r"<[^>]*>", " ", value))
 
 
 def _scan(text, where, seen, out):
@@ -1100,36 +1094,18 @@ def _scan(text, where, seen, out):
                 out.append('british spelling "%s" (American: "%s") in %s' % (key, us + key[len(stem):], where))
 
 
-def spelling_warnings(spec):
-    """One line per distinct British spelling in what the reader sees (not css, assets, URLs, code)."""
-    seen, out = set(), []
-
-    def walk(node, where):
-        if isinstance(node, str):
-            _scan(_visible_text(node), where, seen, out)
-        elif isinstance(node, dict):
-            here = str(node.get("id") or node.get("title") or where)
-            for k, v in node.items():
-                if k not in _SKIP_KEYS:
-                    walk(v, here)
-        elif isinstance(node, list):
-            for v in node:
-                walk(v, where)
-
-    walk(spec, "the page")
-    return out
-
-
 def page_spelling_warnings(text):
     """The same check on a built page, where the reader's text lives (rp-spec keeps only a
-    trimmed spec). Scripts, styles and code are dropped, tags go with their URLs, and each
-    hit is named by the nearest preceding element id."""
+    trimmed spec). Scripts, styles and code are dropped, tags go with their URLs (alt and title
+    text is kept), and each hit is named by the nearest preceding element id."""
     text = re.sub(r"<(script|style|code)\b.*?</\1>", " ", text, flags=re.S | re.I)
     seen, out, where = set(), [], "the page"
     for chunk in re.split(r"(<[^>]*>)", text):
         if chunk.startswith("<"):
             m = re.search(r'\sid="([^"]+)"', chunk)
             where = m.group(1) if m else where
+            for attr in re.findall(r'\s(?:alt|title)="([^"]*)"', chunk):
+                _scan(html.unescape(attr), where, seen, out)
         else:
             _scan(html.unescape(chunk), where, seen, out)
     return out

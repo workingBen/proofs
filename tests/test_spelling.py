@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "shared" / "review_page"))
 import review_page  # noqa: E402
 
-MARKER = "british-ok"
+MARKER = re.compile(r"british-ok: ([a-z, ]+)")
 
 
 class Shipped(unittest.TestCase):
@@ -36,10 +36,10 @@ class Shipped(unittest.TestCase):
                     if in_table:
                         in_table = line.strip() != "}"
                         continue
-                if MARKER in line:
-                    continue
+                ok = MARKER.search(line)
+                allowed = {w.strip().lower() for w in ok.group(1).split(",")} if ok else set()
                 for rx, _stem, us in review_page._BRITISH_RE:
-                    m = rx.search(line)
+                    m = next((m for m in rx.finditer(line) if m.group(0).lower() not in allowed), None)
                     if m:
                         found.append("%s:%d %r (American: %s)" % (p.relative_to(ROOT), n, m.group(0), us))
         self.assertEqual(found, [], "British spelling in shipped text:\n" + "\n".join(found))

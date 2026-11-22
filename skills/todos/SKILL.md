@@ -58,8 +58,10 @@ Two rules, both worth restating every time:
 ## Running it
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/todos/scripts/todos_page.py     # TODO.md -> .proofs/pages/todos.html
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/todos/scripts/todos_page.py TODO.md .proofs/pages/todos.html --session "<session name>"
 ```
+
+The arguments are the to-do file, the output page and the session name (details below).
 
 Then deliver the generated page as "Where the page goes" says (with `artifact`, publish it
 with the `Artifact` tool). **Always republish to

@@ -60,6 +60,15 @@ class SiteTests(unittest.TestCase):
         txt = open(os.path.join(DOCS, "index.html"), encoding="utf-8").read()
         self.assertIn("12 skills", txt)
 
+    def test_install_line_uses_https(self):
+        # The owner/repo shorthand clones over SSH and fails without a GitHub SSH key.
+        line = "/plugin marketplace add https://github.com/workingBen/proofs.git"
+        for f in (os.path.join(ROOT, "README.md"), os.path.join(DOCS, "index.html"),
+                  os.path.join(DOCS, "try", "index.html")):
+            txt = open(f, encoding="utf-8").read()
+            self.assertIn(line, txt, f)
+            self.assertNotIn("/plugin marketplace add workingBen/proofs\n", txt, f)
+
 
 if __name__ == "__main__":
     unittest.main()

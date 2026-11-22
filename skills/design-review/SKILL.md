@@ -4,6 +4,7 @@ version: 1.8.3
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
+  - Bash(node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs *)
 description: Use when the user wants to see and choose between rendered options for a visual or layout change before it is built, such as a redesign, a layout bug or "make this section nicer". Differs from visual-qa, which finds what is wrong, and article-copy-edit, which reviews wording; this compares coded mockups with the current page.
 ---
 
@@ -29,37 +30,38 @@ Confirm the live route, and which specific section(s) are in scope. A whole-page
 
 ### 2. Capture "before": always from the running app
 
-The "before" is a screenshot of the page as the running app serves it today. Do not use images committed in the repo as the "before" because they happen to be there: they show an older page, and the user will review a design against something that is no longer live.
+The "before" is a screenshot of the page as the running app serves it today, never an image committed in the repo (it shows an older page).
 
-1. **Find the project's start command.** Look in the project's `CLAUDE.md` or README first, then `package.json` scripts, `Procfile`, `bin/dev`, or `manage.py runserver`. If none of them gives one, **ask the user** for it; do not switch to screenshots on your own. If dependencies are missing (no `node_modules`, no installed bundle), install them with the project's own install command; that is not a reason to fall back to repo images.
-   **Pick a free port.** Check that nothing answers on it (`curl -s -o /dev/null http://localhost:PORT/` fails), and start the server on that port. The helper treats a server that already answers at `--url` as ready and leaves it running, so a stale or unrelated app on a reused port would be captured as the "before" and left running.
-2. **Rebuild first.** If the project compiles its styles (a CSS build step), run that build before the capture, or the screenshot shows the old look.
-3. **Start, wait, capture and stop in one call to the helper.** It starts the server, waits until the URL answers, runs your capture command with `PROOFS_BASE_URL` set to that URL, then always stops the server. It is not pre-approved, so the user may get one permission prompt; that is expected. Example, with Chrome from the command line. Set `CHROME` inside the `sh -c` capture command, never in front of `python3`: the command has to start with `python3 ${CLAUDE_PLUGIN_ROOT}/shared/capture/with_server.py` or it will not match the allow rule for unattended runs, and a variable set in an earlier Bash call is gone by the next one anyway. Pick the binary that exists: `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome` (macOS), `google-chrome`, `google-chrome-stable` or `chromium` (Linux, e.g. `CHROME=google-chrome;`).
+**House rules.** Same as every proofs capture skill; full text in `../../reference/house-rules.md`.
+
+1. **Finish in this turn.** Build, smoke-check and screenshot before you reply; the next turn re-reads the whole session and costs more each time. Write big files (HTML, spec JSON, scripts) with the Write tool and never print them back with `cat`, `head` or `Read`; the helpers print short summaries.
+2. **Stay in two folders.** Read only inside the project (the folder Claude Code started in) and the plugin folder. Do not read parent folders: their `CLAUDE.md` is already loaded for you. Write specs, scratch scripts, screenshots and pages only under `.proofs/` in the project, never the system temp folder, `$TMPDIR` or `~`. The exceptions are the Playwright install in `~/.cache/proofs-playwright` and pr-qa's `PROOFS_BASE_DIR` base folder, when it is set.
+3. **One command per Bash call.** No pipes, redirects, `;`, `&&`, `cd`, `$(...)` or `VAR=` in front: Claude Code matches its allow rules against the whole command, and any of those makes it ask (or, in `claude -p`, refuse).
+
+Then, in order:
+
+1. **Find the start command** in the project's `CLAUDE.md` or README, then `package.json` scripts, `Procfile`, `bin/dev` or `manage.py runserver`. If none gives one, **ask the user**; do not switch to screenshots on your own. Missing dependencies are installed with the project's own install command.
+2. **Print "Commands this review will run"** before the first Bash call: one short list with the exact forms (the install, for example `npm install`; the capture line below; the style build if the project compiles styles, or the shot shows the old look; the type check if the project has one, for example `npx tsc --noEmit`). Then run them without further narration. The README's optional project block can pre-approve them.
+3. **Write the pages file** with the Write tool at `.proofs/capture/pages.json`: a base URL, then one entry per page (start from the example pages file in the visual-qa skill's scripts folder).
+4. **Capture with this command**, the same every time. It starts the server, waits for the URL, runs the capture with `PROOFS_BASE_URL` set, then stops the server. One permission prompt is expected.
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/shared/capture/with_server.py --start "npm run dev -- -p 3311" \
-  --url http://localhost:3311/ -- sh -c 'CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"; "$CHROME" --headless --disable-features=MacAppCodeSignClone \
-  --hide-scrollbars --virtual-time-budget=8000 --window-size=390,2200 --screenshot=before-390.png "$PROOFS_BASE_URL"'
+python3 ${CLAUDE_PLUGIN_ROOT}/shared/capture/with_server.py --start "npm run dev -- -p 3311" --url http://localhost:3311/ -- node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs .proofs/capture/pages.json --out .proofs/capture/before --sizes 390,1280
 ```
 
-   - Use `--cwd DIR` when the server starts from another folder. For several widths, chain the Chrome commands inside one `sh -c`: each helper call restarts the server.
-   - Exit codes: 3 means the server never answered (read `.proofs/server.log`), 4 means it exited early, 5 means another run holds the lock; any other nonzero code is the capture command's own.
-   - Exit 0 only means the capture command succeeded: headless Chrome also exits 0 on a blank or error page. Read the PNG and confirm it shows the route you meant.
-   - The helper writes its log, pid and lock files to `.proofs/` in the project. Leave that folder untracked (add it to `.gitignore` if the project has one).
-   - A headless capture at 390 px wide works. A project's own browser automation (Playwright or similar) also works as the capture command, and is better when you need to measure the page: pass it after `--` the same way, and launch Chrome with `--disable-features=MacAppCodeSignClone` in its `args`.
-4. **Never start the server yourself with `run_in_background` or `&`.** In `claude -p` the turn then never ends, and when the turn is stopped the server dies with it. The helper owns the server for exactly as long as the capture runs and leaves nothing running.
-5. **Why the Chrome flag stays.** On a Mac, Google Chrome copies its whole app (about 1.4 GB) into a temp folder on every launch and deletes the copy only when quit normally, so each screenshot without `--disable-features=MacAppCodeSignClone` can leave one behind. The flag is in every command above. Headless Chrome also screenshots `file://` URLs, which is how you look at the built review page itself (step 4). The Chrome browser extension tools are a last resort, and only when connected: if every call fails with "not connected", stop retrying.
+   - It renders a true 390 px phone viewport and writes `summary.md` with measured sideways overflow. **When `summary.md` shows sideways overflow at 390, state it as a finding with the numbers** (for example: the page is 455 px wide on a 390 px screen; the nav is cut off), and show the shot. Hedge only about what was not measured. Open the PNGs and confirm each shows the route you meant.
+   - Use port 3311. If the helper prints `server: already answering at <url>; not started by this helper`, the shot may be of another app: rerun on a different port.
+   - Use `--cwd DIR` when the server starts from another folder. Exit codes: 3 the server never answered (read `.proofs/server.log`), 4 it exited early, 5 another run holds the lock; any other nonzero is the capture's own.
+   - **Never start the server yourself with `run_in_background` or `&`.** In `claude -p` the turn then never ends. The helper owns the server and leaves nothing running.
+   - **Fallback only on failure, and say which was used.** Playwright missing: run the one-line install the capture prints, once, then rerun. Install declined or failing: take desktop shots with Chrome (`--window-size=1280,900` is fine, with `--disable-features=MacAppCodeSignClone`, which stops a Mac copying its 1.4 GB app per launch) and mark the phone view "not measured" on the page. **Never use Chrome `--window-size` below 500 for a phone shot:** macOS headless Chrome lays the page out at 500 px at narrower sizes. The Chrome browser extension tools are a last resort; if every call fails with "not connected", stop retrying.
 
-**Match the live wording.** Local test data drifts from what editors have since changed on the live site, so a local screenshot can show different text than the user is looking at. Bring the real live text into the local copy before capturing, or the "before" pane won't match the picture in the user's head.
+**Match the live wording.** Local test data drifts from the live site; bring the real live text into the local copy before capturing, or the "before" pane won't match the picture in the user's head.
 
-**Only when the app cannot run** (the helper exits 3 or 4 and you cannot fix it, or the project has no way to run), a committed screenshot may stand in. Then:
+**Only when the app cannot run** (exit 3 or 4 you cannot fix, or no way to run), a committed screenshot may stand in. Take its date from `git log -1 --format=%cs -- <file>`, write in that item's Reason "committed screenshot, last changed YYYY-MM-DD", and tell the user in chat and on the page why the app could not run.
 
-- Take its date from `git log -1 --format=%cs -- <file>`, and write in that item's Reason: "committed screenshot, last changed YYYY-MM-DD".
-- Tell the user in chat, and on the review page, that the "before" is a committed screenshot and not the live page, with why the app could not run.
+Screenshot each in-scope section at the width(s) that matter. The builder embeds each as a data URI (step 4), so the page is self-contained.
 
-Screenshot each in-scope section at whichever viewport width(s) matter for this review (desktop, mobile, or both). The builder embeds each one as a data URI (step 4): no external image hosting, which keeps the page self-contained wherever it is opened.
-
-There is no mandatory standing-audit section here (unlike a copy review's compliance step). If something accessibility- or readability-related comes up, raise it inline as a normal item's Reason, not as a separate always-on section.
+No standing-audit section here; raise accessibility or readability points inline in an item's Reason.
 
 ### 3. Turn the redesign brief into discrete numbered items
 
@@ -73,7 +75,7 @@ Each item is one section or component:
 
 **Needs the whole plugin.** This skill reads shared files at `../../reference/` and `../../shared/`, relative to its folder. If they are missing, the skill was copied on its own: install the whole plugin (`/plugin install proofs@proofs`) rather than recreating them.
 
-Write the content; the builder writes the page. Read `../../reference/review-page.md` first: it documents the spec and the command, `python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py spec.json --out page.html`, with `"decisions": "design-review"`. Do not hand-write the page's JavaScript. Follow any design guidance your environment provides for published pages: "utilitarian but polished," not a landing page. Fill `project` with `name`, `session` and `repo`, taking the session name the way the `working-log` skill does (the session's own name, else one named for the work, kept for the life of the page): the page's header shows the proofs mark, this skill's name, the project and the session, so the user can match the page to its session at a glance.
+Write the content; the builder writes the page. Read `../../reference/review-page.md` first: it documents the spec and the command, `python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py .proofs/design-review/spec.json --out .proofs/pages/<review-name>.html`, with `"decisions": "design-review"`. Do not hand-write the page's JavaScript. Follow any design guidance your environment provides for published pages: "utilitarian but polished," not a landing page. Fill `project` with `name`, `session` and `repo`, taking the session name the way the `working-log` skill does (the session's own name, else one named for the work, kept for the life of the page): the page's header shows the proofs mark, this skill's name, the project and the session, so the user can match the page to its session at a glance.
 
 - **Reuse the target page's own design system** for the mockups (the spec's `css`). Read the project's style guide for its colors and fonts, including dark mode if it has one, rather than trusting a list in this skill, and build against its tokens so the mockups render correctly in every theme the site supports. Give mockup panes their own explicit background rather than letting them inherit the review page's. If the project deliberately darkened its grays to pass contrast, don't "fix" a mockup by reaching back to stock framework grays.
 - **Fonts and images.** Review pages cannot load web fonts from a font service, so download the real fonts (the `woff2` weights you need) and list them in `assets`, then point `@font-face` at them from `css` with `src: url({{asset:name}}) format('woff2')`. **Never paste a font's base64 into the spec**: one 22 KB font is about 28,000 tokens, while an asset costs none. Put photos and the before screenshot in `assets` too. The builder embeds every asset **once**, however many mockups use it, and converts PNG and JPEG screenshots to WebP with a PNG or JPEG fallback for older Safari (`image_quality`, `image_max_width`; see the builder reference). Style a screenshot `<img>` by class, not with a `>` child selector: the builder wraps it in a `<picture>`.
@@ -93,7 +95,7 @@ Write the content; the builder writes the page. Read `../../reference/review-pag
 
 Deliver the page as "Where the page goes" below says (with `artifact`, that means publishing it with the `Artifact` tool). Redeploy to the same file path across revisions of the *same* review page; don't mint a new URL for revisions the user is already looking at.
 
-**Verify before publishing, every time and not just the first.** The build runs its own check (script syntax, card and button counts). Run `--smoke`. If it reports Playwright missing, run the one-line install it prints (it uses your installed Google Chrome and downloads no browser), then run `--smoke` again; if it still cannot run, say on the page and in chat that the self-check did not run. Then screenshot the page at a desktop and a phone width and check your coded mockups don't add sideways scroll or overlap. Only publish after all of it passes.
+**Verify before publishing, every time and not just the first.** The build runs its own check (script syntax, card and button counts). Run `--smoke`. If it reports Playwright missing, run the one-line install it prints (it uses your installed Google Chrome and downloads no browser), then run `--smoke` again; if it still cannot run, say on the page and in chat that the self-check did not run. `--smoke` already measures sideways scroll at 1280 and 390. For a look, run `node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs .proofs/capture/review.json --out .proofs/capture/review --sizes 390,1280` with a pages file whose `base` is the `file://` URL of `.proofs/pages/` (an absolute path) and whose entry `path` is `/<review-name>.html` (capture.cjs builds each address as base plus path), then open the PNGs and check your coded mockups don't overlap. Never use Chrome `--window-size` for the phone view. Only publish after all of it passes.
 
 ### 5. Applying the decisions
 

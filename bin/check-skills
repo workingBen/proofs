@@ -15,6 +15,7 @@ Usage: check-skills [skills_dir]   (default: skills/ at the repo root)
 Exit 1 on any problem.
 """
 import re
+import shlex
 import sys
 from pathlib import Path
 
@@ -106,6 +107,61 @@ def rule_matches(rule, command):
     else:
         rx = ".*".join(re.escape(part) for part in pat.split("*"))
     return re.fullmatch(rx, command, re.S) is not None
+
+
+def why_not_allowed(rules, command):
+    """None when claude_code_allows would accept the command, else the reason, naming the token."""
+    if "\n" in command or "\r" in command:
+        return "a newline outside quotes makes two commands"
+    quote, i = None, 0
+    while i < len(command):
+        ch, two = command[i], command[i:i + 2]
+        if ch == "\\" and quote != "'":
+            i += 2
+            continue
+        if quote is None and ch in "'\"":
+            quote = ch
+        elif ch == quote:
+            quote = None
+        elif quote != "'" and (ch == "`" or ch == "$"):
+            return "%r expands at run time (variable or command substitution), so the text a rule saw is not what runs" % ch
+        elif quote is None and ch in "*?[{":
+            return "unquoted %r is a glob or brace expansion, so the text a rule saw is not what runs" % ch
+        elif quote is None and ch == "#" and (i == 0 or command[i - 1].isspace()):
+            return "an unquoted # starts a comment, which is not part of what the rule matched"
+        elif quote is None and ch in "|;&<>()":
+            return "unquoted %r is a shell operator, so Claude Code checks each part separately or asks" % ch
+        i += 1
+    if quote:
+        return "unbalanced quote"
+    try:
+        lex = shlex.shlex(command, posix=True, punctuation_chars=True)
+        lex.whitespace_split = True
+        tokens = list(lex)
+    except ValueError as err:
+        return "cannot tokenize: %s" % err
+    if not tokens:
+        return "empty command"
+    if re.match(r"[A-Za-z_]\w*=", tokens[0]):
+        return "leading %s sets a variable, so the command no longer starts with its program" % tokens[0]
+    if tokens[0] == "cd":
+        return "starts with cd, which Claude Code treats as a separate command"
+    if not any(rule_matches(r, command) for r in rules):
+        return "no allow rule matches"
+    return None
+
+
+def claude_code_allows(rules, command):
+    """A deliberately strict model of Claude Code's Bash permission matching.
+
+    False for any unquoted |, ;, &, &&, ||, >, <, (, ), backtick, $( or newline, for a
+    leading NAME=value and for a command starting with cd; otherwise True only when some
+    rule matches through rule_matches. Quoted text is one argument and is fine.
+
+    Stricter than Claude Code on purpose: a command this accepts must be accepted by
+    Claude Code, never the other way round. Never loosen it to make a skill pass; fix the
+    skill's example instead."""
+    return why_not_allowed(rules, command) is None
 
 
 def check_plugin_calls(path, body, rules):

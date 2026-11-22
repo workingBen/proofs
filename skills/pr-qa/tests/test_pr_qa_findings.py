@@ -160,6 +160,20 @@ class NotMeasuredTest(unittest.TestCase):
         self.assertEqual(json.loads(buf.getvalue())["verdict"], "unknown")
 
 
+    def test_out_flag_writes_file_and_prints_summary_only(self):
+        with tempfile.TemporaryDirectory() as tmp, redirect_stdout(StringIO()) as buf:
+            dest = os.path.join(tmp, "findings.json")
+            main(["--dir", tmp, "--out", dest])
+            with open(dest, encoding="utf-8") as handle:
+                written = json.load(handle)
+        self.assertEqual(written["verdict"], "unknown")
+        printed = buf.getvalue()
+        self.assertLess(len(printed.splitlines()), 4)
+        self.assertIn("unknown", printed)
+        self.assertIn(dest, printed)
+        self.assertNotIn('"findings"', printed)
+
+
 def run(before, after):
     return summarize(compare(before, after), measured=measured(before, after),
                      unmeasured=unmeasured_routes(before, after))

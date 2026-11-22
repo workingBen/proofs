@@ -5,6 +5,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -147,6 +148,57 @@ class AllowBlockTest(unittest.TestCase):
         r = self._cli("/opt/claude-home", None, "--lines", "--headless")
         self.assertEqual(json.loads("[" + r.stdout + "]"), allow_block.rules("/opt/claude-home", None, headless=True))
 
+    def test_project_flag_prints_only_the_project_rules(self):
+        r = self._cli("/opt/claude-home", None, "--project")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(json.loads(r.stdout), {"permissions": {"allow": allow_block.PROJECT_RULES}})
+        r = self._cli("/opt/claude-home", None, "--lines", "--project")
+        self.assertEqual(json.loads("[" + r.stdout + "]"), allow_block.PROJECT_RULES)
+        self.assertNotIn("/opt/claude-home", r.stdout)
+
+    def test_project_rules_are_never_in_the_default_or_headless_output(self):
+        for headless in (False, True):
+            plain = allow_block.rules("/opt/claude-home", None, headless=headless)
+            self.assertFalse(set(plain) & set(allow_block.PROJECT_RULES))
+        self.assertFalse(set(readme_block()["permissions"]["allow"]) & set(allow_block.PROJECT_RULES))
+
+    def test_project_and_headless_combine_into_one_block(self):
+        r = self._cli("/opt/claude-home", None, "--project", "--headless")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(json.loads(r.stdout)["permissions"]["allow"],
+                         allow_block.rules("/opt/claude-home", None, headless=True) + allow_block.PROJECT_RULES)
+
+    def test_project_rules_cover_the_pr_qa_commands(self):
+        for cmd in ("printenv PROOFS_BASE_DIR", "gh pr checkout 7", "gh pr list --state open", "cp .env .proofs/base/web/.env",
+                    "git worktree add --detach .proofs/base main", "git worktree add --detach .proofs/base fix-nav"):
+            self.assertTrue(check_skills.claude_code_allows(allow_block.PROJECT_RULES, cmd), cmd)
+        # Final review I2: the local-branch after shot uses a worktree; nothing switches the developer's checkout.
+        for cmd in ("git switch fix-nav", "git switch -f main", "git switch --discard-changes main"):
+            self.assertFalse(check_skills.claude_code_allows(allow_block.PROJECT_RULES, cmd), cmd)
+        self.assertFalse(check_skills.claude_code_allows(allow_block.PROJECT_RULES, "cp .env /opt/claude-home/base/web/.env"))
+
+    def test_readme_offers_the_project_block_labeled_and_apart(self):
+        text = (REPO / "README.md").read_text()
+        section = text[text.index("<!-- allow-proofs:start -->"):text.index("<!-- allow-proofs:end -->")]
+        self.assertIn("Allow your project's commands too (optional", section)
+        self.assertIn("--project", section)
+        self.assertGreater(section.index("--project"), section.index("--headless"))
+        self.assertIn("npm install", section)
+        self.assertIn("package scripts", section)
+        self.assertIn(".claude/settings.local.json", section.split("Allow your project's commands too")[1])
+        self.assertIn("no home path", section.split("Allow your project's commands too")[1])
+
+    def test_readme_states_the_one_command_per_call_rule(self):
+        text = (REPO / "README.md").read_text()
+        self.assertIn("one command per Bash call", text)
+        self.assertNotIn("that script alone", text)
+
+    def test_usage_line_shows_headless_and_project_combine(self):
+        usage = next(l for l in allow_block.__doc__.splitlines() if "allow_block.py [" in l)
+        self.assertIn("[--headless]", usage)
+        self.assertIn("[--project]", usage)
+        self.assertNotIn("|", usage)
+
     def test_cli_rejects_unknown_flags(self):
         self.assertEqual(self._cli("/opt/claude-home", None, "--everything").returncode, 2)
 
@@ -181,6 +233,71 @@ class AllowBlockTest(unittest.TestCase):
             env["CLAUDE_CONFIG_DIR"] = config_dir
         return subprocess.run([sys.executable, str(REPO / "shared" / "allow_block.py"), *args],
                               capture_output=True, text=True, env=env)
+
+    def _known(self, config, marketplaces):
+        (Path(config) / "plugins").mkdir(parents=True, exist_ok=True)
+        (Path(config) / "plugins" / "known_marketplaces.json").write_text(json.dumps(marketplaces))
+
+    def _local_marketplace(self, config, name, plugins):
+        """A local-folder marketplace under config/<name>; plugins=None leaves out marketplace.json."""
+        folder = Path(config) / name
+        (folder / ".claude-plugin").mkdir(parents=True)
+        if plugins is not None:
+            (folder / ".claude-plugin" / "marketplace.json").write_text(json.dumps({"name": name, "plugins": plugins}))
+        return str(folder)
+
+    def _allow(self, config, *args):
+        r = self._cli("/opt/claude-home", config, *args)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return json.loads(r.stdout)["permissions"]["allow"]
+
+    def test_directory_marketplace_adds_rules_for_its_source_folder(self):
+        # A marketplace added from a local folder runs the plugin from that folder, not the cache:
+        # the 2026-11-22 headless check had with_server.py denied for exactly this reason.
+        with tempfile.TemporaryDirectory() as config:
+            root = self._local_marketplace(config, "proofs", [{"name": "proofs", "source": "./"}])
+            self._known(config, {"proofs": {"source": {"source": "directory", "path": root}}})
+            allow = self._allow(config, "--headless")
+            base = allow_block.rules("/opt/claude-home", config, headless=True)
+        cmd = ("python3 %s/shared/capture/with_server.py --start \"python3 -m http.server 3411\" "
+               "--url http://localhost:3411/ -- node %s/skills/visual-qa/scripts/capture.cjs "
+               ".proofs/capture/pages.json --out .proofs/evidence/pr-1 --sizes 390,1440 --evidence before" % (root, root))
+        self.assertTrue(check_skills.claude_code_allows(allow, cmd), allow)
+        self.assertIn("Read(/%s/**)" % root, allow)
+        self.assertEqual(allow[:len(base)], base)
+
+    def test_directory_rules_follow_the_headless_flag(self):
+        with tempfile.TemporaryDirectory() as config:
+            root = self._local_marketplace(config, "proofs", [{"name": "proofs", "source": "./"}])
+            self._known(config, {"proofs": {"source": {"source": "directory", "path": root}}})
+            allow = self._allow(config)
+        self.assertFalse(any(root + "/shared/capture/with_server.py" in r for r in allow), allow)
+        self.assertIn("Bash(python3 %s/skills/pr-qa/scripts/pr_qa_page.py *)" % root, allow)
+
+    def test_a_github_marketplace_adds_no_folder_rules(self):
+        with tempfile.TemporaryDirectory() as config:
+            self._known(config, {"proofs": {"source": {"source": "github", "repo": "workingBen/proofs"}}})
+            allow = self._allow(config, "--headless")
+            base = allow_block.rules("/opt/claude-home", config, headless=True)
+        self.assertEqual(allow, base)
+
+    def test_a_directory_marketplace_without_proofs_adds_no_rules(self):
+        # Final review I1: an unrelated local marketplace got a full set of proofs rules.
+        with tempfile.TemporaryDirectory() as config:
+            other = self._local_marketplace(config, "tap-to-fix", [{"name": "tap-to-fix", "source": "./"}])
+            self._known(config, {"tap-to-fix": {"source": {"source": "directory", "path": other}}})
+            allow = self._allow(config, "--headless", "--project")
+            base = allow_block.rules("/opt/claude-home", config, headless=True) + allow_block.PROJECT_RULES
+        self.assertEqual(allow, base)
+        self.assertFalse(any(other in r for r in allow), allow)
+
+    def test_unreadable_marketplace_json_adds_no_rules(self):
+        with tempfile.TemporaryDirectory() as config:
+            missing = self._local_marketplace(config, "proofs", None)
+            self._known(config, {"proofs": {"source": {"source": "directory", "path": missing}}})
+            allow = self._allow(config, "--headless")
+            base = allow_block.rules("/opt/claude-home", config, headless=True)
+        self.assertEqual(allow, base)
 
     def test_cli_prints_the_block_for_this_home(self):
         r = self._cli("/opt/claude-home")

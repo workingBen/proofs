@@ -1131,8 +1131,8 @@ def warnings(path):
 
 
 HOW_TO_PY = ("Install Google Chrome, or point PROOFS_BROWSER_CHANNEL at another installed channel. "
-             "No browser download is needed: PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install "
-             "--prefix ~/.cache/proofs-playwright playwright@1.61.1")
+             "No browser download is needed: "
+             "npm install --prefix ~/.cache/proofs-playwright playwright@1.61.1")
 
 
 def find_playwright(arg):
@@ -1201,6 +1201,14 @@ def main(argv=None):
         return 1
     Path(a.out).parent.mkdir(parents=True, exist_ok=True)
     Path(a.out).write_text(text)
+    parts = Path(a.out).resolve().parts
+    if ".proofs" in parts:
+        try:
+            sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+            import proofs_dir
+            proofs_dir.ensure_excluded(Path(*parts[:parts.index(".proofs")]))
+        except Exception:
+            pass
     print("wrote %s (%d KB)" % (a.out, len(text.encode()) // 1024))
     for line in (image_line(spec), size_warning(text, spec)):
         if line:

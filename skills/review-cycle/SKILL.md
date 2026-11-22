@@ -35,7 +35,7 @@ A queue-processing workflow for a live review session: the user reports issues o
    - Run the relevant test suite; confirm it's green.
    - Self-review the diff before committing.
    - **Ship it as its own pull request: one item, one branch, one PR, merged as you go.** Never commit on the main branch. The sequence per item:
-     ```bash
+     ```text
      git fetch origin main                            # from the session's working copy
      git checkout -b <type>/<short-slug> origin/main   # fresh off main, not off the last item
      # ... commit the work, explicit paths only ...

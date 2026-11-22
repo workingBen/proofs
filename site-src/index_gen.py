@@ -108,7 +108,7 @@ body = f'''<header class="top"><div class="in"><a class="logo" href="index.html"
   <div class="eyebrow">Skills for Claude Code · {len([s for _, g in GROUPS for s in g])} skills · {total_f}+ features</div>
   <h1>Claude skills that <i>show</i> their work.</h1>{hero_vid}
   <p class="tagline">Stop reading walls of terminal text. Every skill here includes a page you can look at, click through and decide on, then hand back to Claude in one paste.</p>
-  <div class="tries"><div class="try"><span class="lbl">Install in Claude Code</span><div class="trybox"><code>/plugin marketplace add workingBen/proofs
+  <div class="tries"><div class="try"><span class="lbl">Install in Claude Code</span><div class="trybox"><code>/plugin marketplace add https://github.com/workingBen/proofs.git
 /plugin install proofs@proofs</code><button type="button" class="tryb">Copy</button></div></div>
   <div class="try"><span class="lbl">Then try this prompt</span><div class="trybox wrap"><code>Use the design-review skill to propose two or three design updates for the page [YOUR URL]</code><button type="button" class="tryb">Copy</button></div></div></div>
 </div></section>

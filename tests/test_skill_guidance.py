@@ -62,8 +62,11 @@ class DesignReviewGuidance(unittest.TestCase):
         for flag in flags:
             self.assertIn(f'"{flag}"', helper)
 
-    def test_chrome_is_set_inside_the_capture_command(self):
-        self.assertIn("""-- sh -c 'CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"; "$CHROME" --headless""", self.step2())
+    def test_capture_is_capture_cjs_after_with_server(self):
+        # design-review's example runs the one default capture helper after `--`.
+        for skill in ("design-review", "visual-qa", "pr-qa"):
+            calls = [c for p, c in helper_calls() if p.parent.name == skill]
+            self.assertTrue(any(re.search(r" -- node \$\{CLAUDE_PLUGIN_ROOT\}/skills/visual-qa/scripts/capture\.cjs ", c) for c in calls), skill)
 
 
 def helper_calls():
@@ -126,7 +129,7 @@ class SmokeGuidance(unittest.TestCase):
     def test_the_builder_prints_the_install_line_the_sentence_points_to(self):
         src = (REPO / "shared" / "review_page" / "review_page.py").read_text()
         self.assertIn("Playwright not found. \" + HOW_TO_PY", src)
-        self.assertIn("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install", src)
+        self.assertIn("npm install --prefix ~/.cache/proofs-playwright playwright@1.61.1", src)
 
 
 class ReadmeInstall(unittest.TestCase):
@@ -136,6 +139,14 @@ class ReadmeInstall(unittest.TestCase):
         self.assertIn("claude -p", after_install)
         self.assertIn("Allow Proofs", after_install)
         self.assertIn("will not start", after_install)
+
+    def test_readme_says_pr_qa_in_claude_p_needs_both_blocks(self):
+        # Final review M1.
+        self.assertIn("For pr-qa in `claude -p`, use `--headless --project`", (REPO / "README.md").read_text())
+
+    def test_readme_says_to_rerun_after_a_local_marketplace_change(self):
+        # Final review M6: the folder rules record the path once.
+        self.assertIn("rerun it after adding or moving a local marketplace", (REPO / "README.md").read_text())
 
 
 class ChromeLines(unittest.TestCase):
@@ -151,9 +162,120 @@ class ChromeLines(unittest.TestCase):
 
 
 class PrQaGuidance(unittest.TestCase):
+    def pr_qa(self):
+        return (REPO / "skills" / "pr-qa" / "SKILL.md").read_text()
+
+    def test_default_path_comes_before_the_sequence(self):
+        text = self.pr_qa()
+        self.assertIn("## Default path: one turn, page first", text)
+        self.assertLess(text.index("## Default path: one turn, page first"), text.index("## The Sequence"))
+        self.assertLess(text.index("## When to Use"), text.index("## Default path"))
+
+    def test_default_path_builds_page_before_polish(self):
+        text = section("pr-qa", "Default path")
+        self.assertLess(text.index("pr_qa_page.py"), text.index("polish"))
+
+    def test_no_redirect_for_findings(self):
+        text = self.pr_qa()
+        self.assertNotIn("> <dir>/findings.json", text)
+        self.assertNotRegex(text, r"pr_qa_findings\.py[^\n]* > ")
+        self.assertIn("--out .proofs/evidence/pr-<n>/findings.json", text)
+
+    def test_never_asks_which_capture_method(self):
+        text = self.pr_qa()
+        sentence = "Do not ask the user which capture method to use."
+        self.assertIn(sentence, text)
+        self.assertNotRegex(text.replace(sentence, ""), r"(?i)choose how to|which capture")
+
+    def test_default_path_uses_one_playwright_home(self):
+        text = section("pr-qa", "Default path")
+        self.assertIn("~/.cache/proofs-playwright", text)
+        self.assertIn("not measured", text)
+
+    def test_default_path_has_at_most_ten_bash_calls(self):
+        text = section("pr-qa", "Default path")
+        fence = text.split("```bash", 1)[1].split("```", 1)[0]
+        calls = [l for l in fence.splitlines() if l.strip() and not l.startswith("#")]
+        self.assertLessEqual(len(calls), 10, calls)
+
+    def test_default_path_checks_out_the_pr_before_the_after_capture(self):
+        section_text = section("pr-qa", "Default path")
+        text = section_text.split("```bash", 1)[1].split("```", 1)[0]
+        remove = text.index("git worktree remove --force")
+        checkout = text.index("gh pr checkout <n>")
+        after = text.index("--evidence after")
+        self.assertLess(remove, checkout)
+        self.assertLess(checkout, after)
+        self.assertIn("no-op", section_text)
+
+    def test_default_path_honors_the_base_dir_setting(self):
+        text = section("pr-qa", "Default path")
+        fence = text.split("```bash", 1)[1].split("```", 1)[0]
+        self.assertEqual(fence.strip().splitlines()[0], "printenv PROOFS_BASE_DIR")
+        self.assertIn("<PROOFS_BASE_DIR>/<repo folder>-pr-qa-base", text)
+        sequence = section("pr-qa", "The Sequence")
+        self.assertIn("printenv PROOFS_BASE_DIR", sequence)
+        self.assertNotIn("echo \"${PROOFS_BASE_DIR", self.pr_qa())
+        self.assertNotIn("Read tool", text.split("PROOFS_BASE_DIR", 1)[1].split("gh pr checkout", 1)[0])
+
+    def test_default_path_copies_env_with_cp_and_reinstalls_after_checkout(self):
+        text = section("pr-qa", "Default path")
+        self.assertIn("cp .env", text)
+        self.assertNotIn("copy it into the base folder's `<app-dir>` with the Read", text)
+        after_checkout = text.split("gh pr checkout <n>` is not optional", 1)[1]
+        self.assertIn("package.json", after_checkout)
+        self.assertIn("lockfile", after_checkout)
+
+    def test_exclude_one_liner_is_gone(self):
+        text = self.pr_qa()
+        self.assertNotIn("git check-ignore", text)
+        self.assertIn("adds `.proofs/` to `.git/info/exclude`", text)
+
+    def test_default_path_says_how_to_compare_local_branches(self):
+        # 2026-11-22 headless check: no GitHub PR, and the base branch checked out in the project.
+        text = section("pr-qa", "Default path")
+        fence = text.split("```bash", 1)[1].split("```", 1)[0]
+        self.assertIn("git worktree add --detach .proofs/base origin/<base>", fence)
+        # Final review I2: the after shot comes from a second detached worktree, never a switch.
+        self.assertNotIn("git switch", self.pr_qa())
+        local = text.split("**No GitHub PR", 1)[1].split("\n\n", 1)[0]
+        self.assertIn("11 Bash calls", local)
+        self.assertIn("in place of `gh pr checkout <n>`", local)
+        self.assertIn("git worktree add --detach .proofs/base <branch>", local)
+        self.assertIn("--cwd .proofs/base/<app-dir>", local)
+        self.assertIn("never touched", local)
+
+    def test_default_path_skips_the_install_without_package_json(self):
+        # Final review M3: a static site has no package.json, so npm ci only fails.
+        self.assertIn("has no `package.json`", section("pr-qa", "Default path"))
+
+    def test_unattended_run_prints_the_page_path_instead_of_open(self):
+        # Final review I3: `open` has no rule, so it is a denial in claude -p.
+        line = "In an unattended run (`claude -p`), do not open the page; print its path."
+        self.assertIn(line, (REPO / "reference" / "where-the-page-goes.md").read_text())
+        self.assertIn("print its path", section("pr-qa", "Default path"))
+
+    def test_own_tests_need_preapproval_in_claude_p(self):
+        # Final review M4: the project's test command is in no rule.
+        step5 = section("pr-qa", "Default path").split("5. **Only then", 1)[1].split("\n", 1)[0]
+        self.assertIn("in `claude -p`, only if their command is pre-approved", step5)
+
+    def test_jsdom_verification_is_for_hand_built_pages(self):
+        # Final review I4: pr_qa_page.py is tested by its own suite; no jsdom pass after the default path.
+        artifact = section("pr-qa", "The Artifact")
+        self.assertTrue(artifact.strip().startswith(
+            "This section is for a page you build by hand; `pr_qa_page.py` already does all of it."), artifact[:200])
+        self.assertIn("**Verify before publishing (a hand-built page only).**", artifact)
+
+    def test_every_worktree_remove_says_force(self):
+        # Step 3 removes the base worktree with --force; Common Mistakes must give the same command.
+        mistakes = section("pr-qa", "Common Mistakes")
+        self.assertIn("git worktree remove --force <base-dir>", mistakes)
+        self.assertNotIn("git worktree remove <base-dir>", self.pr_qa())
+
     def test_pr_qa_base_worktree_lives_under_dot_proofs(self):
         text = section("pr-qa", "The Sequence")
-        self.assertIn("git worktree add <base-dir>", text)
+        self.assertIn("git worktree add --detach <base-dir>", text)
         self.assertIn(".proofs/base", text)
         self.assertIn("info/exclude", text)
 
@@ -175,7 +297,7 @@ class PrQaGuidance(unittest.TestCase):
         self.assertIn("literal resolved path", section("pr-qa", "The Sequence"))
 
     def test_pr_qa_cleanup_removes_the_base_worktree(self):
-        self.assertIn("git worktree remove <base-dir>", section("pr-qa", "Common Mistakes"))
+        self.assertIn("git worktree remove --force <base-dir>", section("pr-qa", "Common Mistakes"))
 
     def test_pr_qa_removes_the_base_worktree_before_the_branch_and_its_tests(self):
         text = section("pr-qa", "The Sequence")
@@ -184,6 +306,79 @@ class PrQaGuidance(unittest.TestCase):
         self.assertLess(text.index("--cwd <base-dir>"), remove)
         self.assertLess(remove, text.index("3. **Run the branch for real**"))
         self.assertLess(remove, text.index("4. **Run the PR's own tests**"))
+
+
+HOUSE_RULE_SKILLS = ("design-review", "visual-qa", "working-log", "pr-qa")
+
+
+class HouseRules(unittest.TestCase):
+    def test_house_rules_in_capture_skills(self):
+        for skill in HOUSE_RULE_SKILLS:
+            text = (REPO / "skills" / skill / "SKILL.md").read_text()
+            for rule in ("**Finish in this turn.**", "**Stay in two folders.**", "**One command per Bash call.**"):
+                with self.subTest(skill=skill, rule=rule):
+                    self.assertIn(rule, text)
+
+    def test_design_review_phone_check_of_the_page_names_a_working_method(self):
+        text = (REPO / "skills" / "design-review" / "SKILL.md").read_text()
+        self.assertNotIn("screenshot the page at a desktop and a phone width", text)
+        verify = text.split("**Verify before publishing", 1)[1].split("###", 1)[0]
+        self.assertIn("390", verify)
+        self.assertIn("file://", verify)
+        self.assertIn("capture.cjs", verify)
+
+    def test_visual_qa_default_capture_starts_its_own_server(self):
+        text = (REPO / "skills" / "visual-qa" / "SKILL.md").read_text()
+        self.assertNotIn("as `design-review` step 2 does", text)
+        self.assertIn("run_in_background", text)
+        self.assertIn("already answering", text)
+
+    def test_design_review_file_url_example_uses_base_and_path(self):
+        text = (REPO / "skills" / "design-review" / "SKILL.md").read_text()
+        verify = text.split("**Verify before publishing", 1)[1].split("###", 1)[0]
+        self.assertIn(".proofs/pages/", verify)
+        self.assertIn("/<review-name>.html", verify)
+
+    def test_house_rules_reference_exists(self):
+        text = (REPO / "reference" / "house-rules.md").read_text()
+        self.assertIn("~/.cache/proofs-playwright", text)
+
+    def test_stay_in_two_folders_names_the_base_dir_exception(self):
+        # Final review M2: pr-qa's PROOFS_BASE_DIR base folder is outside the project by design.
+        exception = "and pr-qa's `PROOFS_BASE_DIR` base folder, when it is set"
+        for path in [REPO / "reference" / "house-rules.md"] + [
+                REPO / "skills" / s / "SKILL.md" for s in HOUSE_RULE_SKILLS]:
+            with self.subTest(path=path.name if path.name != "SKILL.md" else path.parent.name):
+                self.assertIn(exception, path.read_text())
+
+    def test_no_phone_window_size_below_500(self):
+        for path in guidance_files():
+            for m in re.finditer(r"--window-size=(\d+),", path.read_text()):
+                self.assertGreaterEqual(int(m.group(1)), 500, f"{path}: {m.group(0)}")
+
+    def test_no_gitignore_advice(self):
+        for path in guidance_files():
+            text = path.read_text()
+            self.assertIsNone(re.search(r"(?i)add it to `?\.gitignore", text), str(path))
+
+    def test_no_parent_claude_md(self):
+        for path in guidance_files():
+            for line in path.read_text().splitlines():
+                if "../CLAUDE.md" in line:
+                    self.assertRegex(line, r"(?i)never|do not|don't", f"{path}: {line[:80]}")
+
+    def test_examples_have_no_shell_tricks(self):
+        paths = [REPO / "skills" / s / "SKILL.md" for s in HOUSE_RULE_SKILLS] + sorted((REPO / "reference").glob("*.md"))
+        for path in paths:
+            in_fence = False
+            for line in path.read_text().splitlines():
+                if line.lstrip().startswith("```"):
+                    in_fence = line.lstrip().startswith("```bash") and not in_fence
+                elif in_fence:
+                    code = re.sub(r"<[^<>\s][^<>]{0,30}>", "X", line.split(" #", 1)[0]).lstrip()
+                    if code.startswith("#"):
+                        continue
+                    self.assertIsNone(re.search(r"^[A-Z_]+=|\||&&|;|\$\(|^cd |(?<![-=])\d*>{1,2}|&>|(^|\s)<\s", code), f"{path.name}: {line[:80]}")
 
 
 if __name__ == "__main__":

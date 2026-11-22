@@ -6,9 +6,11 @@ builder writes one self-contained HTML page with every mechanic already built an
 tested. Do not hand-write the page's JavaScript.
 
 ```bash
-python3 <plugin root>/shared/review_page/review_page.py spec.json --out page.html   # build, then check
-python3 <plugin root>/shared/review_page/review_page.py --smoke page.html          # click through in Chromium
+python3 <plugin root>/shared/review_page/review_page.py spec.json --out page.html
+python3 <plugin root>/shared/review_page/review_page.py --smoke page.html
 ```
+
+The first builds the page and checks it; the second clicks through it in Chromium.
 
 Use the absolute plugin root your skill showed you, unquoted, so the allow rule matches. Write the spec with your file tool; do not write a script to generate it, since every new script is one more approval.
 
@@ -206,7 +208,7 @@ The build also prints how many screenshots became WebP and how much smaller they
 `~/.cache/proofs-playwright`, or one resolvable from the current folder). It uses the
 bundled browser if there is one and otherwise your installed Google Chrome, and it
 downloads no browser. One-line install:
-`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install --prefix ~/.cache/proofs-playwright playwright@1.61.1`.
+`npm install --prefix ~/.cache/proofs-playwright playwright@1.61.1`.
 Every skill that builds a page says the same thing:
 Run `--smoke`. If it reports Playwright missing, run the one-line install it prints (it uses your installed Google Chrome and downloads no browser), then run `--smoke` again; if it still cannot run, say on the page and in chat that the self-check did not run.
 The install is an `npm install`, so it may ask permission once; that is expected.

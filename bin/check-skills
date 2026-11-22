@@ -113,14 +113,14 @@ def check_plugin_calls(path, body, rules):
     errs = []
     repo = path.parent.parent.parent
     bash = [r for r in rules if r.startswith("Bash(")]
-    for r in bash:
-        if any(n in r for n in NEVER_PREAPPROVED):
+    for r in rules:
+        if r == READ_RULE or re.fullmatch(r"Skill\(proofs:[a-z][a-z0-9-]*\)", r):
+            continue
+        m = re.fullmatch(r"Bash\((?:python3|node) " + re.escape(ROOT) + r"/([\w./-]+\.(?:py|cjs|js|sh)) \*\)", r)
+        if not m or ".." in m.group(1):
+            errs.append("allowed-tools rule %s is not allowed: only Bash(<python3|node> %s/<one script> *), %s and Skill(proofs:<name>)" % (r, ROOT, READ_RULE))
+        elif m.group(1) in NEVER_PREAPPROVED or any(n in r for n in NEVER_PREAPPROVED):
             errs.append("allowed-tools rule %s must keep prompting (never pre-approve it)" % r)
-        elif ROOT in r:
-            inner = r[len("Bash("):-1]
-            inner = inner[:-2] if inner.endswith(" *") else inner
-            if "*" in inner or not re.search(r"\.(?:py|cjs|js|sh)$", inner):
-                errs.append("allowed-tools rule %s must name one script, not a folder or wildcard" % r)
     if rules and READ_RULE not in rules:
         errs.append("allowed-tools is missing %s" % READ_RULE)
     covering = [r.replace(ROOT, FAKE_ROOT) for r in bash]

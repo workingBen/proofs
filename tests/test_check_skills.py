@@ -331,7 +331,18 @@ class PluginRootScripts(CheckBase):
     def test_root_wildcard_rule_is_rejected(self):
         r = self.alpha("Plain text.", ["Bash(python3 " + ROOT + "/*)", "Read(/" + ROOT + "/**)"])
         self.assertEqual(r.returncode, 1)
-        self.assertIn("name one script", r.stdout)
+        self.assertIn("is not allowed", r.stdout)
+
+    def test_rule_shapes_outside_the_allow_list_are_rejected(self):
+        for bad in ("Bash(*)", "Bash(python3 *)", "Bash(python3 /opt/x/*)", "Write(*)"):
+            with self.subTest(rule=bad):
+                r = self.alpha("Plain text.", [bad, "Read(/" + ROOT + "/**)"])
+                self.assertEqual(r.returncode, 1, r.stdout)
+                self.assertIn("is not allowed", r.stdout)
+
+    def test_skill_rule_is_accepted(self):
+        r = self.alpha("Plain text.", ["Read(/" + ROOT + "/**)", "Skill(proofs:alpha)"])
+        self.assertEqual(r.returncode, 0, r.stdout)
 
     def test_allowed_tools_without_read_rule_is_rejected(self):
         r = self.alpha("Run `python3 " + PAGE + " x`.", ["Bash(python3 " + PAGE + " *)"])

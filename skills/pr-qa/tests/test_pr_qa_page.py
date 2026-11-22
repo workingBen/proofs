@@ -18,7 +18,7 @@ from pr_qa_page import (
     load_evidence, effective_verdict, merge_findings, order_prs,
     VERDICT_RANK, SEVERITY_RANK,
     data_uri, pair_shots, embed, MAX_PAGE_BYTES,
-    render, build, validate_meta, ABSENT,
+    render, build, validate_meta, ABSENT, smoke, load_meta, skipped_line,
 )
 
 
@@ -727,6 +727,112 @@ class RiseGateTest(unittest.TestCase):
                                rise_explained="The new links are footer legal text.")
             self.assertIn("Why merge anyway", page)
             self.assertIn("The new links are footer legal text.", page)
+
+
+REAL_PNG = bytes.fromhex(
+    "89504e470d0a1a0a0000000d4948445200000001000000010806000000"
+    "1f15c4890000000d4944415478da63f8cfc0f01f0005000201fe2a2b6c0b0000000049454e44ae426082")
+
+
+class SkippedTest(unittest.TestCase):
+    """The page names every open PR it did not cover, and why."""
+
+    def _build(self, tmp, skipped=None, prs=True):
+        entries = []
+        if prs:
+            evidence = os.path.join(tmp, "ev")
+            write_evidence(evidence)
+            entries = [{"number": 3, "title": "T", "branch": "b", "dir": evidence,
+                        "absent_reason": "", "cost": "", "tests": "", "narrative": "",
+                        "recommendation": "wait", "human_findings": []}]
+        meta = os.path.join(tmp, "meta.json")
+        body = entries if skipped is None else {"prs": entries, "skipped": skipped}
+        with open(meta, "w", encoding="utf-8") as handle:
+            json.dump(body, handle)
+        return build(meta, os.path.join(tmp, "page.html"), "Sample Project", "acme/widgets")
+
+    def test_skipped_line_rendered(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            page = self._build(tmp, [{"number": 2, "reason": "not requested"}])
+            self.assertIn("Other open PRs: #2 (not requested)", page)
+
+    def test_skipped_line_joins_several(self):
+        self.assertEqual(
+            skipped_line([{"number": 2, "reason": "not requested"},
+                          {"number": 5, "reason": "draft"}]),
+            "Other open PRs: #2 (not requested); #5 (draft)")
+
+    def test_skipped_empty_renders_nothing(self):
+        for skipped in (None, []):
+            with tempfile.TemporaryDirectory() as tmp:
+                page = self._build(tmp, skipped)
+                self.assertNotIn("Other open PRs: #", page)
+                self.assertIn('"skippedLine": ""', page)
+
+    def test_a_bare_list_meta_still_loads(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            meta = os.path.join(tmp, "m.json")
+            with open(meta, "w", encoding="utf-8") as handle:
+                json.dump([{"number": 1}], handle)
+            self.assertEqual(load_meta(meta), ([{"number": 1}], []))
+
+
+class SmokeTest(unittest.TestCase):
+    """--smoke drives the built page in a real browser."""
+
+    def _page(self, tmp, real_images=True, prs=True):
+        evidence = os.path.join(tmp, "ev")
+        entries = []
+        if prs:
+            write_evidence(evidence)
+            if real_images:
+                for name in os.listdir(evidence):
+                    if name.endswith(".png"):
+                        with open(os.path.join(evidence, name), "wb") as handle:
+                            handle.write(REAL_PNG)
+            entries = [{"number": 3, "title": "T", "branch": "b", "dir": evidence,
+                        "absent_reason": "", "cost": "", "tests": "", "narrative": "",
+                        "recommendation": "merge-and-push", "human_findings": []}]
+        meta = os.path.join(tmp, "meta.json")
+        with open(meta, "w", encoding="utf-8") as handle:
+            json.dump(entries, handle)
+        out = os.path.join(tmp, "page.html")
+        build(meta, out, "Sample Project", "acme/widgets")
+        return out
+
+    def _smoke(self, path):
+        ok, result = smoke(path)
+        if ok is None:
+            self.skipTest("Playwright is not installed: " + result["error"])
+        return ok, result
+
+    def test_smoke_passes_on_built_page(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ok, result = self._smoke(self._page(tmp))
+            self.assertTrue(ok, result)
+            self.assertEqual(result["problems"], [])
+
+    def test_smoke_reports_broken_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ok, result = self._smoke(self._page(tmp, real_images=False))
+            self.assertFalse(ok)
+            self.assertTrue(any("image" in p for p in result["problems"]), result)
+
+    def test_smoke_zero_prs_does_not_crash(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ok, result = self._smoke(self._page(tmp, prs=False))
+            self.assertTrue(ok, result)
+
+    def test_smoke_cli_missing_playwright_exits_2(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            page = self._page(tmp)
+            script = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                  "scripts", "pr_qa_page.py")
+            env = dict(os.environ, HOME=tmp, PROOFS_PLAYWRIGHT="", PATH=os.path.dirname(sys.executable))
+            r = subprocess.run([sys.executable, script, "--smoke", page],
+                               capture_output=True, text=True, env=env)
+            self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+            self.assertIn("playwright@1.61.1", r.stdout + r.stderr)
 
 
 if __name__ == "__main__":

@@ -17,6 +17,7 @@ import html as html_escape
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 
@@ -213,10 +214,21 @@ DECISIONS = [
 ]
 
 
-def render(prs, dropped, project, repo, session=None):
+def skipped_line(skipped):
+    """One line naming the open PRs this page did not cover; "" when none."""
+    parts = []
+    for item in skipped or []:
+        reason = (item.get("reason") or "").strip() if isinstance(item, dict) else ""
+        number = item.get("number") if isinstance(item, dict) else item
+        parts.append(f"#{number} ({reason})" if reason else f"#{number}")
+    return "Other open PRs: " + "; ".join(parts) if parts else ""
+
+
+def render(prs, dropped, project, repo, session=None, skipped=None):
     """The whole page, as one self-contained string."""
     payload = {
         "project": project, "repo": repo, "session": session, "dropped": dropped,
+        "skippedLine": skipped_line(skipped),
         "decisions": [{"value": v, "consequence": c} for v, c in DECISIONS],
         "prs": [{
             "number": pr.get("number"), "title": pr.get("title", ""),
@@ -307,9 +319,18 @@ def check_rise(entry, evidence):
             "meta entry, or recommend send-back or wait.")
 
 
-def build(meta_path, out_path, project, repo, session=None):
+def load_meta(meta_path):
+    """(entries, skipped). meta.json is a list of PR entries, or an object
+    {"prs": [...], "skipped": [{"number": 2, "reason": "not requested"}]}."""
     with open(meta_path, encoding="utf-8") as handle:
         meta = json.load(handle)
+    if isinstance(meta, dict):
+        return meta.get("prs") or [], meta.get("skipped") or []
+    return meta, []
+
+
+def build(meta_path, out_path, project, repo, session=None):
+    meta, skipped = load_meta(meta_path)
     validate_meta(meta)
     prs = []
     for entry in meta:
@@ -319,10 +340,38 @@ def build(meta_path, out_path, project, repo, session=None):
         prs.append(dict(entry, evidence=evidence,
                         verdict=effective_verdict(evidence, human)))
     embedded, dropped = embed(prs)
-    page = render(embedded, dropped, project, repo, session)
+    page = render(embedded, dropped, project, repo, session, skipped)
     with open(out_path, "w", encoding="utf-8") as handle:
         handle.write(page)
     return page
+
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+SMOKE_CJS = os.path.join(HERE, "pr_qa_smoke.cjs")
+
+
+def smoke(page_path, playwright=None):
+    """Click through the built page in a real browser. Returns (ok, result);
+    ok is None when Playwright is missing. Reuses review_page's finder and
+    install hint rather than copying them."""
+    sys.path.insert(0, os.path.join(HERE, "..", "..", "..", "shared", "review_page"))
+    try:
+        import review_page
+    finally:
+        sys.path.pop(0)
+    pw = review_page.find_playwright(playwright)
+    if not pw:
+        return None, {"error": "Playwright not found. " + review_page.HOW_TO_PY}
+    node = shutil.which("node")
+    if not node:
+        return None, {"error": "node not found on PATH"}
+    r = subprocess.run([node, SMOKE_CJS, pw, os.path.abspath(page_path)],
+                       capture_output=True, text=True, timeout=180)
+    try:
+        result = json.loads(r.stdout.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        return False, {"ok": False, "problems": [(r.stdout + r.stderr).strip()[-2000:] or "smoke printed nothing"]}
+    return not result.get("problems"), result
 
 
 def repo_slug():
@@ -338,13 +387,25 @@ def repo_slug():
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--meta", required=True)
-    parser.add_argument("--out", required=True)
+    parser.add_argument("--meta")
+    parser.add_argument("--out")
+    parser.add_argument("--smoke", metavar="PAGE", help="click through a built page in headless "
+                        "Chromium; prints one JSON line, exits 0 only when ok (2: Playwright missing)")
+    parser.add_argument("--playwright", help="folder of an installed playwright package")
     parser.add_argument("--project", help="name for the page's top bar; default: the repo name")
     parser.add_argument("--repo", help="owner/name; default: read from the origin remote")
     parser.add_argument("--session", help="this session's name, shown in the top bar so the page can be "
                                           "matched to its session")
     args = parser.parse_args(argv)
+    if args.smoke:
+        ok, result = smoke(args.smoke, args.playwright)
+        if ok is None:
+            print(json.dumps({"ok": False, "problems": [result["error"]]}))
+            return 2
+        print(json.dumps({"ok": bool(ok), "problems": result.get("problems", [])}))
+        return 0 if ok else 1
+    if not args.meta or not args.out:
+        parser.error("give --meta and --out, or --smoke PAGE")
     repo = args.repo or repo_slug() or ""
     project = args.project or (repo.split("/")[-1] if repo else "Project")
     if not args.session:
@@ -908,6 +969,9 @@ const DATA = __PAYLOAD__;
       return;
     }
     wrap.appendChild(buildVerdictTable(DATA.prs));
+    if (DATA.skippedLine) {
+      wrap.appendChild(el("p", { class: "notice skipped", text: DATA.skippedLine }));
+    }
     if (DATA.dropped && DATA.dropped.length) {
       wrap.appendChild(el("p", { class: "notice",
         text: DATA.dropped.length + " screenshot pair(s) were dropped to stay under the " +

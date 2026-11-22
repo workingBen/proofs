@@ -192,11 +192,11 @@ class PrQaGuidance(unittest.TestCase):
         self.assertIn("~/.cache/proofs-playwright", text)
         self.assertIn("not measured", text)
 
-    def test_default_path_has_at_most_ten_bash_calls(self):
+    def test_default_path_has_at_most_eleven_bash_calls(self):
         text = section("pr-qa", "Default path")
         fence = text.split("```bash", 1)[1].split("```", 1)[0]
         calls = [l for l in fence.splitlines() if l.strip() and not l.startswith("#")]
-        self.assertLessEqual(len(calls), 10, calls)
+        self.assertLessEqual(len(calls), 11, calls)
 
     def test_default_path_checks_out_the_pr_before_the_after_capture(self):
         section_text = section("pr-qa", "Default path")

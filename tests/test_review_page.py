@@ -836,6 +836,101 @@ class Assets(unittest.TestCase):
         self.assertIsNone(review_page.size_warning("z" * 1000, spec))
 
 
+LAUNCH = RP / "launch.cjs"
+LAUNCH_DRIVER = r"""
+const { launchChromium, CHROME_ARGS } = require(process.argv[1]);
+const script = JSON.parse(process.argv[2]);
+const env = JSON.parse(process.argv[3]);
+const calls = [];
+const chromium = { launch: async (opts) => {
+  calls.push(opts);
+  const step = script[calls.length - 1];
+  if (step) throw new Error(step);
+  return { fake: true };
+} };
+launchChromium(chromium, env).then(
+  (b) => console.log(JSON.stringify({ ok: !!b.fake, calls, args: CHROME_ARGS })),
+  (e) => console.log(JSON.stringify({ ok: false, message: e.message, calls })));
+"""
+FLAG = "--disable-features=MacAppCodeSignClone"
+
+
+@unittest.skipUnless(NODE, "node not found")
+class BrowserLaunch(unittest.TestCase):
+    def run_launch(self, script, env=None):
+        r = subprocess.run([NODE, "-e", LAUNCH_DRIVER, str(LAUNCH), json.dumps(script), json.dumps(env or {})],
+                           capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return json.loads(r.stdout.strip().splitlines()[-1])
+
+    def test_launch_uses_bundled_browser_first_with_the_flag(self):
+        res = self.run_launch([None])
+        self.assertTrue(res["ok"])
+        self.assertEqual(len(res["calls"]), 1)
+        self.assertEqual(res["calls"][0]["args"], [FLAG])
+        self.assertNotIn("channel", res["calls"][0])
+
+    def test_launch_falls_back_to_installed_chrome(self):
+        res = self.run_launch(["browserType.launch: Executable doesn't exist at /x", None])
+        self.assertTrue(res["ok"])
+        self.assertEqual(len(res["calls"]), 2)
+        self.assertEqual(res["calls"][1]["channel"], "chrome")
+        self.assertEqual(res["calls"][1]["args"], [FLAG])
+
+    def test_channel_env_forces_one_launch(self):
+        res = self.run_launch([None], {"PROOFS_BROWSER_CHANNEL": "chrome"})
+        self.assertEqual(len(res["calls"]), 1)
+        self.assertEqual(res["calls"][0]["channel"], "chrome")
+        self.assertEqual(res["calls"][0]["args"], [FLAG])
+
+    def test_other_launch_errors_are_not_retried(self):
+        res = self.run_launch(["spawn EACCES"])
+        self.assertFalse(res["ok"])
+        self.assertEqual(len(res["calls"]), 1)
+
+    def test_launch_reports_how_to_get_a_browser_when_both_fail(self):
+        res = self.run_launch(["Executable doesn't exist at /x", "Chromium distribution 'chrome' is not found"])
+        self.assertFalse(res["ok"])
+        self.assertIn("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1", res["message"])
+        self.assertIn("Install Google Chrome", res["message"])
+
+    def test_find_playwright_checks_the_proofs_cache(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pkg = Path(tmp) / ".cache" / "proofs-playwright" / "node_modules" / "playwright"
+            pkg.mkdir(parents=True)
+            (pkg / "package.json").write_text("{}")
+            old = {k: os.environ.get(k) for k in ("HOME", "PROOFS_PLAYWRIGHT")}
+            os.environ["HOME"] = tmp
+            os.environ.pop("PROOFS_PLAYWRIGHT", None)
+            try:
+                self.assertEqual(review_page.find_playwright(None), str(pkg.resolve()))
+            finally:
+                for k, v in old.items():
+                    if v is None:
+                        os.environ.pop(k, None)
+                    else:
+                        os.environ[k] = v
+
+    def test_smoke_without_playwright_says_how_to_get_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            old = {k: os.environ.get(k) for k in ("HOME", "PROOFS_PLAYWRIGHT")}
+            cwd = os.getcwd()
+            os.environ["HOME"] = tmp
+            os.environ.pop("PROOFS_PLAYWRIGHT", None)
+            os.chdir(tmp)
+            try:
+                ok, res = review_page.smoke(str(Path(tmp) / "x.html"))
+            finally:
+                os.chdir(cwd)
+                for k, v in old.items():
+                    if v is None:
+                        os.environ.pop(k, None)
+                    else:
+                        os.environ[k] = v
+            self.assertIsNone(ok)
+            self.assertIn("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1", res["error"])
+
+
 def playwright_dir():
     return review_page.find_playwright(None)
 

@@ -1,4 +1,4 @@
-// Click through a built review page in headless Chromium and report what broke.
+// Click through a built review page in headless Chromium (or the installed Google Chrome) and report what broke.
 // Usage: node smoke.cjs <playwright package dir> <page.html>
 // Prints one JSON line: { mode, items, export, problems: [...] }. Exercises the
 // first item of each kind the page's frame uses, and on question and session
@@ -6,11 +6,12 @@
 // review_page.py --smoke rather than directly.
 const path = require("path");
 const { chromium } = require(process.argv[2]);
+const { launchChromium } = require("./launch.cjs");
 const file = "file://" + path.resolve(process.argv[3]);
 
 (async () => {
   const problems = [];
-  const browser = await chromium.launch();
+  const browser = await launchChromium(chromium, process.env);
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   page.on("pageerror", (e) => problems.push("page error: " + e.message));
   page.on("console", (m) => { if (m.type() === "error") problems.push("console error: " + m.text()); });

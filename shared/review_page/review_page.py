@@ -1071,10 +1071,18 @@ def warnings(path):
     return out
 
 
+HOW_TO_PY = ("Install Google Chrome, or point PROOFS_BROWSER_CHANNEL at another installed channel. "
+             "No browser download is needed: PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install "
+             "--prefix ~/.cache/proofs-playwright playwright@1.61.1")
+
+
 def find_playwright(arg):
     for c in (arg, os.environ.get("PROOFS_PLAYWRIGHT")):
         if c and (Path(c) / "package.json").is_file():
             return str(Path(c).resolve())
+    cached = Path.home() / ".cache" / "proofs-playwright" / "node_modules" / "playwright"
+    if (cached / "package.json").is_file():
+        return str(cached.resolve())
     node = shutil.which("node")
     if node:
         r = subprocess.run([node, "-e", "console.log(require.resolve('playwright/package.json'))"],
@@ -1088,7 +1096,7 @@ def smoke(path, playwright=None):
     """Click through the page in headless Chromium. Returns (ok, result dict)."""
     pw = find_playwright(playwright)
     if not pw:
-        return None, {"error": "Playwright not found: pass --playwright DIR or set PROOFS_PLAYWRIGHT"}
+        return None, {"error": "Playwright not found. " + HOW_TO_PY}
     r = subprocess.run([shutil.which("node"), str(SMOKE), pw, str(Path(path).resolve())],
                        capture_output=True, text=True, timeout=180)
     try:

@@ -118,6 +118,47 @@ class AllowBlockTest(unittest.TestCase):
                     "python3 -c print(1)"):
             self.assertFalse(any(check_skills.rule_matches(r, cmd) for r in rules), cmd)
 
+    def test_headless_adds_exactly_the_capture_helper(self):
+        plain = allow_block.rules("/opt/claude-home", None)
+        headless = allow_block.rules("/opt/claude-home", None, headless=True)
+        extra = [r for r in headless if r not in plain]
+        self.assertEqual(headless[:len(plain)], plain)
+        self.assertEqual(extra, ["Bash(python3 /opt/claude-home/.claude/plugins/cache/proofs/proofs/*/shared/capture/with_server.py *)"])
+        cmd = "python3 %s/shared/capture/with_server.py --start x --url y -- z" % FAKE_VERSION_ROOT
+        self.assertTrue(check_skills.rule_matches(extra[0], cmd))
+        self.assertFalse(any(check_skills.rule_matches(r, cmd) for r in plain))
+
+    def test_headless_follows_claude_config_dir(self):
+        self.assertEqual(allow_block.rules("/opt/claude-home", "/opt/cfg", headless=True)[-1],
+                         "Bash(python3 /opt/cfg/plugins/cache/proofs/proofs/*/shared/capture/with_server.py *)")
+
+    def test_capture_helper_is_never_in_the_default_output(self):
+        self.assertIn("shared/capture/with_server.py", check_skills.NEVER_PREAPPROVED)
+        for config_dir in (None, "/opt/cfg"):
+            self.assertFalse(any("with_server.py" in r for r in allow_block.rules("/opt/claude-home", config_dir)))
+        r = self._cli("/opt/claude-home")
+        self.assertNotIn("with_server.py", r.stdout)
+        self.assertFalse(any("with_server.py" in r for r in readme_block()["permissions"]["allow"]))
+
+    def test_cli_headless_flag_works_with_and_without_lines(self):
+        r = self._cli("/opt/claude-home", None, "--headless")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(json.loads(r.stdout)["permissions"]["allow"], allow_block.rules("/opt/claude-home", None, headless=True))
+        r = self._cli("/opt/claude-home", None, "--lines", "--headless")
+        self.assertEqual(json.loads("[" + r.stdout + "]"), allow_block.rules("/opt/claude-home", None, headless=True))
+
+    def test_cli_rejects_unknown_flags(self):
+        self.assertEqual(self._cli("/opt/claude-home", None, "--everything").returncode, 2)
+
+    def test_readme_offers_the_headless_line_labeled_and_apart(self):
+        text = (REPO / "README.md").read_text()
+        section = text[text.index("<!-- allow-proofs:start -->"):text.index("<!-- allow-proofs:end -->")]
+        self.assertIn("For unattended (`claude -p`) runs only", section)
+        self.assertIn("--headless", section)
+        self.assertGreater(section.index("--headless"), section.index("```json"))
+        self.assertIn("`with_server.py`", section.split("still ask every time")[1].split("\n")[0])
+        self.assertIn("custom `CLAUDE_CONFIG_DIR`, put the rules in that folder's `settings.json`", section)
+
     def test_readme_example_matches_the_generator_with_a_placeholder_home(self):
         self.assertEqual(readme_block(), {"permissions": {"allow": allow_block.rules(README_HOME, None)}})
 

@@ -1053,6 +1053,63 @@ def image_errors(text):
 
 NO_SESSION = "no session name: the reader can't tell which session this page belongs to (set project.session)"
 
+# British spelling (regex, word-bounded and case-insensitive) -> American form of the stem.
+# The stem is the literal text before the first "(" in the key.
+BRITISH = {
+    r"behaviour(s)?": "behavior",
+    r"colour(s|ed|ing|ful)?": "color",
+    r"favour(s|ed|ing|ite|ites)?": "favor",
+    r"honour(s|ed|ing)?": "honor",
+    r"labour": "labor",
+    r"neighbour(s|hood)?": "neighbor",
+    r"flavour(s)?": "flavor",
+    r"labell(ed|ing)": "label",
+    r"modell(ed|ing)": "model",
+    r"travell(ed|ing|er)": "travel",
+    r"grey(s|er|ish)?": "gray",
+    r"centre(s)?": "center",
+    r"centred": "centered",
+    r"metre(s)?": "meter",
+    r"litre(s)?": "liter",
+    r"fibre(s)?": "fiber",
+    r"theatre(s)?": "theater",
+    r"defence(s)?": "defense",
+    r"catalogue(s)?": "catalog",
+    r"catalogued": "cataloged",
+    r"analys(e|ed|ing)": "analyz",
+    **{r"%sis(e|es|ed|ing|ation|ations)" % stem: stem + "iz" for stem in (
+        "organ", "recogn", "real", "priorit", "summar", "normal", "anonym", "custom",
+        "optim", "minim", "maxim", "standard", "categor", "emphas")},
+}
+_BRITISH_RE = [(re.compile(r"\b(?:%s)\b" % pat, re.I), re.match(r"[a-z]+", pat).group(), us)
+               for pat, us in BRITISH.items()]
+
+
+def _scan(text, where, seen, out):
+    for rx, stem, us in _BRITISH_RE:
+        for m in rx.finditer(text):
+            key = m.group(0).lower()
+            if key not in seen:
+                seen.add(key)
+                out.append('british spelling "%s" (American: "%s") in %s' % (key, us + key[len(stem):], where))
+
+
+def page_spelling_warnings(text):
+    """The same check on a built page, where the reader's text lives (rp-spec keeps only a
+    trimmed spec). Scripts, styles and code are dropped, tags go with their URLs (alt and title
+    text is kept), and each hit is named by the nearest preceding element id."""
+    text = re.sub(r"<(script|style|code)\b.*?</\1>", " ", text, flags=re.S | re.I)
+    seen, out, where = set(), [], "the page"
+    for chunk in re.split(r"(<[^>]*>)", text):
+        if chunk.startswith("<"):
+            m = re.search(r'\sid="([^"]+)"', chunk)
+            where = m.group(1) if m else where
+            for attr in re.findall(r'\s(?:alt|title)="([^"]*)"', chunk):
+                _scan(html.unescape(attr), where, seen, out)
+        else:
+            _scan(html.unescape(chunk), where, seen, out)
+    return out
+
 
 def warnings(path):
     """Problems worth saying that still leave a working page: older specs keep building."""
@@ -1068,13 +1125,23 @@ def warnings(path):
     if bare:
         out.append("%d <img> show WebP with no fallback, so older Safari shows a broken image "
                    "(use a PNG or JPEG asset and the builder adds one)" % len(bare))
+    if os.environ.get("PROOFS_SPELLING") == "american":
+        out.extend(page_spelling_warnings(text))
     return out
+
+
+HOW_TO_PY = ("Install Google Chrome, or point PROOFS_BROWSER_CHANNEL at another installed channel. "
+             "No browser download is needed: PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install "
+             "--prefix ~/.cache/proofs-playwright playwright@1.61.1")
 
 
 def find_playwright(arg):
     for c in (arg, os.environ.get("PROOFS_PLAYWRIGHT")):
         if c and (Path(c) / "package.json").is_file():
             return str(Path(c).resolve())
+    cached = Path.home() / ".cache" / "proofs-playwright" / "node_modules" / "playwright"
+    if (cached / "package.json").is_file():
+        return str(cached.resolve())
     node = shutil.which("node")
     if node:
         r = subprocess.run([node, "-e", "console.log(require.resolve('playwright/package.json'))"],
@@ -1088,7 +1155,7 @@ def smoke(path, playwright=None):
     """Click through the page in headless Chromium. Returns (ok, result dict)."""
     pw = find_playwright(playwright)
     if not pw:
-        return None, {"error": "Playwright not found: pass --playwright DIR or set PROOFS_PLAYWRIGHT"}
+        return None, {"error": "Playwright not found. " + HOW_TO_PY}
     r = subprocess.run([shutil.which("node"), str(SMOKE), pw, str(Path(path).resolve())],
                        capture_output=True, text=True, timeout=180)
     try:

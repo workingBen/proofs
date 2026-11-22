@@ -1,6 +1,6 @@
 ---
 name: pr-qa
-version: 1.6.1
+version: 1.7.3
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/skills/pr-qa/scripts/pr_qa_page.py *)
@@ -89,11 +89,70 @@ no token, no network, or no open PR, so it can never keep a session from startin
 1. **Read each PR's diff first.** You cannot photograph a change until you know
    which page and which record exercises it. A screenshot of a page that does not
    show the change is worse than no screenshot: it looks like evidence.
-2. **Screenshot BEFORE first, on the main branch.** Anything that migrates the
-   database makes going back expensive. Take the before pair before you migrate
-   anything.
-3. **Run the branch for real** — check it out, migrate if needed, boot the app,
-   log in, capture the after pair.
+2. **Screenshot BEFORE first, from a base worktree.** Anything that migrates the
+   database makes going back expensive, so take the before pair before you
+   migrate anything.
+
+   **First pick the base worktree path, `<base-dir>`:**
+   `$PROOFS_BASE_DIR/<repo folder name>-pr-qa-base` if the `PROOFS_BASE_DIR`
+   setting is set, else `.proofs/base` (repo folder name = basename of
+   `git rev-parse --show-toplevel`). Some setups block `git worktree add` inside
+   code folders except one sanctioned folder; for them, set `PROOFS_BASE_DIR` to
+   that folder, as an absolute path (no `~`, no relative path), in the `env` block
+   of `.claude/settings.json` (project or user level). Resolve it **once**
+   (`echo "${PROOFS_BASE_DIR:-}"`), confirm the folder exists, and write the
+   **literal resolved path** in every later command (`git worktree add`, `--cwd`,
+   the log path `<base-dir>/.proofs/server.log`, `NODE_PATH=<base-dir>/node_modules`,
+   `git worktree remove`): shell variables do not survive between Bash calls, and
+   hooks read literal paths. If `<base-dir>` already shows in `git worktree list`,
+   run `git worktree remove --force <base-dir>` only if it is this repo's own
+   leftover pr-qa base; otherwise stop and ask.
+
+   For the default `.proofs/base`, keep it out of git first (skip the first line
+   when `PROOFS_BASE_DIR` is set):
+
+   ```bash
+   git check-ignore -q .proofs/ || echo ".proofs/" >> "$(git rev-parse --git-path info/exclude)"
+   git fetch origin && git worktree add <base-dir> origin/<base>
+   ```
+
+   `info/exclude` changes nothing that gets committed. (`<base>` here is the PR's
+   target branch.) Copy untracked settings (`.env`) into `<base-dir>`, then
+   **install dependencies there** with the project's own install (`npm ci`,
+   `bundle install`, ...). Do not symlink `node_modules`: Next.js with Turbopack
+   returned HTTP 500 through a symlinked one. Build the stylesheet there too.
+   Capture the before pair through the helper (step 3) with `--cwd <base-dir>`.
+3. **Run the branch for real**: check it out, migrate if needed, and capture the
+   after pair through the same helper from the PR checkout (no `--cwd`). Both
+   shots use the helper, which starts the server, waits for the URL, runs the
+   capture and always stops the server, so nothing dies between turns.
+   - **Find the start command** in the project's `CLAUDE.md`, README, `package.json`
+     scripts, `Procfile` or `bin/dev`; if none gives one, **ask the user**.
+   - **Pick free high ports.** Check that nothing answers (`curl -s -o /dev/null
+     http://localhost:PORT/` fails). Run before and after one after the other, each
+     through its own helper call; if you ever run both servers at once, give them
+     two different ports. A server already answering at `--url` is treated as ready
+     and left running, so a reused port would be captured by mistake.
+   - **Set `CHROME` in the same command** as the helper call (a variable from an
+     earlier Bash call is gone): `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
+     on macOS, `google-chrome`, `google-chrome-stable` or `chromium` on Linux.
+
+   ```bash
+   CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+   python3 ${CLAUDE_PLUGIN_ROOT}/shared/capture/with_server.py --cwd <base-dir> --start "npm run dev -- -p 3411" \
+     --url http://localhost:3411/ -- sh -c '"$CHROME" --headless --disable-features=MacAppCodeSignClone \
+     --hide-scrollbars --virtual-time-budget=8000 --window-size=390,2200 --screenshot=before-390.png "$PROOFS_BASE_URL"'
+   ```
+
+   The helper is not pre-approved, so the user may get one permission prompt. Exit
+   codes: 3 the server never answered (read the log: `<base-dir>/.proofs/server.log` for the before run, because the
+   helper writes it under `--cwd`, and `.proofs/server.log` for the after run), 4 it
+   exited early, 5 another run holds the lock; anything else is the capture's own. Exit 0
+   does not prove the page is right: read each PNG and confirm it shows the route
+   you meant. A project's own Playwright script also works as the capture command
+   after `--`; launch Chrome with `--disable-features=MacAppCodeSignClone` in its
+   `args`. Never start a server yourself with `run_in_background` or `&`: in
+   `claude -p` the turn then never ends.
 4. **Run the PR's own tests**, and say whether it added any. "Tests pass" and "this
    PR is tested" are different claims.
 5. **Look for what tests cannot see** — the list below.
@@ -220,7 +279,8 @@ order; each works where the other does not:
 
 1. Run it with the project's module path set, from the project root:
    `NODE_PATH=./node_modules node <your capture script>` (or keep the script inside
-   the project).
+   the project). For the before run that root is `<base-dir>` (`.proofs/base` by
+   default), where the dependencies were installed: use `NODE_PATH=<base-dir>/node_modules`.
 2. If the project has no `package.json` at all, find the copy in the `npx` cache:
 
 ```js
@@ -303,9 +363,10 @@ Tailwind; translate them to your stack.
   `bin/rails tailwindcss:build`), or every shot is unstyled and worthless. A fresh
   checkout has no build and fails this way.
 - **Missing settings in a separate working folder.** Untracked files such as `.env`
-  and `node_modules` do not follow a new checkout or worktree. Link or copy them in
-  from the main checkout, or the database fails with an error that reads like a
-  database problem and is not. How to set one up is in the project's own notes.
+  do not follow a new checkout or worktree: copy them in. Install dependencies in
+  the worktree (`npm ci`, `bundle install`) and do not symlink `node_modules`.
+  Without the settings, the database fails with an error that reads like a database
+  problem and is not.
 - **Port collisions.** Other projects and other sessions may be on this machine.
   Pick a high port and say which one you used.
 - **A record that does not show the change.** Find or create one that does. Say in
@@ -425,7 +486,10 @@ pushes and deploys is in its own notes; follow them.
 - **Screenshotting the main branch twice.** Confirm the branch is actually checked
   out and migrated; identical before/after pairs are the giveaway.
 - **Leaving the repo dirty.** Migrations rolled back, the main branch checked out,
-  extra worktrees removed. Someone else may be using this machine.
+  the base worktree removed with `git worktree remove <base-dir>` (default
+  `.proofs/base`; use the literal path)
+  (add `--force` if the install left files behind), so `git worktree list` is
+  clean. Someone else may be using this machine.
 - **Recommending a merge you did not run.** If the app would not boot, say that.
 - **Burying the bad news.** Worst PR first, verdict in the table at the top.
 - **Publishing images you have not looked at.** Read every screenshot before it goes

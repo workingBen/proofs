@@ -18,6 +18,7 @@ check_skills = importlib.util.module_from_spec(_spec)
 _loader.exec_module(check_skills)
 
 ROOT = "${CLAUDE_PLUGIN_ROOT}"
+README_HOME = "/YOUR/HOME"
 FAKE_VERSION_ROOT = "/opt/claude-home/.claude/plugins/cache/proofs/proofs/1.2.0"
 
 
@@ -117,15 +118,27 @@ class AllowBlockTest(unittest.TestCase):
                     "python3 -c print(1)"):
             self.assertFalse(any(check_skills.rule_matches(r, cmd) for r in rules), cmd)
 
-    def test_readme_block_matches_the_generator(self):
-        self.assertEqual(readme_block(), {"permissions": {"allow": allow_block.rules("~", None)}})
+    def test_readme_example_matches_the_generator_with_a_placeholder_home(self):
+        self.assertEqual(readme_block(), {"permissions": {"allow": allow_block.rules(README_HOME, None)}})
 
-    def _cli(self, home, config_dir=None):
+    def test_readme_has_no_tilde_bash_rule(self):
+        self.assertFalse(any(r.startswith("Bash(") and "~" in r for r in readme_block()["permissions"]["allow"]))
+
+    def test_readme_command_comes_before_the_example(self):
+        text = (REPO / "README.md").read_text()
+        section = text[text.index("<!-- allow-proofs:start -->"):]
+        self.assertLess(section.index("allow_block.py"), section.index("```json"))
+
+    def test_readme_command_honors_claude_config_dir(self):
+        text = (REPO / "README.md").read_text()
+        self.assertIn('"${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/plugins/cache/proofs/proofs/*/', text)
+
+    def _cli(self, home, config_dir=None, *args):
         env = {k: v for k, v in os.environ.items() if k != "CLAUDE_CONFIG_DIR"}
         env["HOME"] = home
         if config_dir:
             env["CLAUDE_CONFIG_DIR"] = config_dir
-        return subprocess.run([sys.executable, str(REPO / "shared" / "allow_block.py")],
+        return subprocess.run([sys.executable, str(REPO / "shared" / "allow_block.py"), *args],
                               capture_output=True, text=True, env=env)
 
     def test_cli_prints_the_block_for_this_home(self):
@@ -138,10 +151,11 @@ class AllowBlockTest(unittest.TestCase):
         r = self._cli("/opt/claude-home", "/opt/cfg")
         self.assertEqual(json.loads(r.stdout)["permissions"]["allow"][0], "Read(//opt/cfg/plugins/cache/proofs/**)")
 
-    def test_space_in_home_warns(self):
-        r = self._cli("/opt/my claude-home")
-        self.assertEqual(r.returncode, 0)
-        self.assertIn("spaces", r.stderr)
+    def test_lines_prints_items_to_merge_into_an_existing_allow_list(self):
+        r = self._cli("/opt/claude-home", None, "--lines")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn("permissions", r.stdout)
+        self.assertEqual(json.loads("[" + r.stdout + "]"), allow_block.rules("/opt/claude-home", None))
 
 
 if __name__ == "__main__":

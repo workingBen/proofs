@@ -2,11 +2,13 @@
 """Print the Claude Code permission rules that let Proofs read its own files and run
 its own page builders without asking, for this machine.
 
-    python3 <plugin root>/shared/allow_block.py
+    python3 <plugin root>/shared/allow_block.py [--lines]
 
-Prints {"permissions": {"allow": [...]}} to paste into ~/.claude/settings.json (every
-project) or a project's .claude/settings.local.json. Never paste it into a committed
-.claude/settings.json: the Bash lines hold your home folder.
+Prints {"permissions": {"allow": [...]}} for a settings file that has no permissions
+key yet, or with --lines just the rules, comma-separated, to add to an existing
+permissions.allow list. Use ~/.claude/settings.json (every project) or a project's
+.claude/settings.local.json, never a committed .claude/settings.json: the Bash lines
+hold your home folder.
 
 The scripts come from each skill's allowed-tools list, read at run time, so there is
 no second list to keep in step. Claude Code fills in ~ in Read rules but matches Bash
@@ -69,18 +71,19 @@ def rules(home, config_dir):
 
 
 def main(argv):
-    if len(argv) > 1:
+    args = argv[1:]
+    if args not in ([], ["--lines"]):
         print(__doc__.strip(), file=sys.stderr)
-        return 0 if argv[1] in ("-h", "--help") else 2
+        return 0 if args in (["-h"], ["--help"]) else 2
     home = os.environ.get("HOME") or str(Path.home())
     config_dir = os.environ.get("CLAUDE_CONFIG_DIR") or None
     if config_dir:
         config_dir = os.path.abspath(os.path.expanduser(config_dir))
-    base = config_dir or home
-    if " " in base:
-        print("warning: %r has spaces. Bash rules cannot match a path with spaces; "
-              "Claude Code will keep asking before each Proofs script." % base, file=sys.stderr)
-    print(json.dumps({"permissions": {"allow": rules(home, config_dir)}}, indent=2))
+    allow = rules(home, config_dir)
+    if args == ["--lines"]:
+        print(",\n".join(json.dumps(r) for r in allow))
+    else:
+        print(json.dumps({"permissions": {"allow": allow}}, indent=2))
     return 0
 
 

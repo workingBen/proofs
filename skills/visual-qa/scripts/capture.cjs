@@ -276,6 +276,25 @@ function verdicts(m, vpLabel) {
   }
   const base = process.env.PROOFS_BASE_URL || cfg.base;
   fs.mkdirSync(out, { recursive: true });
+  const outParts = path.resolve(out).split(path.sep);
+  if (outParts.includes('.proofs')) {
+    const proofsParent = outParts.slice(0, outParts.indexOf('.proofs')).join(path.sep) || path.sep;
+    // Keep the scratch folder out of git via the clone's own exclude file; silent if git is missing.
+    try {
+      const cp = require('child_process');
+      const run = (...a) => cp.execFileSync('git', a, { cwd: proofsParent, stdio: ['ignore', 'pipe', 'ignore'] }).toString();
+      const ex = path.resolve(proofsParent, run('rev-parse', '--git-path', 'info/exclude').trim());
+      let ignored = true;
+      try { run('check-ignore', '-q', '.proofs/'); } catch (_) { ignored = false; }
+      if (!ignored) {
+        const cur = fs.existsSync(ex) ? fs.readFileSync(ex, 'utf8') : '';
+        if (!cur.split('\n').some((l) => l.trim() === '.proofs/')) {
+          fs.mkdirSync(path.dirname(ex), { recursive: true });
+          fs.appendFileSync(ex, (cur && !cur.endsWith('\n') ? '\n' : '') + '.proofs/\n');
+        }
+      }
+    } catch (_) { /* no git, not a repo, read-only: nothing to do */ }
+  }
   const minText = cfg.minText || 16, minTap = cfg.minTap || 44;
   const setup = cfg.setup ? require(path.resolve(path.dirname(cfgPath), cfg.setup)) : null;
 

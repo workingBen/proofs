@@ -387,9 +387,20 @@ def _returncode(rc):
     return 128 - rc if rc < 0 else rc
 
 
+def _keep_proofs_out_of_git(start):
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        import proofs_dir
+        proofs_dir.ensure_excluded(start)
+    except Exception:
+        pass
+
+
 def _run(args, capture, state):
     for path in (args.log, args.pidfile):
         os.makedirs(os.path.dirname(path), exist_ok=True)
+    if ".proofs" in os.path.normpath(args.log).split(os.sep) or ".proofs" in os.path.normpath(args.pidfile).split(os.sep):
+        _keep_proofs_out_of_git(args.cwd)
     state["lock"] = _take_lock(args.pidfile + ".lock", time.monotonic() + args.timeout)
     if state["lock"] is None:
         say("server: another run still holds %s.lock after %gs" % (args.pidfile, args.timeout), err=True)

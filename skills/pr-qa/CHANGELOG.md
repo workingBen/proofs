@@ -1,5 +1,8 @@
 # Changelog
 
+- **1.7.2** (2026-11-22): New `PROOFS_BASE_DIR` setting moves the before-shot base worktree to `$PROOFS_BASE_DIR/<repo folder name>-pr-qa-base`, for setups that block `git worktree add` inside code folders. Unset, it stays `.proofs/base`.
+- **1.7.1** (2026-11-22): Names the helper's log for each run (`.proofs/base/.proofs/server.log` for the before run, `.proofs/server.log` for the after run) and which `node_modules` the before capture resolves Playwright from.
+- **1.7.0** (2026-11-22): Before shots come from a worktree at `.proofs/base`, with its own installed dependencies, and every capture runs through the start-capture-stop helper.
 - **1.6.0** (2026-11-22): Runs its scripts (`pr_qa_page.py`, `pr_qa_findings.py` and `pr_qa_plan.py`) through `${CLAUDE_PLUGIN_ROOT}` and pre-approves them and reads of the plugin's own files, so a session no longer asks permission for each one.
 - **1.5.1** (2026-11-21): The headless Chrome command adds `--disable-features=MacAppCodeSignClone`. On a Mac, Google Chrome copies its whole app (about 1.4 GB) into a temp folder on every launch and deletes it only on a normal quit, so screenshot runs left those copies behind.
 - **1.5.0** (2026-11-19): The top bar starts with the proofs mark and a `pr-qa` pill, then project · session · repo; the "PR QA" label is gone. New `--session` flag on `pr_qa_page.py`; without it the page builds and says it has no session.

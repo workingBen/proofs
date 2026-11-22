@@ -1,5 +1,7 @@
 # Changelog
 
+- **1.8.1** (2026-11-22): The capture example sets `CHROME` in the same command (a variable from an earlier Bash call is gone) and lists the usual Chrome paths. Says how to find the start command, to ask the user when there is none, and to pick an unused port so a stale app is not captured. Also: read the PNG to confirm the route, chain widths in one call, leave `.proofs/` untracked.
+- **1.8.0** (2026-11-22): The "before" is always captured from the running app, through the new start-capture-stop helper, which works in `claude -p` and leaves no server running. A committed screenshot is used only when the app cannot run, labeled with its date and flagged to the user.
 - **1.7.0** (2026-11-22): Runs its scripts (`review_page.py`) through `${CLAUDE_PLUGIN_ROOT}` and pre-approves them and reads of the plugin's own files, so a session no longer asks permission for each one.
 - **1.6.2** (2026-11-21): The headless Chrome command adds `--disable-features=MacAppCodeSignClone`. On a Mac, Google Chrome copies its whole app (about 1.4 GB) into a temp folder on every launch and deletes it only on a normal quit, so screenshot runs left those copies behind.
 - **1.6.1** (2026-11-19): Screenshots and photos show on older iPhones again (Safari before iOS 14 showed a broken "?"). Each WebP image now carries a PNG or JPEG fallback in a `<picture>`, and an image used more than once is filled in from a JSON map instead of a CSS variable older Safari could not read back. Pages are a little larger, by the size of the fallbacks.

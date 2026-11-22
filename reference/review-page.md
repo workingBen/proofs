@@ -5,12 +5,12 @@ Shared by `design-review`, `article-copy-edit`, `photo-picker`, `style-guide`,
 builder writes one self-contained HTML page with every mechanic already built and
 tested. Do not hand-write the page's JavaScript.
 
-Paths below are relative to a skill's folder (`skills/<name>/`).
-
 ```bash
-python3 ../../shared/review_page/review_page.py spec.json --out page.html   # build, then check
-python3 ../../shared/review_page/review_page.py --smoke page.html          # click through in Chromium
+python3 <plugin root>/shared/review_page/review_page.py spec.json --out page.html   # build, then check
+python3 <plugin root>/shared/review_page/review_page.py --smoke page.html          # click through in Chromium
 ```
+
+Use the absolute plugin root your skill showed you, unquoted, so the allow rule matches. Write the spec with your file tool; do not write a script to generate it, since every new script is one more approval.
 
 Build in a scratch folder, not the repo. Keep `spec.json` beside the page: it is
 how you rebuild the next round.

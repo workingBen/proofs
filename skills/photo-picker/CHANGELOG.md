@@ -1,5 +1,6 @@
 # Changelog
 
+- **1.3.0** (2026-11-22): Runs its scripts (`review_page.py`) through `${CLAUDE_PLUGIN_ROOT}` and pre-approves them and reads of the plugin's own files, so a session no longer asks permission for each one.
 - **1.2.1** (2026-11-19): Screenshots and photos show on older iPhones again (Safari before iOS 14 showed a broken "?"). Each WebP image now carries a PNG or JPEG fallback in a `<picture>`, and an image used more than once is filled in from a JSON map instead of a CSS variable older Safari could not read back. Pages are a little larger, by the size of the fallbacks.
 - **1.2.0** (2026-11-19): The page's header now starts with the proofs mark and a `photo-picker` pill, then the project and the session (accented), on a slim line above the heading. Fill `project.session`; a page without it still builds, with a warning.
 - **1.1.2** (2026-11-19): Delivers the page as "Where the page goes" says rather than always via artifacts. Says plainly that it needs the whole plugin. Candidate images used in several places are embedded once.

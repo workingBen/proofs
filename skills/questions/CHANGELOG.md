@@ -1,5 +1,6 @@
 # Changelog
 
+- **1.3.0** (2026-11-22): Runs its scripts (`review_page.py`) through `${CLAUDE_PLUGIN_ROOT}` and pre-approves them and reads of the plugin's own files, so a session no longer asks permission for each one.
 - **1.2.0** (2026-11-19): The page's header now starts with the proofs mark and a `questions` pill, then the project and the session (accented), in the sticky bar with no added height. Fill `project.session`; a page without it still builds, with a warning.
 - **1.1.0** (2026-11-19): Description sharpened: this skill fires whenever Claude needs the user to answer or decide anything, including several decisions to answer later or from a phone, and still supplies the questions on working-log's session page. Found by the ambiguous trigger evals, where such a request fired working-log instead.
 - **1.0.1** (2026-11-19): Says plainly that it needs the whole plugin, for anyone who copies one skill folder on its own.

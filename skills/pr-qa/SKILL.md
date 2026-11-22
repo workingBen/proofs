@@ -1,6 +1,11 @@
 ---
 name: pr-qa
-version: 1.5.1
+version: 1.6.0
+allowed-tools:
+  - Read(/${CLAUDE_PLUGIN_ROOT}/**)
+  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/skills/pr-qa/scripts/pr_qa_page.py *)
+  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/skills/pr-qa/scripts/pr_qa_findings.py *)
+  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/skills/pr-qa/scripts/pr_qa_plan.py *)
 description: Use when open pull requests, especially ones an AI agent made unattended, need checking before merge and the user wants to see the change rather than read a diff, such as "QA the PRs", "check the agent's work" or screenshots before approving. Differs from visual-qa; it shows a PR's before and after, not a live page's problems.
 ---
 
@@ -67,10 +72,10 @@ silently covers two of three reads as though it covered everything.
 says how many PRs are open and how old the oldest is keeps an unreviewed one from
 going quiet between sessions. The proofs plugin ships it (`hooks/hooks.json`), but it
 is off until you opt in. To turn it on for a project, run this from the project root
-(use the full path to this skill's `scripts` folder):
+(it asks permission each time, on purpose):
 
 ```bash
-python3 scripts/install_session_hook.py
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/pr-qa/scripts/install_session_hook.py
 ```
 
 That adds `"PROOFS_PR_REMINDER": "1"` to the `env` block of the project's
@@ -100,10 +105,10 @@ no token, no network, or no open PR, so it can never keep a session from startin
 
 Everything above can be done by hand. These scripts take the mechanical parts, and
 they ship inside this skill (in its `scripts/` folder, with tests in `tests/`).
-Python 3, standard library only. Run them through `python3`, with paths relative to
-this skill's folder.
+Python 3, standard library only. Run each one exactly as written below; Claude Code
+fills in `${CLAUDE_PLUGIN_ROOT}`, and the allow rule only matches the unquoted form.
 
-`python3 scripts/pr_qa_collect.py --repo <owner>/<repo> --out <dir>` walks every
+`python3 ${CLAUDE_PLUGIN_ROOT}/skills/pr-qa/scripts/pr_qa_collect.py --repo <owner>/<repo> --out <dir>` walks every
 open PR, finds the newest run of a QA workflow for its branch (`--workflow` names
 it; the default is `pr-qa.yml`), downloads the `pr-qa` artifact if there is one, and
 writes `<dir>/meta.json` — one entry per PR with every mechanical field filled in
@@ -120,20 +125,20 @@ why, because an omission that looks like coverage is worse than a gap.
 | `recommendation` | One of `merge-and-push`, `merge-hold-push`, `send-back`, `wait` |
 | `human_findings` | What Step 5 found that the machine could not |
 
-`python3 scripts/pr_qa_page.py --meta <dir>/meta.json --out <file>.html` renders
+`python3 ${CLAUDE_PLUGIN_ROOT}/skills/pr-qa/scripts/pr_qa_page.py --meta <dir>/meta.json --out <file>.html` renders
 that skeleton into the Artifact described below (`--project` and `--repo` set the
 top bar; both have defaults taken from the origin remote). Always pass `--session`, the
 session name taken the way the `working-log` skill does: the bar starts with the proofs
 mark and a `pr-qa` pill, then project · session · repo, so the user can tell which
 session's QA this is.
 
-`python3 scripts/pr_qa_findings.py --dir <evidence dir>` turns a PR's before and
+`python3 ${CLAUDE_PLUGIN_ROOT}/skills/pr-qa/scripts/pr_qa_findings.py --dir <evidence dir>` turns a PR's before and
 after measurements (`before.json`, `after.json`, each a list of `shots`) into the
 findings a machine can be sure of. It reports a *regression* (the after is worse
 than the before for the same page at the same size), not a state the page was
 already in.
 
-`python3 scripts/pr_qa_plan.py --map pr_qa_pages.json --ids ids.json` decides which
+`python3 ${CLAUDE_PLUGIN_ROOT}/skills/pr-qa/scripts/pr_qa_plan.py --map pr_qa_pages.json --ids ids.json` decides which
 URLs to photograph for a PR, from the list of changed files (on stdin, or
 `--changed-file`). **Write your own map:** a JSON file whose `pages` entries have a
 `name`, `match` (glob patterns against changed paths) and `urls` (`label` and
@@ -150,7 +155,7 @@ read an evidence folder per PR, and you (or a workflow of yours) write it:
 (`before` or `after`), `size` (`phone` or `desktop`), `slug`, `pageLabel`, `path`,
 `file` (the PNG's name in the same folder), and optionally `overflow` (pixels of
 sideways scroll), `scrollWidth`, `clientWidth`, `errors`, `redirected` and
-`landedOn`. `python3 scripts/pr_qa_findings.py --dir <folder>` then writes the
+`landedOn`. `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pr-qa/scripts/pr_qa_findings.py --dir <folder>` then writes the
 `findings.json` the page reads; `plan.json` (from the plan script) is optional.
 For `pr_qa_collect.py`, a CI workflow uploads that folder as an artifact named
 `pr-qa`, and the collector unpacks it into a `pr-<number>` folder inside the output folder.
@@ -211,7 +216,7 @@ from your script, so a capture script parked outside the project dies with
 order; each works where the other does not:
 
 1. Run it with the project's module path set, from the project root:
-   `NODE_PATH=./node_modules node /path/to/script.cjs` (or keep the script inside
+   `NODE_PATH=./node_modules node <your capture script>` (or keep the script inside
    the project).
 2. If the project has no `package.json` at all, find the copy in the `npx` cache:
 

@@ -1,6 +1,9 @@
 ---
 name: visual-qa
-version: 1.2.0
+version: 1.3.0
+allowed-tools:
+  - Read(/${CLAUDE_PLUGIN_ROOT}/**)
+  - Bash(node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs *)
 description: Use when pointed at whole pages to find what is wrong with how they look, before saying any user-facing page is done, and when the user says a layout looks wrong, cramped, empty, too small or broken on a phone. Differs from design-review (options for a change already decided) and pr-qa (a PR's diff), since this finds the problems.
 ---
 
@@ -43,10 +46,10 @@ and colors (mockups reuse them), and anything already decided that must not be "
 - Sign in through the real form with a `setup` hook (a sign-in example is bundled in the scripts folder). Read the
   password from the untracked env file inside the hook; never print it. If a page shows a
   secret, replace it in the DOM before capture.
-- Run it (from this skill's folder, or put its path in front of `scripts/`):
+- Run it exactly as written; Claude Code fills in `${CLAUDE_PLUGIN_ROOT}`, and the allow rule only matches the unquoted form:
 
   ```bash
-  node scripts/capture.cjs pages.json --out before
+  node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs pages.json --out before
   ```
 
   Three viewports (1440×900, 1280×800, 390×844), a first-screen and a full-page PNG each,

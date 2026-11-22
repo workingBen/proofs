@@ -6,7 +6,10 @@ skills/<name>/CHANGELOG.md, whose first entry must be that version. Page skills
 carry a short "Where the page goes" pointer to reference/where-the-page-goes.md
 at the plugin root. Any ../../ path, and any reference/*.md path (relative to
 the skill's folder), that a SKILL.md names must exist, and a skill that uses
-../../ paths must carry the "Needs the whole plugin" line.
+../../ or ${CLAUDE_PLUGIN_ROOT} paths must carry the "Needs the whole plugin" line.
+Every python3/node script call goes through an unquoted ${CLAUDE_PLUGIN_ROOT}/<path>
+and is covered by a one-script Bash rule in allowed-tools (plus the Read rule), except
+the scripts in NEVER_PREAPPROVED, which keep prompting.
 
 Usage: check-skills [skills_dir]   (default: skills/ at the repo root)
 Exit 1 on any problem.
@@ -30,6 +33,15 @@ PAGE_VALUES = ("artifact", "file", "wifi")
 PAGE_REF = "../../reference/where-the-page-goes.md"
 # A skill that reads ../../ paths says so, for anyone who copies one skill folder on its own.
 WHOLE_PLUGIN = "**Needs the whole plugin.**"
+ROOT = "${CLAUDE_PLUGIN_ROOT}"
+READ_RULE = "Read(/${CLAUDE_PLUGIN_ROOT}/**)"
+# Scripts whose arguments can run arbitrary commands or rewrite user files: never pre-approved.
+NEVER_PREAPPROVED = {"shared/capture/with_server.py", "skills/todos/scripts/todos_apply.py",
+                     "skills/todos/scripts/todos_adopt.py", "skills/pr-qa/scripts/install_session_hook.py",
+                     "skills/pr-qa/scripts/pr_qa_collect.py"}
+# A script call: interpreter, optional flags, optional quote, then the script path.
+PLUGIN_CMD = re.compile(r"\b(python3|node)((?: -[\w-]+)*) ([\"']?)(\S+?\.(?:py|cjs|js|sh))\b")
+FAKE_ROOT = "/opt/claude/plugins/cache/proofs/proofs/9.9.9"
 ROOT_PATH = re.compile(r"\.\./\.\./[\w./-]*[\w-]|(?<![\w./-])reference/[\w./-]*\.md")
 
 
@@ -43,6 +55,98 @@ def frontmatter(text):
         if sep:
             fm[k.strip()] = v.strip().strip("\"'")
     return fm, text[m.end():]
+
+
+def allowed_tools(text):
+    """The allowed-tools entries from the frontmatter: YAML list items or a one-line value."""
+    m = re.match(r"---\n(.*?)\n---\n", text, re.S)
+    if not m:
+        return []
+    lines = m.group(1).splitlines()
+    for i, line in enumerate(lines):
+        if re.match(r"allowed-tools\s*:", line):
+            value = line.partition(":")[2].strip()
+            if value:
+                return _split_rules(value)
+            out = []
+            for item in lines[i + 1:]:
+                im = re.match(r"\s+-\s+(.*\S)\s*$", item)
+                if not im:
+                    break
+                out.append(im.group(1).strip("\"'"))
+            return out
+    return []
+
+
+def _split_rules(value):
+    """Split a one-line value on spaces or commas that sit outside parentheses."""
+    out, cur, depth = [], "", 0
+    for ch in value:
+        depth += (ch == "(") - (ch == ")")
+        if depth <= 0 and ch in " ,":
+            if cur:
+                out.append(cur)
+            cur = ""
+        else:
+            cur += ch
+    if cur:
+        out.append(cur)
+    return [r.strip("\"'") for r in out]
+
+
+def rule_matches(rule, command):
+    """Claude Code's Bash wildcard semantics: * matches any text; a trailing ' *' that is
+    the only wildcard also matches the bare command."""
+    m = re.fullmatch(r"Bash\((.*)\)", rule, re.S)
+    if not m:
+        return False
+    pat = m.group(1)
+    if pat.endswith(" *") and pat.count("*") == 1:
+        rx = re.escape(pat[:-2]) + r"(?: .*)?"
+    else:
+        rx = ".*".join(re.escape(part) for part in pat.split("*"))
+    return re.fullmatch(rx, command, re.S) is not None
+
+
+def check_plugin_calls(path, body, rules):
+    """Rules for every python3/node script call and for the allowed-tools list."""
+    errs = []
+    repo = path.parent.parent.parent
+    bash = [r for r in rules if r.startswith("Bash(")]
+    for r in rules:
+        if r == READ_RULE or re.fullmatch(r"Skill\(proofs:[a-z][a-z0-9-]*\)", r):
+            continue
+        m = re.fullmatch(r"Bash\((?:python3|node) " + re.escape(ROOT) + r"/([\w./-]+\.(?:py|cjs|js|sh)) \*\)", r)
+        if not m or ".." in m.group(1):
+            errs.append("allowed-tools rule %s is not allowed: only Bash(<python3|node> %s/<one script> *), %s and Skill(proofs:<name>)" % (r, ROOT, READ_RULE))
+        elif m.group(1) in NEVER_PREAPPROVED or any(n in r for n in NEVER_PREAPPROVED):
+            errs.append("allowed-tools rule %s must keep prompting (never pre-approve it)" % r)
+    if rules and READ_RULE not in rules:
+        errs.append("allowed-tools is missing %s" % READ_RULE)
+    covering = [r.replace(ROOT, FAKE_ROOT) for r in bash]
+    seen = set()
+    for line in body.splitlines():
+        for cm in PLUGIN_CMD.finditer(line):
+            interp, flags, quote, target = cm.groups()
+            if not target.startswith(ROOT + "/"):
+                msg = "run plugin scripts through %s, not %s" % (ROOT, target)
+            elif quote:
+                msg = "%s call must be unquoted (the allow rule matches the command text)" % target
+            else:
+                rel = target[len(ROOT) + 1:]
+                if not (repo / rel).exists():
+                    msg = "path %s does not exist" % target
+                elif rel in NEVER_PREAPPROVED:
+                    continue
+                else:
+                    cmd = ("%s%s %s" % (interp, flags, target)).replace(ROOT, FAKE_ROOT)
+                    if any(rule_matches(r, cmd) for r in covering):
+                        continue
+                    msg = "call to %s is not covered by allowed-tools" % target
+            if msg not in seen:
+                seen.add(msg)
+                errs.append(msg)
+    return errs
 
 
 def page_section(body):
@@ -95,8 +199,9 @@ def check(path, names):
             for v in PAGE_VALUES:
                 if not re.search(r"\b" + v + r"\b", text):
                     errs.append("%s does not mention %s" % (PAGE_REF, v))
-    if "../../" in body and WHOLE_PLUGIN not in body:
-        errs.append("uses ../../ paths but lacks the %s line" % WHOLE_PLUGIN)
+    if ("../../" in body or ROOT in body) and WHOLE_PLUGIN not in body:
+        errs.append("uses ../../ or %s paths but lacks the %s line" % (ROOT, WHOLE_PLUGIN))
+    errs.extend(check_plugin_calls(path, body, allowed_tools(path.read_text())))
     for rp in sorted(set(ROOT_PATH.findall(body))):
         if not (path.parent / rp).exists():
             errs.append("path %s does not exist" % rp)

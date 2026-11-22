@@ -1,6 +1,9 @@
 ---
 name: photo-picker
-version: 1.2.1
+version: 1.3.0
+allowed-tools:
+  - Read(/${CLAUDE_PLUGIN_ROOT}/**)
+  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
 description: Use when the user wants real photos found for an article or page and wants to pick from candidates before any is added, such as "find some photos for this" or "show me options for the hero image". Differs from design-review; it compares sourced, licensed photographs for one spot, not coded layouts, then uploads the winner.
 ---
 
@@ -35,7 +38,7 @@ A slot is one spot in the content that needs a photo: a section, a topic, a mood
 
 **Needs the whole plugin.** This skill reads shared files at `../../reference/` and `../../shared/`, relative to its folder. If they are missing, the skill was copied on its own: install the whole plugin (`/plugin install proofs@proofs`) rather than recreating them.
 
-Write the content; the builder writes the page. Read `../../reference/review-page.md` first: it documents the spec and the command, `python3 ../../shared/review_page/review_page.py spec.json --out page.html`, with `"decisions": "photo-picker"`. Do not hand-write the page's JavaScript. Follow any design guidance your environment provides for published pages first; utilitarian-but-polished, same as the other two tools. Fill `project` with `name`, `session` and `repo`, taking the session name the way the `working-log` skill does (the session's own name, else one named for the work, kept for the life of the page): the page's header shows the proofs mark, this skill's name, the project and the session, so the user can match the page to its session at a glance.
+Write the content; the builder writes the page. Read `../../reference/review-page.md` first: it documents the spec and the command, `python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py spec.json --out page.html`, with `"decisions": "photo-picker"`. Do not hand-write the page's JavaScript. Follow any design guidance your environment provides for published pages first; utilitarian-but-polished, same as the other two tools. Fill `project` with `name`, `session` and `repo`, taking the session name the way the `working-log` skill does (the session's own name, else one named for the work, kept for the life of the page): the page's header shows the proofs mark, this skill's name, the project and the session, so the user can match the page to its session at a glance.
 
 - Reuse the target page's own design system (palette, type) where one exists, in the spec's `css`.
 - **One item per slot:** `label` (slot title), `location` (what it illustrates), and the candidates as `variants`, each with `name` (a short subject, exported after the option letter), the image, and `note_html` giving its source, framing rationale, and "Already on site" where it is reused. Option labels are A/B/C. Use plain text labels or monochrome line icons, never emoji.

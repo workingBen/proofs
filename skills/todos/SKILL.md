@@ -1,6 +1,9 @@
 ---
 name: todos
-version: 1.2.0
+version: 1.3.0
+allowed-tools:
+  - Read(/${CLAUDE_PLUGIN_ROOT}/**)
+  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/skills/todos/scripts/todos_page.py *)
 description: Use when the user wants to see and work their open to-do list ("show my todos", "what's still open"), tick items off and archive the done ones with evidence, or adopt the convention in a repo whose TODO.md has grown into a decision log. Differs from review-cycle; it closes existing items, not a stream of new requests.
 ---
 
@@ -10,17 +13,16 @@ description: Use when the user wants to see and work their open to-do list ("sho
 
 `TODO.md` holds only open work; everything finished lives in `docs/todo-archive/`,
 verbatim, with the reasoning and the commit that closed it. The round-trip:
-`python3 scripts/todos_page.py` turns `TODO.md`'s open items into a published,
+`python3 ${CLAUDE_PLUGIN_ROOT}/skills/todos/scripts/todos_page.py` turns `TODO.md`'s open items into a published,
 tickable Artifact; the user ticks what is done, adds a note where they have one, and
-pastes the copy-back export into chat; `python3 scripts/todos_apply.py` reads that
+pastes the copy-back export into chat; `python3 ${CLAUDE_PLUGIN_ROOT}/skills/todos/scripts/todos_apply.py` reads that
 paste and turns it into a plan: what to archive outright, what to verify first, and
 what didn't match anything. The scripts parse, render and match; they never decide
 whether a claim holds up. That judgment belongs here, in this file, because it is
 the part a script must not be trusted to get right on its own.
 
-The scripts live in this skill's own `scripts` folder, and the commands below are
-written relative to this skill's folder. Run them from the project root with this
-skill's folder path put in front of each script path. They need Python 3 and
+Run each script exactly as written below, from the project root; Claude Code fills in
+`${CLAUDE_PLUGIN_ROOT}`, and the allow rule only matches the unquoted form. They need Python 3 and
 nothing else.
 
 ## The convention
@@ -56,7 +58,7 @@ Two rules, both worth restating every time:
 ## Running it
 
 ```bash
-python3 scripts/todos_page.py     # TODO.md -> .proofs/pages/todos.html
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/todos/scripts/todos_page.py     # TODO.md -> .proofs/pages/todos.html
 ```
 
 Then deliver the generated page as "Where the page goes" says (with `artifact`, publish it
@@ -107,7 +109,7 @@ work, and treating it as evidence is the bug this skill exists to close.
    runs several sessions against one checkout, follow the project's own notes
    (CLAUDE.md) for how to isolate this edit; the re-read is only sufficient when
    nothing else can write to the file mid-apply.
-2. Run `python3 scripts/todos_apply.py export.txt TODO.md` against the pasted
+2. Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/todos/scripts/todos_apply.py export.txt TODO.md` against the pasted
    export. It matches each ticked row back to a real item by title (numbers are
    reassigned on every apply, so they're never the stable handle) and prints a plan:
    `archive`, `verify`, `unmatched`, `free`.
@@ -146,7 +148,7 @@ whatever you actually checked to confirm repo work, or "ticked by the user" for 
 
 For a repo whose `TODO.md` has never been through this: a decision log wearing a
 to-do list's name, months of `- [x]` sitting next to a handful of genuinely open
-items. Run once, then never again. Five steps; `python3 scripts/todos_adopt.py` does the
+items. Run once, then never again. Five steps; `python3 ${CLAUDE_PLUGIN_ROOT}/skills/todos/scripts/todos_adopt.py` does the
 mechanical two in the middle, the judgment is the skill's:
 
 1. **Audit.** Count `- [x]` against `- [ ]`, and note anything a first read flags
@@ -156,7 +158,7 @@ mechanical two in the middle, the judgment is the skill's:
 2. **Verify every open item** against code and git, same standard as the verify
    policy above. Assume the repo being adopted has several items that are already
    built; a first-time adoption is rarely cleaner.
-3. Run `python3 scripts/todos_adopt.py TODO.md docs/todo-archive/`. It splits every
+3. Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/todos/scripts/todos_adopt.py TODO.md docs/todo-archive/`. It splits every
    `## `-headed section of the original file into `docs/todo-archive/YYYY-MM.md`
    files, grouped by the date in each section's own heading (an undated section
    inherits the month of the section above it, since these files run newest-first).
@@ -188,7 +190,7 @@ read reproduces the exact bug this skill was built to fix: live items once went
 invisible to every count because they were numbered entries rather than
 checkboxes, and nobody noticed because the count looked confident. Loosening
 the parser's patterns to swallow a malformed line hides the next version of that
-bug instead of fixing this one. Re-run `python3 scripts/todos_page.py` after
+bug instead of fixing this one. Re-run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/todos/scripts/todos_page.py` after
 editing `TODO.md` and confirm `unparsed` reads `0` before treating the page's count
 as real.
 

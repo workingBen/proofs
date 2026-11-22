@@ -1,5 +1,6 @@
 # Changelog
 
+- **1.5.1** (2026-11-21): The headless Chrome command adds `--disable-features=MacAppCodeSignClone`. On a Mac, Google Chrome copies its whole app (about 1.4 GB) into a temp folder on every launch and deletes it only on a normal quit, so screenshot runs left those copies behind.
 - **1.5.0** (2026-11-19): The top bar starts with the proofs mark and a `pr-qa` pill, then project · session · repo; the "PR QA" label is gone. New `--session` flag on `pr_qa_page.py`; without it the page builds and says it has no session.
 - **1.4.5** (2026-11-19): Says plainly that it needs the whole plugin, for anyone who copies one skill folder on its own.
 - **1.4.4** (2026-11-18): Description trimmed to the trigger and how it differs from its nearest sibling; the detail it used to carry is in the body. No change in behavior.

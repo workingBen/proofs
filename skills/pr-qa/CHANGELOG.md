@@ -1,5 +1,7 @@
 # Changelog
 
+- **1.7.5** (2026-11-22): Removes the `.proofs/base` worktree right after the before shots are taken and read, before checking out the branch or running its tests, so test runners and linters that walk the tree cannot pick up the base copy. Common Mistakes keeps the cleanup as a backstop.
+- **1.7.4** (2026-11-22): The capture example sets `CHROME` inside the `sh -c` capture command instead of in front of `python3`, so the command matches the unattended allow rule for the helper.
 - **1.7.3** (2026-11-22): `pr_qa_findings.py` says "not measured" instead of "clean" when the evidence holds no measurements, decided per route so a partly measured run never reads clean.
 - **1.7.2** (2026-11-22): New `PROOFS_BASE_DIR` setting moves the before-shot base worktree to `$PROOFS_BASE_DIR/<repo folder name>-pr-qa-base`, for setups that block `git worktree add` inside code folders. Unset, it stays `.proofs/base`.
 - **1.7.1** (2026-11-22): Names the helper's log for each run (`.proofs/base/.proofs/server.log` for the before run, `.proofs/server.log` for the after run) and which `node_modules` the before capture resolves Playwright from.

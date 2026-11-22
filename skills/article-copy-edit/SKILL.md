@@ -1,6 +1,6 @@
 ---
 name: article-copy-edit
-version: 1.5.0
+version: 1.5.1
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -86,7 +86,7 @@ Write the content; the builder writes the page. Read `../../reference/review-pag
 
 Deliver the page as "Where the page goes" below says (with `artifact`, that means publishing it with the `Artifact` tool). Redeploy to the same file path when you add fields or fix bugs; don't mint a new URL for revisions the user is already looking at.
 
-**Verify before publishing, on every revision.** The build runs its own check (script syntax, card and button counts); run `--smoke` too when Playwright is available, or open the page and click a decision and Copy yourself. Then look at the page: every item rendered, the panes read correctly. Only publish after that.
+**Verify before publishing, on every revision.** The build runs its own check (script syntax, card and button counts). Run `--smoke`. If it reports Playwright missing, run the one-line install it prints (it uses your installed Google Chrome and downloads no browser), then run `--smoke` again; if it still cannot run, say on the page and in chat that the self-check did not run. Then look at the page: every item rendered, the panes read correctly. Only publish after that.
 
 ### 5. Applying the decisions
 

@@ -1,4 +1,8 @@
+import contextlib
+import importlib.util
+import io
 import re
+import shlex
 import unittest
 from pathlib import Path
 
@@ -58,8 +62,80 @@ class DesignReviewGuidance(unittest.TestCase):
         for flag in flags:
             self.assertIn(f'"{flag}"', helper)
 
-    def test_chrome_is_set_in_the_same_command(self):
-        self.assertRegex(self.step2(), r'CHROME="[^"]+" \\\n?\s*python3')
+    def test_chrome_is_set_inside_the_capture_command(self):
+        self.assertIn("""-- sh -c 'CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"; "$CHROME" --headless""", self.step2())
+
+
+def helper_calls():
+    """(file, command) for every with_server.py call in a fenced block of a SKILL.md or reference page, continuations joined."""
+    calls = []
+    for path in guidance_files():
+        in_fence = False
+        for line in re.sub(r"\\\n\s*", " ", path.read_text()).splitlines():
+            if line.lstrip().startswith("```"):
+                in_fence = not in_fence
+            elif in_fence and "with_server.py" in line:
+                calls.append((path, line.strip()))
+    return calls
+
+
+class HelperCalls(unittest.TestCase):
+    def test_examples_exist(self):
+        files = {p.parent.name for p, _ in helper_calls()}
+        self.assertTrue({"design-review", "pr-qa"} <= files, files)
+
+    def test_no_call_starts_with_a_variable_assignment(self):
+        # Claude Code strips only a fixed list of safe env vars before matching a Bash
+        # rule, so `CHROME=... python3 ...with_server.py` never matches the allow rule.
+        for path, cmd in helper_calls():
+            self.assertNotRegex(cmd, r"^[A-Z_][A-Z0-9_]*=", f"{path}: {cmd[:80]}")
+            self.assertTrue(cmd.startswith("python3 ${CLAUDE_PLUGIN_ROOT}/shared/capture/with_server.py "), f"{path}: {cmd[:80]}")
+
+    def test_every_flag_is_one_the_helper_accepts(self):
+        spec = importlib.util.spec_from_file_location("with_server", REPO / "shared" / "capture" / "with_server.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        for path, cmd in helper_calls():
+            argv = shlex.split(cmd.split("with_server.py", 1)[1])
+            with self.subTest(path=path.parent.name), contextlib.redirect_stderr(io.StringIO()) as err:
+                try:
+                    mod._parse(argv)
+                except SystemExit:
+                    self.fail(f"{path}: with_server.py rejects the example: {err.getvalue().strip()}")
+
+
+SMOKE_SENTENCE = (
+    'Run `--smoke`. If it reports Playwright missing, run the one-line install it prints (it uses your installed Google Chrome and downloads no browser), then run `--smoke` again; if it still cannot run, say on the page and in chat that the self-check did not run.'
+)
+PAGE_SKILLS = ("article-copy-edit", "design-review", "photo-picker", "qa-checklist", "questions", "style-guide", "working-log")
+
+
+class SmokeGuidance(unittest.TestCase):
+    def test_every_page_skill_says_to_install_and_rerun_smoke(self):
+        paths = [REPO / "skills" / s / "SKILL.md" for s in PAGE_SKILLS] + [REPO / "reference" / "review-page.md"]
+        for path in paths:
+            with self.subTest(path=path.relative_to(REPO)):
+                self.assertIn(SMOKE_SENTENCE, path.read_text())
+
+    def test_no_skill_lets_smoke_be_skipped(self):
+        for path in guidance_files():
+            text = path.read_text()
+            self.assertNotIn("when Playwright is available", text, path)
+            self.assertNotIn("Without Playwright", text, path)
+
+    def test_the_builder_prints_the_install_line_the_sentence_points_to(self):
+        src = (REPO / "shared" / "review_page" / "review_page.py").read_text()
+        self.assertIn("Playwright not found. \" + HOW_TO_PY", src)
+        self.assertIn("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install", src)
+
+
+class ReadmeInstall(unittest.TestCase):
+    def test_install_paragraph_warns_that_claude_p_needs_the_allow_block(self):
+        readme = (REPO / "README.md").read_text()
+        after_install = readme.split("/plugin install proofs@proofs\n```\n", 1)[1].lstrip().splitlines()[0]
+        self.assertIn("claude -p", after_install)
+        self.assertIn("Allow Proofs", after_install)
+        self.assertIn("will not start", after_install)
 
 
 class ChromeLines(unittest.TestCase):
@@ -100,6 +176,14 @@ class PrQaGuidance(unittest.TestCase):
 
     def test_pr_qa_cleanup_removes_the_base_worktree(self):
         self.assertIn("git worktree remove <base-dir>", section("pr-qa", "Common Mistakes"))
+
+    def test_pr_qa_removes_the_base_worktree_before_the_branch_and_its_tests(self):
+        text = section("pr-qa", "The Sequence")
+        remove = text.index("**Then remove the base worktree at once**")
+        self.assertIn("git worktree remove --force <base-dir>", text[remove:remove + 200])
+        self.assertLess(text.index("--cwd <base-dir>"), remove)
+        self.assertLess(remove, text.index("3. **Run the branch for real**"))
+        self.assertLess(remove, text.index("4. **Run the PR's own tests**"))
 
 
 if __name__ == "__main__":

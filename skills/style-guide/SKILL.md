@@ -1,6 +1,6 @@
 ---
 name: style-guide
-version: 1.8.0
+version: 1.8.1
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -83,7 +83,7 @@ Write the content; the builder writes the page. Read `../../reference/review-pag
 
 Deliver the page as "Where the page goes" below says (with `artifact`, that means publishing it with the `Artifact` tool). Use the same file path across revisions of the same audit round.
 
-**Verify before publishing, every time.** The build runs its own check; run `--smoke` too when Playwright is available. Then screenshot the page in both preview themes and check the coded examples don't add sideways scroll or overlap. Only publish after all of it passes.
+**Verify before publishing, every time.** The build runs its own check. Run `--smoke`. If it reports Playwright missing, run the one-line install it prints (it uses your installed Google Chrome and downloads no browser), then run `--smoke` again; if it still cannot run, say on the page and in chat that the self-check did not run. Then screenshot the page in both preview themes and check the coded examples don't add sideways scroll or overlap. Only publish after all of it passes.
 
 ### 4. Applying the decisions
 

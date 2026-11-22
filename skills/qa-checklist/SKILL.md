@@ -1,6 +1,6 @@
 ---
 name: qa-checklist
-version: 1.2.0
+version: 1.2.1
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -107,8 +107,9 @@ working-log's export, after the questions.
 
 ## Verifying
 
-The build runs its own check. Run `--smoke` when Playwright is available, then look
-at one screenshot at a desktop and a phone width. Republish to the same file path so
+The build runs its own check.
+Run `--smoke`. If it reports Playwright missing, run the one-line install it prints (it uses your installed Google Chrome and downloads no browser), then run `--smoke` again; if it still cannot run, say on the page and in chat that the self-check did not run.
+Then look at one screenshot at a desktop and a phone width. Republish to the same file path so
 the URL never changes.
 
 ## Where the page goes

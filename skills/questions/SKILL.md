@@ -1,6 +1,6 @@
 ---
 name: questions
-version: 1.3.0
+version: 1.3.1
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -151,10 +151,11 @@ same `Q` blocks arrive under `--- Questions ---` inside working-log's export.
 
 ## Verifying
 
-The build runs its own check, including the questions-first order. Run `--smoke`
-when Playwright is available: it answers, types a note, copies, reloads, confirms
-the questions sit directly under the sticky bar, and checks for sideways scroll at
-1280 and 390. Then look at one screenshot at a desktop and a phone width: the checks
+The build runs its own check, including the questions-first order. `--smoke`
+answers, types a note, copies, reloads, confirms the questions sit directly under
+the sticky bar, and checks for sideways scroll at 1280 and 390.
+Run `--smoke`. If it reports Playwright missing, run the one-line install it prints (it uses your installed Google Chrome and downloads no browser), then run `--smoke` again; if it still cannot run, say on the page and in chat that the self-check did not run.
+Then look at one screenshot at a desktop and a phone width: the checks
 prove behavior, not that your mockups are readable.
 
 ## Where the page goes

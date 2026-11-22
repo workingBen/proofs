@@ -1,6 +1,6 @@
 ---
 name: pr-qa
-version: 1.7.3
+version: 1.7.5
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/skills/pr-qa/scripts/pr_qa_page.py *)
@@ -121,8 +121,14 @@ no token, no network, or no open PR, so it can never keep a session from startin
    **install dependencies there** with the project's own install (`npm ci`,
    `bundle install`, ...). Do not symlink `node_modules`: Next.js with Turbopack
    returned HTTP 500 through a symlinked one. Build the stylesheet there too.
-   Capture the before pair through the helper (step 3) with `--cwd <base-dir>`.
-3. **Run the branch for real**: check it out, migrate if needed, and capture the
+   Capture the before pair through the helper (step 3) with `--cwd <base-dir>` and
+   read both PNGs. **Then remove the base worktree at once**
+   (`git worktree remove --force <base-dir>`, the literal path), before you check
+   out the branch, migrate or run any tests. It is a full second copy of the project
+   inside the repo: `info/exclude` hides it from git, not from test runners, linters
+   or `tsc` that walk the tree, so the PR's test run could pick up the base's files.
+3. **Run the branch for real**: with the before pair taken and `<base-dir>` removed,
+   check it out, migrate if needed, and capture the
    after pair through the same helper from the PR checkout (no `--cwd`). Both
    shots use the helper, which starts the server, waits for the URL, runs the
    capture and always stops the server, so nothing dies between turns.
@@ -133,14 +139,15 @@ no token, no network, or no open PR, so it can never keep a session from startin
      through its own helper call; if you ever run both servers at once, give them
      two different ports. A server already answering at `--url` is treated as ready
      and left running, so a reused port would be captured by mistake.
-   - **Set `CHROME` in the same command** as the helper call (a variable from an
-     earlier Bash call is gone): `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
-     on macOS, `google-chrome`, `google-chrome-stable` or `chromium` on Linux.
+   - **Set `CHROME` inside the `sh -c` capture command**, never in front of
+     `python3`: the command has to start with `python3 ${CLAUDE_PLUGIN_ROOT}/shared/capture/with_server.py`
+     to match the allow rule for unattended runs, and a variable from an earlier Bash
+     call is gone anyway. Use `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
+     on macOS, `google-chrome`, `google-chrome-stable` or `chromium` on Linux (e.g. `CHROME=google-chrome;`).
 
    ```bash
-   CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
    python3 ${CLAUDE_PLUGIN_ROOT}/shared/capture/with_server.py --cwd <base-dir> --start "npm run dev -- -p 3411" \
-     --url http://localhost:3411/ -- sh -c '"$CHROME" --headless --disable-features=MacAppCodeSignClone \
+     --url http://localhost:3411/ -- sh -c 'CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"; "$CHROME" --headless --disable-features=MacAppCodeSignClone \
      --hide-scrollbars --virtual-time-budget=8000 --window-size=390,2200 --screenshot=before-390.png "$PROOFS_BASE_URL"'
    ```
 
@@ -486,7 +493,8 @@ pushes and deploys is in its own notes; follow them.
 - **Screenshotting the main branch twice.** Confirm the branch is actually checked
   out and migrated; identical before/after pairs are the giveaway.
 - **Leaving the repo dirty.** Migrations rolled back, the main branch checked out,
-  the base worktree removed with `git worktree remove <base-dir>` (default
+  the base worktree removed (step 2 removes it right after the before shots; check
+  it is gone) with `git worktree remove <base-dir>` (default
   `.proofs/base`; use the literal path)
   (add `--force` if the install left files behind), so `git worktree list` is
   clean. Someone else may be using this machine.

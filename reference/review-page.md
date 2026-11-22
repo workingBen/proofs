@@ -24,7 +24,7 @@ how you rebuild the next round.
   phone the wordmark drops and the pill stays. Screen readers hear "Proofs, design-review".
   A review or questions page with no `project.session` still builds, with a warning:
   the session is how the reader matches a page to the chat it belongs to.
-  It also warns about British spellings in what the reader sees (`behaviour` → `behavior`); it is off unless the project sets `PROOFS_SPELLING=american`. <!-- british-ok: behaviour -->
+  It also warns about British spellings in what the reader sees (`behaviour` → `behavior`); it is off unless the project sets `PROOFS_SPELLING` to `american` in the `env` block of its `.claude/settings.json` (not as a prefix in front of the command, which would stop the command matching its allow rule). <!-- british-ok: behaviour -->
 - Decision buttons per item, one active at a time, all starting unselected, with
   `aria-pressed`. Choices that need a comment open the comment box and focus it; a
   comment typed under any other choice is still kept and exported.
@@ -206,7 +206,11 @@ The build also prints how many screenshots became WebP and how much smaller they
 `~/.cache/proofs-playwright`, or one resolvable from the current folder). It uses the
 bundled browser if there is one and otherwise your installed Google Chrome, and it
 downloads no browser. One-line install:
-`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install --prefix ~/.cache/proofs-playwright playwright@1.61.1`. It clicks a variant and every decision on the
+`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install --prefix ~/.cache/proofs-playwright playwright@1.61.1`.
+Every skill that builds a page says the same thing:
+Run `--smoke`. If it reports Playwright missing, run the one-line install it prints (it uses your installed Google Chrome and downloads no browser), then run `--smoke` again; if it still cannot run, say on the page and in chat that the self-check did not run.
+The install is an `npm install`, so it may ask permission once; that is expected.
+The smoke check clicks a variant and every decision on the
 first item (or answers the first question and check, and ticks the first entry),
 types a comment, ticks read, confirms open questions sit directly under the sticky
 bar, copies, reloads to prove persistence,

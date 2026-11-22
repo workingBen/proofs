@@ -1,6 +1,6 @@
 ---
 name: photo-picker
-version: 1.3.0
+version: 1.3.1
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -55,7 +55,7 @@ Write the content; the builder writes the page. Read `../../reference/review-pag
 
 Deliver the page as "Where the page goes" below says (with `artifact`, that means publishing it with the `Artifact` tool). Use a stable icon across revisions of the *same* review page: redeploy to the same file path for new rounds or added candidates, don't mint a new URL for a gallery the user is already looking at.
 
-**Verify before publishing, every time.** The build runs its own check. Then run `--smoke`, which also fails on **any image that did not load**: a broken image renders as a blank box with no console error, the one failure mode unique to this tool. Without Playwright, open the page and look at every candidate yourself. Only publish after both pass.
+**Verify before publishing, every time.** The build runs its own check. `--smoke` also fails on **any image that did not load**: a broken image renders as a blank box with no console error, the one failure mode unique to this tool. Run `--smoke`. If it reports Playwright missing, run the one-line install it prints (it uses your installed Google Chrome and downloads no browser), then run `--smoke` again; if it still cannot run, say on the page and in chat that the self-check did not run. Then open the page and look at every candidate yourself. Only publish after both pass.
 
 ### 4. Applying the decisions
 

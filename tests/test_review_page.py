@@ -891,7 +891,7 @@ class BrowserLaunch(unittest.TestCase):
     def test_launch_reports_how_to_get_a_browser_when_both_fail(self):
         res = self.run_launch(["Executable doesn't exist at /x", "Chromium distribution 'chrome' is not found"])
         self.assertFalse(res["ok"])
-        self.assertIn("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1", res["message"])
+        self.assertIn("npm install --prefix ~/.cache/proofs-playwright", res["message"])
         self.assertIn("Install Google Chrome", res["message"])
 
     def test_find_playwright_checks_the_proofs_cache(self):
@@ -928,7 +928,7 @@ class BrowserLaunch(unittest.TestCase):
                     else:
                         os.environ[k] = v
             self.assertIsNone(ok)
-            self.assertIn("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1", res["error"])
+            self.assertIn("npm install --prefix ~/.cache/proofs-playwright", res["error"])
 
 
 class Spelling(unittest.TestCase):
@@ -1010,7 +1010,7 @@ def playwright_dir():
 
 @unittest.skipUnless(NODE and playwright_dir(), "Playwright not found: set PROOFS_PLAYWRIGHT, or install it where "
                      "the builder looks (~/.cache/proofs-playwright) with no browser download: "
-                     "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install --prefix ~/.cache/proofs-playwright playwright@1.61.1")
+                     "npm install --prefix ~/.cache/proofs-playwright playwright@1.61.1")
 class ClickThrough(unittest.TestCase):
     """Drive every example in real Chromium: decisions, variants, comments, read
     switch, export, reload persistence, clipboard fallback, images, no sideways scroll."""

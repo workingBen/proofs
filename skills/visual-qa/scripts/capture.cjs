@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Visual QA capture: screenshots + measurements for whole pages at three viewports.
 //
-//   node <skill folder>/scripts/capture.cjs pages.json [--out DIR]
+//   node <skill folder>/scripts/capture.cjs pages.json [--out DIR] [--sizes 390,1440] [--evidence before|after]
 //
 // pages.json (see pages.example.json beside this file):
 //   {
@@ -14,6 +14,11 @@
 //         "actions": [{ "click": "summary" }, { "waitFor": ".editor" }] }
 //     ]
 //   }
+//
+// --sizes picks viewports by label (default: all of 1440, 1280, 390).
+// PROOFS_BASE_URL, when set, replaces "base" (so it runs unchanged after with_server.py --).
+// --evidence <label> prefixes every file the run writes with "<label>-" (a before and an
+// after run can share one --out) and also writes <out>/<label>.json in the shape pr-qa reads.
 //
 // Writes <out>/<name>-<state>-<width>.png, ...-full.png, measures.json and summary.md.
 // Prints only the summary table, so the run stays small in context.
@@ -38,6 +43,7 @@ function loadPlaywright() {
   const tries = [
     'playwright',
     path.join(process.cwd(), 'node_modules/playwright'),
+    process.env.PROOFS_PLAYWRIGHT,
     process.env.PLAYWRIGHT_PATH,
     path.join(os.homedir(), '.cache', 'proofs-playwright', 'node_modules', 'playwright'),
   ].filter(Boolean);
@@ -70,8 +76,24 @@ function measure({ items, minText, minTap }) {
     return t.slice(0, 40);
   };
 
-  // Sideways scroll
-  const sideways = document.documentElement.scrollWidth - document.documentElement.clientWidth;
+  // Sideways scroll. scrollWidth alone misses content that `overflow-x: hidden` clips, so also
+  // take the right edge of the widest visible element. An element inside its own scroller
+  // (carousel, wide table) is not the page's overflow, so those are skipped.
+  const scrollWidth = document.documentElement.scrollWidth;
+  const sideways = scrollWidth - vw;
+  const insideScroller = (el) => {
+    const r = el.getBoundingClientRect();
+    for (let a = el.parentElement; a && a !== document.body && a !== document.documentElement; a = a.parentElement) {
+      const ox = getComputedStyle(a).overflowX;
+      if (ox !== 'visible' && r.right > a.getBoundingClientRect().right + 1) return true;
+    }
+    return false;
+  };
+  let widestRight = 0;
+  for (const el of document.querySelectorAll('body *')) {
+    if (!visible(el) || insideScroller(el)) continue;
+    widestRight = Math.max(widestRight, el.getBoundingClientRect().right);
+  }
 
   // Main column width
   const main = document.querySelector('main') || document.body;
@@ -169,6 +191,8 @@ function measure({ items, minText, minTap }) {
 
   return {
     viewport: { w: vw, h: vh },
+    innerWidth: window.innerWidth, dpr: window.devicePixelRatio,
+    scrollWidth, clientWidth: vw, widestRight: Math.round(widestRight),
     pageHeight: document.documentElement.scrollHeight,
     sideways,
     contentWidth: Math.round(contentWidth),
@@ -181,10 +205,34 @@ function measure({ items, minText, minTap }) {
   };
 }
 
+// Width of a PNG from its IHDR chunk (bytes 16-19, big-endian).
+function pngWidth(file) {
+  const fd = fs.openSync(file, 'r');
+  const b = Buffer.alloc(24);
+  fs.readSync(fd, b, 0, 24, 0);
+  fs.closeSync(fd);
+  return b.readUInt32BE(16);
+}
+
+// Folds the three overflow signals into m.sideways (the worst of them) and m.signals.
+function overflowOf(m) {
+  const cw = m.clientWidth;
+  const scroll = m.scrollWidth - cw;
+  const clipped = m.widestRight - cw;
+  const image = Math.round(m.pngWidth / m.dpr) - cw;
+  const signals = [];
+  if (scroll > 1) signals.push('scroll');
+  else if (clipped > 1) signals.push('clipped');
+  if (image > 1) signals.push('image');
+  m.signals = signals;
+  m.sideways = Math.max(scroll, clipped, image, 0);
+}
+
 function verdicts(m, vpLabel) {
   const phone = vpLabel === '390';
   const out = [];
-  out.push(['sideways scroll', m.sideways, m.sideways <= 0]);
+  out.push(['sideways scroll', m.signals.length ? `${m.sideways}px, ${m.signals.join('+')}` : m.sideways,
+    m.sideways <= 1]);
   if (!phone) out.push(['content width share', m.contentShare, m.contentShare >= 0.7]);
   out.push(['text below floor', m.smallTextCount, m.smallTextCount === 0]);
   out.push(['small tap targets', m.smallTapCount, m.smallTapCount === 0]);
@@ -200,11 +248,24 @@ function verdicts(m, vpLabel) {
 }
 
 (async () => {
-  const cfgPath = process.argv[2];
-  if (!cfgPath) { console.error('usage: capture.cjs pages.json [--out DIR]'); process.exit(1); }
+  const argv = process.argv.slice(2);
+  const opt = (name) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined; };
+  const cfgPath = argv[0];
+  if (!cfgPath || cfgPath.startsWith('--')) {
+    console.error('usage: capture.cjs pages.json [--out DIR] [--sizes 390,1440] [--evidence before|after]');
+    process.exit(1);
+  }
   const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
-  const outIdx = process.argv.indexOf('--out');
-  const out = outIdx > 0 ? process.argv[outIdx + 1] : path.join(path.dirname(cfgPath), 'shots');
+  const out = opt('--out') || path.join(path.dirname(cfgPath), 'shots');
+  const evidence = opt('--evidence');
+  const prefix = evidence ? `${evidence}-` : '';
+  const sizes = opt('--sizes') ? opt('--sizes').split(',').map((x) => x.trim()) : null;
+  const viewports = sizes ? VIEWPORTS.filter((v) => sizes.includes(v.label)) : VIEWPORTS;
+  if (!viewports.length) {
+    console.error(`--sizes ${sizes.join(',')} matches none of ${VIEWPORTS.map((v) => v.label).join(', ')}`);
+    process.exit(1);
+  }
+  const base = process.env.PROOFS_BASE_URL || cfg.base;
   fs.mkdirSync(out, { recursive: true });
   const minText = cfg.minText || 16, minTap = cfg.minTap || 44;
   const setup = cfg.setup ? require(path.resolve(path.dirname(cfgPath), cfg.setup)) : null;
@@ -213,19 +274,21 @@ function verdicts(m, vpLabel) {
   const browser = await launchChromium(chromium, process.env);
   const results = [];
   const errors = [];
+  let untrusted = null;
 
-  for (const vp of VIEWPORTS) {
+  for (const vp of viewports) {
+    if (untrusted) break;
     const { label, ...ctxOpts } = vp;
     const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, ...ctxOpts });
     const page = await context.newPage();
     page.on('pageerror', (e) => errors.push(`${label}: ${e.message}`));
-    if (setup) await setup(page, cfg.base);
+    if (setup) await setup(page, base);
 
     for (const p of cfg.pages) {
       const state = p.state || 'default';
-      const file = `${p.name}-${state}-${label}`;
+      const file = `${prefix}${p.name}-${state}-${label}`;
       try {
-        await page.goto(cfg.base + p.path, { waitUntil: 'networkidle' });
+        await page.goto(base + p.path, { waitUntil: 'networkidle' });
         for (const a of p.actions || []) {
           if (a.click) await page.click(a.click);
           if (a.waitFor) await page.waitForSelector(a.waitFor);
@@ -235,6 +298,12 @@ function verdicts(m, vpLabel) {
         await page.screenshot({ path: path.join(out, `${file}.png`) });
         await page.screenshot({ path: path.join(out, `${file}-full.png`), fullPage: true });
         const m = await page.evaluate(measure, { items: p.items, minText, minTap });
+        if (m.innerWidth !== vp.width) {
+          untrusted = `the browser laid the page out at ${m.innerWidth} px, not ${vp.width} px; the capture is not trustworthy`;
+          break;
+        }
+        m.pngWidth = pngWidth(path.join(out, `${file}-full.png`));
+        overflowOf(m);
         results.push({ page: p.name, state, viewport: label, file, measures: m, verdicts: verdicts(m, label) });
       } catch (e) {
         results.push({ page: p.name, state, viewport: label, file, error: e.message.split('\n')[0] });
@@ -243,17 +312,38 @@ function verdicts(m, vpLabel) {
     await context.close();
   }
   await browser.close();
+  if (untrusted) { console.error(untrusted); process.exit(3); }
 
-  fs.writeFileSync(path.join(out, 'measures.json'), JSON.stringify({ results, errors }, null, 2));
+  fs.writeFileSync(path.join(out, `${prefix}measures.json`), JSON.stringify({ results, errors }, null, 2));
+  if (evidence) {
+    const shots = results.filter((r) => !r.error).map((r) => ({
+      label: r.viewport, size: r.viewport === '390' ? 'phone' : 'desktop',
+      slug: `${r.page}-${r.state}`, pageLabel: r.page,
+      path: cfg.pages.find((p) => p.name === r.page && (p.state || 'default') === r.state).path,
+      file: `${r.file}-full.png`,
+      overflow: r.measures.sideways, scrollWidth: r.measures.scrollWidth, clientWidth: r.measures.clientWidth,
+      widestRight: r.measures.widestRight, pngWidth: r.measures.pngWidth, innerWidth: r.measures.innerWidth,
+      errors: errors.filter((e) => e.startsWith(`${r.viewport}:`)),
+    }));
+    fs.writeFileSync(path.join(out, `${evidence}.json`), JSON.stringify({ shots }, null, 2));
+  }
   const lines = ['| page | state | vp | fails | notes |', '|---|---|---|---|---|'];
+  const seen = new Set();
   for (const r of results) {
     if (r.error) { lines.push(`| ${r.page} | ${r.state} | ${r.viewport} | ERROR | ${r.error} |`); continue; }
     const fails = r.verdicts.filter(([, , ok]) => ok === false).map(([k, v]) => `${k}: ${v}`);
     const info = r.verdicts.filter(([, , ok]) => ok === null).map(([k, v]) => `${k}: ${v}`);
     lines.push(`| ${r.page} | ${r.state} | ${r.viewport} | ${fails.join('; ') || 'none'} | ${info.join('; ')} |`);
+    r.measures.signals.forEach((s) => seen.add(s));
   }
+  const WORDS = {
+    scroll: 'scroll: the page scrolls sideways.',
+    clipped: 'clipped: content is wider than the screen but hidden by overflow-x, so it does not scroll and is cut off.',
+    image: 'image: the full-page screenshot came out wider than the screen.',
+  };
+  if (seen.size) lines.push('', ...[...seen].map((s) => `- ${WORDS[s]}`));
   if (errors.length) lines.push('', 'Page errors:', ...errors.map((e) => `- ${e}`));
-  fs.writeFileSync(path.join(out, 'summary.md'), lines.join('\n') + '\n');
+  fs.writeFileSync(path.join(out, `${prefix}summary.md`), lines.join('\n') + '\n');
   console.log(lines.join('\n'));
-  console.log(`\nScreenshots + measures.json in ${out}`);
+  console.log(`\nScreenshots + ${prefix}measures.json in ${out}`);
 })();

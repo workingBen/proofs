@@ -6,7 +6,7 @@
 const CHROME_ARGS = ["--disable-features=MacAppCodeSignClone"];
 const HOW_TO =
   "Install Google Chrome, or point PROOFS_BROWSER_CHANNEL at another installed channel. " +
-  "No browser download is needed: PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install --prefix ~/.cache/proofs-playwright playwright@1.61.1";
+  "No browser download is needed: npm install --prefix ~/.cache/proofs-playwright playwright@1.61.1";
 
 async function launchChromium(chromium, env) {
   const channel = env && env.PROOFS_BROWSER_CHANNEL;

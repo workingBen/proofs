@@ -126,7 +126,7 @@ class SmokeGuidance(unittest.TestCase):
     def test_the_builder_prints_the_install_line_the_sentence_points_to(self):
         src = (REPO / "shared" / "review_page" / "review_page.py").read_text()
         self.assertIn("Playwright not found. \" + HOW_TO_PY", src)
-        self.assertIn("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install", src)
+        self.assertIn("npm install --prefix ~/.cache/proofs-playwright playwright@1.61.1", src)
 
 
 class ReadmeInstall(unittest.TestCase):

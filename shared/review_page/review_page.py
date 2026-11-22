@@ -1131,8 +1131,8 @@ def warnings(path):
 
 
 HOW_TO_PY = ("Install Google Chrome, or point PROOFS_BROWSER_CHANNEL at another installed channel. "
-             "No browser download is needed: PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install "
-             "--prefix ~/.cache/proofs-playwright playwright@1.61.1")
+             "No browser download is needed: "
+             "npm install --prefix ~/.cache/proofs-playwright playwright@1.61.1")
 
 
 def find_playwright(arg):

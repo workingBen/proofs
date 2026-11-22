@@ -1,6 +1,6 @@
 ---
 name: pr-qa
-version: 1.7.0
+version: 1.7.1
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/skills/pr-qa/scripts/pr_qa_page.py *)
@@ -128,8 +128,9 @@ no token, no network, or no open PR, so it can never keep a session from startin
    ```
 
    The helper is not pre-approved, so the user may get one permission prompt. Exit
-   codes: 3 the server never answered (read `.proofs/server.log`), 4 it exited
-   early, 5 another run holds the lock; anything else is the capture's own. Exit 0
+   codes: 3 the server never answered (read the log: `.proofs/base/.proofs/server.log` for the before run, because the
+   helper writes it under `--cwd`, and `.proofs/server.log` for the after run), 4 it
+   exited early, 5 another run holds the lock; anything else is the capture's own. Exit 0
    does not prove the page is right: read each PNG and confirm it shows the route
    you meant. A project's own Playwright script also works as the capture command
    after `--`; launch Chrome with `--disable-features=MacAppCodeSignClone` in its
@@ -258,7 +259,8 @@ order; each works where the other does not:
 
 1. Run it with the project's module path set, from the project root:
    `NODE_PATH=./node_modules node <your capture script>` (or keep the script inside
-   the project).
+   the project). For the before run that root is `.proofs/base`, where the
+   dependencies were installed: use `NODE_PATH=.proofs/base/node_modules`.
 2. If the project has no `package.json` at all, find the copy in the `npx` cache:
 
 ```js
@@ -465,7 +467,8 @@ pushes and deploys is in its own notes; follow them.
   out and migrated; identical before/after pairs are the giveaway.
 - **Leaving the repo dirty.** Migrations rolled back, the main branch checked out,
   the base worktree removed with `git worktree remove .proofs/base`
-  (add `--force` if the install left files behind), so `git worktree list` is clean. Someone else may be using this machine.
+  (add `--force` if the install left files behind), so `git worktree list` is
+  clean. Someone else may be using this machine.
 - **Recommending a merge you did not run.** If the app would not boot, say that.
 - **Burying the bad news.** Worst PR first, verdict in the table at the top.
 - **Publishing images you have not looked at.** Read every screenshot before it goes

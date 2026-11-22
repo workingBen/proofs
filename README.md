@@ -60,7 +60,7 @@ Example of the output; run the command above to get yours. `/YOUR/HOME` stands f
 }
 ```
 
-The `Skill(proofs:*)` line matters: skills that pre-approve their own scripts make Claude Code ask before the skill itself runs, and `claude -p` refuses it outright. The `*` in the middle of each Bash line is the plugin's version folder, so the rules keep working after an update. A Bash rule only covers a command that is that script alone: `review_page.py ... ; something-else` still asks.
+The `Skill(proofs:*)` line matters: skills that pre-approve their own scripts make Claude Code ask before the skill itself runs, and `claude -p` refuses it outright. The `*` in the middle of each Bash line is the plugin's version folder, so the rules keep working after an update. Claude Code matches a rule against the whole command, so the skills run one command per Bash call: no pipes, redirects, `;`, `&&`, `cd`, `$(...)` or `VAR=` in front. Any of those makes it ask (or, in `claude -p`, refuse), even when every part on its own is allowed.
 
 The command leaves five scripts out, on purpose, so they still ask every time: `todos_apply.py` and `todos_adopt.py` (rewrite `TODO.md`), `install_session_hook.py` (edits `.claude/settings.json`), `pr_qa_collect.py` (calls GitHub with your token) and `with_server.py` (starts a dev server from whatever command it is given). Don't add them by hand; the optional line below is the one exception.
 
@@ -71,6 +71,14 @@ python3 "$(ls -d "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/plugins/cache/proofs/proo
 ```
 
 Leave it out for normal, attended use: Claude Code then asks before each server start, and you can see the command it is about to run.
+
+**Allow your project's commands too (optional, never part of the standard block).** The skills also run a few commands of your project's, not the plugin's: the install (`npm install`, `npm ci`), the type check (`npx tsc --noEmit`), the pr-qa base worktree (`git fetch origin`, `git worktree add` and `git worktree remove` on `.proofs/base`) and the one-time Playwright install into `~/.cache/proofs-playwright`. Add `--project` to print just those rules:
+
+```
+python3 "$(ls -d "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/plugins/cache/proofs/proofs/*/ | sort -V | tail -1)shared/allow_block.py" --project
+```
+
+The one risk: `npm install` and `npm ci` run your project's package scripts, so only turn this on for a project you trust. These rules hold no home path, so they can go in `.claude/settings.local.json` (the default) or, if the team wants them, the committed `.claude/settings.json`. It does not run dev servers or any other command.
 <!-- allow-proofs:end -->
 
 Screenshots shrink automatically when ImageMagick or libwebp (`cwebp`) is installed: they're converted to WebP as each page is built. Without either, pages still work, just heavier.

@@ -147,6 +147,39 @@ class AllowBlockTest(unittest.TestCase):
         r = self._cli("/opt/claude-home", None, "--lines", "--headless")
         self.assertEqual(json.loads("[" + r.stdout + "]"), allow_block.rules("/opt/claude-home", None, headless=True))
 
+    def test_project_flag_prints_only_the_project_rules(self):
+        r = self._cli("/opt/claude-home", None, "--project")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(json.loads(r.stdout), {"permissions": {"allow": allow_block.PROJECT_RULES}})
+        r = self._cli("/opt/claude-home", None, "--lines", "--project")
+        self.assertEqual(json.loads("[" + r.stdout + "]"), allow_block.PROJECT_RULES)
+        self.assertNotIn("/opt/claude-home", r.stdout)
+
+    def test_project_rules_are_never_in_the_default_or_headless_output(self):
+        for headless in (False, True):
+            plain = allow_block.rules("/opt/claude-home", None, headless=headless)
+            self.assertFalse(set(plain) & set(allow_block.PROJECT_RULES))
+        self.assertFalse(set(readme_block()["permissions"]["allow"]) & set(allow_block.PROJECT_RULES))
+
+    def test_project_and_headless_do_not_mix(self):
+        self.assertEqual(self._cli("/opt/claude-home", None, "--project", "--headless").returncode, 2)
+
+    def test_readme_offers_the_project_block_labeled_and_apart(self):
+        text = (REPO / "README.md").read_text()
+        section = text[text.index("<!-- allow-proofs:start -->"):text.index("<!-- allow-proofs:end -->")]
+        self.assertIn("Allow your project's commands too (optional", section)
+        self.assertIn("--project", section)
+        self.assertGreater(section.index("--project"), section.index("--headless"))
+        self.assertIn("npm install", section)
+        self.assertIn("package scripts", section)
+        self.assertIn(".claude/settings.local.json", section.split("Allow your project's commands too")[1])
+        self.assertIn("no home path", section.split("Allow your project's commands too")[1])
+
+    def test_readme_states_the_one_command_per_call_rule(self):
+        text = (REPO / "README.md").read_text()
+        self.assertIn("one command per Bash call", text)
+        self.assertNotIn("that script alone", text)
+
     def test_cli_rejects_unknown_flags(self):
         self.assertEqual(self._cli("/opt/claude-home", None, "--everything").returncode, 2)
 

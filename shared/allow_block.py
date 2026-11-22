@@ -2,13 +2,17 @@
 """Print the Claude Code permission rules that let Proofs read its own files and run
 its own page builders without asking, for this machine.
 
-    python3 <plugin root>/shared/allow_block.py [--lines] [--headless]
+    python3 <plugin root>/shared/allow_block.py [--lines] [--headless | --project]
 
 Prints {"permissions": {"allow": [...]}} for a settings file that has no permissions
 key yet, or with --lines just the rules, comma-separated, to add to an existing
 permissions.allow list. --headless adds one more rule, for unattended (claude -p) runs
 only: it pre-approves shared/capture/with_server.py, which runs whatever --start command
-it is given, so it is never in the standard output. Use ~/.claude/settings.json (every
+it is given, so it is never in the standard output. --project prints a separate,
+opt-in block for the project's own commands (installs, the type check, the pr-qa base
+worktree, the one-time Playwright install) and nothing else; it holds no home path, so
+it may go in a committed .claude/settings.json, but its npm install and npm ci run the
+project's package scripts. Use ~/.claude/settings.json (every
 project; with a custom $CLAUDE_CONFIG_DIR, that folder's settings.json) or a project's
 .claude/settings.local.json, never a committed .claude/settings.json: the Bash lines hold
 your home folder.
@@ -31,6 +35,19 @@ CACHE = "plugins/cache/proofs"
 BASH_RULE = re.compile(r"Bash\((python3|node) " + re.escape(ROOT) + r"/([\w./-]+) \*\)")
 # A skill that declares allowed-tools makes Claude Code ask before the Skill call itself.
 SKILL_RULE = "Skill(proofs:*)"
+# Opt-in (--project): the project's own commands the skills run. No home path in any rule, and
+# nothing that runs an arbitrary command (no with_server.py, no npm run, no bare wildcard).
+# npm install and npm ci run the project's package scripts, which is the one risk.
+PROJECT_RULES = [
+    "Bash(npm install)",
+    "Bash(npm ci)",
+    "Bash(npm ci --prefix .proofs/base/*)",
+    "Bash(npx tsc --noEmit)",
+    "Bash(git fetch origin)",
+    "Bash(git worktree add .proofs/base *)",
+    "Bash(git worktree remove --force .proofs/base)",
+    "Bash(npm install --prefix ~/.cache/proofs-playwright playwright@1.61.1)",
+]
 # Starts a dev server from an arbitrary command, so it is opt-in (--headless), never default.
 HEADLESS_SCRIPT = ("python3", "shared/capture/with_server.py")
 
@@ -82,14 +99,18 @@ def rules(home, config_dir, headless=False):
 
 def main(argv):
     args = argv[1:]
-    if len(set(args)) != len(args) or not set(args) <= {"--lines", "--headless"}:
+    if (len(set(args)) != len(args) or not set(args) <= {"--lines", "--headless", "--project"}
+            or {"--headless", "--project"} <= set(args)):
         print(__doc__.strip(), file=sys.stderr)
         return 0 if args in (["-h"], ["--help"]) else 2
     home = os.environ.get("HOME") or str(Path.home())
     config_dir = os.environ.get("CLAUDE_CONFIG_DIR") or None
     if config_dir:
         config_dir = os.path.abspath(os.path.expanduser(config_dir))
-    allow = rules(home, config_dir, headless="--headless" in args)
+    if "--project" in args:
+        allow = list(PROJECT_RULES)
+    else:
+        allow = rules(home, config_dir, headless="--headless" in args)
     if "--lines" in args:
         print(",\n".join(json.dumps(r) for r in allow))
     else:

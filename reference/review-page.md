@@ -6,9 +6,11 @@ builder writes one self-contained HTML page with every mechanic already built an
 tested. Do not hand-write the page's JavaScript.
 
 ```bash
-python3 <plugin root>/shared/review_page/review_page.py spec.json --out page.html   # build, then check
-python3 <plugin root>/shared/review_page/review_page.py --smoke page.html          # click through in Chromium
+python3 <plugin root>/shared/review_page/review_page.py spec.json --out page.html
+python3 <plugin root>/shared/review_page/review_page.py --smoke page.html
 ```
+
+The first builds the page and checks it; the second clicks through it in Chromium.
 
 Use the absolute plugin root your skill showed you, unquoted, so the allow rule matches. Write the spec with your file tool; do not write a script to generate it, since every new script is one more approval.
 

@@ -1,6 +1,6 @@
 ---
 name: pr-qa
-version: 1.7.4
+version: 1.7.5
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/skills/pr-qa/scripts/pr_qa_page.py *)
@@ -121,8 +121,14 @@ no token, no network, or no open PR, so it can never keep a session from startin
    **install dependencies there** with the project's own install (`npm ci`,
    `bundle install`, ...). Do not symlink `node_modules`: Next.js with Turbopack
    returned HTTP 500 through a symlinked one. Build the stylesheet there too.
-   Capture the before pair through the helper (step 3) with `--cwd <base-dir>`.
-3. **Run the branch for real**: check it out, migrate if needed, and capture the
+   Capture the before pair through the helper (step 3) with `--cwd <base-dir>` and
+   read both PNGs. **Then remove the base worktree at once**
+   (`git worktree remove --force <base-dir>`, the literal path), before you check
+   out the branch, migrate or run any tests. It is a full second copy of the project
+   inside the repo: `info/exclude` hides it from git, not from test runners, linters
+   or `tsc` that walk the tree, so the PR's test run could pick up the base's files.
+3. **Run the branch for real**: with the before pair taken and `<base-dir>` removed,
+   check it out, migrate if needed, and capture the
    after pair through the same helper from the PR checkout (no `--cwd`). Both
    shots use the helper, which starts the server, waits for the URL, runs the
    capture and always stops the server, so nothing dies between turns.
@@ -487,7 +493,8 @@ pushes and deploys is in its own notes; follow them.
 - **Screenshotting the main branch twice.** Confirm the branch is actually checked
   out and migrated; identical before/after pairs are the giveaway.
 - **Leaving the repo dirty.** Migrations rolled back, the main branch checked out,
-  the base worktree removed with `git worktree remove <base-dir>` (default
+  the base worktree removed (step 2 removes it right after the before shots; check
+  it is gone) with `git worktree remove <base-dir>` (default
   `.proofs/base`; use the literal path)
   (add `--force` if the install left files behind), so `git worktree list` is
   clean. Someone else may be using this machine.

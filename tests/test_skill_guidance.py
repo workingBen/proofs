@@ -168,6 +168,14 @@ class PrQaGuidance(unittest.TestCase):
     def test_pr_qa_cleanup_removes_the_base_worktree(self):
         self.assertIn("git worktree remove <base-dir>", section("pr-qa", "Common Mistakes"))
 
+    def test_pr_qa_removes_the_base_worktree_before_the_branch_and_its_tests(self):
+        text = section("pr-qa", "The Sequence")
+        remove = text.index("**Then remove the base worktree at once**")
+        self.assertIn("git worktree remove --force <base-dir>", text[remove:remove + 200])
+        self.assertLess(text.index("--cwd <base-dir>"), remove)
+        self.assertLess(remove, text.index("3. **Run the branch for real**"))
+        self.assertLess(remove, text.index("4. **Run the PR's own tests**"))
+
 
 if __name__ == "__main__":
     unittest.main()

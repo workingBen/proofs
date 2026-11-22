@@ -214,6 +214,17 @@ class ScanCase(unittest.TestCase):
         self.write("a.md", "ask jo" + AT + "anthropic.com\n")
         self.assertIn("a.md:1: email", self.run_scan("--all").stdout)
 
+    def test_npm_versions_are_not_emails(self):
+        self.write("a.md", "npm install playwright" + AT + "1.61.1 and " + AT + "scope/pkg" + AT + "2.0.0\n")
+        self.assertEqual(self.run_scan("--all").returncode, 0)
+
+    def test_real_addresses_still_flagged(self):
+        self.write("a.md", "someone" + AT + "example.com\n")
+        self.write("b.md", "a.b" + AT + "sub.example.io\n")
+        r = self.run_scan("--all")
+        self.assertIn("b.md:1: email", r.stdout)
+        self.assertNotEqual(r.returncode, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

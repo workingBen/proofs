@@ -18,6 +18,7 @@ BINARY_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".pdf", ".mp4", 
               ".webm", ".mp3", ".wav", ".woff", ".woff2", ".ttf", ".otf", ".zip", ".gz"}
 
 EMAIL = re.compile(r"([\w.+-]+@([\w-]+(?:\.[\w-]+)+))")
+DIGIT_DOMAIN = re.compile(r"^[\d.]+$")
 EMAIL_OK = {"example.com", "example.org", "users.noreply.github.com"}  # whole domains
 EMAIL_OK_ADDR = {"noreply@anthropic.com"}  # exact addresses only
 PATTERNS = [
@@ -66,7 +67,10 @@ def categories(line, deny):
     found = []
     if deny.search(line):
         found.append("deny-list")
+    # A domain of only digits and dots is an npm name@1.2.3 version, not an address:
+    # real addresses end in a letter TLD.
     if any(m.group(2).lower() not in EMAIL_OK and m.group(1).lower() not in EMAIL_OK_ADDR
+           and not DIGIT_DOMAIN.match(m.group(2))
            for m in EMAIL.finditer(line)):
         found.append("email")
     for name, rx in PATTERNS:

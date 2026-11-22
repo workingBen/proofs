@@ -2,13 +2,16 @@
 """Print the Claude Code permission rules that let Proofs read its own files and run
 its own page builders without asking, for this machine.
 
-    python3 <plugin root>/shared/allow_block.py [--lines]
+    python3 <plugin root>/shared/allow_block.py [--lines] [--headless]
 
 Prints {"permissions": {"allow": [...]}} for a settings file that has no permissions
 key yet, or with --lines just the rules, comma-separated, to add to an existing
-permissions.allow list. Use ~/.claude/settings.json (every project) or a project's
-.claude/settings.local.json, never a committed .claude/settings.json: the Bash lines
-hold your home folder.
+permissions.allow list. --headless adds one more rule, for unattended (claude -p) runs
+only: it pre-approves shared/capture/with_server.py, which runs whatever --start command
+it is given, so it is never in the standard output. Use ~/.claude/settings.json (every
+project; with a custom $CLAUDE_CONFIG_DIR, that folder's settings.json) or a project's
+.claude/settings.local.json, never a committed .claude/settings.json: the Bash lines hold
+your home folder.
 
 The scripts come from each skill's allowed-tools list, read at run time, so there is
 no second list to keep in step. Claude Code fills in ~ in Read rules but matches Bash
@@ -28,6 +31,8 @@ CACHE = "plugins/cache/proofs"
 BASH_RULE = re.compile(r"Bash\((python3|node) " + re.escape(ROOT) + r"/([\w./-]+) \*\)")
 # A skill that declares allowed-tools makes Claude Code ask before the Skill call itself.
 SKILL_RULE = "Skill(proofs:*)"
+# Starts a dev server from an arbitrary command, so it is opt-in (--headless), never default.
+HEADLESS_SCRIPT = ("python3", "shared/capture/with_server.py")
 
 
 def _allowed_tools(text):
@@ -58,29 +63,34 @@ def scripts(plugin=PLUGIN):
     return sorted(found)
 
 
-def rules(home, config_dir):
-    """Read rule first, then the Skill rule, then one Bash rule per script, sorted."""
+def rules(home, config_dir, headless=False):
+    """Read rule first, then the Skill rule, then one Bash rule per script, sorted.
+
+    headless=True appends one rule for the capture helper, for unattended runs only."""
     if config_dir:
         base = config_dir.rstrip("/")
         read = "Read(/%s/%s/**)" % (base, CACHE)
     else:
         base = home.rstrip("/") + "/.claude"
         read = "Read(~/.claude/%s/**)" % CACHE
-    bash = sorted("Bash(%s %s/%s/proofs/*/%s *)" % (interp, base, CACHE, path) for interp, path in scripts())
-    return [read, SKILL_RULE] + bash
+    def bash_rule(interp, path):
+        return "Bash(%s %s/%s/proofs/*/%s *)" % (interp, base, CACHE, path)
+    bash = sorted(bash_rule(interp, path) for interp, path in scripts())
+    extra = [bash_rule(*HEADLESS_SCRIPT)] if headless else []
+    return [read, SKILL_RULE] + bash + extra
 
 
 def main(argv):
     args = argv[1:]
-    if args not in ([], ["--lines"]):
+    if len(set(args)) != len(args) or not set(args) <= {"--lines", "--headless"}:
         print(__doc__.strip(), file=sys.stderr)
         return 0 if args in (["-h"], ["--help"]) else 2
     home = os.environ.get("HOME") or str(Path.home())
     config_dir = os.environ.get("CLAUDE_CONFIG_DIR") or None
     if config_dir:
         config_dir = os.path.abspath(os.path.expanduser(config_dir))
-    allow = rules(home, config_dir)
-    if args == ["--lines"]:
+    allow = rules(home, config_dir, headless="--headless" in args)
+    if "--lines" in args:
         print(",\n".join(json.dumps(r) for r in allow))
     else:
         print(json.dumps({"permissions": {"allow": allow}}, indent=2))

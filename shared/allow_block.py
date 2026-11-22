@@ -54,11 +54,9 @@ PROJECT_RULES = [
     # The default base folder only; a PROOFS_BASE_DIR base is an absolute path, so it still asks.
     "Bash(cp .env .proofs/base/*)",
     "Bash(git fetch origin)",
-    # --detach: works when the base branch is the one checked out in the project.
+    # --detach: works when the base branch is the one checked out in the project. With no GitHub
+    # PR the after shot uses the same slot for the branch, so nothing switches your checkout.
     "Bash(git worktree add --detach .proofs/base *)",
-    # pr-qa with no GitHub PR: the after shot's branch, in place of gh pr checkout.
-    # (git switch refuses to drop local changes unless told to with --discard-changes.)
-    "Bash(git switch *)",
     "Bash(git worktree remove --force .proofs/base)",
     "Bash(npm install --prefix ~/.cache/proofs-playwright playwright@1.61.1)",
 ]
@@ -127,11 +125,15 @@ def local_roots(home, config_dir):
         if not isinstance(source, dict) or source.get("source") != "directory" or not source.get("path"):
             continue
         folder = Path(source["path"])
+        # Only a marketplace that lists a plugin named proofs; an unreadable one is skipped,
+        # so an unrelated local marketplace never gets proofs rules.
         try:
             plugins = json.loads((folder / ".claude-plugin" / "marketplace.json").read_text()).get("plugins", [])
         except (OSError, ValueError, AttributeError):
-            plugins = []
-        sub = next((p.get("source") for p in plugins if isinstance(p, dict) and p.get("name") == "proofs"), "./")
+            continue
+        if not isinstance(plugins, list):
+            continue
+        sub = next((p.get("source") for p in plugins if isinstance(p, dict) and p.get("name") == "proofs"), None)
         if not isinstance(sub, str):
             continue
         root = os.path.normpath(str(folder / sub))

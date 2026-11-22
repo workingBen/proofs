@@ -120,6 +120,31 @@ Proofs is a small, tested codebase, not just a folder of prompts.
 
 [Superpowers](https://github.com/obra/superpowers) is the best-known workflow skill set for Claude Code (brainstorming, plans, writing tests first, subagents), and it is excellent. It works as text in the terminal. Proofs sits next to it as the visual decision layer, not a rival: use Superpowers to plan and build, and Proofs to see and decide. This project has no affiliation with or endorsement from Superpowers.
 
+## All 12 skills
+
+Grouped by what you're doing. Each name opens that skill's page, with screenshots and a live example.
+
+**See it and decide**
+
+- [**design-review**](https://workingben.github.io/proofs/design-review.html) · *Start here*: Your live page next to one to three mockups per section. You pick, Claude builds it.
+- [**pr-qa**](https://workingben.github.io/proofs/pr-qa.html) · *Critical for UI changes*: Before and after screenshots of each open pull request, with one decision per PR.
+- [**questions**](https://workingben.github.io/proofs/questions.html): Claude's questions on a page, with real buttons, its pick marked and one Copy.
+- [**article-copy-edit**](https://workingben.github.io/proofs/article-copy-edit.html): Line edits shown on your real article, with a claims check first.
+- [**photo-picker**](https://workingben.github.io/proofs/photo-picker.html): Licensed photo candidates for every spot that needs one, in a gallery you choose from.
+
+**Check it**
+
+- [**visual-qa**](https://workingben.github.io/proofs/visual-qa.html): Measures pages at three screen sizes, finds layout problems, and designs the fixes.
+- [**qa-checklist**](https://workingben.github.io/proofs/qa-checklist.html): The checks only you can run, each marked Pass, Fail or Couldn't test.
+- [**style-guide**](https://workingben.github.io/proofs/style-guide.html): Audits the whole site for one consistent look and saves the rules you accept.
+
+**Keep track**
+
+- [**working-log**](https://workingben.github.io/proofs/working-log.html) · *Most used*: One page per session: what's waiting on you first, then the log, with one Copy button.
+- [**review-cycle**](https://workingben.github.io/proofs/review-cycle.html): Report bugs and ideas as they come; each is fixed, reviewed or saved for later.
+- [**todos**](https://workingben.github.io/proofs/todos.html): Your to-do list as a tickable page. Done items are checked before they are archived.
+- [**changelog**](https://workingben.github.io/proofs/changelog.html): A "What's new" page split by month, updated at the end of every session that ships something.
+
 ## Four skills up close
 
 ### design-review: see your live page beside real mockups, then approve what ships
@@ -171,31 +196,6 @@ The claims check is set up for your field: medical and wellness promises, financ
 - Risky claims flagged before anything else
 
 [Read the article-copy-edit page](https://workingben.github.io/proofs/article-copy-edit.html)
-
-## All 12 skills
-
-Grouped by what you're doing. Each name opens that skill's page, with screenshots and a live example.
-
-**See it and decide**
-
-- [**design-review**](https://workingben.github.io/proofs/design-review.html) · *Start here*: Your live page next to one to three mockups per section. You pick, Claude builds it.
-- [**pr-qa**](https://workingben.github.io/proofs/pr-qa.html) · *Critical for UI changes*: Before and after screenshots of each open pull request, with one decision per PR.
-- [**questions**](https://workingben.github.io/proofs/questions.html): Claude's questions on a page, with real buttons, its pick marked and one Copy.
-- [**article-copy-edit**](https://workingben.github.io/proofs/article-copy-edit.html): Line edits shown on your real article, with a claims check first.
-- [**photo-picker**](https://workingben.github.io/proofs/photo-picker.html): Licensed photo candidates for every spot that needs one, in a gallery you choose from.
-
-**Check it**
-
-- [**visual-qa**](https://workingben.github.io/proofs/visual-qa.html): Measures pages at three screen sizes, finds layout problems, and designs the fixes.
-- [**qa-checklist**](https://workingben.github.io/proofs/qa-checklist.html): The checks only you can run, each marked Pass, Fail or Couldn't test.
-- [**style-guide**](https://workingben.github.io/proofs/style-guide.html): Audits the whole site for one consistent look and saves the rules you accept.
-
-**Keep track**
-
-- [**working-log**](https://workingben.github.io/proofs/working-log.html) · *Most used*: One page per session: what's waiting on you first, then the log, with one Copy button.
-- [**review-cycle**](https://workingben.github.io/proofs/review-cycle.html): Report bugs and ideas as they come; each is fixed, reviewed or saved for later.
-- [**todos**](https://workingben.github.io/proofs/todos.html): Your to-do list as a tickable page. Done items are checked before they are archived.
-- [**changelog**](https://workingben.github.io/proofs/changelog.html): A "What's new" page split by month, updated at the end of every session that ships something.
 
 ## FAQ
 

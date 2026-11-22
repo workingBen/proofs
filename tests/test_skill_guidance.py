@@ -140,6 +140,14 @@ class ReadmeInstall(unittest.TestCase):
         self.assertIn("Allow Proofs", after_install)
         self.assertIn("will not start", after_install)
 
+    def test_readme_says_pr_qa_in_claude_p_needs_both_blocks(self):
+        # Final review M1.
+        self.assertIn("For pr-qa in `claude -p`, use `--headless --project`", (REPO / "README.md").read_text())
+
+    def test_readme_says_to_rerun_after_a_local_marketplace_change(self):
+        # Final review M6: the folder rules record the path once.
+        self.assertIn("rerun it after adding or moving a local marketplace", (REPO / "README.md").read_text())
+
 
 class ChromeLines(unittest.TestCase):
     def test_every_chrome_line_turns_off_code_sign_clone(self):
@@ -228,8 +236,36 @@ class PrQaGuidance(unittest.TestCase):
         text = section("pr-qa", "Default path")
         fence = text.split("```bash", 1)[1].split("```", 1)[0]
         self.assertIn("git worktree add --detach .proofs/base origin/<base>", fence)
-        self.assertIn("git switch <branch>", text)
-        self.assertIn("in place of `gh pr checkout <n>`", text)
+        # Final review I2: the after shot comes from a second detached worktree, never a switch.
+        self.assertNotIn("git switch", self.pr_qa())
+        local = text.split("**No GitHub PR", 1)[1].split("\n\n", 1)[0]
+        self.assertIn("11 Bash calls", local)
+        self.assertIn("in place of `gh pr checkout <n>`", local)
+        self.assertIn("git worktree add --detach .proofs/base <branch>", local)
+        self.assertIn("--cwd .proofs/base/<app-dir>", local)
+        self.assertIn("never touched", local)
+
+    def test_default_path_skips_the_install_without_package_json(self):
+        # Final review M3: a static site has no package.json, so npm ci only fails.
+        self.assertIn("has no `package.json`", section("pr-qa", "Default path"))
+
+    def test_unattended_run_prints_the_page_path_instead_of_open(self):
+        # Final review I3: `open` has no rule, so it is a denial in claude -p.
+        line = "In an unattended run (`claude -p`), do not open the page; print its path."
+        self.assertIn(line, (REPO / "reference" / "where-the-page-goes.md").read_text())
+        self.assertIn("print its path", section("pr-qa", "Default path"))
+
+    def test_own_tests_need_preapproval_in_claude_p(self):
+        # Final review M4: the project's test command is in no rule.
+        step5 = section("pr-qa", "Default path").split("5. **Only then", 1)[1].split("\n", 1)[0]
+        self.assertIn("in `claude -p`, only if their command is pre-approved", step5)
+
+    def test_jsdom_verification_is_for_hand_built_pages(self):
+        # Final review I4: pr_qa_page.py is tested by its own suite; no jsdom pass after the default path.
+        artifact = section("pr-qa", "The Artifact")
+        self.assertTrue(artifact.strip().startswith(
+            "This section is for a page you build by hand; `pr_qa_page.py` already does all of it."), artifact[:200])
+        self.assertIn("**Verify before publishing (a hand-built page only).**", artifact)
 
     def test_every_worktree_remove_says_force(self):
         # Step 3 removes the base worktree with --force; Common Mistakes must give the same command.
@@ -306,6 +342,14 @@ class HouseRules(unittest.TestCase):
     def test_house_rules_reference_exists(self):
         text = (REPO / "reference" / "house-rules.md").read_text()
         self.assertIn("~/.cache/proofs-playwright", text)
+
+    def test_stay_in_two_folders_names_the_base_dir_exception(self):
+        # Final review M2: pr-qa's PROOFS_BASE_DIR base folder is outside the project by design.
+        exception = "and pr-qa's `PROOFS_BASE_DIR` base folder, when it is set"
+        for path in [REPO / "reference" / "house-rules.md"] + [
+                REPO / "skills" / s / "SKILL.md" for s in HOUSE_RULE_SKILLS]:
+            with self.subTest(path=path.name if path.name != "SKILL.md" else path.parent.name):
+                self.assertIn(exception, path.read_text())
 
     def test_no_phone_window_size_below_500(self):
         for path in guidance_files():

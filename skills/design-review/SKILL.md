@@ -1,6 +1,6 @@
 ---
 name: design-review
-version: 1.8.1
+version: 1.8.2
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -34,12 +34,11 @@ The "before" is a screenshot of the page as the running app serves it today. Do 
 1. **Find the project's start command.** Look in the project's `CLAUDE.md` or README first, then `package.json` scripts, `Procfile`, `bin/dev`, or `manage.py runserver`. If none of them gives one, **ask the user** for it; do not switch to screenshots on your own. If dependencies are missing (no `node_modules`, no installed bundle), install them with the project's own install command; that is not a reason to fall back to repo images.
    **Pick a free port.** Check that nothing answers on it (`curl -s -o /dev/null http://localhost:PORT/` fails), and start the server on that port. The helper treats a server that already answers at `--url` as ready and leaves it running, so a stale or unrelated app on a reused port would be captured as the "before" and left running.
 2. **Rebuild first.** If the project compiles its styles (a CSS build step), run that build before the capture, or the screenshot shows the old look.
-3. **Start, wait, capture and stop in one call to the helper.** It starts the server, waits until the URL answers, runs your capture command with `PROOFS_BASE_URL` set to that URL, then always stops the server. It is not pre-approved, so the user may get one permission prompt; that is expected. Example, with Chrome from the command line. Set `CHROME` in the same command: a variable set in an earlier Bash call is gone by the next one. Pick the binary that exists: `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome` (macOS), `google-chrome`, `google-chrome-stable` or `chromium` (Linux).
+3. **Start, wait, capture and stop in one call to the helper.** It starts the server, waits until the URL answers, runs your capture command with `PROOFS_BASE_URL` set to that URL, then always stops the server. It is not pre-approved, so the user may get one permission prompt; that is expected. Example, with Chrome from the command line. Set `CHROME` inside the `sh -c` capture command, never in front of `python3`: the command has to start with `python3 ${CLAUDE_PLUGIN_ROOT}/shared/capture/with_server.py` or it will not match the allow rule for unattended runs, and a variable set in an earlier Bash call is gone by the next one anyway. Pick the binary that exists: `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome` (macOS), `google-chrome`, `google-chrome-stable` or `chromium` (Linux, e.g. `CHROME=google-chrome;`).
 
 ```bash
-CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
 python3 ${CLAUDE_PLUGIN_ROOT}/shared/capture/with_server.py --start "npm run dev -- -p 3311" \
-  --url http://localhost:3311/ -- sh -c '"$CHROME" --headless --disable-features=MacAppCodeSignClone \
+  --url http://localhost:3311/ -- sh -c 'CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"; "$CHROME" --headless --disable-features=MacAppCodeSignClone \
   --hide-scrollbars --virtual-time-budget=8000 --window-size=390,2200 --screenshot=before-390.png "$PROOFS_BASE_URL"'
 ```
 

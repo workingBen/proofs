@@ -1,6 +1,6 @@
 ---
 name: pr-qa
-version: 1.7.3
+version: 1.7.4
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/skills/pr-qa/scripts/pr_qa_page.py *)
@@ -133,14 +133,15 @@ no token, no network, or no open PR, so it can never keep a session from startin
      through its own helper call; if you ever run both servers at once, give them
      two different ports. A server already answering at `--url` is treated as ready
      and left running, so a reused port would be captured by mistake.
-   - **Set `CHROME` in the same command** as the helper call (a variable from an
-     earlier Bash call is gone): `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
-     on macOS, `google-chrome`, `google-chrome-stable` or `chromium` on Linux.
+   - **Set `CHROME` inside the `sh -c` capture command**, never in front of
+     `python3`: the command has to start with `python3 ${CLAUDE_PLUGIN_ROOT}/shared/capture/with_server.py`
+     to match the allow rule for unattended runs, and a variable from an earlier Bash
+     call is gone anyway. Use `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
+     on macOS, `google-chrome`, `google-chrome-stable` or `chromium` on Linux (e.g. `CHROME=google-chrome;`).
 
    ```bash
-   CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
    python3 ${CLAUDE_PLUGIN_ROOT}/shared/capture/with_server.py --cwd <base-dir> --start "npm run dev -- -p 3411" \
-     --url http://localhost:3411/ -- sh -c '"$CHROME" --headless --disable-features=MacAppCodeSignClone \
+     --url http://localhost:3411/ -- sh -c 'CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"; "$CHROME" --headless --disable-features=MacAppCodeSignClone \
      --hide-scrollbars --virtual-time-budget=8000 --window-size=390,2200 --screenshot=before-390.png "$PROOFS_BASE_URL"'
    ```
 

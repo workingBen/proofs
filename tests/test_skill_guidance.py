@@ -1,4 +1,8 @@
+import contextlib
+import importlib.util
+import io
 import re
+import shlex
 import unittest
 from pathlib import Path
 
@@ -58,8 +62,46 @@ class DesignReviewGuidance(unittest.TestCase):
         for flag in flags:
             self.assertIn(f'"{flag}"', helper)
 
-    def test_chrome_is_set_in_the_same_command(self):
-        self.assertRegex(self.step2(), r'CHROME="[^"]+" \\\n?\s*python3')
+    def test_chrome_is_set_inside_the_capture_command(self):
+        self.assertIn("""-- sh -c 'CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"; "$CHROME" --headless""", self.step2())
+
+
+def helper_calls():
+    """(file, command) for every with_server.py call in a fenced block of a SKILL.md or reference page, continuations joined."""
+    calls = []
+    for path in guidance_files():
+        in_fence = False
+        for line in re.sub(r"\\\n\s*", " ", path.read_text()).splitlines():
+            if line.lstrip().startswith("```"):
+                in_fence = not in_fence
+            elif in_fence and "with_server.py" in line:
+                calls.append((path, line.strip()))
+    return calls
+
+
+class HelperCalls(unittest.TestCase):
+    def test_examples_exist(self):
+        files = {p.parent.name for p, _ in helper_calls()}
+        self.assertTrue({"design-review", "pr-qa"} <= files, files)
+
+    def test_no_call_starts_with_a_variable_assignment(self):
+        # Claude Code strips only a fixed list of safe env vars before matching a Bash
+        # rule, so `CHROME=... python3 ...with_server.py` never matches the allow rule.
+        for path, cmd in helper_calls():
+            self.assertNotRegex(cmd, r"^[A-Z_][A-Z0-9_]*=", f"{path}: {cmd[:80]}")
+            self.assertTrue(cmd.startswith("python3 ${CLAUDE_PLUGIN_ROOT}/shared/capture/with_server.py "), f"{path}: {cmd[:80]}")
+
+    def test_every_flag_is_one_the_helper_accepts(self):
+        spec = importlib.util.spec_from_file_location("with_server", REPO / "shared" / "capture" / "with_server.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        for path, cmd in helper_calls():
+            argv = shlex.split(cmd.split("with_server.py", 1)[1])
+            with self.subTest(path=path.parent.name), contextlib.redirect_stderr(io.StringIO()) as err:
+                try:
+                    mod._parse(argv)
+                except SystemExit:
+                    self.fail(f"{path}: with_server.py rejects the example: {err.getvalue().strip()}")
 
 
 class ChromeLines(unittest.TestCase):

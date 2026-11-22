@@ -24,7 +24,7 @@ how you rebuild the next round.
   phone the wordmark drops and the pill stays. Screen readers hear "Proofs, design-review".
   A review or questions page with no `project.session` still builds, with a warning:
   the session is how the reader matches a page to the chat it belongs to.
-  It also warns about British spellings in what the reader sees (`behaviour` → `behavior`); it is off unless the project sets `PROOFS_SPELLING=american`. <!-- british-ok: behaviour -->
+  It also warns about British spellings in what the reader sees (`behaviour` → `behavior`); it is off unless the project sets `PROOFS_SPELLING` to `american` in the `env` block of its `.claude/settings.json` (not as a prefix in front of the command, which would stop the command matching its allow rule). <!-- british-ok: behaviour -->
 - Decision buttons per item, one active at a time, all starting unselected, with
   `aria-pressed`. Choices that need a comment open the comment box and focus it; a
   comment typed under any other choice is still kept and exported.

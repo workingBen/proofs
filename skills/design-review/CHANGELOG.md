@@ -1,5 +1,6 @@
 # Changelog
 
+- **1.8.2** (2026-11-22): The capture example sets `CHROME` inside the `sh -c` capture command instead of in front of `python3`. Claude Code does not strip a `CHROME=` prefix before matching a Bash rule, so the old example never matched the unattended allow rule for the helper.
 - **1.8.1** (2026-11-22): The capture example sets `CHROME` in the same command (a variable from an earlier Bash call is gone) and lists the usual Chrome paths. Says how to find the start command, to ask the user when there is none, and to pick an unused port so a stale app is not captured. Also: read the PNG to confirm the route, chain widths in one call, leave `.proofs/` untracked.
 - **1.8.0** (2026-11-22): The "before" is always captured from the running app, through the new start-capture-stop helper, which works in `claude -p` and leaves no server running. A committed screenshot is used only when the app cannot run, labeled with its date and flagged to the user.
 - **1.7.0** (2026-11-22): Runs its scripts (`review_page.py`) through `${CLAUDE_PLUGIN_ROOT}` and pre-approves them and reads of the plugin's own files, so a session no longer asks permission for each one.

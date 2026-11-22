@@ -37,7 +37,7 @@ Proofs reads its own reference files and runs its own scripts, which sit outside
 python3 "$(ls -d "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/plugins/cache/proofs/proofs/*/ | sort -V | tail -1)shared/allow_block.py"
 ```
 
-Put the output in `~/.claude/settings.json` for every project, or `.claude/settings.local.json` for one. Never put it in a project's committed `.claude/settings.json`: it holds your home path. If the file already has a `permissions` key, don't paste a second one. Add `--lines` to the command to print just the rules, and add them to your existing `permissions.allow` list (or add them one at a time with `/permissions` in Claude Code).
+Put the output in `~/.claude/settings.json` for every project, or `.claude/settings.local.json` for one. If you use a custom `CLAUDE_CONFIG_DIR`, put the rules in that folder's `settings.json` instead of `~/.claude/settings.json`. Never put it in a project's committed `.claude/settings.json`: it holds your home path. If the file already has a `permissions` key, don't paste a second one. Add `--lines` to the command to print just the rules, and add them to your existing `permissions.allow` list (or add them one at a time with `/permissions` in Claude Code).
 
 Example of the output; run the command above to get yours. `/YOUR/HOME` stands for your home folder, and these lines do nothing until it's replaced, which is why the command exists:
 
@@ -60,7 +60,15 @@ Example of the output; run the command above to get yours. `/YOUR/HOME` stands f
 
 The `Skill(proofs:*)` line matters: skills that pre-approve their own scripts make Claude Code ask before the skill itself runs, and `claude -p` refuses it outright. The `*` in the middle of each Bash line is the plugin's version folder, so the rules keep working after an update. A Bash rule only covers a command that is that script alone: `review_page.py ... ; something-else` still asks.
 
-The command leaves four scripts out, on purpose, so they still ask every time: `todos_apply.py` and `todos_adopt.py` (rewrite `TODO.md`), `install_session_hook.py` (edits `.claude/settings.json`) and `pr_qa_collect.py` (calls GitHub with your token). Don't add them by hand.
+The command leaves five scripts out, on purpose, so they still ask every time: `todos_apply.py` and `todos_adopt.py` (rewrite `TODO.md`), `install_session_hook.py` (edits `.claude/settings.json`), `pr_qa_collect.py` (calls GitHub with your token) and `with_server.py` (starts a dev server from whatever command it is given). Don't add them by hand; the optional line below is the one exception.
+
+**For unattended (`claude -p`) runs only** (optional, never part of the standard block): `shared/capture/with_server.py` starts a dev server for screenshots, waits for it, runs the capture and always stops the server again. It runs whatever start command it is given, which is why it asks. The one exit it cannot clean up after is a SIGKILL of the helper itself: the server then keeps running until the next run in that folder stops it (even one killed mid-boot; this needs `ps`, and the helper warns if it is missing), but nothing is left holding your terminal's or `claude -p`'s output open. If an unattended run has to start a server with nobody there to approve it, add `--headless` to the command, which prints the same rules plus one for this helper:
+
+```
+python3 "$(ls -d "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/plugins/cache/proofs/proofs/*/ | sort -V | tail -1)shared/allow_block.py" --headless
+```
+
+Leave it out for normal, attended use: Claude Code then asks before each server start, and you can see the command it is about to run.
 <!-- allow-proofs:end -->
 
 Screenshots shrink automatically when ImageMagick or libwebp (`cwebp`) is installed: they're converted to WebP as each page is built. Without either, pages still work, just heavier.

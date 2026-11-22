@@ -261,6 +261,7 @@ class CheckCase(CheckBase):
 ROOT = "${CLAUDE_PLUGIN_ROOT}"
 PAGE = ROOT + "/shared/review_page/review_page.py"
 APPLY = ROOT + "/skills/todos/scripts/todos_apply.py"
+WITH_SERVER = ROOT + "/shared/capture/with_server.py"
 WHOLE = "**Needs the whole plugin.**\n\n"
 
 
@@ -272,7 +273,8 @@ def fm(rules):
 class PluginRootScripts(CheckBase):
     def setUp(self):
         super().setUp()
-        for rel in ("shared/review_page/review_page.py", "skills/todos/scripts/todos_apply.py"):
+        for rel in ("shared/review_page/review_page.py", "skills/todos/scripts/todos_apply.py",
+                    "shared/capture/with_server.py"):
             f = Path(self._tmp.name) / rel
             f.parent.mkdir(parents=True, exist_ok=True)
             f.write_text("")
@@ -325,6 +327,13 @@ class PluginRootScripts(CheckBase):
 
     def test_never_preapproved_script_in_allowed_tools_is_rejected(self):
         r = self.alpha("Run `python3 " + APPLY + "`.", ["Bash(python3 " + APPLY + " *)", "Read(/" + ROOT + "/**)"])
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("must keep prompting", r.stdout)
+
+    def test_capture_helper_stays_out_of_allowed_tools(self):
+        call = "Run `python3 " + WITH_SERVER + " --start x --url y -- z`."
+        self.assertEqual(self.alpha(call).returncode, 0)
+        r = self.alpha(call, ["Bash(python3 " + WITH_SERVER + " *)", "Read(/" + ROOT + "/**)"])
         self.assertEqual(r.returncode, 1)
         self.assertIn("must keep prompting", r.stdout)
 

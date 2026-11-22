@@ -84,7 +84,7 @@ def effective_verdict(evidence, human_findings):
         return "unknown"
     verdict = evidence.get("verdict", "unknown")
     if (verdict == "unknown" and evidence.get("measured", True) is False
-            and human_findings):
+            and worst <= 1):
         # Nothing was measured, but a reviewer looked and wrote something down.
         return "look"
     if worst == 1 and VERDICT_RANK.get(verdict, 9) > VERDICT_RANK["look"]:

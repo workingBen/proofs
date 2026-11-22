@@ -11,7 +11,7 @@ import tempfile
 from io import StringIO
 from contextlib import redirect_stdout
 
-from pr_qa_findings import compare, summarize, measured, main
+from pr_qa_findings import compare, summarize, measured, unmeasured_routes, main
 
 
 def shot(label="after", slug="admin-contacts-14", size="phone", overflow=0,
@@ -123,8 +123,8 @@ class SummaryTest(unittest.TestCase):
         self.assertEqual(out["unmapped_changes"], ["app/views/new.html.erb"])
 
 
-def bare(label="after", redirected=False):
-    return {"label": label, "slug": "x", "size": "phone", "path": "/x",
+def bare(label="after", redirected=False, slug="x"):
+    return {"label": label, "slug": slug, "size": "phone", "path": "/x",
             "file": f"{label}-x-phone.png", "redirected": redirected}
 
 
@@ -141,7 +141,7 @@ class NotMeasuredTest(unittest.TestCase):
         self.assertIn("not measured", out["note"])
 
     def test_only_after_measured_is_not_measured(self):
-        self.assertFalse(measured([bare("before")], [shot(overflow=0)]))
+        self.assertFalse(measured([bare("before", slug="s")], [shot(slug="s", overflow=0)]))
 
     def test_a_redirect_blocker_still_holds_when_unmeasured(self):
         before, after = [bare("before")], [bare("after", redirected=True)]
@@ -158,6 +158,35 @@ class NotMeasuredTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, redirect_stdout(StringIO()) as buf:
             main(["--dir", tmp])
         self.assertEqual(json.loads(buf.getvalue())["verdict"], "unknown")
+
+
+def run(before, after):
+    return summarize(compare(before, after), measured=measured(before, after),
+                     unmeasured=unmeasured_routes(before, after))
+
+
+class PartialMeasurementTest(unittest.TestCase):
+    def test_mixed_routes_are_unknown_and_name_the_unmeasured_one(self):
+        before = [shot("before", slug="a"), dict(bare("before"), slug="b", pageLabel="Bare page")]
+        after = [shot("after", slug="a"), dict(bare("after"), slug="b", pageLabel="Bare page")]
+        out = run(before, after)
+        self.assertEqual(out["verdict"], "unknown")
+        self.assertIn("Bare page at phone", out["note"])
+
+    def test_a_bare_before_is_not_a_zero_baseline(self):
+        out = run([bare("before", slug="s")], [shot("after", slug="s", overflow=30)])
+        self.assertEqual(out["counts"]["blocker"], 0)
+        self.assertEqual(out["verdict"], "unknown")
+
+    def test_a_bare_after_does_not_hide_behind_a_measured_before(self):
+        out = run([shot("before", slug="s", overflow=30)], [bare("after", slug="s")])
+        self.assertEqual(out["verdict"], "unknown")
+
+    def test_unmeasured_plus_a_machine_warning_is_look(self):
+        # "gone" was measured before but has no after shot (a warning); the
+        # other route is bare on both sides (unmeasured).
+        out = run([shot("before", slug="gone"), bare("before")], [bare("after")])
+        self.assertEqual(out["verdict"], "look")
 
 
 if __name__ == "__main__":

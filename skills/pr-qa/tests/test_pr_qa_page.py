@@ -115,6 +115,9 @@ class NotMeasuredTest(unittest.TestCase):
     def test_unmeasured_evidence_without_human_findings_stays_unknown(self):
         self.assertEqual(effective_verdict(self.UNMEASURED, []), "unknown")
 
+    def test_a_human_finding_of_only_good_does_not_escalate(self):
+        self.assertEqual(effective_verdict(self.UNMEASURED, [{"severity": "good"}]), "unknown")
+
     def test_old_findings_files_count_as_measured(self):
         with tempfile.TemporaryDirectory() as tmp:
             write_evidence(tmp)

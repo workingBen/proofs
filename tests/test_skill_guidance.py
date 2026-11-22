@@ -65,7 +65,7 @@ class DesignReviewGuidance(unittest.TestCase):
     def test_capture_is_capture_cjs_after_with_server(self):
         # design-review's example runs the one default capture helper after `--`.
         # (pr-qa joins this list in Task 4.)
-        for skill in ("design-review",):
+        for skill in ("design-review", "visual-qa"):
             calls = [c for p, c in helper_calls() if p.parent.name == skill]
             self.assertTrue(any(re.search(r" -- node \$\{CLAUDE_PLUGIN_ROOT\}/skills/visual-qa/scripts/capture\.cjs ", c) for c in calls), skill)
 
@@ -201,6 +201,20 @@ class HouseRules(unittest.TestCase):
                 with self.subTest(skill=skill, rule=rule):
                     self.assertIn(rule, text)
 
+    def test_design_review_phone_check_of_the_page_names_a_working_method(self):
+        text = (REPO / "skills" / "design-review" / "SKILL.md").read_text()
+        self.assertNotIn("screenshot the page at a desktop and a phone width", text)
+        verify = text.split("**Verify before publishing", 1)[1].split("###", 1)[0]
+        self.assertIn("390", verify)
+        self.assertIn("file://", verify)
+        self.assertIn("capture.cjs", verify)
+
+    def test_visual_qa_default_capture_starts_its_own_server(self):
+        text = (REPO / "skills" / "visual-qa" / "SKILL.md").read_text()
+        self.assertNotIn("as `design-review` step 2 does", text)
+        self.assertIn("run_in_background", text)
+        self.assertIn("already answering", text)
+
     def test_house_rules_reference_exists(self):
         text = (REPO / "reference" / "house-rules.md").read_text()
         self.assertIn("~/.cache/proofs-playwright", text)
@@ -223,13 +237,15 @@ class HouseRules(unittest.TestCase):
                     self.assertRegex(line, r"(?i)never|do not|don't", f"{path}: {line[:80]}")
 
     def test_examples_have_no_shell_tricks(self):
-        for skill in HOUSE_RULE_SKILLS:
+        # The three skills of this task and reference pages; pr-qa joins in Task 4.
+        paths = [REPO / "skills" / s / "SKILL.md" for s in HOUSE_RULE_SKILLS] + sorted((REPO / "reference").glob("*.md"))
+        for path in paths:
             in_fence = False
-            for line in (REPO / "skills" / skill / "SKILL.md").read_text().splitlines():
+            for line in path.read_text().splitlines():
                 if line.lstrip().startswith("```"):
                     in_fence = line.lstrip().startswith("```bash") and not in_fence
                 elif in_fence:
-                    self.assertIsNone(re.search(r"^[A-Z_]+=|\||&&|;|\$\(|^cd ", line), f"{skill}: {line[:80]}")
+                    self.assertIsNone(re.search(r"^[A-Z_]+=|\||&&|;|\$\(|^cd ", line.lstrip()), f"{path.name}: {line[:80]}")
 
 
 if __name__ == "__main__":

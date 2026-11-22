@@ -91,7 +91,8 @@ republish, read the session's current name: a rename notice in the conversation,
 `<title>`, keep publishing to the same file path so the URL stays, and say so in one log
 entry. The `localStorage` key changes with the name, so earlier ticks reset; mention it.
 A name taken from a handoff note is a guess, not the session's name; check before the
-first publish.
+first publish. The same goes for the project bar: if the work has moved to another repo, update
+`name` and `repo` with it.
 
 ## Building it: the shared builder
 

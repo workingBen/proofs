@@ -346,7 +346,7 @@ function verdicts(m, vpLabel) {
   if (evidence) {
     const shots = results.filter((r) => !r.error).map((r) => ({
       label: r.viewport, size: r.viewport === '390' ? 'phone' : 'desktop',
-      slug: `${r.page}-${r.state}${r.viewport === '1280' ? '-1280' : ''}`, pageLabel: r.page,
+      slug: `${r.page}-${r.state}${r.viewport === '1280' ? '-1280' : ''}`, pageLabel: r.viewport === '1280' ? `${r.page} (1280)` : r.page,
       path: cfg.pages.find((p) => p.name === r.page && (p.state || 'default') === r.state).path,
       file: `${r.file}-full.png`,
       overflow: r.measures.sideways, overflowing: r.measures.overflowing,

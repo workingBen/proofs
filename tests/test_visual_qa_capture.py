@@ -248,6 +248,14 @@ class PhoneWidth(unittest.TestCase):
             self.assertEqual(r.returncode, 0, r.stderr)
             json.loads(r.stdout)
 
+    def test_1280_evidence_page_label_says_1280(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.capture(tmp, "fits.html", "--sizes", "1440,1280", "--evidence", "after")
+            shots = json.loads((Path(tmp) / "out" / "after.json").read_text())["shots"]
+            by = {s["label"]: s for s in shots}
+            self.assertNotIn("(1280)", by["1440"]["pageLabel"])
+            self.assertTrue(by["1280"]["pageLabel"].endswith(" (1280)"), by["1280"]["pageLabel"])
+
     def test_two_labels_share_one_out_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.capture(tmp, "fits.html", "--sizes", "390", "--evidence", "before")

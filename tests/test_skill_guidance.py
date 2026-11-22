@@ -64,8 +64,7 @@ class DesignReviewGuidance(unittest.TestCase):
 
     def test_capture_is_capture_cjs_after_with_server(self):
         # design-review's example runs the one default capture helper after `--`.
-        # (pr-qa joins this list in Task 4.)
-        for skill in ("design-review", "visual-qa"):
+        for skill in ("design-review", "visual-qa", "pr-qa"):
             calls = [c for p, c in helper_calls() if p.parent.name == skill]
             self.assertTrue(any(re.search(r" -- node \$\{CLAUDE_PLUGIN_ROOT\}/skills/visual-qa/scripts/capture\.cjs ", c) for c in calls), skill)
 
@@ -155,6 +154,47 @@ class ChromeLines(unittest.TestCase):
 
 
 class PrQaGuidance(unittest.TestCase):
+    def pr_qa(self):
+        return (REPO / "skills" / "pr-qa" / "SKILL.md").read_text()
+
+    def test_default_path_comes_before_the_sequence(self):
+        text = self.pr_qa()
+        self.assertIn("## Default path: one turn, page first", text)
+        self.assertLess(text.index("## Default path: one turn, page first"), text.index("## The Sequence"))
+        self.assertLess(text.index("## When to Use"), text.index("## Default path"))
+
+    def test_default_path_builds_page_before_polish(self):
+        text = section("pr-qa", "Default path")
+        self.assertLess(text.index("pr_qa_page.py"), text.index("polish"))
+
+    def test_no_redirect_for_findings(self):
+        text = self.pr_qa()
+        self.assertNotIn("> <dir>/findings.json", text)
+        self.assertNotRegex(text, r"pr_qa_findings\.py[^\n]* > ")
+        self.assertIn("--out .proofs/evidence/pr-<n>/findings.json", text)
+
+    def test_never_asks_which_capture_method(self):
+        text = self.pr_qa()
+        sentence = "Do not ask the user which capture method to use."
+        self.assertIn(sentence, text)
+        self.assertNotRegex(text.replace(sentence, ""), r"(?i)choose how to|which capture")
+
+    def test_default_path_uses_one_playwright_home(self):
+        text = section("pr-qa", "Default path")
+        self.assertIn("~/.cache/proofs-playwright", text)
+        self.assertIn("not measured", text)
+
+    def test_default_path_has_at_most_eight_bash_calls(self):
+        text = section("pr-qa", "Default path")
+        fence = text.split("```bash", 1)[1].split("```", 1)[0]
+        calls = [l for l in fence.splitlines() if l.strip() and not l.startswith("#")]
+        self.assertLessEqual(len(calls), 8, calls)
+
+    def test_exclude_one_liner_is_gone(self):
+        text = self.pr_qa()
+        self.assertNotIn("git check-ignore", text)
+        self.assertIn("adds `.proofs/` to `.git/info/exclude`", text)
+
     def test_pr_qa_base_worktree_lives_under_dot_proofs(self):
         text = section("pr-qa", "The Sequence")
         self.assertIn("git worktree add <base-dir>", text)
@@ -190,7 +230,7 @@ class PrQaGuidance(unittest.TestCase):
         self.assertLess(remove, text.index("4. **Run the PR's own tests**"))
 
 
-HOUSE_RULE_SKILLS = ("design-review", "visual-qa", "working-log")
+HOUSE_RULE_SKILLS = ("design-review", "visual-qa", "working-log", "pr-qa")
 
 
 class HouseRules(unittest.TestCase):
@@ -215,13 +255,18 @@ class HouseRules(unittest.TestCase):
         self.assertIn("run_in_background", text)
         self.assertIn("already answering", text)
 
+    def test_design_review_file_url_example_uses_base_and_path(self):
+        text = (REPO / "skills" / "design-review" / "SKILL.md").read_text()
+        verify = text.split("**Verify before publishing", 1)[1].split("###", 1)[0]
+        self.assertIn(".proofs/pages/", verify)
+        self.assertIn("/<review-name>.html", verify)
+
     def test_house_rules_reference_exists(self):
         text = (REPO / "reference" / "house-rules.md").read_text()
         self.assertIn("~/.cache/proofs-playwright", text)
 
     def test_no_phone_window_size_below_500(self):
-        # pr-qa joins in Task 4.
-        for path in [p for p in guidance_files() if p.parent.name != "pr-qa"]:
+        for path in guidance_files():
             for m in re.finditer(r"--window-size=(\d+),", path.read_text()):
                 self.assertGreaterEqual(int(m.group(1)), 500, f"{path}: {m.group(0)}")
 
@@ -237,7 +282,6 @@ class HouseRules(unittest.TestCase):
                     self.assertRegex(line, r"(?i)never|do not|don't", f"{path}: {line[:80]}")
 
     def test_examples_have_no_shell_tricks(self):
-        # The three skills of this task and reference pages; pr-qa joins in Task 4.
         paths = [REPO / "skills" / s / "SKILL.md" for s in HOUSE_RULE_SKILLS] + sorted((REPO / "reference").glob("*.md"))
         for path in paths:
             in_fence = False

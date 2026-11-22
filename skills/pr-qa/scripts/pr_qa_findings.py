@@ -11,7 +11,10 @@ an app already overflow slightly at some width; a QA that lists those buries
 the one the PR caused. A finding is raised when the after is worse than the
 before for the same page at the same size.
 
-    python3 scripts/pr_qa_findings.py --dir work/pr-7 > findings.json
+    python3 scripts/pr_qa_findings.py --dir work/pr-7 --out work/pr-7/findings.json
+
+With --out the JSON goes to that file and stdout carries a one-line summary;
+without it the JSON is printed, so a pipe still works.
 
 With no layout measurements in before.json and after.json the verdict is
 "unknown" ("not measured"), never "clean": absence of measurements is not
@@ -200,6 +203,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dir", required=True)
     parser.add_argument("--plan")
+    parser.add_argument("--out", help="write the findings JSON here and print only a one-line summary")
     args = parser.parse_args(argv)
 
     plan = None
@@ -211,7 +215,13 @@ def main(argv=None):
     after = load(args.dir, "after")
     result = summarize(compare(before, after), plan, measured=measured(before, after),
                        unmeasured=unmeasured_routes(before, after))
-    print(json.dumps(result, indent=2))
+    if args.out:
+        with open(args.out, "w", encoding="utf-8") as handle:
+            json.dump(result, handle, indent=2)
+        counts = result.get("counts") or {}
+        print(f"verdict: {result.get('verdict')}; {sum(counts.values()) if counts else len(result.get('findings', []))} finding(s) -> {args.out}")
+    else:
+        print(json.dumps(result, indent=2))
     # Never fail the build. A blocker is a thing for a person to decide about,
     # and a red X on the PR would say "the agent's change is broken" when what
     # is true is "the layout needs a look".

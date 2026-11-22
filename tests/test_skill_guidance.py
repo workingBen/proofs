@@ -184,11 +184,26 @@ class PrQaGuidance(unittest.TestCase):
         self.assertIn("~/.cache/proofs-playwright", text)
         self.assertIn("not measured", text)
 
-    def test_default_path_has_at_most_eight_bash_calls(self):
+    def test_default_path_has_at_most_nine_bash_calls(self):
         text = section("pr-qa", "Default path")
         fence = text.split("```bash", 1)[1].split("```", 1)[0]
         calls = [l for l in fence.splitlines() if l.strip() and not l.startswith("#")]
-        self.assertLessEqual(len(calls), 8, calls)
+        self.assertLessEqual(len(calls), 9, calls)
+
+    def test_default_path_checks_out_the_pr_before_the_after_capture(self):
+        section_text = section("pr-qa", "Default path")
+        text = section_text.split("```bash", 1)[1].split("```", 1)[0]
+        remove = text.index("git worktree remove --force")
+        checkout = text.index("gh pr checkout <n>")
+        after = text.index("--evidence after")
+        self.assertLess(remove, checkout)
+        self.assertLess(checkout, after)
+        self.assertIn("no-op", section_text)
+
+    def test_default_path_honors_the_base_dir_setting(self):
+        text = section("pr-qa", "Default path")
+        self.assertIn("PROOFS_BASE_DIR", text)
+        self.assertIn("<PROOFS_BASE_DIR>/<repo folder>-pr-qa-base", text)
 
     def test_exclude_one_liner_is_gone(self):
         text = self.pr_qa()
@@ -289,7 +304,10 @@ class HouseRules(unittest.TestCase):
                 if line.lstrip().startswith("```"):
                     in_fence = line.lstrip().startswith("```bash") and not in_fence
                 elif in_fence:
-                    self.assertIsNone(re.search(r"^[A-Z_]+=|\||&&|;|\$\(|^cd ", line.lstrip()), f"{path.name}: {line[:80]}")
+                    code = re.sub(r"<[^<>\s]+>", "X", line.split(" #", 1)[0]).lstrip()
+                    if code.startswith("#"):
+                        continue
+                    self.assertIsNone(re.search(r"^[A-Z_]+=|\||&&|;|\$\(|^cd |(?<![-=])>{1,2}(\s|$)|(^|\s)<\s", code), f"{path.name}: {line[:80]}")
 
 
 if __name__ == "__main__":

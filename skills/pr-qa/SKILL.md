@@ -54,9 +54,11 @@ The whole flow for a PR whose app runs with one start command. The goal is a bui
 2. **Stay in two folders.** Read only inside the project (the folder Claude Code started in) and the plugin folder. Do not read parent folders: their `CLAUDE.md` is already loaded for you. Write specs, scratch scripts, screenshots and pages only under `.proofs/` in the project, never the system temp folder, `$TMPDIR` or `~`. The one exception is the Playwright install in `~/.cache/proofs-playwright`.
 3. **One command per Bash call.** No pipes, redirects, `;`, `&&`, `cd`, `$(...)` or `VAR=` in front: Claude Code matches its allow rules against the whole command, and any of those makes it ask (or, in `claude -p`, refuse).
 
-1. **List every command once, up front, in one message**, with the exact text and literal paths (no variables): the eight lines below, the install in the checkout (`npm ci`) if its `node_modules` is missing, and the Playwright install line if `capture.cjs` reports Playwright missing. Playwright lives in `~/.cache/proofs-playwright`, one install per machine (`npm install --prefix ~/.cache/proofs-playwright playwright@1.61.1`); do not install it in the system temp folder or the project. Then run them without further narration.
+**Steps.**
+
+1. **List every command once, up front, in one message**, with the exact text and literal paths (no variables): the nine lines below, the install in the checkout (`npm ci`) if its `node_modules` is missing, and the Playwright install line if `capture.cjs` reports Playwright missing. Playwright lives in `~/.cache/proofs-playwright`, one install per machine (`npm install --prefix ~/.cache/proofs-playwright playwright@1.61.1`); do not install it in the system temp folder or the project. Then run them without further narration.
 2. **Write `.proofs/capture/pages.json`** with the Write tool: the pages the diff touches (`pr_qa_plan.py` when a map exists), each with a `name` and `path`.
-3. **Run the commands in order.** Replace `<n>` with the PR number, `<base>` with its target branch and `<app-dir>` with the folder holding `package.json` (use `.` when it is the root), and the ports with free high ones.
+3. **Run the commands in order.** Replace `<n>` with the PR number, `<base>` with its target branch and `<app-dir>` with the folder holding `package.json` (use `.` when it is the root), and the ports with free high ones. `.proofs/base` is the base folder: if the `PROOFS_BASE_DIR` setting is set (read the `env` block of `.claude/settings.json` with the Read tool), use `<PROOFS_BASE_DIR>/<repo folder>-pr-qa-base` instead, written literally in every line that names it. If the app has a `.env`, copy it into the base folder's `<app-dir>` with the Read and Write tools before the install. **`gh pr checkout <n>` is not optional: the after shot must be the PR's code.** If the session is already on the PR branch it still runs (it is a no-op), so the path is the same every time.
 
 ```bash
 git fetch origin
@@ -64,13 +66,14 @@ git worktree add .proofs/base origin/<base>
 npm ci --prefix .proofs/base/<app-dir>
 python3 ${CLAUDE_PLUGIN_ROOT}/shared/capture/with_server.py --cwd .proofs/base/<app-dir> --start "npm run dev -- -p 3411" --url http://localhost:3411/ -- node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs .proofs/capture/pages.json --out .proofs/evidence/pr-<n> --sizes 390,1440 --evidence before
 git worktree remove --force .proofs/base
+gh pr checkout <n>
 python3 ${CLAUDE_PLUGIN_ROOT}/shared/capture/with_server.py --start "npm run dev -- -p 3411" --url http://localhost:3411/ -- node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs .proofs/capture/pages.json --out .proofs/evidence/pr-<n> --sizes 390,1440 --evidence after
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/pr-qa/scripts/pr_qa_findings.py --dir .proofs/evidence/pr-<n> --out .proofs/evidence/pr-<n>/findings.json
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/pr-qa/scripts/pr_qa_page.py --meta .proofs/evidence/meta.json --out .proofs/pages/pr-qa.html --session "<session name>"
 ```
 
 4. **Write `.proofs/evidence/meta.json`** with the Write tool before the last line (shape: see the helper scripts below), then build the page with that last line (it prints the page's size; `pr_qa_page.py` has no `--smoke`, its own tests cover the page script). **The page is built in this turn, before any extra checks.** Before and after share one `--out` folder: every file is prefixed `before-` or `after-`, and the 1280 shot, if you ask for it with `--sizes 390,1280,1440`, is labeled "(1280)" on the page so it reads differently from 1440.
-5. **Only then, polish if time allows:** menu taps (an `actions` entry in pages.json), more states, the PR's own tests. A phone measurement that the capture's `innerWidth` guard rejected, or any phone view you could not take because Playwright is missing, goes on the page as "not measured", never as a pass, and never gets a Chrome `--window-size` substitute.
+5. **Only then, polish if time allows:** menu taps (an `actions` entry in pages.json), more states, the PR's own tests. A phone measurement that the capture's `innerWidth` guard rejected, or any phone view you could not take because Playwright is missing, goes on the page as "not measured" (the guard aborts the whole run, so rerun that line with `--sizes 1440`), never as a pass, and never gets a Chrome `--window-size` substitute.
 
 Do not ask the user which capture method to use. Use the one above; if it fails, use the fallback in design-review step 2 and say on the page which one ran. The capture helper adds `.proofs/` to `.git/info/exclude` the first time it runs; you do not need to. `git status` may list `.proofs/` until then; ignore it.
 
@@ -133,7 +136,7 @@ no token, no network, or no open PR, so it can never keep a session from startin
    of `.claude/settings.json` (project or user level). Resolve it **once**
    (`echo "${PROOFS_BASE_DIR:-}"`), confirm the folder exists, and write the
    **literal resolved path** in every later command (`git worktree add`, `--cwd`,
-   the log path `<base-dir>/.proofs/server.log`, `NODE_PATH=<base-dir>/node_modules`,
+   the log path `<base-dir>/.proofs/server.log`,
    `git worktree remove`): shell variables do not survive between Bash calls, and
    hooks read literal paths. If `<base-dir>` already shows in `git worktree list`,
    run `git worktree remove --force <base-dir>` only if it is this repo's own
@@ -170,7 +173,7 @@ no token, no network, or no open PR, so it can never keep a session from startin
      `with_server.py --cwd <base-dir>` for the before run, and the same line with no `--cwd`
      for the after run. Exit codes: 3 the server never answered (read `<base-dir>/.proofs/server.log`
      for the before run, `.proofs/server.log` for the after run), 4 it exited early, 5
-     another run holds the lock; anything else is the capture's own. Exit 0 does not
+     another run holds the lock; anything else is the capture's own. 3 is also `capture.cjs`'s untrusted-width exit and 2 with "Playwright not found" is the missing install; the stderr line says which. Exit 0 does not
      prove the page is right: read each PNG and confirm it shows the route you meant.
      Never start a server yourself with `run_in_background` or `&`: in `claude -p` the
      turn then never ends.
@@ -275,7 +278,7 @@ installed, the phone views are "not measured"; never substitute a Chrome `--wind
 
 **If the repo already has a screenshot script, read it and reuse it** for sign-in: it
 already knows the form and the traps specific to the app. `capture.cjs` takes an
-`actions` entry per page for clicks and fills, and `signin.example.cjs` in the
+`actions` entry per page for clicks, waits and `eval` steps (no `fill`; use `setup` or `eval` for form input), and `signin.example.cjs` in the
 visual-qa scripts folder shows a login. Only if `capture.cjs` cannot do what a page needs,
 write a Playwright script of your own with a 390 by 844 viewport at `deviceScaleFactor: 2`.
 
@@ -318,8 +321,7 @@ Debian's archives and needs no root. It stays because the skill is portable and 
 next environment may genuinely lack a browser.
 
 ```bash
-# Redirect, never pipe -- a pipeline is a subshell and the exports are lost.
-source path/to/pr-qa/setup-browser.sh > /dev/null   # sets CHROME_BIN, LD_LIBRARY_PATH
+source path/to/pr-qa/setup-browser.sh   # sets CHROME_BIN, LD_LIBRARY_PATH
 # MacAppCodeSignClone off: on a Mac, Google Chrome copies its whole app (~1.4 GB)
 # into a temp folder per launch and can leave it behind. Harmless elsewhere.
 "$CHROME_BIN" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage \

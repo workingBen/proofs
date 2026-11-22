@@ -188,6 +188,12 @@ class AllowBlockTest(unittest.TestCase):
         self.assertIn("one command per Bash call", text)
         self.assertNotIn("that script alone", text)
 
+    def test_usage_line_shows_headless_and_project_combine(self):
+        usage = next(l for l in allow_block.__doc__.splitlines() if "allow_block.py [" in l)
+        self.assertIn("[--headless]", usage)
+        self.assertIn("[--project]", usage)
+        self.assertNotIn("|", usage)
+
     def test_cli_rejects_unknown_flags(self):
         self.assertEqual(self._cli("/opt/claude-home", None, "--everything").returncode, 2)
 

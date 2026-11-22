@@ -473,9 +473,8 @@ pushes and deploys is in its own notes; follow them.
   out and migrated; identical before/after pairs are the giveaway.
 - **Leaving the repo dirty.** Migrations rolled back, the main branch checked out,
   the base worktree removed (step 2 removes it right after the before shots; check
-  it is gone) with `git worktree remove <base-dir>` (default
-  `.proofs/base`; use the literal path)
-  (add `--force` if the install left files behind), so `git worktree list` is
+  it is gone) with `git worktree remove --force <base-dir>` (default
+  `.proofs/base`; use the literal path), as in step 3, so `git worktree list` is
   clean. Someone else may be using this machine.
 - **Recommending a merge you did not run.** If the app would not boot, say that.
 - **Burying the bad news.** Worst PR first, verdict in the table at the top.

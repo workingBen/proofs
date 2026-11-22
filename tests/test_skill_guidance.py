@@ -223,6 +223,12 @@ class PrQaGuidance(unittest.TestCase):
         self.assertNotIn("git check-ignore", text)
         self.assertIn("adds `.proofs/` to `.git/info/exclude`", text)
 
+    def test_every_worktree_remove_says_force(self):
+        # Step 3 removes the base worktree with --force; Common Mistakes must give the same command.
+        mistakes = section("pr-qa", "Common Mistakes")
+        self.assertIn("git worktree remove --force <base-dir>", mistakes)
+        self.assertNotIn("git worktree remove <base-dir>", self.pr_qa())
+
     def test_pr_qa_base_worktree_lives_under_dot_proofs(self):
         text = section("pr-qa", "The Sequence")
         self.assertIn("git worktree add <base-dir>", text)
@@ -247,7 +253,7 @@ class PrQaGuidance(unittest.TestCase):
         self.assertIn("literal resolved path", section("pr-qa", "The Sequence"))
 
     def test_pr_qa_cleanup_removes_the_base_worktree(self):
-        self.assertIn("git worktree remove <base-dir>", section("pr-qa", "Common Mistakes"))
+        self.assertIn("git worktree remove --force <base-dir>", section("pr-qa", "Common Mistakes"))
 
     def test_pr_qa_removes_the_base_worktree_before_the_branch_and_its_tests(self):
         text = section("pr-qa", "The Sequence")

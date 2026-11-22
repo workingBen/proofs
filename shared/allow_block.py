@@ -2,7 +2,7 @@
 """Print the Claude Code permission rules that let Proofs read its own files and run
 its own page builders without asking, for this machine.
 
-    python3 <plugin root>/shared/allow_block.py [--lines] [--headless | --project]
+    python3 <plugin root>/shared/allow_block.py [--lines] [--headless] [--project]
 
 Prints {"permissions": {"allow": [...]}} for a settings file that has no permissions
 key yet, or with --lines just the rules, comma-separated, to add to an existing

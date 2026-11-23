@@ -343,6 +343,17 @@ body.rp-mode-questions, :root[data-theme] body.rp-mode-questions {
   .rp-mode-questions .bar .rp-brand { margin-right:-8px; }
   /* review pages on a phone: the pill, then project · session, as on the session page */
   .rp-brandline .rp-brand:has(.rp-sk):not(:last-child) .rp-wm, .rp-brandline .rp-brand-sep, .rp-brandline .rp-pb-x { display:none; }
+  /* Vue run 1: one 28px line cut the session name to "hom…"; the name is how the reader
+     matches the page to its chat, so it wraps instead */
+  .rp-brandline { height:auto; min-height:28px; margin:-6px 0 12px; white-space:normal; align-items:flex-start; }
+  .rp-brandline .rp-brand { margin-top:3px; }
+  .rp-where { overflow:visible; line-height:1.4; overflow-wrap:anywhere; }
+  /* and the sticky bar took 138px: the progress line shows each decision's share, so the
+     per-decision counts go and "X of N reviewed" shares one row with Copy */
+  .rp-bar { flex-wrap:wrap; gap:8px 12px; padding-top:8px; padding-bottom:8px; }
+  .rp-bar .rp-tally-st { display:none; }
+  .rp-bar #rp-tally { font-size:15px; white-space:nowrap; }
+  .rp-bar .rp-copy { min-height:44px; padding:8px 16px; }
   .rp-mode-questions .bar-title > span:not(.rp-sess) { display:none; }
   .rp-mode-questions .bar-title { flex:1 1 180px; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .rp-statusbar { flex:1 1 0; min-width:0; flex-wrap:nowrap; padding:6px 16px 6px 10px; border-bottom:0; }

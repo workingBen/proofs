@@ -26,9 +26,14 @@
   function buttonFor(sec, state) {
     return sec.decisions.buttons.filter(function (b) { return b.state === state; })[0];
   }
+  // The user's pick, else the spec's "selected", else the recommended variant, else the
+  // first. Never blindly the first: Vue run 1's "Use Selected" exported a variant that was
+  // not the recommended one because nobody had touched the picker.
   function variantOf(item, key) {
     var vs = item.variants || [];
-    return vs.filter(function (v) { return v.key === key; })[0] || vs.filter(function (v) { return v.key === item.selected; })[0] || vs[0];
+    function by(f) { return vs.filter(f)[0]; }
+    return by(function (v) { return v.key === key; }) || by(function (v) { return v.key === item.selected; }) ||
+      by(function (v) { return v.recommended; }) || vs[0];
   }
   function secState(st, sec) {
     st.sec = st.sec || {};
@@ -223,9 +228,10 @@
       var r = reviewStats();
       var parts = ["<b>" + r.done + "</b> of " + r.total + " reviewed"];
       r.buttons.forEach(function (b) {
-        parts.push('<span class="rp-tally-st rp-st-' + b.state + '">' + b.label.replace(/^[^A-Za-z]+/, "") + " " + (r.counts[b.state] || 0) + "</span>");
+        // The separator rides inside the span, so a phone can hide the counts without strays.
+        parts.push('<span class="rp-tally-st rp-st-' + b.state + '"> · ' + b.label.replace(/^[^A-Za-z]+/, "") + " " + (r.counts[b.state] || 0) + "</span>");
       });
-      one("#rp-tally").innerHTML = parts.join(" · ");
+      one("#rp-tally").innerHTML = parts.join("");
       var prog = one(".rp-progress");
       if (prog) {
         prog.innerHTML = r.buttons.map(function (b) {

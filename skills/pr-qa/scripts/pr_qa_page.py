@@ -114,9 +114,53 @@ MAX_PAGE_BYTES = 15 * 1024 * 1024
 SIZES = ("phone", "desktop")
 
 
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def _review_page():
+    """The shared page builder, for its image encoders and Playwright finder."""
+    sys.path.insert(0, os.path.join(HERE, "..", "..", "..", "shared", "review_page"))
+    try:
+        import review_page
+    finally:
+        sys.path.pop(0)
+    return review_page
+
+
+def compress_shot(path):
+    """(bytes, mime): one screenshot as a lossy WebP, else a JPEG, else the PNG as it is,
+    whichever is smallest.
+
+    Vue run 1: six full-page PNGs (three widths, before and after, of a page up to
+    27188 px tall at 2x) made a 14.1 MB page; as WebP they come to 2.6 MB. Reuses
+    review_page's encoders and its fit to WebP's 16383 px limit (a taller shot is scaled
+    down until it fits). Lossy only: lossless never won on a real page and took most
+    of a minute for six shots. With no ImageMagick or cwebp installed the PNG goes in."""
+    from pathlib import Path
+    rp = _review_page()
+    path = Path(path)
+    best = (path.read_bytes(), "image/png")
+    tool = rp.image_tool()
+    if tool is None:
+        return best
+    settings = rp.image_settings({})
+    try:
+        for w in rp.webp_widths(*rp.image_size(path), settings["max_width"]):
+            data = rp.encode_webp(path, settings["quality"], w, False, tool)
+            if data is not None and len(data) < len(best[0]):
+                best = (data, "image/webp")
+        if best[1] == "image/png":
+            jpeg = rp.to_fallback(path, settings)
+            if len(jpeg[0]) < len(best[0]):
+                best = jpeg
+    except (IndexError, ValueError, OSError):
+        pass  # not an image the encoders can read: embed it as it is
+    return best
+
+
 def data_uri(path):
-    with open(path, "rb") as handle:
-        return "data:image/png;base64," + base64.b64encode(handle.read()).decode("ascii")
+    data, mime = compress_shot(path)
+    return "data:%s;base64,%s" % (mime, base64.b64encode(data).decode("ascii"))
 
 
 def pair_shots(evidence):
@@ -357,7 +401,6 @@ def build(meta_path, out_path, project, repo, session=None):
     return page
 
 
-HERE = os.path.dirname(os.path.abspath(__file__))
 SMOKE_CJS = os.path.join(HERE, "pr_qa_smoke.cjs")
 
 
@@ -365,11 +408,7 @@ def smoke(page_path, playwright=None):
     """Click through the built page in a real browser. Returns (ok, result);
     ok is None when Playwright is missing. Reuses review_page's finder and
     install hint rather than copying them."""
-    sys.path.insert(0, os.path.join(HERE, "..", "..", "..", "shared", "review_page"))
-    try:
-        import review_page
-    finally:
-        sys.path.pop(0)
+    review_page = _review_page()
     pw = review_page.find_playwright(playwright)
     if not pw:
         return None, {"error": "Playwright not found. " + review_page.HOW_TO_PY}

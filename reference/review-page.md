@@ -35,7 +35,8 @@ spec: it is how you rebuild the next round.
   comment typed under any other choice is still kept and exported.
 - Variant galleries: clickable cards, the selection marked by a border and a check
   (never a fill), `aria-pressed` on each. The decision acts on the selected variant;
-  the first variant is selected until the user picks another (`"selected"` changes that).
+  until the user picks another, the spec's `"selected"` variant is selected, else the one marked
+  `"recommended"`, else the first (a `"selected"` that names no variant is a spec error).
 - Optional "Mark as read" switch (`READ` in the export), legend, category filter
   tabs with a live open count, and a light/dark preview switch for examples.
 - A sticky bar: "X of N reviewed", a tally per decision, and the copy button.
@@ -94,7 +95,8 @@ under the sticky bar, and moves `heading`, `intro_html` and `facts` below them; 
 `decided` sections, and any empty section on a session page, are not shown.
 
 Any string value written as `"@file:relative/path.html"` is replaced by that file's
-contents, so long item HTML can live in its own files. Fields ending in `_html` are
+contents, so long item HTML can live in its own files. Like an asset path, it is
+looked up next to the spec first, then in the working directory; the error names both. Fields ending in `_html` are
 inserted as written; every other text field is escaped.
 
 ### `review` mode

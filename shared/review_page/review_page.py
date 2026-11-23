@@ -103,6 +103,20 @@ def slug(s):
     return re.sub(r"[^a-z0-9]+", "-", str(s).lower()).strip("-") or "page"
 
 
+def find_file(rel, base):
+    """(path, tried): rel relative to the spec's folder first, then to the working directory
+    (the project folder), where sessions usually write the path from (Django run 2 for assets,
+    Vue run 1 for @file). path is None when neither has it; tried lists both, for the error."""
+    tried = []
+    for folder in (base, Path.cwd()):
+        p = (folder / rel).resolve()
+        if p not in tried:
+            tried.append(p)
+        if p.is_file():
+            return p, tried
+    return None, tried
+
+
 def resolve_files(obj, base):
     """Replace any string "@file:relative/path" with that file's text."""
     if isinstance(obj, dict):
@@ -110,9 +124,9 @@ def resolve_files(obj, base):
     if isinstance(obj, list):
         return [resolve_files(v, base) for v in obj]
     if isinstance(obj, str) and obj.startswith("@file:"):
-        p = (base / obj[6:]).resolve()
-        if not p.is_file():
-            raise SpecError("@file not found: %s" % obj[6:])
+        p, tried = find_file(obj[6:], base)
+        if p is None:
+            raise SpecError("@file not found: %s (tried %s)" % (obj[6:], " and ".join(map(str, tried))))
         return p.read_text()
     return obj
 
@@ -164,11 +178,16 @@ def image_tool():
     return None
 
 
-def image_width(path):
-    """Pixel width of a PNG or JPEG, read from its header (stdlib only)."""
-    data = path.read_bytes()
+# WebP's largest side. A full-page phone shot at 2x passes it (Vue run 1: 780 x 27188), and
+# the encoder then fails, so to_webp scales such a shot down until it fits.
+WEBP_MAX_DIM = 16383
+
+
+def image_size(path):
+    """(width, height) of a PNG or JPEG, read from its header (stdlib only), or (None, None)."""
+    data = Path(path).read_bytes()
     if data[:8] == b"\x89PNG\r\n\x1a\n":
-        return int.from_bytes(data[16:20], "big")
+        return int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")
     i = 2
     while i + 9 < len(data) and data[:2] == b"\xff\xd8":
         if data[i] != 0xFF:
@@ -176,9 +195,27 @@ def image_width(path):
             continue
         marker, size = data[i + 1], int.from_bytes(data[i + 2:i + 4], "big")
         if marker in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
-            return int.from_bytes(data[i + 7:i + 9], "big")
+            return int.from_bytes(data[i + 7:i + 9], "big"), int.from_bytes(data[i + 5:i + 7], "big")
         i += 2 + size
-    return None
+    return None, None
+
+
+def image_width(path):
+    """Pixel width of a PNG or JPEG, read from its header (stdlib only)."""
+    return image_size(path)[0]
+
+
+def webp_widths(width, height, max_width):
+    """The widths to try a WebP at: None (as is) and max_width when the shot is wider, keeping
+    only those whose sides fit WebP's limit; a shot too tall for any gets one width that fits."""
+    widths = [None] + ([max_width] if max_width and width and width > max_width else [])
+    if not (width and height):
+        return widths
+    def fits(w):
+        w = w or width
+        return w <= WEBP_MAX_DIM and height * w // width <= WEBP_MAX_DIM
+    ok = [w for w in widths if fits(w)]
+    return ok or [max(1, min(WEBP_MAX_DIM, width * WEBP_MAX_DIM // height))]
 
 
 def encode_webp(path, quality, width, lossless, tool):
@@ -204,13 +241,11 @@ def to_webp(path, settings, tool):
     Both lossy (at the quality setting) and lossless are tried, because flat UI
     screenshots are often smaller lossless. When the screenshot is wider than
     max_width, the shrunk versions are tried too, and win only when actually
-    smaller: shrinking a crisp shot can make the lossless file bigger. Never
-    upscales."""
+    smaller: shrinking a crisp shot can make the lossless file bigger. A shot taller
+    than WebP allows is scaled down to fit. Never upscales."""
     q, mw = settings["quality"], settings["max_width"]
-    width = image_width(path)
-    widths = [None] + ([mw] if mw and width and width > mw else [])
     best = None
-    for w in widths:
+    for w in webp_widths(*image_size(path), mw):
         for lossless in (False, True):
             data = encode_webp(path, q, w, lossless, tool)
             if data is not None and (best is None or len(data) < len(best)):
@@ -299,16 +334,8 @@ def load_spec(spec_path):
     tool = image_tool()
     report = {"converted": 0, "before": 0, "after": 0, "fallback": 0, "missing_tool": False, "settings": settings}
     for name, rel in (spec.get("assets") or {}).items():
-        # Relative to the spec first, then to the working directory (the project folder),
-        # where sessions usually write the path from (Django run 2).
-        tried = []
-        for base in (path.parent, Path.cwd()):
-            p = (base / rel).resolve()
-            if p not in tried:
-                tried.append(p)
-            if p.is_file():
-                break
-        else:
+        p, tried = find_file(rel, path.parent)
+        if p is None:
             raise SpecError("asset %r not found: %s (tried %s)" % (name, rel, " and ".join(map(str, tried))))
         assets[name] = embed_asset(p, settings, tool, report)
     spec["_assets"] = assets
@@ -450,9 +477,14 @@ def render_review(sec, ctx):
         for i, v in enumerate(it.get("variants") or []):
             v.setdefault("key", chr(65 + i))
             v.setdefault("label", "%s %s" % (word, v["key"]))
+        keys = [v["key"] for v in it.get("variants") or []]
+        if it.get("selected") is not None and it["selected"] not in keys:
+            raise SpecError("item %s: selected %r is not one of its variants (%s)"
+                            % (it["id"], it["selected"], ", ".join(keys) or "it has none"))
         out.append(review_item(it, dec, ctx.colors))
         items.append({"id": it["id"], "num": it["num"], "label": it["label"], "category": it.get("category"),
-                      "variants": [{"key": v["key"], "label": v["label"], "name": v.get("name", "")}
+                      "variants": [{"key": v["key"], "label": v["label"], "name": v.get("name", ""),
+                                    "recommended": bool(v.get("recommended"))}
                                    for v in it.get("variants") or []],
                       "selected": it.get("selected")})
     js = {"items": items, "decisions": {k: dec.get(k) for k in

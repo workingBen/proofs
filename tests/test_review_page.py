@@ -62,6 +62,29 @@ class Stylesheet(unittest.TestCase):
             self.assertIn("--rp-link:", body, head)
 
 
+class PhoneFrame(unittest.TestCase):
+    """Vue run 1: at 390 the brand line cut the session name to "hom…" and the sticky bar
+    took 138px. Measured in Chromium at 390 before and after; these pin the rules."""
+    CSS = (RP / "style.css").read_text()
+    JS = (RP / "engine.js").read_text()
+
+    def phone(self):
+        start = self.CSS.index("@media (max-width: 600px) {")
+        return self.CSS[start:]
+
+    def test_the_brand_line_wraps_on_a_phone_instead_of_cutting_the_session(self):
+        self.assertIn(".rp-brandline { height:auto;", self.phone())
+        self.assertIn("white-space:normal", self.phone())
+
+    def test_the_bar_drops_the_per_decision_counts_on_a_phone(self):
+        self.assertIn(".rp-bar .rp-tally-st { display:none; }", self.phone())
+
+    def test_each_count_carries_its_own_separator(self):
+        # Hiding the counts must not leave " · · ·" behind.
+        self.assertIn("'\"> · ' + b.label", self.JS)
+        self.assertNotRegex(self.JS, r'#rp-tally"\)\.innerHTML = parts\.join\(" · "\);\n\s+var prog')
+
+
 class ExportText(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -95,9 +118,46 @@ class ExportText(unittest.TestCase):
         self.assertIn("1. Article card layout — DENY\n", text)
         self.assertIn("2. Read More button placement — ACCEPT WITH COMMENT — COMMENT: make it teal", text)
 
-    def test_design_review_defaults_to_first_variant(self):
+    def test_design_review_defaults_to_the_recommended_variant(self):
         text = self.export("design-review", {"items": {"1": {"s": "accept-comment", "c": "x"}}})
-        self.assertIn("1. Article card layout — ACCEPT WITH COMMENT (Use Selected: Variant A) — COMMENT: x", text)
+        self.assertIn("1. Article card layout — ACCEPT WITH COMMENT (Use Selected: Variant B) — COMMENT: x", text)
+
+    def test_design_review_defaults_to_the_first_variant_when_none_is_recommended(self):
+        spec = self._recommend_b()
+        spec["sections"][0]["items"][0]["variants"][1].pop("recommended")
+        text = self.export_spec(spec, {"items": {"1": {"s": "accept"}}})
+        self.assertIn("1. Article card layout — ACCEPT (Use Selected: Variant A", text)
+
+    def _recommend_b(self, **item):
+        # The example's first item, three variants, B recommended (no asset: the spec moves).
+        spec = json.loads((EXAMPLES / "design-review.json").read_text())
+        spec.pop("assets")
+        it = spec["sections"][0]["items"][0]
+        it.pop("body_html")
+        it["variants"].append({"html": "<p>Third</p>"})
+        it.update(item)
+        return spec
+
+    def test_design_review_starts_on_the_recommended_variant(self):
+        # Vue run 1: B was recommended, but "Use Selected" untouched exported Variant A.
+        text = self.export_spec(self._recommend_b(), {"items": {"1": {"s": "accept"}}})
+        self.assertIn("1. Article card layout — ACCEPT (Use Selected: Variant B", text)
+
+    def test_design_review_explicit_selected_beats_recommended(self):
+        text = self.export_spec(self._recommend_b(selected="C"), {"items": {"1": {"s": "accept"}}})
+        self.assertIn("1. Article card layout — ACCEPT (Use Selected: Variant C", text)
+
+    def test_a_selected_key_that_names_no_variant_is_an_error(self):
+        p = Path(self._tmp.name) / "bad.json"
+        p.write_text(json.dumps(self._recommend_b(selected="Z")))
+        r = subprocess.run([sys.executable, str(BUILD), str(p), "--out", str(Path(self._tmp.name) / "bad.html")],
+                           capture_output=True, text=True)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("selected 'Z' is not one of its variants (A, B, C)", r.stdout + r.stderr)
+
+    def test_design_review_a_pick_beats_the_recommended_variant(self):
+        text = self.export_spec(self._recommend_b(), {"items": {"1": {"s": "accept", "v": "A"}}})
+        self.assertIn("1. Article card layout — ACCEPT (Use Selected: Variant A", text)
 
     def test_copy_edit(self):
         text = self.export("copy-edit", {"items": {
@@ -649,6 +709,20 @@ class Assets(unittest.TestCase):
         self.assertNotIn("{{asset:", text)
         self.assertEqual(review_page.image_errors(text), [])
 
+    @unittest.skipUnless(WEBP and shutil.which("magick"), "needs a WebP encoder and ImageMagick to measure")
+    def test_a_shot_taller_than_webp_allows_is_scaled_to_fit(self):
+        # Vue run 1: a 390px phone page at 2x was 27188px tall; WebP stops at 16383, so the
+        # encoder failed and the full PNG went in. Now it is scaled down until it fits.
+        write_png(self.tmp / "tall.png", 60, 20000)
+        self.assertEqual(review_page.image_size(self.tmp / "tall.png"), (60, 20000))
+        data = review_page.to_webp(self.tmp / "tall.png", review_page.image_settings({}), review_page.image_tool())
+        self.assertIsNotNone(data)
+        (self.tmp / "tall.webp").write_bytes(data)
+        w, h = subprocess.run(["magick", "identify", "-format", "%w %h", str(self.tmp / "tall.webp")],
+                              capture_output=True, text=True).stdout.split()
+        self.assertLessEqual(int(h), review_page.WEBP_MAX_DIM)
+        self.assertEqual(int(w), 60 * review_page.WEBP_MAX_DIM // 20000)
+
     @unittest.skipUnless(WEBP, "no WebP encoder installed")
     def test_webp_img_is_a_picture_with_a_fallback_old_safari_can_show(self):
         # Regression: older iOS Safari (before 14) cannot decode WebP and showed a "?".
@@ -931,6 +1005,38 @@ class Paths(unittest.TestCase):
         self.assertIn("asset 'home1440' not found", r.stderr)
         self.assertIn(str(self.tmp / ".proofs" / "review" / "baseline-screens" / "nope.png"), r.stderr)
         self.assertIn(str(self.tmp / "baseline-screens" / "nope.png"), r.stderr)
+
+    def file_spec(self, rel):
+        # Vue run 1 (B1): "@file:.proofs/design-review/mock.css", written from the project folder.
+        s = {"mode": "review", "title": "Paths — Design Review", "decisions": "design-review", "css": "@file:" + rel,
+             "sections": [{"title": "S", "items": [{"label": "x", "recommended": True, "reason_html": "<p>r</p>"}]}]}
+        p = self.tmp / ".proofs" / "review" / "spec.json"
+        p.write_text(json.dumps(s))
+        return p
+
+    def test_at_file_falls_back_to_the_working_directory(self):
+        (self.tmp / ".proofs" / "review" / "mock.css").write_text(".from-spec-folder{}")
+        (self.tmp / ".proofs" / "mock.css").write_text(".from-project-folder{}")
+        spec = self.file_spec(".proofs/mock.css")
+        r = self.run_build(str(spec), "--out", ".proofs/pages/review.html")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn(".from-project-folder{}", (self.tmp / ".proofs" / "pages" / "review.html").read_text())
+
+    def test_at_file_next_to_the_spec_still_wins(self):
+        (self.tmp / ".proofs" / "review" / "mock.css").write_text(".from-spec-folder{}")
+        (self.tmp / "mock.css").write_text(".from-project-folder{}")
+        r = self.run_build(str(self.file_spec("mock.css")), "--out", ".proofs/pages/review.html")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        html = (self.tmp / ".proofs" / "pages" / "review.html").read_text()
+        self.assertIn(".from-spec-folder{}", html)
+        self.assertNotIn(".from-project-folder{}", html)
+
+    def test_missing_at_file_error_names_both_paths_tried(self):
+        r = self.run_build(str(self.file_spec("styles/nope.css")), "--out", ".proofs/pages/review.html")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("@file not found: styles/nope.css", r.stderr)
+        self.assertIn(str(self.tmp / ".proofs" / "review" / "styles" / "nope.css"), r.stderr)
+        self.assertIn(str(self.tmp / "styles" / "nope.css"), r.stderr)
 
     def test_session_page_with_no_out_goes_under_proofs_pages(self):
         shutil.copy(EXAMPLES / "session.json", self.tmp / ".proofs" / "session.json")

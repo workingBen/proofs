@@ -1,6 +1,6 @@
 ---
 name: design-review
-version: 1.10.0
+version: 1.10.1
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -42,7 +42,7 @@ The "before" is a screenshot of the page as the running app serves it today, nev
 Then, in order:
 
 1. **Find the start command** in the project's `CLAUDE.md` or README, then `package.json` scripts, `Procfile`, `bin/dev` or `manage.py runserver`. If none gives one, **ask the user**; do not switch to screenshots on your own. Missing dependencies are installed with the project's own install command, in the forms the README's `--project` allow block covers (for a Django app with no `.venv`: `python3 -m venv .venv`, then `.venv/bin/pip install -r requirements.txt`, then `--start ".venv/bin/python manage.py runserver 3311 --noreload"`). Do not probe first with `python3 -c "import ..."`: list the setup and run it.
-2. **Print "Commands this review will run"** before the first Bash call: one short list with the exact forms (the install, for example `npm install`, or the two Python lines above; the capture line below; the style build if the project compiles styles, or the shot shows the old look; the type check if the project has one, for example `npx tsc --noEmit`). Then run them without further narration. The README's optional project block can pre-approve them.
+2. **Print "Commands this review will run"** before the first Bash call: one short list with the exact forms (the install, for example `npm install`, or the two Python lines above; the capture line below; the style build if the project compiles styles, or the shot shows the old look; the type check if the project has one, in the form the project uses: `npx tsc --noEmit`, or for Vue `npx vue-tsc --noEmit`, or its own `npm run type-check` or `npm run build`). Then run them without further narration. The README's optional project block can pre-approve them.
 3. **Write the pages file** with the Write tool at `.proofs/capture/pages.json`: a base URL, then one entry per page (start from the example pages file in the visual-qa skill's scripts folder).
 4. **Capture with this command**, the same every time. It starts the server, waits for the URL, runs the capture with `PROOFS_BASE_URL` set, then stops the server. One permission prompt is expected.
 

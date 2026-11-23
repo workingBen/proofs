@@ -1,5 +1,6 @@
 # Changelog
 
+- **1.4.3** (2026-11-23): Names the type check in the form the project uses (`npx vue-tsc --noEmit` for Vue, or the project's own `npm run type-check` or `npm run build`); the opt-in `--project` block now covers those and the Svelte, Astro and Angular checks.
 - **1.4.2** (2026-11-23): `capture.cjs --sizes` also takes a desktop width from 400 to 2560 (for example `--sizes 390,1040,1440`), for a shot just above a breakpoint; with `--evidence` it is labeled with its width, like 1280.
 - **1.4.1** (2026-11-23): House rule 2: never `ls` or Read `~/.cache/proofs-playwright` to see whether Playwright is installed (outside the project, so the call is refused); the capture and `--smoke` report a missing install themselves.
 

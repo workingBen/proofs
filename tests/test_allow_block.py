@@ -390,7 +390,15 @@ STACK_CASES = {
 NEVER_PROJECT = ["python3 -c \"import django\"", "python3 evil.py", ".venv/bin/python manage.py shell -c 'x'",
                  ".venv/bin/python -c 'x'", ".venv/bin/pip install requests", "php -r 'x'", "php artisan tinker",
                  "bundle exec ruby -e 'x'", "bin/rails runner 'x'", "dotnet run", "node evil.js", "npm run anything",
-                 "npx anything", "uv run python -c 'x'", "mvn exec:java", "./gradlew run"]
+                 "npx anything", "uv run python -c 'x'", "mvn exec:java", "./gradlew run",
+                 # Dev servers go through with_server.py; a script name the block does not list still asks.
+                 "npm run dev", "npm start", "npm run deploy", "npx ng serve", "npx vite", "npx astro dev"]
+# Vue run 1 (B2): `npx vue-tsc --noEmit` was denied, so the type check was skipped. The front-end
+# frameworks' own checkers and the npm scripts a session runs to check its change, as typed.
+FRONTEND_CHECKS = ["npx vue-tsc --noEmit", "npx vue-tsc --build", "npx svelte-check",
+                   "npx svelte-check --tsconfig ./tsconfig.json", "npx astro check", "npx ng build",
+                   "npx ng test --watch=false", "npm run build", "npm test", "npm run test", "npm run lint",
+                   "npm run type-check", "npm run typecheck", "npm run check"]
 
 
 class StackRulesTest(unittest.TestCase):
@@ -450,6 +458,20 @@ class StackRulesTest(unittest.TestCase):
         self.assertEqual(allow_block.STACK_RULES["node"][:4], ["Bash(npm install)", "Bash(npm ci)",
                                                                "Bash(npm ci --prefix .proofs/base/*)",
                                                                "Bash(npx tsc --noEmit)"])
+
+    def test_node_rules_cover_the_front_end_frameworks_checks(self):
+        with tempfile.TemporaryDirectory() as d:
+            allow = self._allow(self._folder(d, ["package.json"]), "--project")
+        for cmd in FRONTEND_CHECKS:
+            with self.subTest(cmd=cmd):
+                self.assertTrue(check_skills.claude_code_allows(allow, cmd), cmd)
+
+    def test_npm_run_rules_name_each_script(self):
+        # Never Bash(npm run *): only the check and build scripts, each by name.
+        for r in allow_block.STACK_RULES["node"]:
+            if r.startswith("Bash(npm run"):
+                with self.subTest(rule=r):
+                    self.assertNotIn("*", r)
 
     def test_a_stack_gets_only_its_own_rules(self):
         with tempfile.TemporaryDirectory() as d:

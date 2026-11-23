@@ -48,7 +48,7 @@ BASH_RULE = re.compile(r"Bash\((python3|node) " + re.escape(ROOT) + r"/([\w./-]+
 # A skill that declares allowed-tools makes Claude Code ask before the Skill call itself.
 SKILL_RULE = "Skill(proofs:*)"
 # Opt-in (--project): the project's own commands the skills run. No home path in any rule, and
-# nothing that runs an arbitrary command (no with_server.py, no npm run, no bare interpreter, no
+# nothing that runs an arbitrary command (no with_server.py, no npm run *, no bare interpreter, no
 # bare wildcard): each wildcard rule names its subcommand first. Installs run the project's own
 # install scripts (package scripts, composer scripts, setup.py), which is the one risk.
 # Shared by every stack: the pr-qa base worktree, the Playwright install, opening pages.
@@ -87,6 +87,23 @@ STACK_RULES = {
         "Bash(pnpm install --frozen-lockfile)",
         "Bash(yarn install)",
         "Bash(yarn install --frozen-lockfile)",
+        # Vue run 1: a Vue app type-checks with vue-tsc, not tsc, and the check was skipped. The
+        # front-end frameworks' own checkers, then the check and build scripts, each by name (never
+        # `npm run *`: dev, start and deploy still ask, and dev servers go through with_server.py).
+        "Bash(npx vue-tsc --noEmit)",
+        "Bash(npx vue-tsc --build)",
+        "Bash(npx svelte-check)",
+        "Bash(npx svelte-check --tsconfig *)",
+        "Bash(npx astro check)",
+        "Bash(npx ng build)",
+        "Bash(npx ng test --watch=false)",
+        "Bash(npm run build)",
+        "Bash(npm test)",
+        "Bash(npm run test)",
+        "Bash(npm run lint)",
+        "Bash(npm run type-check)",
+        "Bash(npm run typecheck)",
+        "Bash(npm run check)",
     ],
     "python": [
         "Bash(python3 -m venv .venv)",

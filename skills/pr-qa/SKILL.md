@@ -1,6 +1,6 @@
 ---
 name: pr-qa
-version: 1.9.1
+version: 1.9.2
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/skills/pr-qa/scripts/pr_qa_page.py *)
@@ -439,8 +439,11 @@ Structure, in order:
    the user did not touch exports "(no decision yet)".
 
 **Embed the images as `data:` URIs.** A strict CSP blocks every external request, so
-a `src` pointing anywhere is a broken image. Eight PNGs is about 1.5 MB base64,
-well inside the 16 MB limit — but check, and say so if you have to drop a pair.
+a `src` pointing anywhere is a broken image. `pr_qa_page.py` embeds each shot as a
+WebP (a JPEG when that is smaller), scaling a page taller than WebP's 16383 px down to
+fit, so six full-page shots of a long page come to about 2.6 MB, not 14 MB of PNG
+(Vue run 1). With neither ImageMagick nor cwebp installed the PNGs go in as they are;
+check the size it prints, and say so if you have to drop a pair.
 
 **Put the QA on its own page, not in the working log.** A megabyte of base64 makes
 every later log update slow to publish. Link it from a working-log entry instead.

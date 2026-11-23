@@ -1,6 +1,6 @@
 ---
 name: visual-qa
-version: 1.4.2
+version: 1.4.3
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs *)
@@ -42,7 +42,7 @@ and colors (mockups reuse them), and anything already decided that must not be "
 3. **One command per Bash call.** No pipes, redirects, `;`, `&&`, `cd`, `$(...)` or `VAR=` in front: Claude Code matches its allow rules against the whole command, and any of those makes it ask (or, in `claude -p`, refuse).
 4. **Use the helpers' own checks, not ad hoc tools.** Capture prints each shot's size and overflow; never run `file`, `magick`/`identify` or `sips`, and change your own mockups with Edit or Write, never `sed -i`.
 
-- **Print "Commands this review will run"** before the first Bash call: one short list with the exact forms (the install, for example `npm install`; the capture line below; the style build if the project compiles styles; the type check if the project has one, for example `npx tsc --noEmit`). Then run them without further narration. The README's optional project block can pre-approve them.
+- **Print "Commands this review will run"** before the first Bash call: one short list with the exact forms (the install, for example `npm install`; the capture line below; the style build if the project compiles styles; the type check if the project has one, in the form the project uses: `npx tsc --noEmit`, or for Vue `npx vue-tsc --noEmit`, or its own `npm run type-check` or `npm run build`). Then run them without further narration. The README's optional project block can pre-approve them.
 - Run the branch under test on its own port (3311), never another session's server. Find the start command in the project's notes; install missing dependencies with the project's own command.
 - Make the data look like production (realistic counts, long names, missing values), touching
   only the feature's own tables. **Note the starting state first and put it back after.**

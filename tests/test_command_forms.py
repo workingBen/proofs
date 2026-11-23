@@ -170,7 +170,10 @@ class CommandFormsTest(unittest.TestCase):
         for rule in allow_block.project_rules(allow_block.STACKS):
             with self.subTest(rule=rule):
                 self.assertNotIn("with_server.py", rule)
-                self.assertNotIn("npm run", rule)
+                # Named check and build scripts only (Vue run 1): never `npm run *` or a
+                # wildcard script name, and never the dev server, which with_server.py starts.
+                if "npm run" in rule:
+                    self.assertRegex(rule, r"^Bash\(npm run (build|test|lint|type-?check|check)\)$")
                 self.assertNotIn("npx *", rule)
                 self.assertNotIn("sh -c", rule)
                 self.assertTrue(rule.startswith("Bash(") and rule.endswith(")"))

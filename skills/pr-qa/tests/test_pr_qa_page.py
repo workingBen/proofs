@@ -53,6 +53,19 @@ def write_evidence(directory, findings=None, shots=None, plan=None):
                 handle.write(b"\x89PNG\r\n\x1a\n" + marker.ljust(32, b"0"))
 
 
+def write_gradient_png(path, width, height):
+    """A real, compressible PNG (a gradient), stdlib only -- like a screenshot, smaller lossy."""
+    import struct
+    import zlib
+    raw = b"".join(b"\x00" + b"".join(bytes(((x * 7 + y * 3) % 256, (x * 2) % 256, (y * 5) % 256))
+                                       for x in range(width)) for y in range(height))
+    def chunk(t, d):
+        return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xFFFFFFFF)
+    with open(path, "wb") as handle:
+        handle.write(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+                     + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+
+
 def node_env(case, root):
     """Environment for the jsdom-driven tests; skips them when jsdom is missing.
 
@@ -167,6 +180,28 @@ class EmbedTest(unittest.TestCase):
             with open(path, "wb") as handle:
                 handle.write(b"\x89PNG\r\n\x1a\n")
             self.assertTrue(data_uri(path).startswith("data:image/png;base64,"))
+
+    @unittest.skipUnless(shutil.which("magick") or shutil.which("cwebp"), "no image encoder installed")
+    def test_a_screenshot_is_embedded_compressed(self):
+        # Vue run 1: six full-page PNGs made a 14.1 MB page. A real screenshot now goes in
+        # as WebP (or JPEG), whichever is smallest, at a fraction of the PNG's bytes.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "shot.png")
+            write_gradient_png(path, 300, 400)
+            uri = data_uri(path)
+            self.assertRegex(uri[:30], r"^data:image/(webp|jpeg);base64,")
+            png = os.path.getsize(path) * 4 / 3
+            self.assertLess(len(uri), png / 3, "a screenshot should embed at under a third of its PNG size")
+
+    @unittest.skipUnless(shutil.which("magick") or shutil.which("cwebp"), "no image encoder installed")
+    def test_a_page_taller_than_webp_allows_is_still_compressed(self):
+        # The phone shot was 780 x 27188 px, past WebP's 16383 px limit, so it must not fall back to PNG.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "tall.png")
+            write_gradient_png(path, 60, 20000)
+            uri = data_uri(path)
+            self.assertRegex(uri[:30], r"^data:image/(webp|jpeg);base64,")
+            self.assertLess(len(uri), os.path.getsize(path) * 4 / 3)
 
     def test_pairs_carry_both_sizes_and_both_labels(self):
         with tempfile.TemporaryDirectory() as tmp:

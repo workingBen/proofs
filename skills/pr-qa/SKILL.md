@@ -1,6 +1,6 @@
 ---
 name: pr-qa
-version: 1.8.0
+version: 1.9.0
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/skills/pr-qa/scripts/pr_qa_page.py *)
@@ -51,7 +51,7 @@ The whole flow for a PR whose app runs with one start command. The goal is a bui
 **House rules.** Same as every proofs capture skill; full text in `../../reference/house-rules.md`.
 
 1. **Finish in this turn.** Build, smoke-check and screenshot before you reply; the next turn re-reads the whole session and costs more each time. Write big files (HTML, spec JSON, scripts) with the Write tool and never print them back with `cat`, `head` or `Read`; the helpers print short summaries.
-2. **Stay in two folders.** Read only inside the project (the folder Claude Code started in) and the plugin folder. Do not read parent folders: their `CLAUDE.md` is already loaded for you. Write specs, scratch scripts, screenshots and pages only under `.proofs/` in the project, never the system temp folder, `$TMPDIR` or `~`. The exceptions are the Playwright install in `~/.cache/proofs-playwright` and pr-qa's `PROOFS_BASE_DIR` base folder, when it is set.
+2. **Stay in two folders.** Read only inside the project (the folder Claude Code started in) and the plugin folder. Do not read parent folders: their `CLAUDE.md` is already loaded for you. Write specs, scratch scripts, screenshots and pages only under `.proofs/` in the project, never the system temp folder, `$TMPDIR` or `~`. The exceptions are the Playwright install in `~/.cache/proofs-playwright` and pr-qa's `PROOFS_BASE_DIR` base folder, when it is set. Write the Playwright folder only with its one install line; never `ls` or Read it to see whether Playwright is there (it is outside the project, so the call is refused): the capture and `--smoke` report a missing install themselves, with exit 2 and the line to run.
 3. **One command per Bash call.** No pipes, redirects, `;`, `&&`, `cd`, `$(...)` or `VAR=` in front: Claude Code matches its allow rules against the whole command, and any of those makes it ask (or, in `claude -p`, refuse).
 4. **Use the helpers' own checks, not ad hoc tools.** Capture prints each shot's size and overflow; never run `file`, `magick`/`identify` or `sips`, and change your own mockups with Edit or Write, never `sed -i`.
 
@@ -182,6 +182,15 @@ no token, no network, or no open PR, so it can never keep a session from startin
      turn then never ends.
 4. **Run the PR's own tests**, and say whether it added any. "Tests pass" and "this
    PR is tested" are different claims.
+
+   **Not a Node app?** Use the project's own toolchain in the same slots, in the
+   exact forms the README's `--project` allow block covers (it reads the stack from
+   the project's marker files; `--stack` names it when there are none). For a
+   Django app: `python3 -m venv .venv` and `.venv/bin/pip install -r requirements.txt`
+   in place of `npm ci`, `--start ".venv/bin/python manage.py runserver 3411 --noreload"`
+   for the helper, and `.venv/bin/python manage.py test` for the tests; the before
+   run can start the checkout's `.venv` by its path. Other forms (the system Python running
+   `manage.py`, `source .venv/bin/activate`, `python3 -c ...`) are not covered, so they ask.
 5. **Look for what tests cannot see** — the list below.
 6. **Build the Artifact**, publish, and put the link in the working log if the
    project keeps one (see the `working-log` skill).

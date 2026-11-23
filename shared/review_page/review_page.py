@@ -3,6 +3,7 @@
 
 Usage:
   review_page.py SPEC.json --out PAGE.html [--no-check]   build (then check)
+  review_page.py SPEC.json                                session/log: to .proofs/pages/SPEC.html
   review_page.py --check PAGE.html                        node --check + structure
   review_page.py --smoke PAGE.html [--playwright DIR]     click through in Chromium
 
@@ -81,6 +82,8 @@ PRESETS = {
 }
 CATEGORY_COLORS = ["#2563eb", "#b45309", "#047857", "#9333ea", "#be123c", "#0e7490", "#4d7c0f", "#c2410c"]
 MODES = ("review", "questions", "log", "session")
+# Modes built with no --out go to .proofs/pages/<spec name>.html.
+DEFAULT_OUT_MODES = ("log", "session")
 # The skill named in the page's brand pill when the spec gives no `skill`: a review
 # page takes it from its decisions preset (a custom set with no preset shows the
 # wordmark alone), the other modes from their kind of page.
@@ -296,9 +299,17 @@ def load_spec(spec_path):
     tool = image_tool()
     report = {"converted": 0, "before": 0, "after": 0, "fallback": 0, "missing_tool": False, "settings": settings}
     for name, rel in (spec.get("assets") or {}).items():
-        p = (path.parent / rel).resolve()
-        if not p.is_file():
-            raise SpecError("asset %r not found: %s" % (name, rel))
+        # Relative to the spec first, then to the working directory (the project folder),
+        # where sessions usually write the path from (Django run 2).
+        tried = []
+        for base in (path.parent, Path.cwd()):
+            p = (base / rel).resolve()
+            if p not in tried:
+                tried.append(p)
+            if p.is_file():
+                break
+        else:
+            raise SpecError("asset %r not found: %s (tried %s)" % (name, rel, " and ".join(map(str, tried))))
         assets[name] = embed_asset(p, settings, tool, report)
     spec["_assets"] = assets
     spec["_image_report"] = report
@@ -1204,7 +1215,7 @@ def smoke(path, playwright=None):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("spec", nargs="?", help="JSON spec to build")
-    ap.add_argument("--out", help="where to write the page")
+    ap.add_argument("--out", help="where to write the page (a session or log page defaults to .proofs/pages/SPEC.html)")
     ap.add_argument("--no-check", action="store_true", help="skip the check after building")
     ap.add_argument("--check", metavar="PAGE", help="check a built page")
     ap.add_argument("--smoke", metavar="PAGE", help="click through a built page in headless Chromium")
@@ -1227,10 +1238,15 @@ def main(argv=None):
             return 0 if ok else 1
         print("check: ok (%s)" % target)
         return 0
-    if not a.spec or not a.out:
+    if not a.spec:
         ap.error("give SPEC.json --out PAGE.html, or --check PAGE, or --smoke PAGE")
     try:
         spec = load_spec(a.spec)
+        if not a.out:
+            if spec["mode"] not in DEFAULT_OUT_MODES:
+                ap.error("give --out PAGE.html (only a session or log page has a default)")
+            # Under .proofs/pages/, the one folder the optional `open` allow rule covers.
+            a.out = str(Path(".proofs", "pages", Path(a.spec).stem + ".html"))
         text = page(spec)
     except (SpecError, ValueError, KeyError) as e:
         print("spec error: %s" % e, file=sys.stderr)

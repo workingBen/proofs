@@ -15,7 +15,8 @@
 //     ]
 //   }
 //
-// --sizes picks viewports by label (default: all of 1440, 1280, 390).
+// --sizes picks viewports by label (default: all of 1440, 1280, 390), or adds a desktop width
+// such as 1040 (400 to 2560), for a shot just above a breakpoint.
 // PROOFS_BASE_URL, when set, replaces "base" (so it runs unchanged after with_server.py --).
 // --evidence <label> prefixes every file the run writes with "<label>-" (a before and an
 // after run can share one --out) and also writes <out>/<label>.json in the shape pr-qa reads.
@@ -57,6 +58,21 @@ const VIEWPORTS = [
   { label: '1280', width: 1280, height: 800 },
   { label: '390', width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 2 },
 ];
+
+// Any other whole-number width in this range is a desktop viewport too, for a shot just
+// above a CSS breakpoint the change adds (pr-qa: lg: at 1024 gets 1040).
+const EXTRA_MIN = 400, EXTRA_MAX = 2560;
+const extraWidth = (label) => label !== '1440' && label !== '390';
+
+// The named viewports in their usual order, then extra widths widest first, then the phone.
+function pickViewports(sizes) {
+  const named = VIEWPORTS.filter((v) => sizes.includes(v.label));
+  const extra = [...new Set(sizes.filter((s) => /^\d+$/.test(s) && !VIEWPORTS.some((v) => v.label === s))
+    .map(Number).filter((w) => w >= EXTRA_MIN && w <= EXTRA_MAX))]
+    .sort((a, b) => b - a).map((w) => ({ label: String(w), width: w, height: 900 }));
+  const phone = named.filter((v) => v.isMobile);
+  return [...named.filter((v) => !v.isMobile), ...extra, ...phone];
+}
 
 // Runs in the page. Returns raw numbers; pass/fail is decided in Node.
 function measure({ items, minText, minTap }) {
@@ -269,9 +285,10 @@ function verdicts(m, vpLabel) {
   const evidence = opt('--evidence');
   const prefix = evidence ? `${evidence}-` : '';
   const sizes = opt('--sizes') ? opt('--sizes').split(',').map((x) => x.trim()) : null;
-  const viewports = sizes ? VIEWPORTS.filter((v) => sizes.includes(v.label)) : VIEWPORTS;
+  const viewports = sizes ? pickViewports(sizes) : VIEWPORTS;
   if (!viewports.length) {
-    console.error(`--sizes ${sizes.join(',')} matches none of ${VIEWPORTS.map((v) => v.label).join(', ')}`);
+    console.error(`--sizes ${sizes.join(',')} matches none of ${VIEWPORTS.map((v) => v.label).join(', ')}, `
+      + `or a desktop width from ${EXTRA_MIN} to ${EXTRA_MAX}`);
     process.exit(1);
   }
   const base = process.env.PROOFS_BASE_URL || cfg.base;
@@ -346,7 +363,9 @@ function verdicts(m, vpLabel) {
   if (evidence) {
     const shots = results.filter((r) => !r.error).map((r) => ({
       label: r.viewport, size: r.viewport === '390' ? 'phone' : 'desktop',
-      slug: `${r.page}-${r.state}${r.viewport === '1280' ? '-1280' : ''}`, pageLabel: r.viewport === '1280' ? `${r.page} (1280)` : r.page,
+      // 1440 and the phone are the page's default pair; any other width is its own page, labeled with the width.
+      slug: `${r.page}-${r.state}${extraWidth(r.viewport) ? `-${r.viewport}` : ''}`,
+      pageLabel: extraWidth(r.viewport) ? `${r.page} (${r.viewport})` : r.page,
       path: cfg.pages.find((p) => p.name === r.page && (p.state || 'default') === r.state).path,
       file: `${r.file}-full.png`,
       overflow: r.measures.sideways, overflowing: r.measures.overflowing,

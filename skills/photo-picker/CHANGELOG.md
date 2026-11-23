@@ -1,5 +1,6 @@
 # Changelog
 
+- **1.3.2** (2026-11-23): Gives the exact build line with `--out .proofs/pages/<name>.html`, the one folder the optional `open` allow rule covers, so the page can be opened. A spec's asset path that is not found next to the spec is now tried from the working directory, and the error names both paths.
 - **1.3.1** (2026-11-22): Says to run `--smoke` every time: if it reports Playwright missing, run the one-line install it prints (no browser download) and run it again; if it still cannot run, say on the page and in chat that the self-check did not run. It no longer reads as optional when Playwright is absent.
 - **1.3.0** (2026-11-22): Runs its scripts (`review_page.py`) through `${CLAUDE_PLUGIN_ROOT}` and pre-approves them and reads of the plugin's own files, so a session no longer asks permission for each one.
 - **1.2.1** (2026-11-19): Screenshots and photos show on older iPhones again (Safari before iOS 14 showed a broken "?"). Each WebP image now carries a PNG or JPEG fallback in a `<picture>`, and an image used more than once is filled in from a JSON map instead of a CSS variable older Safari could not read back. Pages are a little larger, by the size of the fallbacks.

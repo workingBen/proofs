@@ -1,6 +1,6 @@
 ---
 name: qa-checklist
-version: 1.2.1
+version: 1.2.2
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -38,7 +38,7 @@ Read `../../reference/review-page.md` first. Do not hand-write the page's JavaSc
 
 - **On the session page:** the `qa` list in working-log's session spec.
 - **Standalone:** `"mode": "questions"` with only a `qa` list, built with
-  `python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py spec.json --out checks.html`.
+  `python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py .proofs/checks.json --out .proofs/pages/checks.html`.
   `../../shared/review_page/examples/qa-checklist.json` is a working example. Fill `project` with `name`, `session` and `repo`, taking
   the session name the way the `working-log` skill does: the page's header shows the proofs
   mark, a `qa-checklist` pill, the project and the session, so the user can tell which

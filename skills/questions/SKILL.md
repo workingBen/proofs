@@ -1,6 +1,6 @@
 ---
 name: questions
-version: 1.3.1
+version: 1.3.2
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -56,7 +56,7 @@ Read `../../reference/review-page.md` first. Do not hand-write the page's JavaSc
 - **On the session page:** the `questions` list in working-log's session spec
   (`"mode": "session"`).
 - **Standalone:** `"mode": "questions"` with a `questions` list, built with
-  `python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py spec.json --out questions.html`.
+  `python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py .proofs/questions.json --out .proofs/pages/questions.html`.
   `../../shared/review_page/examples/questions.json` is a working example.
   Fill `project` with `name`, `session` and `repo`, taking the session name the way the `working-log` skill does (the session's own name, else one named for the work, kept for the life of the page): the page's header shows the proofs mark, this skill's name, the project and the session, so the user can match the page to its session at a glance.
 

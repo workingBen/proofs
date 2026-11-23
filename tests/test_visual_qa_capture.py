@@ -256,6 +256,15 @@ class PhoneWidth(unittest.TestCase):
             self.assertNotIn("(1280)", by["1440"]["pageLabel"])
             self.assertTrue(by["1280"]["pageLabel"].endswith(" (1280)"), by["1280"]["pageLabel"])
 
+    def test_breakpoint_width_gets_its_own_pr_qa_key(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.capture(tmp, "fits.html", "--sizes", "1440,1040", "--evidence", "after")
+            shots = json.loads((Path(tmp) / "out" / "after.json").read_text())["shots"]
+            by = {s["label"]: s for s in shots}
+            self.assertEqual(by["1040"]["size"], "desktop")
+            self.assertTrue(by["1040"]["pageLabel"].endswith(" (1040)"), by["1040"]["pageLabel"])
+            self.assertNotEqual(by["1040"]["slug"], by["1440"]["slug"])
+
     def test_two_labels_share_one_out_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.capture(tmp, "fits.html", "--sizes", "390", "--evidence", "before")
@@ -303,6 +312,46 @@ module.exports = { chromium: { launch: async () => ({ newContext: async () => co
             self.assertEqual(r.returncode, 3, r.stderr)
             self.assertIn("the browser laid the page out at 500 px, not 390 px; the capture is not trustworthy", r.stderr)
             self.assertFalse((tmp / "out" / "measures.json").exists())
+
+    def run_sizes(self, sizes):
+        """Run with a Playwright stand-in that records each context's viewport; returns (result, widths)."""
+        fake = r"""
+const fs = require('fs');
+const page = { on() {}, goto: async () => { throw new Error('fake: stop'); } };
+const context = { newPage: async () => page, close: async () => {} };
+module.exports = { chromium: { launch: async () => ({ close: async () => {},
+  newContext: async (o) => { fs.appendFileSync(process.env.FAKE_LOG, JSON.stringify(o) + '\n'); return context; } }) } };
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            pkg = tmp / "node_modules" / "playwright"
+            pkg.mkdir(parents=True)
+            (pkg / "package.json").write_text('{"name": "playwright", "main": "index.js"}')
+            (pkg / "index.js").write_text(fake)
+            (tmp / "pages.json").write_text(json.dumps({"base": "http://localhost:9", "pages": [{"name": "x", "path": "/"}]}))
+            log = tmp / "ctx.log"
+            env = {k: v for k, v in os.environ.items() if k not in ("NODE_PATH", "PLAYWRIGHT_PATH", "PROOFS_PLAYWRIGHT")}
+            env.update(HOME=str(tmp), FAKE_LOG=str(log))
+            r = subprocess.run([NODE, str(CAPTURE), str(tmp / "pages.json"), "--out", str(tmp / "out"), "--sizes", sizes],
+                               cwd=tmp, env=env, capture_output=True, text=True, timeout=60)
+            ctx = [json.loads(l) for l in log.read_text().splitlines()] if log.exists() else []
+            return r, ctx
+
+    def test_sizes_take_a_breakpoint_width(self):
+        # Django run 2: a PR adding an lg: two-column layout needs a shot just above 1024.
+        r, ctx = self.run_sizes("390,1440,1040")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual([c["viewport"]["width"] for c in ctx], [1440, 1040, 390])
+        wide = [c for c in ctx if c["viewport"]["width"] == 1040][0]
+        self.assertNotIn("isMobile", wide)
+        self.assertEqual(wide["viewport"]["height"], 900)
+
+    def test_sizes_refuse_widths_out_of_range(self):
+        for bad in ("100", "1040px", "9000"):
+            r, ctx = self.run_sizes(bad)
+            self.assertEqual(r.returncode, 1, bad)
+            self.assertIn("matches none", r.stderr)
+            self.assertEqual(ctx, [])
 
     def test_not_found_message_names_proofs_playwright(self):
         with tempfile.TemporaryDirectory() as tmp:

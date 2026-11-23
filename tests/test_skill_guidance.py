@@ -202,6 +202,14 @@ class PrQaGuidance(unittest.TestCase):
         text = section("pr-qa", "Default path")
         self.assertLess(text.index("pr_qa_page.py"), text.index("polish"))
 
+    def test_breakpoint_in_the_diff_adds_a_width_just_above_it(self):
+        # Django run 2: an lg: two-column hero was shot only at 390 and 1440.
+        text = section("pr-qa", "Default path")
+        for prefix, width in (("sm:", "656"), ("md:", "784"), ("lg:", "1040"), ("xl:", "1280")):
+            self.assertRegex(text, r"`%s`[^`]*?\b%s\b" % (re.escape(prefix), width), prefix)
+        self.assertIn("--sizes 390,1040,1440", text)
+        self.assertIn("at most two", text)
+
     def test_no_redirect_for_findings(self):
         text = self.pr_qa()
         self.assertNotIn("> <dir>/findings.json", text)
@@ -448,6 +456,19 @@ class AdHocShellAndOpen(unittest.TestCase):
                     in_fence = not in_fence
                 elif in_fence:
                     self.assertIsNone(re.match(r"\s*(sed -i|magick|identify|file|sips)\b", line), f"{path.parent.name}: {line[:80]}")
+
+    def test_every_page_build_writes_under_proofs_pages(self):
+        # Django run 2: working-log built .proofs/session.html, which the `open .proofs/pages/*` rule missed.
+        builders = r"(?:review_page\.py|pr_qa_page\.py|todos_page\.py)"
+        found = 0
+        for path in guidance_files():
+            for m in re.finditer(builders + r" [^`\n]*?--out (\S+?)`?(?=[\s`;,)]|$)", path.read_text()):
+                out = m.group(1).strip("`")
+                if out.startswith("<"):  # a placeholder in a helper's usage line
+                    continue
+                found += 1
+                self.assertTrue(out.startswith(".proofs/pages/"), f"{path.relative_to(REPO)}: --out {out}")
+        self.assertGreaterEqual(found, 8)
 
     def test_design_review_points_at_the_helpers_checks(self):
         text = (REPO / "skills" / "design-review" / "SKILL.md").read_text()

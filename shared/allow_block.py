@@ -10,7 +10,7 @@ permissions.allow list. --headless adds one more rule, for unattended (claude -p
 only: it pre-approves shared/capture/with_server.py, which runs whatever --start command
 it is given, so it is never in the standard output. --project prints a separate,
 opt-in block for the project's own commands (its toolchain's install, test and type-check
-lines, the pr-qa base worktree, the one-time Playwright install, opening pages under
+lines, the pr-qa base worktree and its read-only gh pr lines, the one-time Playwright install, opening pages under
 .proofs/pages) and nothing else; it holds no home path, so it may go in a committed
 .claude/settings.json, but its installs run the project's own install scripts. The
 toolchain comes from marker files in the folder you run it in (package.json for node,
@@ -57,6 +57,9 @@ PROJECT_RULES = [
     "Bash(printenv PROOFS_BASE_DIR)",
     "Bash(gh pr list *)",
     "Bash(gh pr checkout *)",
+    # Read-only: another open PR's files and details, to check for overlap (Django run 2).
+    "Bash(gh pr diff *)",
+    "Bash(gh pr view *)",
     # The default base folder only; a PROOFS_BASE_DIR base is an absolute path, so it still asks.
     "Bash(cp .env .proofs/base/*)",
     "Bash(git fetch origin)",

@@ -1,5 +1,6 @@
 # Changelog
 
+- **1.12.3** (2026-11-23): Gives the exact build line, `review_page.py .proofs/session.json --out .proofs/pages/session.html`: a page built at `.proofs/session.html` was outside `.proofs/pages/`, so the `open` allow rule missed it. A session or log spec built with no `--out` now goes to `.proofs/pages/<spec name>.html`. A spec's asset path that is not found next to the spec is now tried from the working directory, and the error names both paths.
 - **1.12.2** (2026-11-23): House rule 2: never `ls` or Read `~/.cache/proofs-playwright` to see whether Playwright is installed (outside the project, so the call is refused); the capture and `--smoke` report a missing install themselves.
 
 - **1.12.1** (2026-11-23): The build refuses a session-page log entry that asks: a status other than Background, Queued or Done (no more "Your move"), or a lede ending in a question mark. A free-text question once went out as a log entry, because only entries with option buttons were refused, and the reader had to find it in the log.

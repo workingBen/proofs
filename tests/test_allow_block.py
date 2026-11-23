@@ -179,6 +179,19 @@ class AllowBlockTest(unittest.TestCase):
             self.assertFalse(check_skills.claude_code_allows(allow_block.PROJECT_RULES, cmd), cmd)
         self.assertFalse(check_skills.claude_code_allows(allow_block.PROJECT_RULES, "cp .env /opt/claude-home/base/web/.env"))
 
+    def test_project_rules_let_pr_qa_read_other_open_prs(self):
+        # Django run 2: pr-qa checked overlap with another open PR via `gh pr diff 2 --name-only`.
+        for cmd in ("gh pr diff 2 --name-only", "gh pr diff 7", "gh pr view 2 --json files,title"):
+            self.assertTrue(check_skills.claude_code_allows(allow_block.PROJECT_RULES, cmd), cmd)
+        # Read-only only: nothing that edits, merges, closes or comments on a PR.
+        for cmd in ("gh pr merge 2", "gh pr close 2", "gh pr edit 2 --title x", "gh pr comment 2 -b x",
+                    "gh pr review 2 --approve"):
+            self.assertFalse(check_skills.claude_code_allows(allow_block.PROJECT_RULES, cmd), cmd)
+        for flags in (["--project", "--commit"], ["--headless", "--project", "--commit"]):
+            allow = json.loads(self._cli("/opt/claude-home", None, *flags).stdout)["permissions"]["allow"]
+            self.assertEqual(len(allow), len(set(allow)), flags)
+            self.assertEqual(allow.count("Bash(gh pr diff *)"), 1, flags)
+
     def test_readme_offers_the_project_block_labeled_and_apart(self):
         text = (REPO / "README.md").read_text()
         section = text[text.index("<!-- allow-proofs:start -->"):text.index("<!-- allow-proofs:end -->")]

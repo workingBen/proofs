@@ -21,6 +21,8 @@ _loader.exec_module(check_skills)
 ROOT = "${CLAUDE_PLUGIN_ROOT}"
 README_HOME = "/YOUR/HOME"
 FAKE_VERSION_ROOT = "/opt/claude-home/.claude/plugins/cache/proofs/proofs/1.2.0"
+# --project in a folder with no marker file keeps the pre-1.6.0 output: npm rules, then the shared ones.
+NO_MARKER_RULES = allow_block.STACK_RULES["node"] + allow_block.PROJECT_RULES
 
 
 def skill_files():
@@ -151,9 +153,9 @@ class AllowBlockTest(unittest.TestCase):
     def test_project_flag_prints_only_the_project_rules(self):
         r = self._cli("/opt/claude-home", None, "--project")
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertEqual(json.loads(r.stdout), {"permissions": {"allow": allow_block.PROJECT_RULES}})
+        self.assertEqual(json.loads(r.stdout), {"permissions": {"allow": NO_MARKER_RULES}})
         r = self._cli("/opt/claude-home", None, "--lines", "--project")
-        self.assertEqual(json.loads("[" + r.stdout + "]"), allow_block.PROJECT_RULES)
+        self.assertEqual(json.loads("[" + r.stdout + "]"), NO_MARKER_RULES)
         self.assertNotIn("/opt/claude-home", r.stdout)
 
     def test_project_rules_are_never_in_the_default_or_headless_output(self):
@@ -166,7 +168,7 @@ class AllowBlockTest(unittest.TestCase):
         r = self._cli("/opt/claude-home", None, "--project", "--headless")
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(json.loads(r.stdout)["permissions"]["allow"],
-                         allow_block.rules("/opt/claude-home", None, headless=True) + allow_block.PROJECT_RULES)
+                         allow_block.rules("/opt/claude-home", None, headless=True) + NO_MARKER_RULES)
 
     def test_project_rules_cover_the_pr_qa_commands(self):
         for cmd in ("printenv PROOFS_BASE_DIR", "gh pr checkout 7", "gh pr list --state open", "cp .env .proofs/base/web/.env",
@@ -227,12 +229,12 @@ class AllowBlockTest(unittest.TestCase):
         r = self._cli("/opt/claude-home", None, "--project", "--commit")
         self.assertEqual(r.returncode, 0, r.stderr)
         allow = json.loads(r.stdout)["permissions"]["allow"]
-        self.assertEqual(allow, allow_block.PROJECT_RULES + allow_block.COMMIT_RULES)
+        self.assertEqual(allow, NO_MARKER_RULES + allow_block.COMMIT_RULES)
         r = self._cli("/opt/claude-home", None, "--headless", "--project", "--commit")
         self.assertEqual(r.returncode, 0, r.stderr)
         allow = json.loads(r.stdout)["permissions"]["allow"]
         self.assertEqual(allow, allow_block.rules("/opt/claude-home", None, headless=True)
-                         + allow_block.PROJECT_RULES + allow_block.COMMIT_RULES)
+                         + NO_MARKER_RULES + allow_block.COMMIT_RULES)
         self.assertEqual(len(allow), len(set(allow)))
 
     def test_unknown_flag_still_rejected(self):
@@ -329,7 +331,7 @@ class AllowBlockTest(unittest.TestCase):
             other = self._local_marketplace(config, "tap-to-fix", [{"name": "tap-to-fix", "source": "./"}])
             self._known(config, {"tap-to-fix": {"source": {"source": "directory", "path": other}}})
             allow = self._allow(config, "--headless", "--project")
-            base = allow_block.rules("/opt/claude-home", config, headless=True) + allow_block.PROJECT_RULES
+            base = allow_block.rules("/opt/claude-home", config, headless=True) + NO_MARKER_RULES
         self.assertEqual(allow, base)
         self.assertFalse(any(other in r for r in allow), allow)
 
@@ -477,12 +479,21 @@ class StackRulesTest(unittest.TestCase):
                 with self.subTest(args=args):
                     self.assertEqual(self._cli(d, *args).returncode, 2)
 
-    def test_no_stack_found_prints_the_shared_rules_and_says_how_to_name_one(self):
+    def test_no_marker_keeps_the_npm_rules_and_says_how_to_name_a_stack(self):
+        # Nobody upgrading loses rules: with no marker file, --project prints what it printed before.
         with tempfile.TemporaryDirectory() as d:
             r = self._cli(d, "--project")
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertEqual(json.loads(r.stdout)["permissions"]["allow"], allow_block.PROJECT_RULES)
-        self.assertIn("--stack", r.stderr)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            allow = json.loads(r.stdout)["permissions"]["allow"]
+            self.assertEqual(allow, allow_block.STACK_RULES["node"] + allow_block.PROJECT_RULES)
+            for cmd in ("npm install", "npm ci", "npm ci --prefix .proofs/base/web", "npx tsc --noEmit"):
+                self.assertTrue(check_skills.claude_code_allows(allow, cmd), cmd)
+            self.assertIn("--stack", r.stderr)
+            self.assertIn("node", r.stderr)
+            allow = self._allow(d, "--headless", "--project", "--commit")
+        self.assertEqual(allow, allow_block.rules("/opt/claude-home", None, headless=True)
+                         + allow_block.STACK_RULES["node"] + allow_block.PROJECT_RULES + allow_block.COMMIT_RULES)
+        self.assertEqual(len(allow), len(set(allow)))
 
     def test_no_duplicates_with_headless_and_commit(self):
         for stack, (markers, _cmds) in STACK_CASES.items():

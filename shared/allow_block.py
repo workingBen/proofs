@@ -17,7 +17,8 @@ toolchain comes from marker files in the folder you run it in (package.json for 
 requirements.txt, pyproject.toml or manage.py for python, composer.json for php, Gemfile
 for ruby, a *.csproj or *.sln for dotnet, pom.xml or build.gradle for java); --stack
 names it instead, when there is no marker (for example --stack python, or --stack
-python,node for two). --project may be combined with --headless (the output is both
+python,node for two). With no marker and no --stack it prints the node rules, as
+before 1.6.0, and says so on stderr. --project may be combined with --headless (the output is both
 sets, so it holds the home folder again). --commit prints a second opt-in block for
 saving and sharing work (git add, git commit, git push -u origin HEAD, gh pr create). It
 is opt-in, never part of --project, because git push and gh pr create reach GitHub; it
@@ -284,9 +285,11 @@ def main(argv):
     if "--project" in args and stacks is None:
         stacks = detect_stacks(os.getcwd())
         if not stacks:
+            # As before 1.6.0, so nobody upgrading loses rules: npm, then the shared ones.
+            stacks = ["node"]
             print("allow_block: no project marker file here (package.json, requirements.txt, composer.json, "
-                  "Gemfile, *.csproj, pom.xml, ...), so only the shared project rules are printed. Run it in the "
-                  "project folder, or name the toolchain with --stack (one of: %s)." % ", ".join(STACKS),
+                  "Gemfile, *.csproj, pom.xml, ...), so the node (npm) rules are printed, as before. Run it in "
+                  "the project folder, or name the toolchain with --stack (one of: %s)." % ", ".join(STACKS),
                   file=sys.stderr)
     project = project_rules(stacks) if "--project" in args else []
     home = os.environ.get("HOME") or str(Path.home())

@@ -39,7 +39,8 @@ FENCE = re.compile(r"^\s*```(\S*)\s*$")
 
 
 def all_rules():
-    return allow_block.rules(HOME, None, headless=True) + allow_block.PROJECT_RULES
+    # Every stack's project rules: a skill's fences show commands for any stack.
+    return allow_block.rules(HOME, None, headless=True) + allow_block.project_rules(allow_block.STACKS)
 
 
 def allowed(cmd):
@@ -157,7 +158,7 @@ class CommandFormsTest(unittest.TestCase):
         self.assertFalse(check_skills.claude_code_allows([rule], "cd x"))
 
     def test_project_rules_hold_no_home_path(self):
-        for rule in allow_block.PROJECT_RULES:
+        for rule in allow_block.project_rules(allow_block.STACKS):
             with self.subTest(rule=rule):
                 self.assertFalse(re.search(r"(?<![~\w.])/(?:Users|home|root|opt)/", rule), rule)
                 self.assertNotIn("claude-home", rule)
@@ -166,7 +167,7 @@ class CommandFormsTest(unittest.TestCase):
                       allow_block.PROJECT_RULES)
 
     def test_project_rules_never_run_arbitrary_commands(self):
-        for rule in allow_block.PROJECT_RULES:
+        for rule in allow_block.project_rules(allow_block.STACKS):
             with self.subTest(rule=rule):
                 self.assertNotIn("with_server.py", rule)
                 self.assertNotIn("npm run", rule)

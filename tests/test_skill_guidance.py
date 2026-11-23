@@ -50,6 +50,33 @@ class DesignReviewGuidance(unittest.TestCase):
         self.assertIn("committed screenshot", text)
         self.assertIn("git log -1 --format=%cs", text)
 
+    def test_an_app_that_cannot_start_stops_and_asks(self):
+        # Django run 1 (B1): the venv was denied and the review was built on committed PNGs, unasked.
+        text = self.step2()
+        ask = text[text.index("**When the app cannot start, stop and ask.**"):]
+        ask = ask[:ask.index("\n\n")]
+        self.assertIn("(a)", ask)
+        self.assertIn("(b)", ask)
+        self.assertIn("python3 -m venv .venv", ask)
+        self.assertIn(".venv/bin/pip install -r requirements.txt", ask)
+        self.assertIn("not live", ask)
+        self.assertIn("before you build", ask)
+        self.assertIn("End the turn", ask)
+        self.assertNotIn("may stand in", text)
+
+    def test_mockup_fonts_never_depend_on_a_fetch(self):
+        text = section("design-review", "4.")
+        fonts = text[text.index("**Fonts and images.**"):]
+        fonts = fonts[:fonts.index("\n- ")]
+        self.assertNotIn("download the real fonts", fonts)
+        self.assertIn("head_html", fonts)
+        self.assertIn("<link", fonts)
+        self.assertIn("fallback stack", fonts)
+        self.assertIn("curl", fonts)
+        self.assertIn("{{asset:", fonts)
+        ref = (REPO / "reference" / "review-page.md").read_text()
+        self.assertIn("fallback stack", ref)
+
     def test_no_free_standing_poll_loop(self):
         self.assertNotIn("seq 1 20", self.step2())
 
@@ -317,6 +344,23 @@ class HouseRules(unittest.TestCase):
             for rule in ("**Finish in this turn.**", "**Stay in two folders.**", "**One command per Bash call.**"):
                 with self.subTest(skill=skill, rule=rule):
                     self.assertIn(rule, text)
+
+    def test_the_playwright_cache_is_never_listed(self):
+        # Django run 1 (C3): `ls .proofs ~/.cache/proofs-playwright` was denied; the capture says it itself.
+        ref = (REPO / "reference" / "house-rules.md").read_text()
+        rule = next(l for l in ref.splitlines() if "**Stay in two folders.**" in l)
+        self.assertIn("never `ls` or Read it", rule)
+        for skill in HOUSE_RULE_SKILLS:
+            text = (REPO / "skills" / skill / "SKILL.md").read_text()
+            with self.subTest(skill=skill):
+                self.assertIn(rule.split(". ", 1)[1], text)
+
+    def test_pr_qa_names_the_non_node_forms(self):
+        # Django run 1 (C3): `.venv/bin/python manage.py test` was refused; --project now covers it.
+        text = section("pr-qa", "The Sequence")
+        for form in ("python3 -m venv .venv", ".venv/bin/pip install -r requirements.txt",
+                     ".venv/bin/python manage.py test", "--stack"):
+            self.assertIn(form, text)
 
     def test_design_review_phone_check_of_the_page_names_a_working_method(self):
         text = (REPO / "skills" / "design-review" / "SKILL.md").read_text()

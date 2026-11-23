@@ -1117,6 +1117,35 @@ def page_spelling_warnings(text):
     return out
 
 
+GENERIC_FONTS = {"serif", "sans-serif", "monospace", "cursive", "fantasy", "system-ui", "ui-serif",
+                 "ui-sans-serif", "ui-monospace", "ui-rounded", "math", "emoji", "fangsong"}
+FONT_KEYWORDS = {"inherit", "initial", "unset", "revert", "revert-layer"}
+
+
+def font_warnings(text):
+    """Each font-family stack (in a <style> or a style attribute) that does not end in a
+    generic family. A mockup font that fails to load then falls to the browser default
+    instead of something that resembles it. @font-face names are not stacks."""
+    css = " ".join(re.findall(r"<style\b[^>]*>(.*?)</style>", text, re.S | re.I))
+    css = re.sub(r"@font-face\s*\{[^}]*\}", " ", css)
+    attrs = [html.unescape(a) for a in re.findall(r'\sstyle="([^"]*)"', text)]
+    out = []
+    for value in re.findall(r"font-family\s*:\s*([^;}]+)", " ; ".join([css] + attrs)):
+        value = value.strip()
+        low = value.lower()
+        if not value or low.startswith("var(") or low in FONT_KEYWORDS:
+            continue
+        last = low.rsplit(",", 1)[-1].strip().strip("\"'")
+        if last in GENERIC_FONTS or last.startswith("var("):
+            continue
+        line = ("font-family %s has no fallback stack: end it with fonts that resemble it and a generic family "
+                "(sans-serif, serif, monospace or system-ui), or a font that does not load shows the browser "
+                "default" % value)
+        if line not in out:
+            out.append(line)
+    return out
+
+
 def warnings(path):
     """Problems worth saying that still leave a working page: older specs keep building."""
     m = re.search(r'<script type="application/json" id="rp-spec">(.*?)</script>', Path(path).read_text(), re.S)
@@ -1131,6 +1160,7 @@ def warnings(path):
     if bare:
         out.append("%d <img> show WebP with no fallback, so older Safari shows a broken image "
                    "(use a PNG or JPEG asset and the builder adds one)" % len(bare))
+    out.extend(font_warnings(text))
     if os.environ.get("PROOFS_SPELLING") == "american":
         out.extend(page_spelling_warnings(text))
     return out

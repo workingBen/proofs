@@ -709,6 +709,25 @@ class Assets(unittest.TestCase):
         orphan = '<img src="%s" data-rp-asset="src gone img">' % review_page.BLANK_GIF
         self.assertIn("nothing in rp-assets", review_page.image_errors(orphan)[0])
 
+    def test_a_font_with_no_fallback_stack_is_a_warning(self):
+        # Django run 1: the font download was denied and the mockups fell to the browser default.
+        self.built('<p style="font-family:&quot;Space Grotesk&quot;">x</p>',
+                   css="@font-face{font-family:F;src:url({{asset:font}}) format('woff2')}"
+                       ".mk{font-family:'Space Grotesk'}.b{font-family:Inter, Arial}")
+        found = [w for w in review_page.warnings(self.tmp / "page.html") if "fallback" in w]
+        self.assertEqual(len(found), 3, found)
+        self.assertIn("'Space Grotesk'", found[0])
+        self.assertIn("Inter, Arial", found[1])
+        self.assertIn('"Space Grotesk"', found[2])  # the style attribute
+        self.assertIn("sans-serif", found[0])
+
+    def test_a_font_stack_ending_in_a_generic_family_is_fine(self):
+        self.built('<p style="font-family:Georgia, serif">x</p>',
+                   css="@font-face{font-family:F;src:url({{asset:font}}) format('woff2')}"
+                       ".mk{font-family:\"Space Grotesk\", \"Avenir Next\", ui-sans-serif, system-ui, sans-serif}"
+                       ".c{font-family:var(--mono)}.d{font-family:inherit}.e{font-family:F, monospace;}")
+        self.assertEqual([w for w in review_page.warnings(self.tmp / "page.html") if "fallback" in w], [])
+
     def test_a_webp_asset_with_no_fallback_is_a_warning(self):
         (self.tmp / "pic.webp").write_bytes(b"RIFF\x00\x00\x00\x00WEBPVP8 ")
         self.built('<img alt="a" src="{{asset:w}}">', assets={"w": "pic.webp"})

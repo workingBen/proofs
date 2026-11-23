@@ -1,5 +1,7 @@
 # Changelog
 
+- **1.12.2** (2026-11-23): House rule 2: never `ls` or Read `~/.cache/proofs-playwright` to see whether Playwright is installed (outside the project, so the call is refused); the capture and `--smoke` report a missing install themselves.
+
 - **1.12.1** (2026-11-23): The build refuses a session-page log entry that asks: a status other than Background, Queued or Done (no more "Your move"), or a lede ending in a question mark. A free-text question once went out as a log entry, because only entries with option buttons were refused, and the reader had to find it in the log.
 - **1.12.0** (2026-11-22): Opens its saved page with exactly `open .proofs/pages/<name>.html`, which the opt-in `--project` allow block pre-approves; if `open` is refused it prints the path instead of retrying. Adds house rule 4: use the helpers' own checks, never `file`, `magick`, `identify` or `sips`, and change files with Edit or Write, never `sed -i`.
 

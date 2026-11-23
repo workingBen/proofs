@@ -1,6 +1,6 @@
 ---
 name: working-log
-version: 1.12.0
+version: 1.12.1
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -118,7 +118,7 @@ The spec's fields, in the order the page shows them:
 3. **Waiting on you** (`questions`, then `links`): open questions, directly under the sticky bar, highlighted. Write them by the `questions` skill. `links` are other pages waiting on the user: `{label, status, url, state}`, as "Design review: 3 decisions open". `state` is `open` (the default, with an **Open it** link) or `in-progress` once the user has answered that page and you are working on it: it stays listed, muted and after the open ones, until the page needs them again.
 4. **Checks for you** (`qa`): written by the `qa-checklist` skill.
 5. **About this page** (`heading`, `intro_html`, `facts`): what the page is, how to reply, **how to reopen it** (the user will close the tab; name the project's artifact-opener script or list of links if it has one), and 3-4 live facts (branch, tests, what is live). This is context, so it sits below everything that needs action.
-6. **Log, newest first** (`entries`): a title, a status (`Background` / `Queued` / `Done`), an id, and `when` on every new entry: the user's local time you wrote it, as `2026-11-19T15:54` (the page shows `Nov 19 - 3:54PM`); a full-strength `lede` sentence with detail below. Log entries do not ask: a question goes in `questions`, and the builder refuses an entry with option buttons.
+6. **Log, newest first** (`entries`): a title, a status (`Background` / `Queued` / `Done`), an id, and `when` on every new entry: the user's local time you wrote it, as `2026-11-19T15:54` (the page shows `Nov 19 - 3:54PM`); a full-strength `lede` sentence with detail below. Log entries do not ask: a question goes in `questions`, even a free-text one, and the builder refuses an entry with option buttons, a status outside those three (no "Your move"), or a lede ending in a question mark.
 7. **Decided** (`decided`): settled items, `{id, title, decision, when}`, one line each, folded.
 
 ## Rules that matter

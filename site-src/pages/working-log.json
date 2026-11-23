@@ -36,8 +36,8 @@
      "label": "Newest on Top",
      "sub": "The latest message is always the first thing you see",
      "title": "The latest message is always the first thing you see",
-     "what": "Messages are listed newest first, each with a number, a title and a status chip such as Your move, Background, Queued or Done. You open the page and the thing that needs you is right there.",
-     "html": "<div class=\"col\"><div class=\"row\"><b class=\"hd\">14 · Approve the refund flow</b><span class=\"pill mid\">Your move</span></div><div class=\"row\"><b class=\"hd\">13 · Tests running</b><span class=\"pill line\">Background</span></div><div class=\"row\"><b class=\"hd\">12 · Next: email copy</b><span class=\"pill mute\">Queued</span></div><div class=\"row\"><b class=\"hd\">11 · Cart bug fixed</b><span class=\"pill ok\">Done</span></div></div>"
+     "what": "Messages are listed newest first, each with a number, a title and a status chip: Background, Queued or Done. Anything that needs you is a question in Waiting on you, above the log, never a log entry.",
+     "html": "<div class=\"col\"><div class=\"row\"><b class=\"hd\">13 · Tests running</b><span class=\"pill line\">Background</span></div><div class=\"row\"><b class=\"hd\">12 · Next: email copy</b><span class=\"pill mute\">Queued</span></div><div class=\"row\"><b class=\"hd\">11 · Cart bug fixed</b><span class=\"pill ok\">Done</span></div></div>"
     },
     {
      "id": "f5",

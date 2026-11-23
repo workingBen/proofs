@@ -557,6 +557,17 @@ class BuildAndCheck(unittest.TestCase):
         self.assertIn("<h3>One</h3><span class=\"rp-status", text)
         self.assertEqual(text.count('<time class="rp-when"'), 1)
 
+    def test_session_log_entries_never_ask(self):
+        # A free-text question once went out as a "Your move" log entry: no buttons, so the
+        # option-group check let it through, and the user had to find it in the log.
+        ok = self.page_text(dict(self.SESSION, entries=[{"id": "M1", "title": "One", "status": "Queued"}]))
+        self.assertIn("rp-status-queued", ok)
+        for entry in ({"id": "M1", "title": "One", "status": "Your move"},
+                      {"id": "M1", "title": "One", "lede": "What should the logo make a developer feel?"}):
+            with self.assertRaises(review_page.SpecError) as cm:
+                self.page_text(dict(self.SESSION, entries=[entry]))
+            self.assertIn("`questions`", str(cm.exception))
+
     def test_custom_decisions_override_a_preset(self):
         p = self.tmp / "s.json"
         p.write_text(json.dumps({"title": "x", "decisions": {"preset": "copy-edit", "mark_read": True},

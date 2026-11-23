@@ -348,6 +348,8 @@ READ_ONLY_KINDS = ("links", "decided")
 # answered and Claude is working on it): still listed, so it is not lost, but after
 # the open ones and without the call to action.
 LINK_STATES = ("open", "in-progress")
+# A session page asks only in `questions`; its log entries report, so none waits on the user.
+ENTRY_STATUSES = ("Background", "Queued", "Done")
 WIP_LINKS_TITLE = "Pages Claude is working on"
 
 
@@ -527,9 +529,13 @@ def render_log(sec, ctx):
         if e.get("detail_html"):
             out.append('<div class="rp-detail">%s</div>' % e["detail_html"])
         qnames = []
-        if ctx.spec["mode"] == "session" and e.get("questions"):
-            raise SpecError("entry %s: on a session page a question goes in `questions`, so it sits at the top "
-                            "under Waiting on you, not inside a log entry" % eid)
+        if ctx.spec["mode"] == "session":
+            asks = (e.get("questions") or status not in ENTRY_STATUSES
+                    or re.sub(r"<[^>]+>", "", e.get("lede") or "").strip().endswith("?"))
+            if asks:
+                raise SpecError("entry %s: on a session page a question goes in `questions`, so it sits at the top "
+                                "under Waiting on you, not inside a log entry (entry status must be one of %s, "
+                                "and its lede must not ask)" % (eid, ", ".join(ENTRY_STATUSES)))
         for g in e.get("questions") or []:
             q = g.get("q")
             if not q or q in qnames:

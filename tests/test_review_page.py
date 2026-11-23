@@ -886,6 +886,73 @@ FLAG = "--disable-features=MacAppCodeSignClone"
 
 
 @unittest.skipUnless(NODE, "node not found")
+class Paths(unittest.TestCase):
+    """Django run 2: asset paths written from the project folder, and a session page
+    saved outside .proofs/pages/ where the open rule could not reach it."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.tmp = Path(self._tmp.name).resolve()
+        (self.tmp / ".proofs" / "review").mkdir(parents=True)
+        (self.tmp / "baseline-screens").mkdir()
+        write_png(self.tmp / "baseline-screens" / "home-1440.png", 40, 30)
+
+    def run_build(self, *args):
+        return subprocess.run([sys.executable, str(BUILD), *args, "--no-check"],
+                              capture_output=True, text=True, cwd=self.tmp)
+
+    def review_spec(self, rel):
+        s = {"mode": "review", "title": "Paths — Design Review", "decisions": "design-review",
+             "assets": {"home1440": rel},
+             "sections": [{"title": "S", "items": [{"label": "x", "recommended": True,
+                                                    "body_html": '<img alt="a" src="{{asset:home1440}}">',
+                                                    "reason_html": "<p>r</p>"}]}]}
+        p = self.tmp / ".proofs" / "review" / "spec.json"
+        p.write_text(json.dumps(s))
+        return p
+
+    def test_asset_falls_back_to_the_working_directory(self):
+        spec = self.review_spec("baseline-screens/home-1440.png")
+        r = self.run_build(str(spec), "--out", ".proofs/pages/review.html")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("data:image/", (self.tmp / ".proofs" / "pages" / "review.html").read_text())
+
+    def test_asset_next_to_the_spec_still_wins(self):
+        write_png(self.tmp / ".proofs" / "review" / "home.png", 40, 30)
+        spec = self.review_spec("home.png")
+        r = self.run_build(str(spec), "--out", ".proofs/pages/review.html")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_missing_asset_error_names_both_paths_tried(self):
+        spec = self.review_spec("baseline-screens/nope.png")
+        r = self.run_build(str(spec), "--out", ".proofs/pages/review.html")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("asset 'home1440' not found", r.stderr)
+        self.assertIn(str(self.tmp / ".proofs" / "review" / "baseline-screens" / "nope.png"), r.stderr)
+        self.assertIn(str(self.tmp / "baseline-screens" / "nope.png"), r.stderr)
+
+    def test_session_page_with_no_out_goes_under_proofs_pages(self):
+        shutil.copy(EXAMPLES / "session.json", self.tmp / ".proofs" / "session.json")
+        r = self.run_build(".proofs/session.json")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertTrue((self.tmp / ".proofs" / "pages" / "session.html").is_file())
+        self.assertIn(".proofs/pages/session.html", r.stdout)
+
+    def test_log_page_with_no_out_goes_under_proofs_pages(self):
+        shutil.copy(EXAMPLES / "log.json", self.tmp / "my-log.json")
+        r = self.run_build("my-log.json")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertTrue((self.tmp / ".proofs" / "pages" / "my-log.html").is_file())
+
+    def test_review_page_still_needs_out(self):
+        spec = self.review_spec("baseline-screens/home-1440.png")
+        r = self.run_build(str(spec))
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("--out", r.stderr)
+        self.assertFalse((self.tmp / ".proofs" / "pages").exists())
+
+
 class BrowserLaunch(unittest.TestCase):
     def run_launch(self, script, env=None):
         r = subprocess.run([NODE, "-e", LAUNCH_DRIVER, str(LAUNCH), json.dumps(script), json.dumps(env or {})],

@@ -1,5 +1,6 @@
 # Changelog
 
+- **1.4.2** (2026-11-23): `capture.cjs --sizes` also takes a desktop width from 400 to 2560 (for example `--sizes 390,1040,1440`), for a shot just above a breakpoint; with `--evidence` it is labeled with its width, like 1280.
 - **1.4.1** (2026-11-23): House rule 2: never `ls` or Read `~/.cache/proofs-playwright` to see whether Playwright is installed (outside the project, so the call is refused); the capture and `--smoke` report a missing install themselves.
 
 - **1.4.0** (2026-11-22): Opens its saved page with exactly `open .proofs/pages/<name>.html`, which the opt-in `--project` allow block pre-approves; if `open` is refused it prints the path instead of retrying. Adds house rule 4: use the capture helper's own size and overflow checks, never `file`, `magick`, `identify` or `sips`, and change files with Edit or Write, never `sed -i`.

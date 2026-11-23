@@ -1,6 +1,6 @@
 ---
 name: style-guide
-version: 1.8.1
+version: 1.8.2
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -53,7 +53,7 @@ Give every item a **Reason** and a **Recommended/Not Recommended** badge, same c
 
 **Needs the whole plugin.** This skill reads shared files at `../../reference/` and `../../shared/`, relative to its folder. If they are missing, the skill was copied on its own: install the whole plugin (`/plugin install proofs@proofs`) rather than recreating them.
 
-Write the content; the builder writes the page. Read `../../reference/review-page.md` first: it documents the spec and the command, `python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py spec.json --out page.html`, with `"decisions": "style-guide"`. Do not hand-write the page's JavaScript. Follow any design guidance your environment provides for published pages, same as both siblings. Fill `project` with `name`, `session` and `repo`, taking the session name the way the `working-log` skill does (the session's own name, else one named for the work, kept for the life of the page): the page's header shows the proofs mark, this skill's name, the project and the session, so the user can match the page to its session at a glance.
+Write the content; the builder writes the page. Read `../../reference/review-page.md` first: it documents the spec and the command, `python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py .proofs/style-guide/spec.json --out .proofs/pages/<guide-name>.html`, with `"decisions": "style-guide"`. Do not hand-write the page's JavaScript. Follow any design guidance your environment provides for published pages, same as both siblings. Fill `project` with `name`, `session` and `repo`, taking the session name the way the `working-log` skill does (the session's own name, else one named for the work, kept for the life of the page): the page's header shows the proofs mark, this skill's name, the project and the session, so the user can match the page to its session at a glance.
 
 - **Rendered examples, not screenshots, and not prose either.** Unlike `design-review`, build each example as real coded HTML/CSS using the site's actual classes and tokens (in `css`), rendered inline, not a screenshot of a live page. The point is to show the underlying recipe next to the visual. This cuts both ways: never substitute a *description* of the visual difference (for example, "the signup page uses a larger heading than the pricing page") for the difference itself. Class and token names carry no meaning to someone who doesn't read the codebase. Every item, including "current vs. proposed" and multi-variant items, renders the compared states side by side (or labeled Before/After) at their real size, color and weight, using real or representative copy from the site. The decision is "which of these two things I'm looking at do I prefer," never "which of these two labels."
 - **Each item:** `label`, `category` (Typography, Spacing, Color, Components, ...), `recommended`, the rendered example plus its exact class or markup recipe in a `<code>` block in `body_html` (one example for an already-decided item; `variants` for an undecided one), and `reason_html`.

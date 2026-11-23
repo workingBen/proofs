@@ -6,16 +6,19 @@ builder writes one self-contained HTML page with every mechanic already built an
 tested. Do not hand-write the page's JavaScript.
 
 ```bash
-python3 <plugin root>/shared/review_page/review_page.py spec.json --out page.html
-python3 <plugin root>/shared/review_page/review_page.py --smoke page.html
+python3 <plugin root>/shared/review_page/review_page.py .proofs/<name>.json --out .proofs/pages/<name>.html
+python3 <plugin root>/shared/review_page/review_page.py --smoke .proofs/pages/<name>.html
 ```
 
 The first builds the page and checks it; the second clicks through it in Chromium.
 
 Use the absolute plugin root your skill showed you, unquoted, so the allow rule matches. Write the spec with your file tool; do not write a script to generate it, since every new script is one more approval.
 
-Build in a scratch folder, not the repo. Keep `spec.json` beside the page: it is
-how you rebuild the next round.
+Keep the spec under `.proofs/` and always give `--out .proofs/pages/<name>.html`:
+`.proofs/` stays out of git, and `.proofs/pages/` is the only folder the optional
+`open` allow rule covers, so a page saved anywhere else is not opened. A session or
+log spec built with no `--out` goes to `.proofs/pages/<spec name>.html`. Keep the
+spec: it is how you rebuild the next round.
 
 ## What every page gets, built in
 

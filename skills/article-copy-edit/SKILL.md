@@ -1,6 +1,6 @@
 ---
 name: article-copy-edit
-version: 1.5.1
+version: 1.5.2
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -60,7 +60,7 @@ Give every item, edit or addition alike:
 
 **Needs the whole plugin.** This skill reads shared files at `../../reference/` and `../../shared/`, relative to its folder. If they are missing, the skill was copied on its own: install the whole plugin (`/plugin install proofs@proofs`) rather than recreating them.
 
-Write the content; the builder writes the page. Read `../../reference/review-page.md` first: it documents the spec and the command, `python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py spec.json --out page.html`, with `"decisions": "copy-edit"`. Do not hand-write the page's JavaScript. Follow any design guidance your environment provides for published pages: "utilitarian but polished," not a landing page. Fill `project` with `name`, `session` and `repo`, taking the session name the way the `working-log` skill does (the session's own name, else one named for the work, kept for the life of the page): the page's header shows the proofs mark, this skill's name, the project and the session, so the user can match the page to its session at a glance.
+Write the content; the builder writes the page. Read `../../reference/review-page.md` first: it documents the spec and the command, `python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py .proofs/copy-edit/spec.json --out .proofs/pages/<edit-name>.html`, with `"decisions": "copy-edit"`. Do not hand-write the page's JavaScript. Follow any design guidance your environment provides for published pages: "utilitarian but polished," not a landing page. Fill `project` with `name`, `session` and `repo`, taking the session name the way the `working-log` skill does (the session's own name, else one named for the work, kept for the life of the page): the page's header shows the proofs mark, this skill's name, the project and the session, so the user can match the page to its session at a glance.
 
 - **Reuse the target page's own design system** (the spec's `css` and `vars`). Don't invent a palette; pull colors and type straight from the article or page you're editing, and reuse the site's own before/after colors for "original" and "edit" if it has an established pairing, working in both light and dark mode. If the site themes through CSS variables or tokens, take the light/dark values from those same variables.
 - **Highlight word-level diffs**, not just whole-paragraph swaps: wrap the changed spans in `<del>`/`<ins>` inside `.rp-panes`.

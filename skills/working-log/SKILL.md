@@ -1,6 +1,6 @@
 ---
 name: working-log
-version: 1.12.2
+version: 1.12.3
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -105,7 +105,7 @@ first publish. The same goes for the project bar: if the work has moved to anoth
 
 **Needs the whole plugin.** This skill reads shared files at `../../reference/` and `../../shared/`, relative to its folder. If they are missing, the skill was copied on its own: install the whole plugin (`/plugin install proofs@proofs`) rather than recreating them.
 
-Write the content; the builder writes the page. Read `../../reference/review-page.md` first: `"mode": "session"`, built with `python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py spec.json --out session.html`; `../../shared/review_page/examples/session.json` is a working example. Do not hand-write the page's JavaScript. Load `artifact-design` first if it is available; this is a utilitarian tool page, not editorial: real type hierarchy, no hero.
+Write the content; the builder writes the page. Read `../../reference/review-page.md` first: `"mode": "session"`, built with `python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py .proofs/session.json --out .proofs/pages/session.html` (exactly that `--out`: the page lives under `.proofs/pages/`, the only folder the `open` allow rule covers); `../../shared/review_page/examples/session.json` is a working example. Do not hand-write the page's JavaScript. Load `artifact-design` first if it is available; this is a utilitarian tool page, not editorial: real type hierarchy, no hero.
 
 The builder supplies the mechanics: the sticky project bar (session accented) and status bar (one tally across sections, version marker, copy button), the fixed section order, sections hidden when empty, the questions-first check, a **Read this** tick and a note per log entry, an "Anything else" box, `localStorage` keyed per project AND session, and the combined copy-back export with its clipboard fallback. Its width and type are the settled defaults (1180px page, 17px body): a 760px column of 15px text was the usual first draft and the usual complaint. Change them (`css`) only if the reader asks, then keep the change for the life of the page.
 

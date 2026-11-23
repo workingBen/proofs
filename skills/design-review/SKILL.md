@@ -1,6 +1,6 @@
 ---
 name: design-review
-version: 1.10.1
+version: 1.10.2
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -98,7 +98,7 @@ Write the content; the builder writes the page. Read `../../reference/review-pag
 
 Deliver the page as "Where the page goes" below says (with `artifact`, that means publishing it with the `Artifact` tool). Redeploy to the same file path across revisions of the *same* review page; don't mint a new URL for revisions the user is already looking at.
 
-**Verify before publishing, every time and not just the first.** The build runs its own check (script syntax, card and button counts). Run `--smoke`. If it reports Playwright missing, run the one-line install it prints (it uses your installed Google Chrome and downloads no browser), then run `--smoke` again; if it still cannot run, say on the page and in chat that the self-check did not run. `--smoke` already measures sideways scroll at 1280 and 390. For a look, run `node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs .proofs/capture/review.json --out .proofs/capture/review --sizes 390,1280` with a pages file whose `base` is the `file://` URL of `.proofs/pages/` (an absolute path) and whose entry `path` is `/<review-name>.html` (capture.cjs builds each address as base plus path), then open the PNGs and check your coded mockups don't overlap. Never use Chrome `--window-size` for the phone view. Only publish after all of it passes.
+**Verify before publishing, every time and not just the first.** The build runs its own check (script syntax, card and button counts). Run `--smoke`. If it reports Playwright missing, run the one-line install it prints (it uses your installed Google Chrome and downloads no browser), then run `--smoke` again; if it still cannot run, say on the page and in chat that the self-check did not run. `--smoke` already measures sideways scroll at 1280 and 390, and runs the same mid-word measure pr-qa's capture uses on every mockup: a problem such as `item 2 (Feature cards), Variant B: "authenticat|ion" breaks mid-word at 1280px wide` is a problem with that variant. Fix the mockup (a wider box, smaller type, fewer columns) and rebuild; if you keep a variant that breaks a word, say so in that variant's `note_html` and in its item's Reason, and do not recommend it. For a look, run `node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs .proofs/capture/review.json --out .proofs/capture/review --sizes 390,1280` with a pages file whose `base` is the `file://` URL of `.proofs/pages/` (an absolute path) and whose entry `path` is `/<review-name>.html` (capture.cjs builds each address as base plus path), then open the PNGs and check your coded mockups don't overlap. Never use Chrome `--window-size` for the phone view. Only publish after all of it passes.
 
 ### 5. Applying the decisions
 
@@ -110,7 +110,7 @@ When the user pastes back the copied summary, match items by number (and variant
 - **`REVISE`**: leave the file untouched for now; the comment is feedback for a follow-up round (see below), not an instruction to apply anything yet.
 - **`PENDING`**: not reviewed yet; leave untouched.
 
-Then rebuild styles if the project compiles them, verify against a real render, and commit following the project's own notes. The review tool changes nothing about how the actual change gets verified and shipped.
+Then rebuild styles if the project compiles them, verify against a real render, and commit following the project's own notes. **Verify at every width the layout changes at, not just 1280 and 390:** capture the real page at `--sizes 390,1280,1440` plus one width just above each breakpoint the applied markup uses (as pr-qa picks them: Tailwind `sm:` 656, `md:` 784, `lg:` 1040, `xl:` 1280, `2xl:` 1552; Bootstrap `md` 784, `lg` 1008, `xl` 1216, or the project's own). Any `mid-word breaks`, `sideways scroll` or new `text below floor` row in the capture's table is a failure: fix it and capture again before you say the picks are built (Rails run 1: cards built at 1280 and 390 looked right, and broke "authenticat / ion" at 992 and 1440). The review tool changes nothing about how the actual change gets verified and shipped.
 
 ### 6. Follow-up rounds on `REVISE` items
 

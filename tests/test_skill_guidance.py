@@ -246,12 +246,21 @@ class PrQaGuidance(unittest.TestCase):
     def test_default_path_honors_the_base_dir_setting(self):
         text = section("pr-qa", "Default path")
         fence = text.split("```bash", 1)[1].split("```", 1)[0]
-        self.assertEqual(fence.strip().splitlines()[0], "printenv PROOFS_BASE_DIR")
+        # Rails run 1 (C2): the session read both settings at once and the one-variable rule
+        # did not match; the skill and the --project rule now give the same two-variable form.
+        self.assertEqual(fence.strip().splitlines()[0], "printenv PROOFS_PAGES PROOFS_BASE_DIR")
         self.assertIn("<PROOFS_BASE_DIR>/<repo folder>-pr-qa-base", text)
         sequence = section("pr-qa", "The Sequence")
-        self.assertIn("printenv PROOFS_BASE_DIR", sequence)
+        self.assertIn("printenv PROOFS_PAGES PROOFS_BASE_DIR", sequence)
+        import re as _re
+        forms = set(_re.findall(r"printenv [A-Z_ ]*[A-Z_]", self.pr_qa()))
+        self.assertEqual(forms, {"printenv PROOFS_PAGES PROOFS_BASE_DIR"}, forms)
         self.assertNotIn("echo \"${PROOFS_BASE_DIR", self.pr_qa())
         self.assertNotIn("Read tool", text.split("PROOFS_BASE_DIR", 1)[1].split("gh pr checkout", 1)[0])
+
+    def test_rails_base_checkout_installs_in_the_allowed_form(self):
+        # Rails run 1 (C2): `bundle install --gemfile .proofs/base/rails/Gemfile` was denied.
+        self.assertIn("bundle install --gemfile .proofs/base/<app-dir>/Gemfile", self.pr_qa())
 
     def test_default_path_copies_env_with_cp_and_reinstalls_after_checkout(self):
         text = section("pr-qa", "Default path")

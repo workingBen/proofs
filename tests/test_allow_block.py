@@ -179,6 +179,13 @@ class AllowBlockTest(unittest.TestCase):
             self.assertFalse(check_skills.claude_code_allows(allow_block.PROJECT_RULES, cmd), cmd)
         self.assertFalse(check_skills.claude_code_allows(allow_block.PROJECT_RULES, "cp .env /opt/claude-home/base/web/.env"))
 
+    def test_project_rules_cover_pr_qa_reading_both_settings_at_once(self):
+        # Rails run 1 (C2): the first command was `printenv PROOFS_PAGES PROOFS_BASE_DIR`, which
+        # the one-variable rule did not match. The skill now gives that form and the rule matches it.
+        self.assertTrue(check_skills.claude_code_allows(allow_block.PROJECT_RULES, "printenv PROOFS_PAGES PROOFS_BASE_DIR"))
+        self.assertFalse(check_skills.claude_code_allows(allow_block.PROJECT_RULES, "printenv"))
+        self.assertFalse(check_skills.claude_code_allows(allow_block.PROJECT_RULES, "printenv GH_TOKEN"))
+
     def test_project_rules_let_pr_qa_read_other_open_prs(self):
         # Django run 2: pr-qa checked overlap with another open PR via `gh pr diff 2 --name-only`.
         for cmd in ("gh pr diff 2 --name-only", "gh pr diff 7", "gh pr view 2 --json files,title"):
@@ -380,16 +387,22 @@ STACK_CASES = {
                                 "pnpm install --frozen-lockfile", "yarn install"]),
     "python": (["manage.py", "requirements.txt"], ["python3 -m venv .venv", ".venv/bin/pip install -r requirements.txt",
                                                     ".venv/bin/python manage.py test", ".venv/bin/python manage.py migrate",
-                                                    ".venv/bin/pytest -q", "uv sync", "uv run pytest"]),
-    "php": (["composer.json", "artisan"], ["composer install", "php artisan test", "php artisan migrate --force"]),
-    "ruby": (["Gemfile"], ["bundle install", "bin/rails test", "bin/rails db:prepare", "bundle exec rake test"]),
+                                                    ".venv/bin/pytest -q", "uv sync", "uv run pytest",
+                                                    # the base checkout, with the checkout's own .venv
+                                                    ".venv/bin/pip install -r .proofs/base/requirements.txt"]),
+    "php": (["composer.json", "artisan"], ["composer install", "php artisan test", "php artisan migrate --force",
+                                           "composer install --working-dir .proofs/base/web"]),
+    # Rails run 1 (C2): pr-qa installed the base checkout's gems with this exact line, and was denied.
+    "ruby": (["Gemfile"], ["bundle install", "bin/rails test", "bin/rails db:prepare", "bundle exec rake test",
+                           "bundle install --gemfile .proofs/base/rails/Gemfile", "bundle install --gemfile .proofs/base/Gemfile"]),
     "dotnet": (["Shop.csproj"], ["dotnet restore", "dotnet build", "dotnet test"]),
     "java": (["pom.xml"], ["mvn test", "./mvnw test", "gradle test", "./gradlew build"]),
 }
 # Commands no project block may allow: arbitrary code, arbitrary packages, or a bare interpreter.
 NEVER_PROJECT = ["python3 -c \"import django\"", "python3 evil.py", ".venv/bin/python manage.py shell -c 'x'",
                  ".venv/bin/python -c 'x'", ".venv/bin/pip install requests", "php -r 'x'", "php artisan tinker",
-                 "bundle exec ruby -e 'x'", "bin/rails runner 'x'", "dotnet run", "node evil.js", "npm run anything",
+                 "bundle exec ruby -e 'x'", "bin/rails runner 'x'", "bundle install --gemfile /opt/other/Gemfile",
+                 "bundle install --gemfile Gemfile.evil", "dotnet run", "node evil.js", "npm run anything",
                  "npx anything", "uv run python -c 'x'", "mvn exec:java", "./gradlew run",
                  # Dev servers go through with_server.py; a script name the block does not list still asks.
                  "npm run dev", "npm start", "npm run deploy", "npx ng serve", "npx vite", "npx astro dev"]

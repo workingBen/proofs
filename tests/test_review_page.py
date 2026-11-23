@@ -76,6 +76,12 @@ class PhoneFrame(unittest.TestCase):
         self.assertIn(".rp-brandline { height:auto;", self.phone())
         self.assertIn("white-space:normal", self.phone())
 
+    def test_the_brand_line_hides_its_separators_on_a_phone(self):
+        # Rails run 1: a " · " left at the end of a wrapped header line. On a phone the parts
+        # wrap onto their own lines with a gap, and no dot is drawn.
+        self.assertIn(".rp-brandline .rp-sep { display:none; }", self.phone())
+        self.assertIn(".rp-where { display:flex; flex-wrap:wrap;", self.phone())
+
     def test_the_bar_drops_the_per_decision_counts_on_a_phone(self):
         self.assertIn(".rp-bar .rp-tally-st { display:none; }", self.phone())
 
@@ -544,8 +550,10 @@ class BuildAndCheck(unittest.TestCase):
         self.assertIn('<div class="bar-title">Acme app <span>· checks after deploy</span>'
                       '<span class="rp-sess"> · <b class="rp-session">attachments-release</b></span></div>', q)
         dr = review_page.page(review_page.load_spec(EXAMPLES / "design-review.json"))
-        self.assertIn('<span class="rp-where">Acme app · <b class="rp-session">articles-redesign</b>'
-                      '<span class="rp-pb-x"> · acme/app</span></span></div>', dr)
+        # Rails run 1: each separator belongs to the part after it (and hides with it).
+        self.assertIn('<span class="rp-where">Acme app<span class="rp-wp"><span class="rp-sep"> · </span>'
+                      '<b class="rp-session">articles-redesign</b></span>'
+                      '<span class="rp-pb-x"><span class="rp-sep"> · </span>acme/app</span></span></div>', dr)
         # a review page with no project at all keeps the bare mark line
         text = self.page_text({"title": "x", "decisions": "design-review", "items": [{"label": "a"}]})
         self.assertNotIn('class="rp-where"', text)
@@ -1224,6 +1232,27 @@ class ClickThrough(unittest.TestCase):
                 page = build(spec.stem, tmp)
                 ok, res = review_page.smoke(page)
                 self.assertTrue(ok, "%s: %s" % (spec.name, res))
+
+    def test_smoke_names_the_variant_whose_mockup_breaks_a_word(self):
+        # Rails run 1: design-review's feature cards broke "authenticat / ion" and only pr-qa
+        # noticed. The smoke check now runs the same mid-word measure on every mockup.
+        spec = {"title": "Cards", "project": {"name": "P", "session": "s"}, "decisions": "design-review",
+                "items": [{"label": "Feature cards", "reason_html": "<p>r</p>", "recommended": True, "variants": [
+                    {"html": '<div style="width:300px;font:20px sans-serif"><h4>Devise authentication</h4></div>'},
+                    {"html": '<div style="width:120px;font:20px sans-serif"><h4 style="overflow-wrap:anywhere;font-size:20px">'
+                             'Devise authentication</h4><p style="width:70px">Role-based</p></div>'}]}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            src, out = Path(tmp) / "s.json", Path(tmp) / "p.html"
+            src.write_text(json.dumps(spec))
+            r = subprocess.run([sys.executable, str(BUILD), str(src), "--out", str(out)], capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            ok, res = review_page.smoke(out)
+            self.assertFalse(ok, res)
+            broken = [p for p in res["problems"] if "mid-word" in p]
+            self.assertEqual(len(broken), 1, res["problems"])
+            self.assertIn('item 1 (Feature cards), Variant B: "authentic', broken[0])
+            self.assertIn("breaks mid-word", broken[0])
+            self.assertEqual(res["mid_word"][0]["variant"], "B")
 
     def test_design_review_export_after_clicks(self):
         with tempfile.TemporaryDirectory() as tmp:

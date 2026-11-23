@@ -348,6 +348,9 @@ body.rp-mode-questions, :root[data-theme] body.rp-mode-questions {
   .rp-brandline { height:auto; min-height:28px; margin:-6px 0 12px; white-space:normal; align-items:flex-start; }
   .rp-brandline .rp-brand { margin-top:3px; }
   .rp-where { overflow:visible; line-height:1.4; overflow-wrap:anywhere; }
+  /* Rails run 1: a " · " ended a wrapped line; the parts wrap with a gap and no dot */
+  .rp-where { display:flex; flex-wrap:wrap; column-gap:.5em; }
+  .rp-brandline .rp-sep { display:none; }
   /* and the sticky bar took 138px: the progress line shows each decision's share, so the
      per-decision counts go and "X of N reviewed" shares one row with Copy */
   .rp-bar { flex-wrap:wrap; gap:8px 12px; padding-top:8px; padding-bottom:8px; }

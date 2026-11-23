@@ -223,7 +223,9 @@ types a comment, ticks read, confirms open questions sit directly under the stic
 bar, copies, reloads to prove persistence,
 forces a clipboard failure to prove the fallback, checks every image loaded (shared images included, none left
 blank) and every `<picture>` has a PNG or JPEG `<img>` fallback, and
-checks for sideways scroll at 1280 and 390. A headless 390 px viewport renders correctly;
+checks for sideways scroll at 1280 and 390. On a review page it also flags any word a mockup
+breaks mid-word ("authenticat|ion"), naming the item and variant, the same measure
+visual-qa's capture uses. A headless 390 px viewport renders correctly;
 the smoke check measures sideways scroll at 390 itself.
 
 Then look at the page: take a screenshot at a desktop and a phone width (or open it)

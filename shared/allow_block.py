@@ -55,6 +55,9 @@ SKILL_RULE = "Skill(proofs:*)"
 PROJECT_RULES = [
     # pr-qa: resolve the base folder, list open PRs, switch to the PR branch.
     "Bash(printenv PROOFS_BASE_DIR)",
+    # Rails run 1: pr-qa's first line reads both settings in one call (where pages go, and the
+    # base folder); the skill gives this exact form.
+    "Bash(printenv PROOFS_PAGES PROOFS_BASE_DIR)",
     "Bash(gh pr list *)",
     "Bash(gh pr checkout *)",
     # Read-only: another open PR's files and details, to check for overlap (Django run 2).
@@ -129,6 +132,9 @@ STACK_RULES = {
     ],
     "ruby": [
         "Bash(bundle install)",
+        # pr-qa's base checkout (Rails run 1: `bundle install --gemfile .proofs/base/rails/Gemfile`
+        # was denied). Like `npm ci --prefix`, the * also accepts .proofs/base/../other.
+        "Bash(bundle install --gemfile .proofs/base/*)",
         "Bash(bin/rails db:prepare)",
         "Bash(bin/rails test *)",
         "Bash(bundle exec rake test *)",

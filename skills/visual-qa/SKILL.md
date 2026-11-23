@@ -1,6 +1,6 @@
 ---
 name: visual-qa
-version: 1.4.3
+version: 1.4.4
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs *)
@@ -62,7 +62,9 @@ and colors (mockups reuse them), and anything already decided that must not be "
   Never start the server yourself with `run_in_background` or `&`: in `claude -p` the turn then never ends. If the helper prints `server: already answering at <url>; not started by this helper`, the shot may be of another app: rerun on a different port. Only when a server you were given is already running, drop the helper and run `node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs .proofs/visual-qa/pages.json --out .proofs/visual-qa/before` alone.
   Three viewports (1440, 1280, 390 CSS px; `--sizes 390,1280` picks some, and a plain width such as `1040` adds a desktop viewport just above a breakpoint), a first-screen and a full-page PNG each,
   named `<page>-<state>-<width>[-full].png`, plus `measures.json`, `summary.md` and a printed table.
-  The 390 view is a true 390 px viewport, and the overflow is measured three ways. If Playwright is
+  The 390 view is a true 390 px viewport, and the overflow is measured three ways. A page wider than the phone
+  is a finding, not a failed capture: a phone lays it out wider and zooms out to fit, so the row reads, for example,
+  `sideways scroll: 17px, zoomed`, and the other phone numbers are still taken. If Playwright is
   missing, the error prints the one-line install; run it once and rerun. If the install is declined, say the phone view is
   "not measured"; never fake it with Chrome `--window-size` below 500 (macOS headless Chrome lays the page out at 500 px).
 

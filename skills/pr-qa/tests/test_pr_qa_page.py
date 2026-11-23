@@ -873,6 +873,71 @@ class SkippedTest(unittest.TestCase):
         self.assertIn("skiped", str(ctx.exception))
 
 
+class HeaderSeparatorTest(unittest.TestCase):
+    """Rails run 1: at 390 the header wrapped and left a " · " at the end of a line. Each
+    separator now belongs to the part after it and hides with it; on a phone, where the
+    parts wrap onto their own lines, the gap alone separates them."""
+
+    DRIVER = (
+        "const {chromium}=require(process.argv[2]);"
+        "const {launchChromium}=require(process.argv[4]);"
+        "(async()=>{const b=await launchChromium(chromium,process.env);const out={};"
+        "for(const w of [1440,390]){const p=await b.newPage({viewport:{width:w,height:800}});"
+        "await p.goto('file://'+process.argv[3]);"
+        "out[w]=await p.evaluate(()=>{const bar=document.querySelector('header.bar');"
+        "const seps=[...bar.querySelectorAll('.sep')];"
+        "const shown=seps.filter(s=>getComputedStyle(s).display!=='none'&&s.getBoundingClientRect().width>0);"
+        "const kids=[...bar.children].filter(k=>getComputedStyle(k).display!=='none');"
+        "const lineEnds=kids.filter((k,i)=>{const n=kids[i+1];return !n||n.getBoundingClientRect().top>k.getBoundingClientRect().top+2;});"
+        "return {seps:seps.length,shown:shown.length,"
+        "endsWithDot:lineEnds.filter(k=>/[\u00b7]\\s*$/.test(k.textContent)).length,"
+        "bareDots:kids.filter(k=>k.textContent.trim()==='\u00b7').length,"
+        "scroll:document.documentElement.scrollWidth-document.documentElement.clientWidth};});"
+        "await p.close();}console.log(JSON.stringify(out));await b.close()})()")
+
+    def _run(self, project, repo, session):
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                        "..", "..", "..", "shared", "review_page"))
+        import review_page
+        pw = review_page.find_playwright(None)
+        if not pw:
+            self.skipTest("Playwright is not installed")
+        with tempfile.TemporaryDirectory() as tmp:
+            evidence = os.path.join(tmp, "ev")
+            write_evidence(evidence)
+            meta = os.path.join(tmp, "meta.json")
+            with open(meta, "w", encoding="utf-8") as handle:
+                json.dump([{"number": 3, "title": "T", "branch": "b", "dir": evidence, "absent_reason": "",
+                            "cost": "", "tests": "", "narrative": "", "recommendation": "wait",
+                            "human_findings": []}], handle)
+            build(meta, os.path.join(tmp, "page.html"), project, repo, session)
+            script = os.path.join(tmp, "bar.cjs")
+            with open(script, "w", encoding="utf-8") as handle:
+                handle.write(self.DRIVER)
+            launch = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..",
+                                                  "shared", "review_page", "launch.cjs"))
+            r = subprocess.run(["node", script, pw, os.path.join(tmp, "page.html"), launch],
+                               capture_output=True, text=True, timeout=120)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            return json.loads(r.stdout.strip().splitlines()[-1])
+
+    def test_no_stray_separator_at_390(self):
+        out = self._run("Rails landing page", "workingBen/proofs-in-the-wild", "rails-run1-20261123-1513")
+        self.assertEqual(out["390"]["bareDots"], 0, out)
+        self.assertEqual(out["390"]["shown"], 0, out)
+        self.assertEqual(out["390"]["endsWithDot"], 0, out)
+        self.assertEqual(out["390"]["scroll"], 0, out)
+        # on a desktop the dots still sit between project, session and repo
+        self.assertEqual(out["1440"]["seps"], 2, out)
+        self.assertEqual(out["1440"]["shown"], 2, out)
+        self.assertEqual(out["1440"]["endsWithDot"], 0, out)
+
+    def test_a_missing_part_takes_its_separator_with_it(self):
+        out = self._run("P", "", None)
+        self.assertEqual(out["1440"]["seps"], 0, out)
+        self.assertEqual(out["1440"]["bareDots"], 0, out)
+
+
 class SmokeTest(unittest.TestCase):
     """--smoke drives the built page in a real browser."""
 

@@ -2,11 +2,13 @@
 // Usage: node smoke.cjs <playwright package dir> <page.html>
 // Prints one JSON line: { mode, items, export, problems: [...] }. Exercises the
 // first item of each kind the page's frame uses, and on question and session
-// pages checks that open questions sit directly under the sticky bar. Run through
+// pages checks that open questions sit directly under the sticky bar; on review pages it
+// also flags a word a mockup breaks mid-word, by item and variant. Run through
 // review_page.py --smoke rather than directly.
 const path = require("path");
 const { chromium } = require(process.argv[2]);
 const { launchChromium } = require("./launch.cjs");
+const { midWordBreaks } = require("./midword.cjs");
 const file = "file://" + path.resolve(process.argv[3]);
 
 (async () => {
@@ -134,10 +136,26 @@ const file = "file://" + path.resolve(process.argv[3]);
   if (noFallback) problems.push(`${noFallback} <picture>(s) have no PNG or JPEG <img> fallback`);
   const fonts = await page.evaluate(async () => { await document.fonts.ready; return [...document.fonts].filter((f) => f.status === "error").map((f) => f.family); });
   if (fonts.length) problems.push(`font(s) failed to load: ${fonts.join(", ")}`);
+  // Rails run 1: a mockup's narrow cards broke "authenticat / ion" and only pr-qa noticed. Run
+  // the capture's mid-word measure on every mockup, and name the item and variant it is in.
+  const reviewItems = S.mode === "review" ? items("review").map(([, it]) => it) : [];
+  const seenBreaks = new Set();
+  out.mid_word = [];
   for (const w of [1280, 390]) {
     await page.setViewportSize({ width: w, height: 900 });
     const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     if (over > 0) problems.push(`page scrolls sideways by ${over}px at ${w}px wide`);
+    if (!reviewItems.length) continue;
+    for (const b of await page.evaluate(midWordBreaks, { selector: ".rp-item .rp-body, .rp-item .rp-vbody", limit: 40 })) {
+      const it = reviewItems.find((i) => i.id === b.where.item);
+      const v = it && b.where.variant ? (it.variants || []).find((x) => x.key === b.where.variant) : null;
+      const key = `${b.where.item}|${b.where.variant}|${b.word}`;
+      if (seenBreaks.has(key)) continue;
+      seenBreaks.add(key);
+      out.mid_word.push({ item: it ? it.num : b.where.item, variant: b.where.variant, word: b.at, width: w });
+      const where = `item ${it ? it.num : "?"}${it ? ` (${it.label})` : ""}${v ? `, ${v.label}` : ""}`;
+      problems.push(`${where}: "${b.at}" breaks mid-word at ${w}px wide; widen the box, shrink the type or use fewer columns`);
+    }
   }
   await browser.close();
   out.problems = problems;

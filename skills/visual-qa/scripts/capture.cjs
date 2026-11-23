@@ -32,9 +32,10 @@ const path = require('path');
 // installed, else the installed Google Chrome (no download), with the flag that stops
 // Chrome on macOS copying its whole app (about 1.4 GB) into a temp folder per launch.
 const LAUNCH = path.join(__dirname, '..', '..', '..', 'shared', 'review_page', 'launch.cjs');
-let launchChromium, HOW_TO;
+let launchChromium, HOW_TO, midWordBreaks;
 try {
   ({ launchChromium, HOW_TO } = require(LAUNCH));
+  ({ midWordBreaks } = require(path.join(path.dirname(LAUNCH), 'midword.cjs')));
 } catch (_) {
   console.error(`Cannot find ${LAUNCH}. Install the whole Proofs plugin, not the visual-qa folder on its own.`);
   process.exit(2);
@@ -75,8 +76,10 @@ function pickViewports(sizes) {
 }
 
 // Runs in the page. Returns raw numbers; pass/fail is decided in Node.
-function measure({ items, minText, minTap }) {
-  const vw = document.documentElement.clientWidth;
+// `edge`, when given, is the screen's width to measure overflow against (the plain
+// recheck of a phone layout that came out wider than the screen).
+function measure({ items, minText, minTap, edge }) {
+  const vw = edge || document.documentElement.clientWidth;
   const vh = window.innerHeight;
   const visible = (el) => {
     const s = getComputedStyle(el);
@@ -181,22 +184,6 @@ function measure({ items, minText, minTap }) {
     truncated.push({ text: label(el), roomPx: Math.round(room) });
   }
 
-  // Words split across lines ("Wildflo-wer")
-  const midWord = [];
-  const tw = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-  while (tw.nextNode() && midWord.length < 20) {
-    const node = tw.currentNode;
-    const el = node.parentElement;
-    if (!el || !visible(el) || el.closest('svg,code,pre,textarea')) continue;
-    const re = /\S{4,}/g; let m;
-    while ((m = re.exec(node.textContent))) {
-      const range = document.createRange();
-      range.setStart(node, m.index); range.setEnd(node, m.index + m[0].length);
-      const tops = new Set([...range.getClientRects()].map((r) => Math.round(r.top)));
-      if (tops.size > 1) midWord.push(m[0].slice(0, 30));
-    }
-  }
-
   // Repeated items: how many fit the first screen, how tall, where the first starts
   let itemStats = null;
   if (items) {
@@ -225,7 +212,6 @@ function measure({ items, minText, minTap }) {
     smallText: smallText.slice(0, 25), smallTextCount: smallText.length,
     smallTaps: smallTaps.slice(0, 25), smallTapCount: smallTaps.length,
     truncated: truncated.slice(0, 15),
-    midWord,
     items: itemStats,
   };
 }
@@ -239,18 +225,52 @@ function pngWidth(file) {
   return b.readUInt32BE(16);
 }
 
-// Folds the three overflow signals into m.sideways (the worst of them) and m.signals.
+// Folds the overflow signals into m.sideways (the worst of them) and m.signals. A phone
+// layout that came out wider than the screen (m.zoomedOut) is measured against the screen.
 function overflowOf(m) {
-  const cw = m.clientWidth;
-  const scroll = m.scrollWidth - cw;
+  const z = m.zoomedOut;
+  const cw = z ? z.screenWidth : m.clientWidth;
+  const scroll = (z ? z.layoutWidth : m.scrollWidth) - cw;
   const clipped = m.widestRight - cw;
   const image = Math.round(m.pngWidth / m.dpr) - cw;
   const signals = [];
-  if (scroll > 1) signals.push('scroll');
+  if (z) signals.push('zoomed');
+  else if (scroll > 1) signals.push('scroll');
   else if (clipped > 1) signals.push('clipped');
-  if (image > 1) signals.push('image');
+  if (image > 1 && !z) signals.push('image');
   m.signals = signals;
   m.sideways = Math.max(scroll, clipped, image, 0);
+}
+
+// Goes to the page and runs its actions (shared by the capture and the plain recheck).
+async function openPage(page, base, p) {
+  await page.goto(base + p.path, { waitUntil: 'networkidle' });
+  for (const a of p.actions || []) {
+    if (a.click) await page.click(a.click);
+    if (a.waitFor) await page.waitForSelector(a.waitFor);
+    if (a.eval) await page.evaluate(a.eval);
+  }
+  await page.evaluate(() => document.fonts && document.fonts.ready);
+}
+
+// An emulated phone lays the page out wider than its screen when the content is too wide,
+// as a real phone zooms out to fit (Rails run 1: 407 px at 390). A browser that ignores the
+// viewport (headless Chrome on macOS once had a minimum width) is wide in a plain desktop
+// context too. So load the page once more at the same width without phone emulation: if
+// that context is the asked width and the content runs past it, the overflow is the page's.
+async function recheckWide(browser, vp, base, p, setup, minText, minTap) {
+  const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height } });
+  try {
+    const page = await context.newPage();
+    if (setup) await setup(page, base);
+    await openPage(page, base, p);
+    const flat = await page.evaluate(measure, { items: p.items, minText, minTap, edge: vp.width });
+    const real = flat && flat.innerWidth === vp.width
+      && Math.max(flat.scrollWidth || 0, flat.widestRight || 0) > vp.width + 1;
+    return real ? flat : null;
+  } finally {
+    await context.close();
+  }
 }
 
 function verdicts(m, vpLabel) {
@@ -333,20 +353,26 @@ function verdicts(m, vpLabel) {
       const state = p.state || 'default';
       const file = `${prefix}${p.name}-${state}-${label}`;
       try {
-        await page.goto(base + p.path, { waitUntil: 'networkidle' });
-        for (const a of p.actions || []) {
-          if (a.click) await page.click(a.click);
-          if (a.waitFor) await page.waitForSelector(a.waitFor);
-          if (a.eval) await page.evaluate(a.eval);
-        }
-        await page.evaluate(() => document.fonts && document.fonts.ready);
+        await openPage(page, base, p);
         await page.screenshot({ path: path.join(out, `${file}.png`) });
         await page.screenshot({ path: path.join(out, `${file}-full.png`), fullPage: true });
         const m = await page.evaluate(measure, { items: p.items, minText, minTap });
         if (m.innerWidth !== vp.width) {
-          untrusted = `the browser laid the page out at ${m.innerWidth} px, not ${vp.width} px; the capture is not trustworthy`;
-          break;
+          const flat = vp.isMobile && m.innerWidth > vp.width
+            ? await recheckWide(browser, vp, base, p, setup, minText, minTap) : null;
+          if (!flat) {
+            untrusted = `the browser laid the page out at ${m.innerWidth} px, not ${vp.width} px; the capture is not trustworthy`;
+            break;
+          }
+          // The page is wider than the phone: a finding. Keep the phone's text and tap
+          // numbers (taken at the zoomed-out width) and take the overflow from the recheck.
+          m.zoomedOut = { layoutWidth: m.innerWidth, screenWidth: vp.width, past: m.innerWidth - vp.width };
+          m.scrollWidth = Math.max(m.scrollWidth, m.innerWidth);
+          m.clientWidth = vp.width;
+          m.widestRight = flat.widestRight;
+          m.overflowing = flat.overflowing;
         }
+        m.midWord = (await page.evaluate(midWordBreaks, { selector: 'body', limit: 20 })).map((w) => w.at);
         m.pngWidth = pngWidth(path.join(out, `${file}-full.png`));
         overflowOf(m);
         results.push({ page: p.name, state, viewport: label, file, measures: m, verdicts: verdicts(m, label) });
@@ -389,6 +415,8 @@ function verdicts(m, vpLabel) {
     scroll: 'scroll: the page scrolls sideways.',
     clipped: 'clipped: content is wider than the screen but hidden by overflow-x, so it does not scroll and is cut off.',
     image: 'image: the full-page screenshot came out wider than the screen.',
+    zoomed: 'zoomed: the page is wider than the phone screen, so the phone lays it out wider and zooms out to fit, '
+      + 'shrinking everything; the other phone numbers were measured at that wider layout.',
   };
   if (seen.size) lines.push('', ...[...seen].map((s) => `- ${WORDS[s]}`));
   if (errors.length) lines.push('', 'Page errors:', ...errors.map((e) => `- ${e}`));

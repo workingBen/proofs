@@ -1,5 +1,6 @@
 # Changelog
 
+- **1.4.4** (2026-11-23): A page wider than the phone is a finding, not a failed capture: an emulated phone that lays the page out wider than 390 is checked once more without phone emulation, and if that layout is 390 and the content runs past it, the capture records `sideways scroll: 17px, zoomed` with the widest element and keeps the phone's text and tap numbers. The "not trustworthy" exit 3 is kept for a browser that ignored the viewport. A line break at a hyphen, dash or slash no longer counts as a mid-word break.
 - **1.4.3** (2026-11-23): Names the type check in the form the project uses (`npx vue-tsc --noEmit` for Vue, or the project's own `npm run type-check` or `npm run build`); the opt-in `--project` block now covers those and the Svelte, Astro and Angular checks.
 - **1.4.2** (2026-11-23): `capture.cjs --sizes` also takes a desktop width from 400 to 2560 (for example `--sizes 390,1040,1440`), for a shot just above a breakpoint; with `--evidence` it is labeled with its width, like 1280.
 - **1.4.1** (2026-11-23): House rule 2: never `ls` or Read `~/.cache/proofs-playwright` to see whether Playwright is installed (outside the project, so the call is refused); the capture and `--smoke` report a missing install themselves.

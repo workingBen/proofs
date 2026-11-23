@@ -787,11 +787,15 @@ def page(spec):
                             if proj.get("session") else ""), esc(spec.get("copy_label", "Copy my answers"))))
     html_out.append('<main class="rp-main" data-preview="light">')
     if mode == "review":
-        # project · session, then the repo (dropped on phones, separator and all)
-        where = " · ".join(x for x in (proj.get("name") and esc(proj["name"]),
-                                       proj.get("session") and '<b class="rp-session">%s</b>' % esc(proj["session"])) if x)
+        # project · session, then the repo (dropped on phones, separator and all). Each
+        # separator belongs to the part after it, so it hides with that part, and on a
+        # phone, where the parts wrap, none is drawn (Rails run 1: a dot ended a line).
+        sep = '<span class="rp-sep"> · </span>'
+        where = esc(proj.get("name") or "")
+        if proj.get("session"):
+            where += '<span class="rp-wp">%s<b class="rp-session">%s</b></span>' % (sep if where else "", esc(proj["session"]))
         if proj.get("repo"):
-            where += '<span class="rp-pb-x">%s%s</span>' % (" · " if where else "", esc(proj["repo"]))
+            where += '<span class="rp-pb-x">%s%s</span>' % (sep if where else "", esc(proj["repo"]))
         html_out.append('<div class="rp-brandline">%s%s</div>' % (
             mark, '<span class="rp-where">%s</span>' % where if where else ""))
     context = []

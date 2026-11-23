@@ -556,7 +556,8 @@ PAGE_TEMPLATE = """<!doctype html>
   .pf-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .bar .session { color: var(--session); font-weight: 700; }
   @media (max-width: 600px) { .pf-wm, .pf-sep { display: none; } }
-  .bar .tag { color: var(--muted); }
+  .bar .sep { color: var(--muted); font-weight: 400; font-family: system-ui, sans-serif; margin-right: 1rem; }
+  @media (max-width: 600px) { .bar .sep { display: none; } }
   .bar .repo { color: var(--muted); font-size: 1rem; }
   .bar .counter {
     margin-left: auto; font-weight: 700; padding: .4rem .9rem; border-radius: 999px;
@@ -1002,12 +1003,15 @@ const DATA = __PAYLOAD__;
       el("span", { class: "pf-sk", "aria-hidden": "true", text: "pr-qa" }),
       el("span", { class: "pf-sr", text: "Proofs, pr-qa" }),
       el("span", { class: "pf-sep", "aria-hidden": "true" }));
+    // Each separator belongs to the part after it, so a missing part takes its dot with it,
+    // and a phone (where the parts wrap) hides the dots: none is left at a line's end.
+    function part(cls, text) {
+      return text ? el("span", { class: cls }, el("span", { class: "sep", "aria-hidden": "true", text: "\\u00b7" }), text) : null;
+    }
     return el("header", { class: "bar" }, mark,
       el("span", { class: "brand", text: DATA.project }),
-      DATA.session ? el("span", { class: "tag", text: "\\u00b7" }) : null,
-      DATA.session ? el("span", { class: "session", text: DATA.session }) : null,
-      el("span", { class: "tag", text: "\\u00b7" }),
-      el("span", { class: "repo", text: DATA.repo }),
+      part("session", DATA.session),
+      part("repo", DATA.repo),
       el("span", { class: "counter", "data-counter": "",
         text: "0 of " + DATA.prs.length + " decided" }));
   }

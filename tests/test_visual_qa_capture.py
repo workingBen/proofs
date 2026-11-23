@@ -225,6 +225,37 @@ class PhoneWidth(unittest.TestCase):
             self.assertGreaterEqual(shot["overflowing"][0]["past"], 65)
             self.assertEqual(shot["overflowing"][0]["tag"], "nav")
 
+    def test_real_phone_overflow_is_a_finding_not_an_untrusted_capture(self):
+        # Rails run 1: an emulated phone widens its layout to fit content that is too wide
+        # (407 px at 390), the way a real phone zooms out. That is the page's bug, so the
+        # capture records it and keeps the phone's text and tap numbers.
+        with tempfile.TemporaryDirectory() as tmp:
+            r, out = self.capture(tmp, "overflow-17.html", "--sizes", "390", "--evidence", "before")
+            res = self.result(out, "before-")
+            m = res["measures"]
+            self.assertEqual(m["sideways"], 17)
+            self.assertEqual(m["zoomedOut"], {"layoutWidth": 407, "screenWidth": 390, "past": 17})
+            self.assertEqual(m["clientWidth"], 390)
+            self.assertEqual(m["overflowing"][0]["tag"], "div")
+            self.assertEqual(m["overflowing"][0]["past"], 17)
+            self.assertGreaterEqual(m["smallTapCount"], 1)
+            self.assertGreaterEqual(m["smallTextCount"], 1)
+            verdict = {k: (v, ok) for k, v, ok in res["verdicts"]}
+            self.assertEqual(verdict["sideways scroll"], ("17px, zoomed", False))
+            self.assertIn("zoomed", r.stdout)
+            self.assertIn("zooms out", r.stdout)
+            shot = json.loads((out / "before.json").read_text())["shots"][0]
+            self.assertEqual(shot["overflow"], 17)
+            self.assertEqual(shot["clientWidth"], 390)
+            self.assertEqual(shot["overflowing"][0]["past"], 17)
+
+    def test_mid_word_break_is_counted_and_a_hyphen_break_is_not(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, out = self.capture(tmp, "midword.html", "--sizes", "1440")
+            m = self.result(out)["measures"]
+            self.assertEqual(len(m["midWord"]), 1, m["midWord"])
+            self.assertTrue(m["midWord"][0].startswith("authentic"), m["midWord"])
+
     def test_fitting_page_passes(self):
         with tempfile.TemporaryDirectory() as tmp:
             _, out = self.capture(tmp, "fits.html", "--sizes", "390")
@@ -312,6 +343,39 @@ module.exports = { chromium: { launch: async () => ({ newContext: async () => co
             self.assertEqual(r.returncode, 3, r.stderr)
             self.assertIn("the browser laid the page out at 500 px, not 390 px; the capture is not trustworthy", r.stderr)
             self.assertFalse((tmp / "out" / "measures.json").exists())
+
+    def test_a_viewport_that_stays_wide_without_phone_emulation_is_still_untrusted(self):
+        # The old headless-Chrome-on-macOS minimum width: the layout is wide in a plain
+        # desktop context too, so the viewport itself is wrong, not the page.
+        fake = r"""
+const fs = require('fs');
+const page = { on() {}, goto: async () => {}, click: async () => {}, waitForSelector: async () => {},
+  screenshot: async () => {},
+  evaluate: async (fn, arg) => (arg && 'minText' in arg ? { innerWidth: 500, scrollWidth: 500, widestRight: 500, overflowing: [] } : undefined) };
+const context = { newPage: async () => page, close: async () => {} };
+module.exports = { chromium: { launch: async () => ({ close: async () => {},
+  newContext: async (o) => { fs.appendFileSync(process.env.FAKE_LOG, JSON.stringify(o) + '\n'); return context; } }) } };
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            pkg = tmp / "node_modules" / "playwright"
+            pkg.mkdir(parents=True)
+            (pkg / "package.json").write_text('{"name": "playwright", "main": "index.js"}')
+            (pkg / "index.js").write_text(fake)
+            (tmp / "pages.json").write_text(json.dumps({"base": "http://localhost:9", "pages": [{"name": "x", "path": "/"}]}))
+            log = tmp / "ctx.log"
+            env = {k: v for k, v in os.environ.items() if k not in ("NODE_PATH", "PLAYWRIGHT_PATH", "PROOFS_PLAYWRIGHT")}
+            env.update(HOME=str(tmp), FAKE_LOG=str(log))
+            r = subprocess.run([NODE, str(CAPTURE), str(tmp / "pages.json"), "--out", str(tmp / "out"), "--sizes", "390"],
+                               cwd=tmp, env=env, capture_output=True, text=True, timeout=60)
+            self.assertEqual(r.returncode, 3, r.stderr)
+            self.assertIn("the browser laid the page out at 500 px, not 390 px; the capture is not trustworthy", r.stderr)
+            ctx = [json.loads(l) for l in log.read_text().splitlines()]
+            # the phone context, then one plain context at the same width to tell the two apart
+            self.assertEqual(len(ctx), 2)
+            self.assertTrue(ctx[0].get("isMobile"))
+            self.assertNotIn("isMobile", ctx[1])
+            self.assertEqual(ctx[1]["viewport"]["width"], 390)
 
     def run_sizes(self, sizes):
         """Run with a Playwright stand-in that records each context's viewport; returns (result, widths)."""

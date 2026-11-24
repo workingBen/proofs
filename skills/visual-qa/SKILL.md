@@ -1,6 +1,6 @@
 ---
 name: visual-qa
-version: 1.4.5
+version: 1.4.6
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs *)
@@ -71,7 +71,7 @@ and colors (mockups reuse them), and anything already decided that must not be "
 
 ## 2. Compare against the targets
 
-The script measures and flags the first six; the rest come from `items` stats and your look.
+The script measures and flags the first seven; the rest come from `items` stats and your look.
 
 | Measure | Target |
 |---|---|
@@ -81,6 +81,7 @@ The script measures and flags the first six; the rest come from `items` stats an
 | Tap targets | ≥ `minTap` both ways; links inside running text exempt |
 | Truncation | none while there is room beside it |
 | Mid-word breaks ("Wildflo-wer") | none: `overflow-wrap: normal; word-break: normal`; put `<wbr>` after "/" in long compound names |
+| Off-center rows | none: inside a `text-align: center` column, a row's content sits within 16 px of centered. `text-align` does not center a flex or grid row's items (add `justify-content: center`) or a fixed-width block (add `margin-inline: auto`); the summary names each row and its left/right gaps |
 | Chrome before the first item | < 40% of the first screen |
 | Items in the first screen (data pages) | list lines ≥ 6 at 1280 and ≥ 3 at 390; table rows ≥ 12; tile rows ≥ 2; phone cards ≥ 5 |
 | Repeated item height | a list line is one row on desktop (≈ 72–82 px) |

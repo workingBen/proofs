@@ -318,24 +318,57 @@ VALID_SEVERITIES = tuple(SEVERITY_RANK)
 VALID_RECOMMENDATIONS = tuple(value for value, _ in DECISIONS)
 
 
+class MetaError(ValueError):
+    """A meta.json the builder cannot use. main() prints it as one plain line, exit 1."""
+
+
+META_SHAPE = ('each human finding is an object such as {"severity": "warning", "title": '
+              '"The new button is 41px tall", "detail": "..."} or a plain string')
+
+
 def validate_meta(meta):
     """`meta.json` is hand-written by a session; nothing else checks its shape.
     A mistyped severity or recommendation must crash the build, not quietly
     downgrade a blocker to a gray "clean" dot sorted to the bottom of the page.
+    A plain-string human finding is taken as a warning with that text as its title
+    (Angular run 1: strings crashed the build with a stack trace). Returns meta,
+    with those strings turned into findings; anything else malformed raises
+    MetaError naming the PR and the field.
     """
-    for entry in meta:
+    if not isinstance(meta, list):
+        raise MetaError("meta.json must be a list of PR entries, or an object with a \"prs\" list")
+    for index, entry in enumerate(meta, 1):
+        if not isinstance(entry, dict):
+            raise MetaError(f"entry {index} is {type(entry).__name__}, not an object such as "
+                            '{"number": 16, "title": "...", "dir": "...", "recommendation": "wait", '
+                            '"human_findings": []}')
         number = entry.get("number")
-        for finding in entry.get("human_findings") or []:
+        findings = entry.get("human_findings")
+        if findings is None:
+            findings = []
+        if not isinstance(findings, list):
+            raise MetaError(f"PR #{number}: human_findings must be a list; {META_SHAPE}")
+        normalized = []
+        for at, finding in enumerate(findings):
+            if isinstance(finding, str) and finding.strip():
+                finding = {"severity": "warning", "title": finding.strip(), "detail": ""}
+            if not isinstance(finding, dict) or not isinstance(finding.get("title"), str) \
+                    or not finding.get("title").strip():
+                raise MetaError(f"PR #{number}: human_findings[{at}] is {json.dumps(finding)[:80]}; {META_SHAPE}")
             severity = finding.get("severity")
             if severity not in VALID_SEVERITIES:
-                raise ValueError(
+                raise MetaError(
                     f"PR #{number}: human_findings severity {severity!r} is not "
                     f"valid -- valid values are {', '.join(VALID_SEVERITIES)}")
+            normalized.append(finding)
+        if "human_findings" in entry:
+            entry["human_findings"] = normalized
         recommendation = entry.get("recommendation")
         if recommendation and recommendation not in VALID_RECOMMENDATIONS:
-            raise ValueError(
+            raise MetaError(
                 f"PR #{number}: recommendation {recommendation!r} is not valid "
                 f"-- valid values are {', '.join(VALID_RECOMMENDATIONS)}")
+    return meta
 
 
 MERGE_RECOMMENDATIONS = ("merge-and-push", "merge-hold-push")
@@ -369,8 +402,13 @@ def check_rise(entry, evidence):
 def load_meta(meta_path):
     """(entries, skipped). meta.json is a list of PR entries, or an object
     {"prs": [...], "skipped": [{"number": 2, "reason": "not requested"}]}."""
-    with open(meta_path, encoding="utf-8") as handle:
-        meta = json.load(handle)
+    try:
+        with open(meta_path, encoding="utf-8") as handle:
+            meta = json.load(handle)
+    except FileNotFoundError:
+        raise MetaError("not found")
+    except ValueError as e:
+        raise MetaError(f"not valid JSON ({e})")
     if isinstance(meta, dict):
         unknown = sorted(set(meta) - {"prs", "skipped"})
         if unknown:
@@ -449,7 +487,7 @@ def evidence_gaps(prs):
 
 def build(meta_path, out_path, project, repo, session=None):
     meta, skipped = load_meta(meta_path)
-    validate_meta(meta)
+    meta = validate_meta(meta)
     meta_dir = os.path.dirname(os.path.abspath(meta_path))
     prs = []
     for entry in meta:
@@ -556,7 +594,11 @@ def main(argv=None):
     project = args.project or (repo.split("/")[-1] if repo else "Project")
     if not args.session:
         print("warning: no --session: the reader can't tell which session this page belongs to", file=sys.stderr)
-    page = build(args.meta, args.out, project, repo, args.session)
+    try:
+        page = build(args.meta, args.out, project, repo, args.session)
+    except MetaError as e:
+        print(f"pr_qa_page.py: {args.meta}: {e}", file=sys.stderr)
+        return 1
     print(f"==> {args.out}: {len(page)} bytes")
     for line in chat_lines(page):
         print(line)

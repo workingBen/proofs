@@ -1,6 +1,6 @@
 ---
 name: design-review
-version: 1.10.3
+version: 1.10.4
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -112,7 +112,7 @@ When the user pastes back the copied summary, match items by number (and variant
 - **`REVISE`**: leave the file untouched for now; the comment is feedback for a follow-up round (see below), not an instruction to apply anything yet.
 - **`PENDING`**: not reviewed yet; leave untouched.
 
-Then rebuild styles if the project compiles them, verify against a real render, and commit following the project's own notes. **Verify at every width the layout changes at, not just 1280 and 390:** capture the real page at `--sizes 390,1280,1440` plus one width just above each breakpoint the applied markup uses (as pr-qa picks them: Tailwind `sm:` 656, `md:` 784, `lg:` 1040, `xl:` 1280, `2xl:` 1552; Bootstrap `md` 784, `lg` 1008, `xl` 1216, or the project's own). Any `mid-word breaks`, `sideways scroll` or new `text below floor` row in the capture's table is a failure: fix it and capture again before you say the picks are built (Rails run 1: cards built at 1280 and 390 looked right, and broke "authenticat / ion" at 992 and 1440). The review tool changes nothing about how the actual change gets verified and shipped.
+Then rebuild styles if the project compiles them, verify against a real render, and commit following the project's own notes. **Build or type-check the change before you say the picks are built**, if the project has a command for it (`npm run build`, `npx ng build`, `npm run check`, `npx tsc --noEmit`: whichever `package.json`'s scripts or `CLAUDE.md` name); fix what it reports, and if it still fails, or there is no such command, say so in chat (Angular run 1: the applied change was never built, then committed and QA'd on the dev server's compile alone). **Commit only what you meant to change:** a lockfile (`package-lock.json` and the like) that an `npm install` rewrote is left out of the commit (`git restore` it; `npm ci` installs without rewriting it), and you say in chat that you left it out; if the change does need it, mention it in the commit message or PR. **Verify at every width the layout changes at, not just 1280 and 390:** capture the real page at `--sizes 390,1280,1440` plus one width just above each breakpoint the applied markup uses (as pr-qa picks them: Tailwind `sm:` 656, `md:` 784, `lg:` 1040, `xl:` 1280, `2xl:` 1552; Bootstrap `md` 784, `lg` 1008, `xl` 1216, or the project's own). Any `mid-word breaks`, `sideways scroll`, `off-center rows` or new `text below floor` row in the capture's table is a failure: fix it and capture again before you say the picks are built (Rails run 1: cards built at 1280 and 390 looked right, and broke "authenticat / ion" at 992 and 1440). The review tool changes nothing about how the actual change gets verified and shipped.
 
 ### 6. Follow-up rounds on `REVISE` items
 

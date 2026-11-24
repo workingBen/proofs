@@ -165,6 +165,15 @@ def compare(before, after):
                 f"{name_items([text_label(t) for t in fresh_text])}.",
                 dict({"text": fresh_text[:4]}, **({"rise": True} if text_rose else {}))))
 
+        fresh_off = fresh_off_center(old, shot)
+        if fresh_off:
+            findings.append(finding(
+                "warning", f"{where}: a row is now off-center",
+                "Inside a centered column, content now sits to one side (gaps left and "
+                f"right of it): {name_items([off_center_label(o) for o in fresh_off])}. "
+                "Usually a flex or grid row, which text-align: center does not center.",
+                {"rows": fresh_off[:4]}))
+
         fresh_errors = [e for e in shot.get("errors") or []
                         if e not in ((old or {}).get("errors") or [])]
         if fresh_errors:
@@ -244,6 +253,18 @@ def fresh_small_text(old, shot):
     return fresh_by_count((old or {}).get("smallText") or [],
                           shot.get("smallText") or [],
                           lambda t: t.get("text"))
+
+
+def off_center_label(o):
+    return f'"{o.get("text") or o.get("tag")}" ({o.get("left")}px left, {o.get("right")}px right)'
+
+
+def fresh_off_center(old, shot):
+    # An older capture has no offCenter: "not measured", not "zero".
+    if old is not None and "offCenter" not in old:
+        return []
+    return fresh_by_count((old or {}).get("offCenter") or [], shot.get("offCenter") or [],
+                          lambda o: (o.get("text"), o.get("tag")))
 
 
 def is_measured(shot):

@@ -1,6 +1,6 @@
 ---
 name: review-cycle
-version: 1.13.0
+version: 1.13.1
 description: Use when the user opens a review session ("starting a review cycle", "let's do a review pass") and feeds a stream of bug reports and requests, often from a phone, to be triaged and handled without questions; fixes ship, design calls go to design-review, big features become to-dos. Not for a single one-off request.
 ---
 
@@ -33,12 +33,12 @@ A queue-processing workflow for a live review session: the user reports issues o
    - Resolve any remaining ambiguity yourself with the lowest-risk default; record the assumption in the backlog entry (below). Never stop to ask.
    - TDD: test first, then implementation.
    - Run the relevant test suite; confirm it's green.
-   - Self-review the diff before committing.
+   - Self-review the diff before committing. Stage only what the item changed: a lockfile (`package-lock.json` and the like) that an install rewrote stays out of the commit (`git restore` it); if the item needs it, say so in the PR body.
    - **Ship it as its own pull request: one item, one branch, one PR, merged as you go.** Never commit on the main branch. The sequence per item:
      ```text
      git fetch origin main                            # from the session's working copy
      git checkout -b <type>/<short-slug> origin/main   # fresh off main, not off the last item
-     # ... commit the work, explicit paths only ...
+     # ... commit the work, explicit paths only; a lockfile you did not mean to change stays out ...
      git push -u origin HEAD                           # HEAD is the item's branch
      gh pr create --fill                               # body: the report, the fix, test evidence
      gh pr merge <n> --merge                           # NOT --delete-branch; see below

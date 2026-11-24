@@ -9,6 +9,10 @@
 //
 // A break at a hyphen, dash or slash is a normal line break, not a mid-word one, so each
 // run of four or more letters between those is a word of its own.
+//
+// Code (<pre>, <code>) is skipped unless it is told to break anywhere (`word-break:
+// break-all` or `overflow-wrap: anywhere`): then a command can break mid-word like prose
+// (Astro run 1: the quick-start `<pre>` with break-all split "--tem" / "plate" at 390).
 function midWordBreaks({ selector = 'body', limit = 20 } = {}) {
   const out = [];
   const shown = (el) => {
@@ -23,7 +27,11 @@ function midWordBreaks({ selector = 'body', limit = 20 } = {}) {
     while (tw.nextNode() && out.length < limit) {
       const node = tw.currentNode;
       const el = node.parentElement;
-      if (!el || el.closest('svg,code,pre,textarea,script,style') || !shown(el)) continue;
+      if (!el || el.closest('svg,textarea,script,style') || !shown(el)) continue;
+      if (el.closest('code,pre')) {
+        const cs = getComputedStyle(el);
+        if (cs.wordBreak !== 'break-all' && cs.overflowWrap !== 'anywhere') continue;
+      }
       const re = /[^\s\-‐-―\/]{4,}/g;
       let m;
       while ((m = re.exec(node.textContent)) && out.length < limit) {

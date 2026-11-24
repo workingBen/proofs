@@ -112,6 +112,33 @@ class TapTargetTest(unittest.TestCase):
         after = [dict(shot(), offCenter=[events], offCenterCount=1)]
         self.assertEqual(compare([shot("before")], after), [])
 
+    def test_a_new_off_center_column_is_a_warning(self):
+        # Astro run 1: a section's max-width column began 128 px right of the ones around it.
+        steps = {"kind": "edge", "tag": "div", "text": "Steps", "edge": 232, "neighbors": 104}
+        before = [dict(shot("before"), offColumns=[], offColumnCount=0)]
+        after = [dict(shot(), offColumns=[steps], offColumnCount=1)]
+        found = [f for f in compare(before, after) if "column" in f["title"]]
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0]["severity"], "warning")
+        self.assertIn('"Steps" (edge at 232px, the columns around it at 104px)', found[0]["detail"])
+        self.assertEqual(compare([dict(shot("before"), offColumns=[steps], offColumnCount=1)], after), [])
+        self.assertEqual(compare([shot("before")], after), [])
+
+    def test_a_blank_shot_is_never_clean(self):
+        # Astro run 1: shots blank below the hero (sections that fade in on scroll) scored "clean".
+        blank = {"flagged": True, "image": True, "hidden": True, "colorShare": 0.97, "hiddenBlocks": 9}
+        for side in ("before", "after"):
+            with self.subTest(side=side):
+                before = [dict(shot("before"), blank=blank if side == "before" else {"flagged": False})]
+                after = [dict(shot(), blank=blank if side == "after" else {"flagged": False})]
+                found = compare(before, after)
+                self.assertEqual(len(found), 1, found)
+                self.assertIn("blank", found[0]["title"])
+                self.assertIn(side, found[0]["title"])
+                self.assertEqual(found[0]["severity"], "warning")
+                self.assertIn("nothing there was checked", found[0]["detail"])
+                self.assertNotEqual(summarize(found)["verdict"], "clean")
+
     def test_small_text_rise_named(self):
         old = [{"text": "Old a", "px": 11}, {"text": "Old b", "px": 11}]
         new = [{"text": "New c", "px": 11.5}, {"text": "New d", "px": 10}]

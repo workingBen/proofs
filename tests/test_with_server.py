@@ -259,6 +259,37 @@ class WithServerTest(unittest.TestCase):
         r = self.run_helper("sh -c 'echo boom; exit 1'", ["sh", "-c", "true"])
         self.assertNotIn("hint:", r.stderr)
 
+    # Astro run 1: Astro 7's `astro dev` noticed the agent, started a detached server, logged
+    # where it was running and exited 0. The session then could not stop it.
+    ASTRO_BG = ('{"message":"Dev server running at http://localhost:3411 (pid 24239)\\n'
+                'Stop:   astro dev stop\\nStatus: astro dev status\\nLogs:   astro dev logs",'
+                '"label":"SKIP_FORMAT","level":"info"}')
+
+    def test_a_server_that_moved_itself_to_the_background_gets_a_hint(self):
+        (self.dir / "bg.txt").write_text(self.ASTRO_BG + "\n")
+        r = self.run_helper("sh -c 'cat bg.txt; exit 0'", ["sh", "-c", "touch captured"])
+        self.assertEqual(r.returncode, 4, r.stdout + r.stderr)
+        self.assertIn("hint: the dev server moved itself to the background", r.stderr)
+        self.assertIn("--ignore-lock", r.stderr)
+        self.assertIn("npx astro dev stop", r.stderr)
+        self.assertIn("http://localhost:3411", r.stderr)
+        self.assertFalse((self.dir / "captured").exists())
+
+    def test_a_plain_running_at_line_also_gets_the_hint(self):
+        r = self.run_helper("sh -c 'echo \"Server running at http://localhost:4000/\"; exit 0'", ["sh", "-c", "true"])
+        self.assertEqual(r.returncode, 4, r.stdout + r.stderr)
+        self.assertIn("moved itself to the background", r.stderr)
+
+    def test_exit_0_without_a_running_at_line_has_no_background_hint(self):
+        r = self.run_helper("sh -c 'echo done; exit 0'", ["sh", "-c", "true"])
+        self.assertEqual(r.returncode, 4, r.stdout + r.stderr)
+        self.assertNotIn("background", r.stderr)
+
+    def test_a_crash_that_logged_running_at_has_no_background_hint(self):
+        r = self.run_helper("sh -c 'echo \"running at http://localhost:4000\"; echo boom; exit 1'", ["sh", "-c", "true"])
+        self.assertEqual(r.returncode, 4, r.stdout + r.stderr)
+        self.assertNotIn("background", r.stderr)
+
     def test_already_running_server_is_left_alone(self):
         theirs = subprocess.Popen([sys.executable, "-m", "http.server", str(self.port), "--bind", "127.0.0.1"],
                                   cwd=self.dir, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

@@ -1,0 +1,19 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>never revealed</title>
+<!-- Sections that stay at opacity 0 even after scrolling (a reveal script that never ran):
+     the shot is blank below the first screen, and the capture must say so. -->
+<style>body{margin:0;font:20px/1.5 sans-serif;background:#fff}
+.hero{height:100vh;background:#222;color:#fff;display:flex;align-items:center;justify-content:center}
+section{padding:80px 24px}
+.reveal{opacity:0}
+.block{height:400px;background:#0000ff;color:#fff;padding:24px}
+.overlay{position:absolute;inset:0;opacity:0;background:#000}
+</style>
+</head><body><main>
+<div class="hero"><h1>Hero</h1></div>
+<section><div class="reveal"><h2>Steps</h2><div class="block">One</div></div></section>
+<section><div class="reveal"><h2>Features</h2><div class="block">Two</div></div></section>
+<section><div class="reveal"><h2>Story</h2><div class="block">Three</div></div></section>
+<section><div class="reveal"><h2>FAQ</h2><div class="block">Four</div></div></section>
+</main></body></html>

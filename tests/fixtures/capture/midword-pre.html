@@ -1,0 +1,16 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mid-word in pre</title>
+<!-- Astro run 1: the quick-start terminal command is a <pre> with break-all, so at 390 the
+     command breaks mid-word ("--tem" / "plate"). A <pre> that scrolls instead is fine. -->
+<style>body{margin:0;font:16px/1.5 sans-serif}
+pre{font:16px/1.5 monospace;width:200px;margin:8px}
+.breaks{white-space:pre-wrap;word-break:break-all}
+.anywhere{white-space:pre-wrap;overflow-wrap:anywhere}
+.scrolls{overflow-x:auto}
+</style>
+</head><body><main>
+<pre class="breaks"><code>npm create astro@latest -- --template example/astrowind</code></pre>
+<pre class="scrolls"><code>npm create somethingverylong@latest -- --template example/astrowind</code></pre>
+<p>Run <code>npm</code> first.</p>
+</main></body></html>

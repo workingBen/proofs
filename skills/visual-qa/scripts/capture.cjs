@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Visual QA capture: screenshots + measurements for whole pages at three viewports.
 //
-//   node <skill folder>/scripts/capture.cjs pages.json [--out DIR] [--sizes 390,1440] [--evidence before|after]
+//   node <skill folder>/scripts/capture.cjs pages.json [--out DIR] [--sizes 390,1440] [--evidence before|after] [--no-scroll]
 //
 // pages.json (see pages.example.json beside this file):
 //   {
@@ -20,6 +20,11 @@
 // PROOFS_BASE_URL, when set, replaces "base" (so it runs unchanged after with_server.py --).
 // --evidence <label> prefixes every file the run writes with "<label>-" (a before and an
 // after run can share one --out) and also writes <out>/<label>.json in the shape pr-qa reads.
+// Before the shots and the measures, each page is scrolled to the bottom in steps and back to
+// the top (--no-scroll skips it), so sections that fade in as they scroll into view and lazy
+// images are there (Astro run 1: every full-page shot was blank below the hero). A shot that is
+// still mostly one flat color below the first screen, or a page with several blocks still at
+// opacity 0, is flagged "blank or hidden content": nothing there was checked.
 // Each address is base and path joined with exactly one slash ("http://host:3311/" + "/" is
 // "http://host:3311/", never "//", which SvelteKit answers with its 404 page).
 //
@@ -150,6 +155,33 @@ function errorPageText() {
 
 class PageFailed extends Error {
   constructor(message, status) { super(message); this.status = status; }
+}
+
+// Scrolling. 400 px steps are under half the shortest viewport (844), so every part of the page
+// spends at least one step inside the screen; two animation frames and then 250 ms let an
+// IntersectionObserver fire and a lazy image start loading (on the AstroWind page in dev mode,
+// 100 ms left 1 to 38 blocks unrevealed from run to run, 200 ms none in three runs); 1 s after the return to the top lets a fade-in finish (AstroWind's
+// takes 0.6 s); images still loading get up to 5 s more. 150 steps (60,000 px) caps a page
+// that keeps growing as it scrolls.
+const SCROLL = { step: 400, pause: 250, settle: 1000, imageWait: 5000, maxSteps: 150 };
+
+// Runs in the page: scroll to the bottom in steps, back to the top, and wait.
+async function scrollThrough({ step, pause, settle, imageWait, maxSteps }) {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  let y = 0;
+  for (let n = 0; n < maxSteps; n++) {
+    const bottom = document.documentElement.scrollHeight - window.innerHeight;
+    if (y >= bottom) break;
+    y = Math.min(y + step, bottom);
+    window.scrollTo(0, y);
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    await sleep(pause);
+  }
+  window.scrollTo(0, 0);
+  const pending = [...document.images].filter((i) => !i.complete)
+    .map((i) => new Promise((r) => { i.addEventListener('load', r, { once: true }); i.addEventListener('error', r, { once: true }); }));
+  await Promise.race([Promise.all(pending), sleep(imageWait)]);
+  await sleep(settle);
 }
 
 // Runs in the page. Returns raw numbers; pass/fail is decided in Node.
@@ -302,6 +334,78 @@ function measure({ items, minText, minTap, edge, offCenterPx = 16 }) {
     }
   }
 
+  // Blocks still at opacity 0 after the scroll (a reveal-on-scroll section that never
+  // revealed): in flow, at least 24x24 px, holding text or an image. Absolutely placed ones
+  // are hover overlays and icon swaps, not content. Only the outermost of a nested set counts.
+  const hiddenEls = [];
+  for (const el of document.querySelectorAll('body *')) {
+    if (el instanceof SVGElement) continue;
+    const s = getComputedStyle(el);
+    if (+s.opacity !== 0 || s.display === 'none' || s.visibility === 'hidden') continue;
+    if (s.position === 'absolute' || s.position === 'fixed') continue;
+    if (hiddenEls.some((h) => h.contains(el))) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width < 24 || r.height < 24) continue;
+    if (el.closest('.sr-only,.visually-hidden,[aria-hidden=true]')) continue;
+    if (!(el.innerText || '').trim() && !el.querySelector('img,svg,video,canvas,picture')) continue;
+    hiddenEls.push(el);
+  }
+  const hiddenBlocks = hiddenEls.map((el) => ({ text: label(el), tag: el.tagName.toLowerCase() }));
+
+  // Page columns: a box with a max-width in px, in normal flow, whose parent spans the page
+  // (at least 90% of it) and which is at least half the page wide: a section's container.
+  // Two ways one is out of line (Astro run 1: the steps section's max-w-5xl column, centered
+  // but with left-aligned content, began 128 px right of the blocks above and below it):
+  // - "column": it is narrower than its parent and not centered in it (gaps differ by more
+  //   than offCenterPx);
+  // - "edge": its content hugs its left edge, and that edge is more than offCenterPx from the
+  //   left edge of the columns above and below it, which agree with each other.
+  const cols = [];
+  for (const el of document.querySelectorAll('body *')) {
+    if (el instanceof SVGElement || !visible(el)) continue;
+    const s = getComputedStyle(el);
+    if (!/px$/.test(s.maxWidth)) continue;
+    if (s.position === 'absolute' || s.position === 'fixed' || s.float !== 'none') continue;
+    const parent = el.parentElement;
+    if (!parent || cols.some((c) => c.el.contains(el))) continue;
+    const ps = getComputedStyle(parent);
+    if (ps.display.includes('grid') || (ps.display.includes('flex') && !ps.flexDirection.startsWith('column'))) continue;
+    const pr = parent.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    if (pr.width < vw * 0.9 || r.width < vw * 0.5) continue;
+    cols.push({ el, r, s, pr, ps, edge: r.left + parseFloat(s.borderLeftWidth) + parseFloat(s.paddingLeft) });
+  }
+  const textLeft = (el) => {
+    let left = Infinity;
+    const tw = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    while (tw.nextNode()) {
+      const n = tw.currentNode;
+      if (!n.textContent.trim() || !n.parentElement || !visible(n.parentElement)) continue;
+      const range = document.createRange();
+      range.selectNodeContents(n);
+      for (const b of range.getClientRects()) if (b.width > 0) left = Math.min(left, b.left);
+    }
+    return left;
+  };
+  const offColumns = [];
+  cols.forEach((c, i) => {
+    const contentLeft = c.pr.left + parseFloat(c.ps.borderLeftWidth) + parseFloat(c.ps.paddingLeft);
+    const contentRight = c.pr.right - parseFloat(c.ps.borderRightWidth) - parseFloat(c.ps.paddingRight);
+    const left = c.r.left - contentLeft, right = contentRight - c.r.right;
+    if (left > 1 || right > 1) {
+      if (left >= -1 && right >= -1 && Math.abs(left - right) > offCenterPx) {
+        offColumns.push({ kind: 'column', text: label(c.el), tag: c.el.tagName.toLowerCase(), left: Math.round(left), right: Math.round(right) });
+        return;
+      }
+    }
+    const prev = cols[i - 1], next = cols[i + 1];
+    if (!prev || !next || Math.abs(prev.edge - next.edge) > offCenterPx) return;
+    if (Math.abs(c.edge - prev.edge) <= offCenterPx) return;
+    if (Math.abs(textLeft(c.el) - c.edge) > offCenterPx) return; // centered content: deliberate
+    offColumns.push({ kind: 'edge', text: label(c.el), tag: c.el.tagName.toLowerCase(),
+      edge: Math.round(c.edge), neighbors: Math.round((prev.edge + next.edge) / 2) });
+  });
+
   // Repeated items: how many fit the first screen, how tall, where the first starts
   let itemStats = null;
   if (items) {
@@ -331,6 +435,8 @@ function measure({ items, minText, minTap, edge, offCenterPx = 16 }) {
     smallTaps: smallTaps.slice(0, 25), smallTapCount: smallTaps.length,
     truncated: truncated.slice(0, 15),
     offCenter: offCenter.slice(0, 15), offCenterCount: offCenter.length,
+    offColumns: offColumns.slice(0, 15), offColumnCount: offColumns.length,
+    hiddenBlocks: hiddenBlocks.length, hiddenList: hiddenBlocks.slice(0, 5),
     items: itemStats,
   };
 }
@@ -342,6 +448,88 @@ function pngWidth(file) {
   fs.readSync(fd, b, 0, 24, 0);
   fs.closeSync(fd);
   return b.readUInt32BE(16);
+}
+
+// Below the first screen of a full-page PNG: the share of pixel rows with no detail (no step
+// between neighboring pixels over FLAT_STEP in any channel) and the share of pixels in the most
+// common color (channels rounded to 16 levels). Both at BLANK_SHARE or more, over at least one
+// screen's height, is a blank region: a solid-color section is flat but a second color, and a
+// page of text has one color but few flat rows. Null when the PNG is not 8-bit RGB or RGBA.
+const FLAT_STEP = 12;
+const BLANK_SHARE = 0.9;
+// Blocks still at opacity 0 after the scroll that make a page "hidden": one or two can be a
+// deliberate icon or toggle; three or more is content that never appeared.
+const HIDDEN_BLOCKS = 3;
+
+function regionStats(file, dpr, fromCss) {
+  const zlib = require('zlib');
+  const data = fs.readFileSync(file);
+  let pos = 8, width = 0, height = 0, depth = 0, ctype = 0, interlace = 0;
+  const idat = [];
+  while (pos < data.length) {
+    const len = data.readUInt32BE(pos);
+    const kind = data.toString('latin1', pos + 4, pos + 8);
+    if (kind === 'IHDR') {
+      width = data.readUInt32BE(pos + 8); height = data.readUInt32BE(pos + 12);
+      depth = data[pos + 16]; ctype = data[pos + 17]; interlace = data[pos + 20];
+    } else if (kind === 'IDAT') idat.push(data.subarray(pos + 8, pos + 8 + len));
+    pos += 12 + len;
+  }
+  if (depth !== 8 || (ctype !== 2 && ctype !== 6) || interlace) return null;
+  const bpp = ctype === 6 ? 4 : 3, stride = width * bpp;
+  const raw = zlib.inflateSync(Buffer.concat(idat));
+  const start = Math.min(height, Math.round(fromCss * dpr));
+  let prev = Buffer.alloc(stride), flatRows = 0, rows = 0, sampled = 0;
+  const colors = new Map();
+  for (let y = 0; y < height; y++) {
+    const f = raw[y * (stride + 1)];
+    const line = Buffer.from(raw.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1)));
+    for (let i = 0; i < stride; i++) {
+      const a = i >= bpp ? line[i - bpp] : 0, b = prev[i], c = i >= bpp ? prev[i - bpp] : 0;
+      if (f === 1) line[i] = (line[i] + a) & 255;
+      else if (f === 2) line[i] = (line[i] + b) & 255;
+      else if (f === 3) line[i] = (line[i] + ((a + b) >> 1)) & 255;
+      else if (f === 4) {
+        const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
+        line[i] = (line[i] + (pa <= pb && pa <= pc ? a : pb <= pc ? b : c)) & 255;
+      }
+    }
+    prev = line;
+    if (y < start) continue;
+    rows++;
+    let flat = true;
+    for (let i = bpp; i < stride && flat; i++) {
+      if (bpp === 4 && i % 4 === 3) continue;
+      if (Math.abs(line[i] - line[i - bpp]) > FLAT_STEP) flat = false;
+    }
+    if (flat) flatRows++;
+    for (let x = 0; x < width; x += 4) {
+      const k = ((line[x * bpp] >> 4) << 8) | ((line[x * bpp + 1] >> 4) << 4) | (line[x * bpp + 2] >> 4);
+      colors.set(k, (colors.get(k) || 0) + 1);
+      sampled++;
+    }
+  }
+  const top = Math.max(0, ...colors.values());
+  return { rows, flatShare: rows ? +(flatRows / rows).toFixed(2) : 0, colorShare: sampled ? +(top / sampled).toFixed(2) : 0 };
+}
+
+// m.blank: whether the shot shows the page, from the PNG and the opacity-0 count.
+function blankOf(m, file) {
+  const vh = m.viewport.h;
+  let st = null;
+  try { st = regionStats(file, m.dpr || 1, vh); } catch (_) { st = null; }
+  const regionPx = st ? Math.round(st.rows / (m.dpr || 1)) : 0;
+  const image = !!st && regionPx >= vh && st.flatShare >= BLANK_SHARE && st.colorShare >= BLANK_SHARE;
+  const hidden = m.hiddenBlocks >= HIDDEN_BLOCKS;
+  m.blank = { flagged: image || hidden, image, hidden, regionPx,
+    flatShare: st ? st.flatShare : null, colorShare: st ? st.colorShare : null, hiddenBlocks: m.hiddenBlocks };
+}
+
+function blankText(b) {
+  const parts = [];
+  if (b.image) parts.push(`${Math.round(b.colorShare * 100)}% one flat color below the first screen`);
+  if (b.hidden) parts.push(`${b.hiddenBlocks} blocks at opacity 0`);
+  return parts.join(', ');
 }
 
 // Folds the overflow signals into m.sideways (the worst of them) and m.signals. A phone
@@ -362,7 +550,7 @@ function overflowOf(m) {
 }
 
 // Goes to the page and runs its actions (shared by the capture and the plain recheck).
-async function openPage(page, base, p) {
+async function openPage(page, base, p, scroll = true) {
   const url = joinUrl(base, p.path);
   const response = await page.goto(url, { waitUntil: 'networkidle' });
   const status = response && typeof response.status === 'function' ? response.status() : null;
@@ -379,6 +567,7 @@ async function openPage(page, base, p) {
     if (a.eval) await page.evaluate(a.eval);
   }
   await page.evaluate(() => document.fonts && document.fonts.ready);
+  if (scroll) await page.evaluate(scrollThrough, SCROLL);
 }
 
 // An emulated phone lays the page out wider than its screen when the content is too wide,
@@ -386,12 +575,12 @@ async function openPage(page, base, p) {
 // viewport (headless Chrome on macOS once had a minimum width) is wide in a plain desktop
 // context too. So load the page once more at the same width without phone emulation: if
 // that context is the asked width and the content runs past it, the overflow is the page's.
-async function recheckWide(browser, vp, base, p, setup, minText, minTap) {
+async function recheckWide(browser, vp, base, p, setup, minText, minTap, scroll) {
   const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height } });
   try {
     const page = await context.newPage();
     if (setup) await setup(page, base);
-    await openPage(page, base, p);
+    await openPage(page, base, p, scroll);
     const flat = await page.evaluate(measure, { items: p.items, minText, minTap, edge: vp.width });
     const real = flat && flat.innerWidth === vp.width
       && Math.max(flat.scrollWidth || 0, flat.widestRight || 0) > vp.width + 1;
@@ -413,6 +602,8 @@ function verdicts(m, vpLabel) {
     m.truncated.every((t) => t.roomPx <= 24)]);
   out.push(['mid-word breaks', m.midWord.length, m.midWord.length === 0]);
   out.push(['off-center rows', m.offCenterCount, m.offCenterCount === 0]);
+  out.push(['off-center columns', m.offColumnCount, m.offColumnCount === 0]);
+  out.push(['blank or hidden content', m.blank.flagged ? blankText(m.blank) : 'no', !m.blank.flagged]);
   if (m.items) {
     out.push(['chrome before first item', m.items.chromeShare, m.items.chromeShare < 0.4]);
     out.push(['items in first screen', m.items.fullyVisible, null]);
@@ -426,7 +617,7 @@ async function main() {
   const opt = (name) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined; };
   const cfgPath = argv[0];
   if (!cfgPath || cfgPath.startsWith('--')) {
-    console.error('usage: capture.cjs pages.json [--out DIR] [--sizes 390,1440] [--evidence before|after]');
+    console.error('usage: capture.cjs pages.json [--out DIR] [--sizes 390,1440] [--evidence before|after] [--no-scroll]');
     process.exit(1);
   }
   let cfg;
@@ -439,6 +630,7 @@ async function main() {
   }
   const out = opt('--out') || path.join(path.dirname(cfgPath), 'shots');
   const evidence = opt('--evidence');
+  const scroll = !argv.includes('--no-scroll');
   const prefix = evidence ? `${evidence}-` : '';
   const sizes = opt('--sizes') ? opt('--sizes').split(',').map((x) => x.trim()) : null;
   const viewports = sizes ? pickViewports(sizes) : VIEWPORTS;
@@ -491,13 +683,13 @@ async function main() {
       const file = `${prefix}${p.name}-${state}-${label}`;
       const url = joinUrl(base, p.path);
       try {
-        await openPage(page, base, p);
+        await openPage(page, base, p, scroll);
         await page.screenshot({ path: path.join(out, `${file}.png`) });
         await page.screenshot({ path: path.join(out, `${file}-full.png`), fullPage: true });
         const m = await page.evaluate(measure, { items: p.items, minText, minTap });
         if (m.innerWidth !== vp.width) {
           const flat = vp.isMobile && m.innerWidth > vp.width
-            ? await recheckWide(browser, vp, base, p, setup, minText, minTap) : null;
+            ? await recheckWide(browser, vp, base, p, setup, minText, minTap, scroll) : null;
           if (!flat) {
             untrusted = `the browser laid the page out at ${m.innerWidth} px, not ${vp.width} px; the capture is not trustworthy`;
             break;
@@ -513,6 +705,7 @@ async function main() {
         m.midWord = (await page.evaluate(midWordBreaks, { selector: 'body', limit: 20 })).map((w) => w.at);
         m.pngWidth = pngWidth(path.join(out, `${file}-full.png`));
         overflowOf(m);
+        blankOf(m, path.join(out, `${file}-full.png`));
         results.push({ page: p.name, state, viewport: label, file, url, measures: m, verdicts: verdicts(m, label) });
       } catch (e) {
         const error = e.message.split('\n')[0];
@@ -543,6 +736,8 @@ async function main() {
       scrollWidth: r.measures.scrollWidth, clientWidth: r.measures.clientWidth,
       widestRight: r.measures.widestRight, pngWidth: r.measures.pngWidth, innerWidth: r.measures.innerWidth,
       offCenter: r.measures.offCenter, offCenterCount: r.measures.offCenterCount,
+      offColumns: r.measures.offColumns, offColumnCount: r.measures.offColumnCount,
+      blank: r.measures.blank, hiddenBlocks: r.measures.hiddenBlocks,
       errors: errors.filter((e) => e.startsWith(`${r.viewport}:`)),
     }));
     fs.writeFileSync(path.join(out, `${evidence}.json`), JSON.stringify({ shots, failures }, null, 2));
@@ -574,6 +769,29 @@ async function main() {
       const rows = r.measures.offCenter.slice(0, 4).map((o) => `"${o.text || o.tag}" ${o.left}px/${o.right}px`);
       const more = r.measures.offCenterCount > 4 ? `; and ${r.measures.offCenterCount - 4} more` : '';
       lines.push(`- ${r.page} ${r.state} at ${r.viewport}: ${rows.join('; ')}${more}`);
+    }
+  }
+  const offCols = results.filter((r) => !r.error && r.measures.offColumnCount);
+  if (offCols.length) {
+    lines.push('', 'off-center columns: a page-wide section column out of line. "not centered": it has a max-width '
+      + 'and is not centered in its parent (add margin-inline: auto). "edge": its content starts at its left edge, and '
+      + 'that edge is not where the columns above and below start (match their max-width, or center its content):');
+    for (const r of offCols) {
+      const cols = r.measures.offColumns.slice(0, 4).map((o) => (o.kind === 'column'
+        ? `"${o.text || o.tag}" not centered, ${o.left}px/${o.right}px`
+        : `"${o.text || o.tag}" edge at ${o.edge}px, the columns around it at ${o.neighbors}px`));
+      const more = r.measures.offColumnCount > 4 ? `; and ${r.measures.offColumnCount - 4} more` : '';
+      lines.push(`- ${r.page} ${r.state} at ${r.viewport}: ${cols.join('; ')}${more}`);
+    }
+  }
+  const blanks = results.filter((r) => !r.error && r.measures.blank.flagged);
+  if (blanks.length) {
+    lines.push('', 'blank: the full-page shot does not show the page below the first screen, so nothing there was '
+      + 'checked. Open the PNG. Sections that fade in as you scroll, or load late, may never have appeared. Do not '
+      + 'call this page clean; say what was not seen:');
+    for (const r of blanks) {
+      const names = r.measures.hiddenList.map((h) => `"${h.text || h.tag}"`).slice(0, 3).join(', ');
+      lines.push(`- ${r.page} ${r.state} at ${r.viewport}: ${blankText(r.measures.blank)}${r.measures.blank.hidden && names ? ` (${names})` : ''}`);
     }
   }
   if (errors.length) lines.push('', 'Page errors:', ...errors.map((e) => `- ${e}`));

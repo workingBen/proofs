@@ -540,5 +540,34 @@ class AngularRun1(unittest.TestCase):
         self.assertIn("`off-center rows`", section("design-review", "5."))
 
 
+class AstroRun1(unittest.TestCase):
+    """Astro run 1: pr-qa started Astro without --ignore-lock, so it moved itself to the
+    background and was left running; and shots blank below the hero were called clean."""
+
+    def test_pr_qa_copies_the_projects_own_start_command(self):
+        text = section("pr-qa", "Default path")
+        self.assertIn("copy the project's own start command from its README or `CLAUDE.md`", text)
+
+    def test_capture_skills_name_astros_foreground_flag(self):
+        for skill in ("design-review", "pr-qa"):
+            with self.subTest(skill=skill):
+                text = (REPO / "skills" / skill / "SKILL.md").read_text()
+                self.assertIn("--ignore-lock", text)
+                self.assertIn("npx astro dev stop", text)
+
+    def test_capture_skills_never_call_a_blank_shot_clean(self):
+        for skill, where in (("design-review", "2."), ("pr-qa", "Default path")):
+            with self.subTest(skill=skill):
+                text = section(skill, where)
+                self.assertIn("`blank or hidden content`", text)
+                self.assertIn("not clean", text)
+
+    def test_new_measures_are_targets(self):
+        text = (REPO / "skills" / "visual-qa" / "SKILL.md").read_text()
+        self.assertIn("| Off-center columns |", text)
+        self.assertIn("| Blank or hidden content |", text)
+        self.assertIn("`off-center columns`", section("design-review", "5."))
+
+
 if __name__ == "__main__":
     unittest.main()

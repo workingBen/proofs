@@ -1,0 +1,26 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>reveal on scroll</title>
+<!-- Astro run 1: AstroWind fades each section in when it scrolls into view
+     (IntersectionObserver), so a capture that never scrolls shows a blank page below the hero. -->
+<style>body{margin:0;font:20px/1.5 sans-serif;background:#fff}
+.hero{height:100vh;background:#222;color:#fff;display:flex;align-items:center;justify-content:center}
+section{padding:80px 24px}
+.reveal{opacity:0;transition:opacity .3s}
+.reveal.in{opacity:1}
+.block{height:400px;background:#0000ff;color:#fff;padding:24px}
+</style>
+</head><body><main>
+<div class="hero"><h1>Hero</h1></div>
+<section><div class="reveal"><h2>Steps</h2><div class="block" id="b1">One</div></div></section>
+<section><div class="reveal"><h2>Features</h2><div class="block" id="b2">Two</div></div></section>
+<section><div class="reveal"><h2>Story</h2><div class="block" id="b3">Three</div></div></section>
+<section><div class="reveal"><h2>FAQ</h2><div class="block" id="b4">Four</div></div></section>
+</main>
+<script>
+const io = new IntersectionObserver((entries) => {
+  for (const e of entries) if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+}, { threshold: 0.25 });
+document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
+</script>
+</body></html>

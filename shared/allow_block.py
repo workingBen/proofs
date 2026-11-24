@@ -98,6 +98,12 @@ STACK_RULES = {
         "Bash(npx svelte-check)",
         "Bash(npx svelte-check --tsconfig *)",
         "Bash(npx astro check)",
+        # Astro run 1 (C2): Astro 7's `astro dev` moves itself to the background under an agent;
+        # these check on and stop that server (here or in pr-qa's base checkout), nothing else.
+        "Bash(npx astro dev stop)",
+        "Bash(npx astro dev status)",
+        "Bash(npx astro dev stop --root .proofs/base/*)",
+        "Bash(npx astro dev status --root .proofs/base/*)",
         "Bash(npx ng build)",
         "Bash(npx ng test --watch=false)",
         "Bash(npm run build)",

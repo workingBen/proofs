@@ -479,6 +479,20 @@ class StackRulesTest(unittest.TestCase):
             with self.subTest(cmd=cmd):
                 self.assertTrue(check_skills.claude_code_allows(allow, cmd), cmd)
 
+    def test_node_rules_let_a_session_stop_a_background_astro_server(self):
+        # Astro run 1 (C2): Astro 7 moved its dev server to the background, and the session's
+        # attempts to check on it and stop it were denied, so it was left running.
+        with tempfile.TemporaryDirectory() as d:
+            allow = self._allow(self._folder(d, ["package.json"]), "--project")
+        for cmd in ("npx astro dev stop", "npx astro dev status",
+                    "npx astro dev stop --root .proofs/base/astro", "npx astro dev status --root .proofs/base/astro"):
+            with self.subTest(cmd=cmd):
+                self.assertTrue(check_skills.claude_code_allows(allow, cmd), cmd)
+        for cmd in ("npx astro dev", "npx astro dev --background", "npx astro dev stop --root /etc",
+                    "npx astro dev stop; rm -rf x"):
+            with self.subTest(cmd=cmd):
+                self.assertFalse(check_skills.claude_code_allows(allow, cmd), cmd)
+
     def test_npm_run_rules_name_each_script(self):
         # Never Bash(npm run *): only the check and build scripts, each by name.
         for r in allow_block.STACK_RULES["node"]:

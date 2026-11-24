@@ -11,7 +11,10 @@ This helper owns the server for exactly as long as the capture runs:
 - The server runs in its own session (`start_new_session`), with stdin from /dev/null and
   stdout and stderr in the log file, so it never holds the caller's pipes. The start command
   must run in the foreground: a server that detaches itself (`rails s -d`, a double fork)
-  leaves the process group and cannot be stopped; the helper warns when that happens.
+  leaves the process group and cannot be stopped; the helper warns when that happens. Astro 7's
+  `astro dev` moves itself to the background when an AI agent runs it, so pass `--ignore-lock`
+  (`npm run dev -- --ignore-lock`); a start command that exits 0 after logging "running at"
+  gets a hint saying so.
 - Stopping sends SIGTERM to the server's whole process group, waits --grace seconds, then
   sends SIGKILL, and removes the pidfile. It runs on every exit: normal finish, a failed
   capture, a server that never comes up, SIGINT, SIGTERM or SIGHUP to the helper (further
@@ -324,7 +327,18 @@ PORT_HINT = ("hint: the dev server rejected %s. Vite (SvelteKit, Vue, Astro), Nu
              "Copy the start command from the project's README or CLAUDE.md when it gives one")
 
 
-def _log_tail(log):
+# A start command that exits 0 after logging where its server is running has moved the server
+# to the background (Astro run 1: Astro 7's `astro dev` does this when it detects an AI agent,
+# logging "Dev server running at http://localhost:3411 (pid 24239)"). That server is outside
+# this helper's process group, so the helper can neither wait for it nor stop it.
+_RUNNING_AT = re.compile(r"\brunning at\s+(https?://[^\s\"'\\)]+)", re.I)
+BACKGROUND_HINT = ("hint: the dev server moved itself to the background (its log says it is running at %s), "
+                   "so this helper cannot own or stop it. Rerun with the server's foreground flag "
+                   "(Astro: --ignore-lock, as in --start \"npm run dev -- --ignore-lock\"), and stop the background "
+                   "one with its own stop command (Astro: npx astro dev stop in that folder, or npx astro dev stop --root <folder>)")
+
+
+def _log_tail(log, returncode=None):
     try:
         with open(log, "rb") as fh:
             lines = fh.read().decode("utf-8", "replace").splitlines()
@@ -338,6 +352,12 @@ def _log_tail(log):
         if m and m.group(1) in ("-p", "--p", "-P", "--listen", "-l"):
             say(PORT_HINT % m.group(1), err=True)
             break
+    if returncode == 0:
+        for line in lines[-LOG_TAIL:]:
+            m = _RUNNING_AT.search(line)
+            if m:
+                say(BACKGROUND_HINT % m.group(1), err=True)
+                break
 
 
 def _watch_parent(original, done, main_ident):
@@ -480,7 +500,7 @@ def _run(args, capture, state):
             return EXIT_NOT_READY
         except ServerExited as e:
             say("server: exited with code %s before answering at %s" % (e.returncode, args.url), err=True)
-            _log_tail(args.log)
+            _log_tail(args.log, e.returncode)
             return EXIT_SERVER_EXITED
         if srv.poll() is not None and not _group_alive(srv.pid):
             say("server: warning: the start command exited and the server left its process group, so this "

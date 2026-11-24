@@ -1,0 +1,24 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>columns</title>
+<!-- Astro run 1 (AstroWind's steps section): a narrower max-width column, centered, whose
+     content is left-aligned, so its left edge sits 128 px right of the columns above and
+     below it at 1440. And a max-width column that is not centered at all. -->
+<style>body{margin:0;font:20px/1.5 sans-serif}
+section{padding:24px 0}
+.wide{max-width:1280px;margin:0 auto;padding:0 24px}
+.narrow{max-width:1024px;margin:0 auto;padding:0 24px}
+.shifted{max-width:1024px;margin-left:300px;padding:0 24px}
+.centered{text-align:center}
+.prose{max-width:600px}
+p{margin:0 0 8px}
+</style>
+</head><body><main>
+<section id="a"><div class="wide"><h2>Above</h2><p>A wide column, its text starting at the page's usual left edge, as every block on this page does.</p></div></section>
+<section id="b"><div class="narrow"><h2>Steps</h2><p>Step one: download.</p><p>Step two: add content.</p></div></section>
+<section id="c"><div class="wide"><h2>Below</h2><p>Another wide column, its text starting at the page's usual left edge, as every block on this page does.</p></div></section>
+<section id="d"><div class="shifted"><h2>Shifted</h2><p>This column has a max-width and a fixed left margin, so it is not centered.</p></div></section>
+<section id="e"><div class="wide"><h2>Again</h2><p>A wide column, its text starting at the page's usual left edge, as every block on this page does.</p><p class="prose">A narrow paragraph inside the column, left-aligned by design.</p></div></section>
+<section id="f"><div class="narrow centered"><h2>Centered</h2><p>A narrow column whose content is centered.</p></div></section>
+<section id="g"><div class="wide"><h2>Last</h2><p>A wide column, its text starting at the page's usual left edge, as every block on this page does.</p></div></section>
+</main></body></html>

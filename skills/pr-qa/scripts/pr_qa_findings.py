@@ -174,12 +174,39 @@ def compare(before, after):
                 "Usually a flex or grid row, which text-align: center does not center.",
                 {"rows": fresh_off[:4]}))
 
+        fresh_cols = fresh_off_columns(old, shot)
+        if fresh_cols:
+            findings.append(finding(
+                "warning", f"{where}: a section column is now out of line",
+                "A page-wide column now sits off-center or starts at a different left edge from the "
+                f"columns around it: {name_items([off_column_label(o) for o in fresh_cols])}.",
+                {"columns": fresh_cols[:4]}))
+
         fresh_errors = [e for e in shot.get("errors") or []
                         if e not in ((old or {}).get("errors") or [])]
         if fresh_errors:
             findings.append(finding(
                 "blocker", f"{where}: a new JavaScript error",
                 fresh_errors[0], {"errors": fresh_errors[:3]}))
+
+    # A shot that does not show the page below its first screen is not evidence there, on either
+    # side, whatever the other numbers say (Astro run 1: sections that fade in on scroll left every
+    # shot blank below the hero, and the findings said "clean").
+    for label, shots in (("before", before), ("after", after)):
+        for shot in shots:
+            blank = shot.get("blank") or {}
+            if not blank.get("flagged"):
+                continue
+            why = []
+            if blank.get("image"):
+                why.append(f'{round((blank.get("colorShare") or 0) * 100)}% one flat color below the first screen')
+            if blank.get("hidden"):
+                why.append(f'{blank.get("hiddenBlocks")} blocks still at opacity 0')
+            findings.append(finding(
+                "warning", f"{where_of(shot)}: the {label} shot is mostly blank",
+                f'{"; ".join(why) or "blank below the first screen"}, so nothing there was checked. The page may '
+                "reveal sections as you scroll, or load them late. Open the PNG and say what was not seen; "
+                "do not call this page clean.", {"side": label, "blank": blank}))
 
     missing = [s for s in before if key(s) not in {key(a) for a in after}]
     for shot in missing:
@@ -265,6 +292,21 @@ def fresh_off_center(old, shot):
         return []
     return fresh_by_count((old or {}).get("offCenter") or [], shot.get("offCenter") or [],
                           lambda o: (o.get("text"), o.get("tag")))
+
+
+def off_column_label(o):
+    name = o.get("text") or o.get("tag")
+    if o.get("kind") == "edge":
+        return f'"{name}" (edge at {o.get("edge")}px, the columns around it at {o.get("neighbors")}px)'
+    return f'"{name}" (not centered: {o.get("left")}px left, {o.get("right")}px right)'
+
+
+def fresh_off_columns(old, shot):
+    # An older capture has no offColumns: "not measured", not "zero".
+    if old is not None and "offColumns" not in old:
+        return []
+    return fresh_by_count((old or {}).get("offColumns") or [], shot.get("offColumns") or [],
+                          lambda o: (o.get("kind"), o.get("text"), o.get("tag")))
 
 
 def is_measured(shot):

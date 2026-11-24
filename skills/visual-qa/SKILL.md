@@ -1,6 +1,6 @@
 ---
 name: visual-qa
-version: 1.4.6
+version: 1.4.7
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs *)
@@ -59,8 +59,8 @@ and colors (mockups reuse them), and anything already decided that must not be "
   python3 ${CLAUDE_PLUGIN_ROOT}/shared/capture/with_server.py --start "npm run dev -- --port 3311" --url http://localhost:3311/ -- node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs .proofs/visual-qa/pages.json --out .proofs/visual-qa/before
   ```
 
-  The port flag belongs to the dev server: `--port` for Vite (SvelteKit, Vue, Astro), Nuxt and Angular, `-p` or `--port` for Next.js; copy the project's own start command when its README or `CLAUDE.md` gives one, and read `package.json`'s `dev` script otherwise (`vite dev` means `--port`). Never start the server yourself with `run_in_background` or `&`: in `claude -p` the turn then never ends. If the helper prints `server: already answering at <url>; not started by this helper`, the shot may be of another app: rerun on a different port. Only when a server you were given is already running, drop the helper and run `node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs .proofs/visual-qa/pages.json --out .proofs/visual-qa/before` alone.
-  Each address is `base` and `path` joined with exactly one slash. A page that answers HTTP 400 or above, or renders an error page ("Not Found"), is a failed shot, not a finding: the capture lists it as FAILED, leaves it out of the evidence and exits 6; fix the `path` or the server and run it again. A malformed pages file stops with one line naming what is wrong (exit 1).
+  The port flag belongs to the dev server: `--port` for Vite (SvelteKit, Vue, Astro), Nuxt and Angular, `-p` or `--port` for Next.js; copy the project's own start command when its README or `CLAUDE.md` gives one, and read `package.json`'s `dev` script otherwise (`vite dev` means `--port`); Astro 7 also needs `--ignore-lock`, or it moves itself to the background (stop a stray one with `npx astro dev stop`). Never start the server yourself with `run_in_background` or `&`: in `claude -p` the turn then never ends. If the helper prints `server: already answering at <url>; not started by this helper`, the shot may be of another app: rerun on a different port. Only when a server you were given is already running, drop the helper and run `node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs .proofs/visual-qa/pages.json --out .proofs/visual-qa/before` alone.
+  Before the shots, each page is scrolled to the bottom in steps and back to the top, so sections that fade in on scroll and lazy images appear (`--no-scroll` skips it, for a page that must be shot as loaded). Each address is `base` and `path` joined with exactly one slash. A page that answers HTTP 400 or above, or renders an error page ("Not Found"), is a failed shot, not a finding: the capture lists it as FAILED, leaves it out of the evidence and exits 6; fix the `path` or the server and run it again. A malformed pages file stops with one line naming what is wrong (exit 1).
   Three viewports (1440, 1280, 390 CSS px; `--sizes 390,1280` picks some, and a plain width such as `1040` adds a desktop viewport just above a breakpoint), a first-screen and a full-page PNG each,
   named `<page>-<state>-<width>[-full].png`, plus `measures.json`, `summary.md` and a printed table.
   The 390 view is a true 390 px viewport, and the overflow is measured three ways. A page wider than the phone
@@ -71,7 +71,7 @@ and colors (mockups reuse them), and anything already decided that must not be "
 
 ## 2. Compare against the targets
 
-The script measures and flags the first seven; the rest come from `items` stats and your look.
+The script measures and flags the first nine; the rest come from `items` stats and your look.
 
 | Measure | Target |
 |---|---|
@@ -81,6 +81,8 @@ The script measures and flags the first seven; the rest come from `items` stats 
 | Tap targets | ≥ `minTap` both ways; links inside running text exempt |
 | Truncation | none while there is room beside it |
 | Mid-word breaks ("Wildflo-wer") | none: `overflow-wrap: normal; word-break: normal`; put `<wbr>` after "/" in long compound names |
+| Off-center columns | none: a page-wide column with a max-width is centered in its parent, and a column whose content starts at its left edge starts within 16 px of the columns above and below it; the summary names each one (`not centered` with its gaps, or `edge` with both left edges) |
+| Blank or hidden content | none: the capture scrolls each page to the bottom and back first, so sections that fade in on scroll appear; a full-page shot still 90% one flat color below the first screen, or three or more blocks still at opacity 0, means the shot does not show the page: open it, say what was not seen, and do not call the page clean |
 | Off-center rows | none: inside a `text-align: center` column, a row's content sits within 16 px of centered. `text-align` does not center a flex or grid row's items (add `justify-content: center`) or a fixed-width block (add `margin-inline: auto`); the summary names each row and its left/right gaps |
 | Chrome before the first item | < 40% of the first screen |
 | Items in the first screen (data pages) | list lines ≥ 6 at 1280 and ≥ 3 at 390; table rows ≥ 12; tile rows ≥ 2; phone cards ≥ 5 |

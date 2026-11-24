@@ -288,6 +288,96 @@ class PhoneWidth(unittest.TestCase):
             _, out = self.capture(tmp, "midword.html", "--sizes", "1440")
             self.assertEqual(self.result(out)["measures"]["offCenterCount"], 0)
 
+    # Astro run 1: AstroWind fades each section in as it scrolls into view, and the capture
+    # never scrolled, so every full-page shot was blank below the hero and pr-qa called it clean.
+    def test_sections_that_reveal_on_scroll_are_in_the_full_page_shot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            r, out = self.capture(tmp, "reveal.html", "--sizes", "1440")
+            m = self.result(out)["measures"]
+            width, height, rows, bpp = decode_png((out / "t-default-1440-full.png").read_bytes())
+            # Four 400 px blue blocks, all below the first screen (900 px tall).
+            blue = sum(1 for row in rows[900:] if tuple(row[1000 * bpp:1000 * bpp + 3]) == (0, 0, 255))
+            self.assertGreaterEqual(blue, 4 * 400 - 8, (width, height))
+            self.assertEqual(m["hiddenBlocks"], 0)
+            self.assertFalse(m["blank"]["flagged"], m["blank"])
+            verdict = {k: (v, ok) for k, v, ok in self.result(out)["verdicts"]}
+            self.assertTrue(verdict["blank or hidden content"][1])
+            self.assertNotIn("blank:", r.stdout)
+
+    def test_content_that_stays_hidden_is_flagged_as_blank(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            r, out = self.capture(tmp, "hidden.html", "--sizes", "1440", "--evidence", "after")
+            res = self.result(out, "after-")
+            m = res["measures"]
+            self.assertEqual(m["hiddenBlocks"], 4)
+            self.assertTrue(m["blank"]["flagged"], m["blank"])
+            self.assertGreaterEqual(m["blank"]["flatShare"], 0.9)
+            verdict = {k: (v, ok) for k, v, ok in res["verdicts"]}
+            self.assertFalse(verdict["blank or hidden content"][1])
+            self.assertIn("blank:", r.stdout)
+            shot = json.loads((out / "after.json").read_text())["shots"][0]
+            self.assertTrue(shot["blank"]["flagged"])
+            self.assertEqual(shot["hiddenBlocks"], 4)
+            f = subprocess.run(["python3", str(FINDINGS), "--dir", str(out)], capture_output=True, text=True)
+            result = json.loads(f.stdout)
+            self.assertNotEqual(result["verdict"], "clean")
+            self.assertTrue(any("blank" in x["title"] for x in result["findings"]), result["findings"])
+
+    def test_hover_overlays_and_short_pages_are_not_blank(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for page, sizes in (("hover-overlays.html", "1440,390"), ("fits.html", "1440,390"),
+                                ("columns.html", "1440"), ("midword.html", "1440")):
+                with self.subTest(page=page):
+                    _, out = self.capture(tmp, page, "--sizes", sizes)
+                    for res in json.loads((out / "measures.json").read_text())["results"]:
+                        self.assertEqual(res["measures"]["hiddenBlocks"], 0, (page, res["viewport"]))
+                        self.assertFalse(res["measures"]["blank"]["flagged"], (page, res["viewport"], res["measures"]["blank"]))
+
+    def test_a_column_out_of_line_or_not_centered_is_flagged(self):
+        # Astro run 1: the steps section's max-w-5xl column is centered but its content is
+        # left-aligned, so its left edge sat 128 px right of the blocks above and below it.
+        with tempfile.TemporaryDirectory() as tmp:
+            r, out = self.capture(tmp, "columns.html", "--sizes", "1440", "--evidence", "after")
+            res = self.result(out, "after-")
+            cols = res["measures"]["offColumns"]
+            self.assertEqual(len(cols), 2, cols)
+            steps, shifted = cols
+            self.assertEqual(steps["kind"], "edge")
+            self.assertTrue(steps["text"].startswith("Steps"), steps)
+            self.assertEqual(steps["edge"] - steps["neighbors"], 128)
+            self.assertEqual(shifted["kind"], "column")
+            self.assertTrue(shifted["text"].startswith("Shifted"), shifted)
+            # 300 px of margin on the left; 1440 - 300 - (1024 + 48 padding) = 68 on the right.
+            self.assertEqual((shifted["left"], shifted["right"]), (300, 68))
+            self.assertEqual(res["measures"]["offColumnCount"], 2)
+            verdict = {k: (v, ok) for k, v, ok in res["verdicts"]}
+            self.assertEqual(verdict["off-center columns"], (2, False))
+            self.assertIn("off-center columns: 2", r.stdout)
+            shot = json.loads((out / "after.json").read_text())["shots"][0]
+            self.assertEqual(shot["offColumnCount"], 2)
+
+    def test_ordinary_pages_have_no_off_center_columns(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for page in ("fits.html", "off-center.html", "midword.html", "reveal.html", "hover-overlays.html"):
+                with self.subTest(page=page):
+                    _, out = self.capture(tmp, page, "--sizes", "1440,390")
+                    for res in json.loads((out / "measures.json").read_text())["results"]:
+                        self.assertEqual(res["measures"]["offColumns"], [], (page, res["viewport"]))
+            _, out = self.capture(tmp, "columns.html", "--sizes", "390")
+            self.assertEqual(self.result(out)["measures"]["offColumns"], [])
+
+    def test_a_mid_word_break_in_a_break_all_pre_is_counted(self):
+        # Astro run 1: the quick-start command, a <pre> with break-all, broke "--tem" / "plate" at 390.
+        with tempfile.TemporaryDirectory() as tmp:
+            _, out = self.capture(tmp, "midword-pre.html", "--sizes", "390")
+            words = self.result(out)["measures"]["midWord"]
+            self.assertGreaterEqual(len(words), 1, words)
+            self.assertTrue(all("|" in w for w in words), words)
+            self.assertFalse(any(w.startswith("somethingv") for w in words), words)
+            _, out = self.capture(tmp, "midword-anywhere.html", "--sizes", "390")
+            words = self.result(out)["measures"]["midWord"]
+            self.assertEqual(len(words), 1, words)
+
     def capture_fails(self, tmp, page, *extra):
         cfg = Path(tmp) / "pages.json"
         cfg.write_text(json.dumps({"base": self.base, "pages": [{"name": "t", "path": "/" + page}]}))

@@ -1,0 +1,20 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hover overlays</title>
+<!-- Cards with a hover overlay at opacity 0 (absolutely placed): normal, not hidden content. -->
+<style>body{margin:0;font:20px/1.5 sans-serif}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:24px}
+.card{position:relative;height:200px;background:#eef;padding:16px}
+.overlay{position:absolute;inset:0;opacity:0;background:#000;color:#fff}
+.card:hover .overlay{opacity:.8}
+p{margin:16px 24px}
+</style>
+</head><body><main>
+<div class="grid">
+  <div class="card">One<div class="overlay">More</div></div>
+  <div class="card">Two<div class="overlay">More</div></div>
+  <div class="card">Three<div class="overlay">More</div></div>
+  <div class="card">Four<div class="overlay">More</div></div>
+</div>
+<p>Plain text below the cards, as on any page.</p>
+</main></body></html>

@@ -242,6 +242,23 @@ class WithServerTest(unittest.TestCase):
         self.assertIn("boom", r.stderr)
         self.assertFalse((self.dir / "captured").exists())
 
+    def test_unknown_port_flag_gets_a_hint(self):
+        # SvelteKit run 1: `npm run dev -- -p 3311` reached Vite, which has no -p.
+        start = "sh -c 'echo \"CACError: Unknown option \\`-p\\`\"; exit 1'"
+        r = self.run_helper(start, ["sh", "-c", "touch captured"])
+        self.assertEqual(r.returncode, 4, r.stdout + r.stderr)
+        self.assertIn("hint:", r.stderr)
+        self.assertIn("--port", r.stderr)
+
+    def test_commander_style_unknown_option_gets_a_hint(self):
+        r = self.run_helper("sh -c \"echo \\\"error: unknown option '-p'\\\"; exit 1\"", ["sh", "-c", "true"])
+        self.assertEqual(r.returncode, 4, r.stdout + r.stderr)
+        self.assertIn("--port", r.stderr)
+
+    def test_an_ordinary_early_exit_has_no_port_hint(self):
+        r = self.run_helper("sh -c 'echo boom; exit 1'", ["sh", "-c", "true"])
+        self.assertNotIn("hint:", r.stderr)
+
     def test_already_running_server_is_left_alone(self):
         theirs = subprocess.Popen([sys.executable, "-m", "http.server", str(self.port), "--bind", "127.0.0.1"],
                                   cwd=self.dir, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

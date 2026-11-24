@@ -141,6 +141,25 @@ const file = "file://" + path.resolve(process.argv[3]);
   const reviewItems = S.mode === "review" ? items("review").map(([, it]) => it) : [];
   const seenBreaks = new Set();
   out.mid_word = [];
+  // How wide each mockup's box is at 1280, so a session sizes its mockups to the box (or sets
+  // the item's stack_variants) before it builds, not after rounds of captures.
+  out.mockup_widths = [];
+  if (reviewItems.length) {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const boxes = await page.evaluate(() => Array.from(document.querySelectorAll(".rp-item")).flatMap((item) => {
+      const vb = Array.from(item.querySelectorAll(".rp-variant"));
+      if (vb.length) {
+        return vb.map((v) => ({ id: item.dataset.id, variant: v.dataset.variant,
+          width: Math.round(v.querySelector(".rp-vbody").getBoundingClientRect().width) }));
+      }
+      const body = item.querySelector(".rp-body");
+      return body ? [{ id: item.dataset.id, variant: null, width: Math.round(body.getBoundingClientRect().width) }] : [];
+    }));
+    for (const b of boxes) {
+      const it = reviewItems.find((i) => i.id === b.id);
+      out.mockup_widths.push({ item: it ? it.num : b.id, label: it ? it.label : "", variant: b.variant, width: b.width });
+    }
+  }
   for (const w of [1280, 390]) {
     await page.setViewportSize({ width: w, height: 900 });
     const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

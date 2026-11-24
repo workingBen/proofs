@@ -130,6 +130,7 @@ flat `items` list. Item fields:
 | `category` | chip, filter tab (`"filters": true`), color (`category_colors` to set) |
 | `body_html` | what is being judged: before/after panes, screenshot, recipe |
 | `variants` | `[{html, name, note_html, recommended, key, label}]`; `key` defaults to A, B, C and `label` to "Variant A" or "Option A" |
+| `stack_variants` | `true` puts one variant per row (about 1,050 px wide at a 1280 px window instead of about 500 beside a sibling), for a desktop mockup. `--smoke` prints every mockup box's width as `mockup_widths` |
 | `history_html` | earlier rounds, shown dimmed above the body |
 | `reason_html` | the Reason block |
 

@@ -267,5 +267,54 @@ class PartialMeasurementTest(unittest.TestCase):
         self.assertEqual(out["verdict"], "look")
 
 
+
+class CaptureFailureTest(unittest.TestCase):
+    """SvelteKit run 1: both sides were SvelteKit's 404 page (base + path made "//"),
+    and the findings called them "verdict: clean; 0 finding(s)"."""
+
+    def run_dir(self, before, after):
+        with tempfile.TemporaryDirectory() as tmp:
+            for label, body in (("before", before), ("after", after)):
+                with open(os.path.join(tmp, f"{label}.json"), "w") as fh:
+                    json.dump(body, fh)
+            out = os.path.join(tmp, "findings.json")
+            buf = StringIO()
+            with redirect_stdout(buf):
+                main(["--dir", tmp, "--out", out])
+            with open(out) as fh:
+                return json.load(fh), buf.getvalue()
+
+    def test_listed_capture_failures_are_never_clean(self):
+        fail = {"page": "home", "viewport": "1440", "path": "/", "url": "http://x//", "status": 404,
+                "error": "http://x// answered HTTP 404; this is not the page"}
+        result, line = self.run_dir({"shots": [], "failures": [fail]}, {"shots": [], "failures": [fail]})
+        self.assertEqual(result["verdict"], "unknown")
+        self.assertFalse(result["measured"])
+        self.assertIn("capture failed", result["note"])
+        self.assertIn("HTTP 404", result["note"])
+        self.assertIn("capture failed", line)
+
+    def test_a_failure_on_one_side_spoils_a_clean_pair(self):
+        fail = {"page": "home", "viewport": "390", "path": "/", "url": "http://x//", "status": 404,
+                "error": "answered HTTP 404"}
+        result, _ = self.run_dir({"shots": [shot("before")], "failures": [fail]}, {"shots": [shot()]})
+        self.assertNotEqual(result["verdict"], "clean")
+        self.assertEqual(result["capture_failures"][0]["status"], 404)
+
+    def test_a_shot_from_an_error_status_is_never_clean(self):
+        # An older capture, or a hand-made shot, that still carries the status.
+        bad = dict(shot(), status=404)
+        result, _ = self.run_dir({"shots": [dict(shot("before"), status=404)]}, {"shots": [bad]})
+        self.assertNotEqual(result["verdict"], "clean")
+        self.assertIn("HTTP 404", result["note"])
+
+    def test_a_blocker_still_holds_when_a_capture_also_failed(self):
+        fail = {"page": "about", "viewport": "390", "path": "/about", "url": "http://x/about", "status": 500,
+                "error": "answered HTTP 500"}
+        result, _ = self.run_dir({"shots": [shot("before", overflow=0)]},
+                                 {"shots": [shot(overflow=23)], "failures": [fail]})
+        self.assertEqual(result["verdict"], "hold")
+        self.assertIn("capture failed", result["note"])
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -40,12 +40,52 @@ NOT_MEASURED_NOTE = ("not measured: before.json and after.json hold no layout "
                      "measurements, so no regression could be checked")
 
 
-def load(directory, label):
+def _load_json(directory, label):
     path = os.path.join(directory, f"{label}.json")
     if not os.path.exists(path):
-        return []
+        return {}
     with open(path, encoding="utf-8") as handle:
-        return json.load(handle).get("shots", [])
+        return json.load(handle)
+
+
+def load(directory, label):
+    return _load_json(directory, label).get("shots", [])
+
+
+def capture_failures(directory):
+    """Shots the capture could not take because the page answered with an error.
+
+    capture.cjs lists them under "failures" (HTTP 400 or above, or a page that
+    reads as an error page) and exits 6. A shot that still carries such a
+    status (an older capture, or one written by hand) counts too. Either way
+    the run photographed something that is not the page, so it can never be
+    "clean" (SvelteKit run 1: two 404 pages scored "verdict: clean").
+    """
+    found = []
+    for label in ("before", "after"):
+        data = _load_json(directory, label)
+        for item in data.get("failures") or []:
+            found.append(dict(item, side=label))
+        for shot in data.get("shots") or []:
+            status = shot.get("status")
+            if isinstance(status, int) and status >= 400:
+                found.append({"side": label, "page": shot.get("pageLabel") or shot.get("path"),
+                              "viewport": shot.get("label") or shot.get("size"), "path": shot.get("path"),
+                              "status": status,
+                              "error": f'{shot.get("path")} answered HTTP {status}; this is not the page'})
+    return found
+
+
+def failure_note(failures):
+    parts = []
+    for f in failures[:4]:
+        status = f.get("status")
+        what = f"HTTP {status}" if status else "an error page"
+        parts.append(f'{f.get("page")} at {f.get("viewport")} ({f.get("side")}: {what})')
+    more = f" and {len(failures) - 4} more" if len(failures) > 4 else ""
+    return ("capture failed: " + "; ".join(parts) + more +
+            ". Those shots are not the page, so nothing there was checked; fix the "
+            "pages file's base and path (or the server) and capture again")
 
 
 def key(shot):
@@ -239,7 +279,7 @@ def measured(before, after):
             and not unmeasured_routes(before, after))
 
 
-def summarize(findings, plan=None, measured=True, unmeasured=None):
+def summarize(findings, plan=None, measured=True, unmeasured=None, failures=None):
     counts = {"blocker": 0, "warning": 0, "good": 0}
     for item in findings:
         counts[item["severity"]] = counts.get(item["severity"], 0) + 1
@@ -261,6 +301,14 @@ def summarize(findings, plan=None, measured=True, unmeasured=None):
             out["note"] = ("not measured: " + ", ".join(unmeasured) +
                            " hold no layout measurements in before.json or "
                            "after.json, so no regression could be checked there")
+    if failures:
+        # A failed capture is never clean, whatever else the run measured.
+        if verdict == "clean":
+            verdict = "unknown"
+        out["verdict"] = verdict
+        out["measured"] = False
+        out["capture_failures"] = list(failures)
+        out["note"] = failure_note(failures) + (("; " + out["note"]) if out.get("note") else "")
     if plan:
         # An unmapped view means the QA covered less than it appears to. Saying
         # so is the difference between a gap and a silent gap.
@@ -283,13 +331,16 @@ def main(argv=None):
 
     before = load(args.dir, "before")
     after = load(args.dir, "after")
+    failures = capture_failures(args.dir)
     result = summarize(compare(before, after), plan, measured=measured(before, after),
-                       unmeasured=unmeasured_routes(before, after))
+                       unmeasured=unmeasured_routes(before, after), failures=failures)
     if args.out:
         with open(args.out, "w", encoding="utf-8") as handle:
             json.dump(result, handle, indent=2)
         counts = result.get("counts") or {}
         print(f"verdict: {result.get('verdict')}; {sum(counts.values()) if counts else len(result.get('findings', []))} finding(s) -> {args.out}")
+        if failures:
+            print(result["note"])
     else:
         print(json.dumps(result, indent=2))
     # Never fail the build. A blocker is a thing for a person to decide about,

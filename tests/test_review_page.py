@@ -46,6 +46,23 @@ def build(name, tmp):
     return out
 
 
+class StackVariants(unittest.TestCase):
+    def test_stack_variants_puts_one_variant_per_row(self):
+        spec = {"title": "T", "project": {"name": "P", "session": "s"}, "decisions": "design-review",
+                "items": [{"label": "Wide", "stack_variants": True, "variants": [{"html": "<p>a</p>"}, {"html": "<p>b</p>"}]},
+                          {"label": "Narrow", "variants": [{"html": "<p>a</p>"}, {"html": "<p>b</p>"}]}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            src, out = Path(tmp) / "s.json", Path(tmp) / "p.html"
+            src.write_text(json.dumps(spec))
+            r = subprocess.run([sys.executable, str(BUILD), str(src), "--out", str(out), "--no-check"],
+                               capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            html = out.read_text()
+            self.assertEqual(html.count('class="rp-gallery rp-stack"'), 1)
+            self.assertEqual(html.count('class="rp-gallery"'), 1)
+            self.assertIn(".rp-gallery.rp-stack", html)
+
+
 @unittest.skipUnless(NODE, "node is not installed")
 class Stylesheet(unittest.TestCase):
     CSS = (RP / "style.css").read_text()
@@ -1254,6 +1271,30 @@ class ClickThrough(unittest.TestCase):
             self.assertIn("breaks mid-word", broken[0])
             self.assertEqual(res["mid_word"][0]["variant"], "B")
 
+    def test_smoke_reports_each_mockups_box_width_and_stack_variants_widens_it(self):
+        # SvelteKit run 1: two variants side by side left each desktop mockup about 490 px at a
+        # 1280 px window, so its desktop layout collapsed; the session spent four rebuild-and-
+        # capture rounds overriding .rp-gallery and .rp-panes to find that out.
+        def item(label, stack):
+            it = {"label": label, "reason_html": "<p>r</p>", "recommended": True, "variants": [
+                {"html": "<div>A</div>"}, {"html": "<div>B</div>"}]}
+            if stack:
+                it["stack_variants"] = True
+            return it
+        spec = {"title": "Widths", "project": {"name": "P", "session": "s"}, "decisions": "design-review",
+                "items": [item("Side by side", False), item("Stacked", True)]}
+        with tempfile.TemporaryDirectory() as tmp:
+            src, out = Path(tmp) / "s.json", Path(tmp) / "p.html"
+            src.write_text(json.dumps(spec))
+            r = subprocess.run([sys.executable, str(BUILD), str(src), "--out", str(out)], capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            ok, res = review_page.smoke(out)
+            self.assertTrue(ok, res)
+            widths = {(w["item"], w["variant"]): w["width"] for w in res["mockup_widths"]}
+            self.assertLess(widths[("1", "A")], 700, res["mockup_widths"])
+            self.assertGreater(widths[("2", "A")], 900, res["mockup_widths"])
+            self.assertGreater(widths[("2", "B")], 900, res["mockup_widths"])
+
     def test_design_review_export_after_clicks(self):
         with tempfile.TemporaryDirectory() as tmp:
             ok, res = review_page.smoke(build("design-review", tmp))
@@ -1262,6 +1303,93 @@ class ClickThrough(unittest.TestCase):
                                             "1. Article card layout — REVISE — READ — COMMENT: smoke comment\n"
                                             "2. Read More button placement — PENDING")
 
+
+
+READ_JUMP = r"""
+const { chromium } = require(process.argv[2]);
+const { launchChromium } = require(process.argv[3]);
+(async () => {
+  const browser = await launchChromium(chromium, process.env);
+  const out = {};
+  for (const motion of ["reduce", "no-preference"]) {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true,
+                                           deviceScaleFactor: 2, reducedMotion: motion });
+    const page = await ctx.newPage();
+    await page.goto("file://" + process.argv[4]);
+    const settle = () => page.waitForTimeout(motion === "reduce" ? 80 : 900);
+    const bars = () => page.evaluate(() => document.querySelector(".rp-topbars").getBoundingClientRect().bottom);
+    const top = (id) => page.evaluate((i) => document.querySelector('[data-entry="' + i + '"]').getBoundingClientRect().top, id);
+    const tick = (id) => page.evaluate((i) => { const t = document.querySelector('[data-tick="' + i + '"]'); t.click(); }, id);
+    // Scroll into the middle of entry 3, then tick it.
+    await page.evaluate(() => { const e = document.querySelector('[data-entry="E3"]');
+      window.scrollTo({ top: window.scrollY + e.getBoundingClientRect().top + e.offsetHeight / 2 - 300, behavior: "instant" }); });
+    await page.waitForTimeout(50);
+    await tick("E3"); await settle();
+    const r = { afterTick: { next: await top("E4"), bars: await bars() } };
+    // Untick E3 from the Read list: it comes back, and its top stays where it was just before.
+    await page.evaluate(() => { const e = document.querySelector('[data-entry="E3"]');
+      window.scrollTo({ top: window.scrollY + e.getBoundingClientRect().top - 400, behavior: "instant" }); });
+    await page.waitForTimeout(50);
+    const before = await top("E3");
+    await tick("E3"); await settle();
+    r.untick = { before, after: await top("E3") };
+    // Tick everything but E10, then from E10's middle tick E10: nothing unread is left.
+    for (let i = 1; i <= 9; i++) { await tick("E" + i); }
+    await settle();
+    await page.evaluate(() => { const e = document.querySelector('[data-entry="E10"]');
+      window.scrollTo({ top: window.scrollY + e.getBoundingClientRect().top + 400, behavior: "instant" }); });
+    await page.waitForTimeout(50);
+    const y0 = await page.evaluate(() => window.scrollY);
+    await tick("E10"); await settle();
+    r.last = { y0, y1: await page.evaluate(() => window.scrollY),
+               maxY: await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight) };
+    if (y0 < 100) throw new Error("the last-entry case never scrolled: y0 " + y0);
+    // Untick E2 and E5 (unread again), then tick E9's neighbor E10 is read; tick E5 from the bottom:
+    // nothing unread below it, so it goes to the first unread one above (E2).
+    await tick("E2"); await tick("E5"); await settle();
+    await tick("E5"); await settle();
+    r.above = { e2: await top("E2"), bars: await bars() };
+    out[motion] = r;
+    await ctx.close();
+  }
+  await browser.close();
+  console.log(JSON.stringify(out));
+})().catch((e) => { console.log(JSON.stringify({ crash: String(e && e.stack || e) })); process.exit(1); });
+"""
+
+
+@unittest.skipUnless(NODE and playwright_dir(), "Playwright not found")
+class ReadTickScroll(unittest.TestCase):
+    """Found on a phone: ticking "Read this" folds the entry and moves it to the Read list,
+    and the page jumped somewhere unrelated. Now the next unread entry's top lands just under
+    the sticky bars; unticking keeps the entry where it was."""
+
+    def test_tick_lands_on_the_next_unread_entry(self):
+        long = "<p>" + ("A long paragraph of working-log detail that goes on for a while. " * 30) + "</p>"
+        entries = [{"id": "E%d" % i, "title": "Entry %d" % i, "status": "FYI", "when": "2026-11-24T10:%02d" % i,
+                    "lede": "Lede %d" % i, "detail_html": long} for i in range(1, 11)]
+        spec = {"mode": "log", "title": "s · P log", "project": {"name": "P", "session": "s", "repo": "a/b"},
+                "heading": "Working log", "entries": entries}
+        with tempfile.TemporaryDirectory() as tmp:
+            src, out = Path(tmp) / "s.json", Path(tmp) / "p.html"
+            src.write_text(json.dumps(spec))
+            r = subprocess.run([sys.executable, str(BUILD), str(src), "--out", str(out)], capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            script = Path(tmp) / "jump.cjs"
+            script.write_text(READ_JUMP)
+            r = subprocess.run([NODE, str(script), playwright_dir(), str(RP / "launch.cjs"), str(out)],
+                               capture_output=True, text=True, timeout=180)
+            res = json.loads(r.stdout.strip().splitlines()[-1])
+            self.assertNotIn("crash", res, res)
+            for motion, m in res.items():
+                with self.subTest(motion=motion):
+                    gap = m["afterTick"]["next"] - m["afterTick"]["bars"]
+                    self.assertTrue(0 <= gap <= 12, m)
+                    self.assertLess(abs(m["untick"]["after"] - m["untick"]["before"]), 3, m)
+                    # Left alone: the same scroll, unless the shorter page clamps it.
+                    self.assertLess(abs(m["last"]["y1"] - min(m["last"]["y0"], m["last"]["maxY"])), 3, m)
+                    gap = m["above"]["e2"] - m["above"]["bars"]
+                    self.assertTrue(0 <= gap <= 12, m)
 
 if __name__ == "__main__":
     unittest.main()

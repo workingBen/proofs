@@ -1,6 +1,6 @@
 ---
 name: working-log
-version: 1.12.4
+version: 1.12.5
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -127,7 +127,9 @@ The spec's fields, in the order the page shows them:
 
 **Clear out what is settled.** The top of the page is what needs the user. An answered question leaves Waiting on you at once for Decided; a log entry that is done becomes a Decided line or goes entirely. A page that only grows is scrollback with extra steps.
 
-**A paste updates the page first, before any other work.** When the user pastes an export (from this page or any page linked from it), republish the session page before you start on what it asks: mark each answered page's link `"state": "in-progress"`, move answered questions to Decided, and log what you are about to do. When a linked page is ready for the user again, flip its link back to `open` with its new status in the same republish. A page that still shows answered work as waiting on them reads as stale, and they stop trusting it.
+**A paste updates the page first, before any other work.** The same goes for answers you read from the page's database. When the user pastes an export (from this page or any page linked from it), republish the session page before you start on what it asks: mark each answered page's link `"state": "in-progress"`, move answered questions to Decided, and log what you are about to do. When a linked page is ready for the user again, flip its link back to `open` with its new status in the same republish. A page that still shows answered work as waiting on them reads as stale, and they stop trusting it.
+
+**Read answers from the page first.** A published page saves every answer in its own database when you publish it with `capabilities: {"db": {}}` (keep it on every republish; never pass `{}`). Before you ask for a paste, and whenever the user says they answered, read them: `ArtifactData` `list` of `proofs-answers` with `out_dir`, then `review_page.py --answers <page> --rows <out_dir>` prints the same text as the Copy export. The database comes first and a pasted export second; if they differ, the newer (`updated_at` against the export's stamp) wins, and say so. Anyone the page is shared with can write answers; pages are private by default. Details: "Answers without Copy" in `../../reference/review-page.md`.
 
 **Say what a failure looks like.** When an entry asks the user to run something, give the success output *and* the most likely failure text. They often cannot read their own terminal — that is why this page exists.
 
@@ -172,7 +174,7 @@ ship it
 
 ## Publishing and verifying
 
-Publish with `Artifact`, and **republish to the same file path every time** — the URL must not change, or the user loses the tab they have been using. Keep the favicon stable for the same reason.
+Publish with `Artifact` and `capabilities: {"db": {}}`, and **republish to the same file path every time** — the URL must not change, or the user loses the tab they have been using. Keep the favicon stable for the same reason.
 
 **"Same path" includes the folder, and that is easier to break than it sounds.** Publishing from `/work/checkout-a/docs/log.html` and later from `/work/checkout-b/docs/log.html` is TWO paths: the second mints a new URL and silently strands the tab the user is working from, along with its `localStorage` ticks. So do not delete the folder you published from (for example by removing a git worktree) while the page is still live. The fix is cheap once you know it: recreate a folder at the ORIGINAL path, copy the file back, republish, and the original URL returns.
 

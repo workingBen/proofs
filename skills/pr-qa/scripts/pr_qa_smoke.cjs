@@ -38,6 +38,11 @@ const file = "file://" + path.resolve(process.argv[3]);
     await page.waitForLoadState("load");
     await page.waitForTimeout(200);
 
+    // Screenshots the builder expected and did not find (SvelteKit run 1: a 29 KB page with
+    // no images passed). The builder lists each gap; one the meta entry gave a reason for is not.
+    const gaps = await page.evaluate(() => (typeof DATA !== "undefined" && DATA.evidenceGaps) || []);
+    for (const g of gaps) problems.push("screenshot gap: " + g);
+
     // Every image that has a source must have decoded.
     const broken = await page.evaluate(() =>
       Array.from(document.images).filter((i) => i.getAttribute("src") && !(i.complete && i.naturalWidth > 0))

@@ -954,7 +954,10 @@ def review_item(it, dec, colors):
     if it.get("body_html"):
         h.append('<div class="rp-body">%s</div>' % it["body_html"])
     if variants:
-        h.append('<div class="rp-gallery" role="group" aria-label="Choose one">')
+        # stack_variants: one variant per row, so a desktop mockup gets the card's full width
+        # instead of about 490 px beside its sibling at a 1280 px window (SvelteKit run 1).
+        h.append('<div class="rp-gallery%s" role="group" aria-label="Choose one">'
+                 % (" rp-stack" if it.get("stack_variants") else ""))
         for v in variants:
             name = ' <span class="rp-vname">%s</span>' % esc(v["name"]) if v.get("name") else ""
             rv = ' <span class="rp-vrec">Recommended</span>' if v.get("recommended") else ""

@@ -48,6 +48,7 @@ Python 3 standard library only.
 import argparse
 import fcntl
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -283,6 +284,16 @@ def _take_lock(path, deadline):
             time.sleep(0.2)
 
 
+# The port flag differs by tool: Vite (SvelteKit, Vue, Astro, Remix), Nuxt, Angular and
+# webpack-dev-server take --port; Next.js takes -p or --port; Rails and Django differ again.
+# A dev server that rejects the flag says so in its log (Vite: "CACError: Unknown option `-p`";
+# commander-based CLIs: "error: unknown option '-p'"). SvelteKit run 1 guessed -p twice.
+_UNKNOWN_FLAG = re.compile(r"unknown (?:option|argument|flag)\W+(-{1,2}[A-Za-z][\w-]*)", re.I)
+PORT_HINT = ("hint: the dev server rejected %s. Vite (SvelteKit, Vue, Astro), Nuxt and Angular take "
+             "--port, as in --start \"npm run dev -- --port 3311\"; Next.js takes -p or --port. "
+             "Copy the start command from the project's README or CLAUDE.md when it gives one")
+
+
 def _log_tail(log):
     try:
         with open(log, "rb") as fh:
@@ -292,6 +303,11 @@ def _log_tail(log):
     say("server: last %d lines of %s:" % (LOG_TAIL, log), err=True)
     for line in lines[-LOG_TAIL:]:
         say("  " + line, err=True)
+    for line in lines[-LOG_TAIL:]:
+        m = _UNKNOWN_FLAG.search(line)
+        if m and m.group(1) in ("-p", "--p", "-P", "--listen", "-l"):
+            say(PORT_HINT % m.group(1), err=True)
+            break
 
 
 def _watch_parent(original, done, main_ident):

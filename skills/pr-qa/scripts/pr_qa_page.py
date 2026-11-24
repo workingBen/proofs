@@ -270,10 +270,11 @@ def skipped_line(skipped):
     return "Other open PRs: " + "; ".join(parts) if parts else ""
 
 
-def render(prs, dropped, project, repo, session=None, skipped=None):
+def render(prs, dropped, project, repo, session=None, skipped=None, gaps=None):
     """The whole page, as one self-contained string."""
     payload = {
         "project": project, "repo": repo, "session": session, "dropped": dropped,
+        "evidenceGaps": list(gaps or []),
         "skippedLine": skipped_line(skipped),
         "decisions": [{"value": v, "consequence": c} for v, c in DECISIONS],
         "prs": [{
@@ -382,18 +383,90 @@ def load_meta(meta_path):
     return meta, []
 
 
+def resolve_dir(directory, meta_dir):
+    """(path, looked_in). A relative `dir` is tried from the working folder
+    first (what pr_qa_collect.py writes), then from meta.json's own folder
+    (what a session writing .proofs/evidence/meta.json means by "pr-13")."""
+    if not directory:
+        return None, []
+    if os.path.isabs(directory):
+        return directory, [directory]
+    tries = [os.path.abspath(directory), os.path.abspath(os.path.join(meta_dir, directory))]
+    for candidate in tries:
+        if os.path.isdir(candidate):
+            return candidate, tries
+    return directory, list(dict.fromkeys(tries))
+
+
+def _missing_reason(entry, pair):
+    for item in entry.get("missing_shots") or []:
+        if not isinstance(item, dict) or not (item.get("reason") or "").strip():
+            continue
+        if item.get("size") not in (None, "", pair.get("size")):
+            continue
+        if item.get("page") in (pair.get("slug"), pair.get("pageLabel"), pair.get("path")):
+            return item["reason"].strip()
+    return ""
+
+
+def evidence_gaps(prs):
+    """Every PR whose page should carry screenshots and does not, unless the
+    meta entry says why (`absent_reason` for a whole PR, `missing_shots` for
+    one pair). Each gap is printed as a warning and fails --smoke."""
+    gaps = []
+    for pr in prs:
+        number = pr.get("number")
+        evidence = pr.get("evidence") or {}
+        if not evidence.get("present"):
+            looked = pr.get("_looked_in") or []
+            if pr.get("dir"):
+                gaps.append(f'PR #{number}: evidence folder "{pr.get("dir")}" not found (looked in '
+                            f'{" and ".join(looked)}), so the page has no screenshots for it. '
+                            'Fix "dir" in meta.json (an absolute path, or one relative to meta.json) and rebuild')
+            elif not (pr.get("absent_reason") or "").strip():
+                gaps.append(f'PR #{number}: no evidence folder ("dir") and no "absent_reason", so the page has '
+                            'no screenshots for it and does not say why')
+            continue
+        pairs = pr.get("pairs") or []
+        if not pairs:
+            gaps.append(f'PR #{number}: the evidence folder {evidence.get("dir")} has no before or after shots '
+                        '(before.json and after.json list none), so the page has no screenshots for it')
+            continue
+        for pair in pairs:
+            if not pair.get("missing"):
+                continue
+            reason = _missing_reason(pr, pair)
+            if reason:
+                pair["missingReason"] = reason
+                continue
+            sides = [side for side, name in (("before", pair.get("beforeFile")), ("after", pair.get("afterFile")))
+                     if not (name and os.path.exists(os.path.join(evidence.get("dir") or "", name)))]
+            gaps.append(f'PR #{number}: {pair.get("pageLabel")} at {pair.get("size")} has no '
+                        f'{" or ".join(sides) or "screenshot"} file in {evidence.get("dir")}; capture it, or add '
+                        '{"page": "<slug>", "size": "<size>", "reason": "<why>"} to the entry\'s "missing_shots"')
+    return gaps
+
+
 def build(meta_path, out_path, project, repo, session=None):
     meta, skipped = load_meta(meta_path)
     validate_meta(meta)
+    meta_dir = os.path.dirname(os.path.abspath(meta_path))
     prs = []
     for entry in meta:
-        evidence = load_evidence(entry.get("dir"))
+        directory, looked = resolve_dir(entry.get("dir"), meta_dir)
+        evidence = load_evidence(directory)
         human = entry.get("human_findings") or []
         check_rise(entry, evidence)
-        prs.append(dict(entry, evidence=evidence,
+        prs.append(dict(entry, evidence=evidence, _looked_in=looked,
                         verdict=effective_verdict(evidence, human)))
     embedded, dropped = embed(prs)
-    page = render(embedded, dropped, project, repo, session, skipped)
+    gaps = evidence_gaps(embedded)
+    for gap in gaps:
+        print("warning: " + gap, file=sys.stderr)
+    if gaps:
+        print(f"warning: {len(gaps)} screenshot gap(s): the page is missing evidence it should have, "
+              "and --smoke fails until each is fixed or given a reason", file=sys.stderr)
+    page = render(embedded, dropped, project, repo, session, skipped, gaps)
     # The first run in a project has no .proofs/pages yet.
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as handle:
@@ -427,6 +500,24 @@ def smoke(page_path, playwright=None):
     if result.get("launchFailed"):
         return None, {"error": (result.get("problems") or ["browser could not start"])[0]}
     return not result.get("problems"), result
+
+
+DECISION_WORDS = {"merge-and-push": "Merge and push", "merge-hold-push": "Merge, hold the push",
+                  "send-back": "Send it back", "wait": "Wait"}
+
+
+def chat_lines(page):
+    """One line per PR, in the page's words: its verdict chip, then the
+    recommended decision. The chat reply quotes these word for word, so chat
+    and page cannot disagree (SvelteKit run 1: "Look first" on the page,
+    "I recommend merging" in chat)."""
+    m = re.search(r"const DATA = (.*?);\n", page)
+    if not m:
+        return []
+    data = json.loads(m.group(1))
+    return [f'PR #{pr.get("number")} ({pr.get("title")}): {pr.get("chip")}; recommended: '
+            f'{DECISION_WORDS.get(pr.get("recommendation"), pr.get("recommendation"))}'
+            for pr in data.get("prs", [])]
 
 
 def repo_slug():
@@ -467,6 +558,8 @@ def main(argv=None):
         print("warning: no --session: the reader can't tell which session this page belongs to", file=sys.stderr)
     page = build(args.meta, args.out, project, repo, args.session)
     print(f"==> {args.out}: {len(page)} bytes")
+    for line in chat_lines(page):
+        print(line)
     return 0
 
 
@@ -759,7 +852,8 @@ const DATA = __PAYLOAD__;
       if (!pair) {
         note = "This page was not photographed at " + state.size + " width.";
       } else if (pair.missing) {
-        note = "No " + state.label + " shot: this pair proves nothing -- the file was missing.";
+        note = "No " + state.label + " shot: this pair proves nothing -- the file was missing" +
+          (pair.missingReason ? (": " + pair.missingReason) : ".");
       } else if (pair.dropped) {
         note = "No " + state.label + " shot here -- it was dropped to keep the page under the size limit.";
       } else {
@@ -1033,6 +1127,12 @@ const DATA = __PAYLOAD__;
     wrap.appendChild(buildVerdictTable(DATA.prs));
     if (DATA.skippedLine) {
       wrap.appendChild(el("p", { class: "notice skipped", text: DATA.skippedLine }));
+    }
+    if (DATA.evidenceGaps && DATA.evidenceGaps.length) {
+      var gapBox = el("div", { class: "notice warn evidence-gaps" },
+        el("strong", { text: "Screenshots missing (" + DATA.evidenceGaps.length + "): this page is missing evidence it should have." }));
+      DATA.evidenceGaps.forEach(function (g) { gapBox.appendChild(el("p", { text: g })); });
+      wrap.appendChild(gapBox);
     }
     if (DATA.dropped && DATA.dropped.length) {
       wrap.appendChild(el("p", { class: "notice",

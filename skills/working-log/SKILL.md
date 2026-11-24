@@ -1,6 +1,6 @@
 ---
 name: working-log
-version: 1.12.3
+version: 1.12.4
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)

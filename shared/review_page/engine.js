@@ -345,11 +345,43 @@
       all("[data-tick]", root).forEach(function (t) { t.checked = !!ss.read[t.dataset.tick]; });
       root.addEventListener("change", function (e) {
         var t = e.target;
-        if (t.type === "radio") ss.ans[t.name] = t.value;
-        else if (t.dataset && t.dataset.tick) ss.read[t.dataset.tick] = t.checked;
-        else return;
+        if (t.type === "radio") { ss.ans[t.name] = t.value; save(); paint(); return; }
+        if (!(t.dataset && t.dataset.tick)) return;
+        var card = t.closest("[data-entry]");
+        var wasTop = card ? card.getBoundingClientRect().top : 0, wasY = window.scrollY;
+        ss.read[t.dataset.tick] = t.checked;
         save(); paint();
+        if (card) keepPlace(card, wasTop, wasY);
       });
+      // A tick folds the entry and moves it to the Read list (flex order), which reflows the
+      // page and used to leave the screen somewhere unrelated (found on a phone). After a
+      // fold, bring the next unread entry's top to just under the sticky bars: the following
+      // unread one, else the first unread one above. Nothing unread left: leave the scroll.
+      // An entry that comes back (untick) keeps its top where it was.
+      function barsBottom() {
+        // The sticky bars' real height: it differs on a phone, where they wrap.
+        var h = 0;
+        // (Measured from the box, not read back from the computed style, which older iOS
+        // Safari answers badly.) They stick at the top, so their bottom is their height.
+        all(".rp-topbars").forEach(function (b) {
+          h = Math.max(h, Math.max(0, b.getBoundingClientRect().top) + b.offsetHeight);
+        });
+        return h;
+      }
+      function keepPlace(card, wasTop, wasY) {
+        if (!card.classList.contains("rp-is-read")) {
+          window.scrollTo({ top: window.scrollY + card.getBoundingClientRect().top - wasTop, behavior: "instant" });
+          return;
+        }
+        var entries = all("[data-entry]", root);
+        var at = entries.indexOf(card);
+        var unread = function (c) { return !c.classList.contains("rp-is-read"); };
+        var next = entries.slice(at + 1).filter(unread)[0] || entries.slice(0, at).filter(unread)[0];
+        if (!next) { window.scrollTo({ top: wasY, behavior: "instant" }); return; }
+        var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        window.scrollTo({ top: window.scrollY + next.getBoundingClientRect().top - barsBottom() - 6,
+                          behavior: reduce ? "instant" : "smooth" });
+      }
       root.addEventListener("input", function (e) {
         if (e.target.dataset && e.target.dataset.note) { ss.notes[e.target.dataset.note] = e.target.value; save(); }
       });

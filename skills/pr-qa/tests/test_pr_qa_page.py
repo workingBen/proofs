@@ -1018,5 +1018,137 @@ class SmokeTest(unittest.TestCase):
             self.assertIn("playwright@1.61.1", r.stdout + r.stderr)
 
 
+
+def payload_of(page):
+    import re
+    m = re.search(r"const DATA = (.*?);\n", page)
+    return json.loads(m.group(1).replace("\\u003c", "<"))
+
+
+class EvidenceGapTest(unittest.TestCase):
+    """SvelteKit run 1: meta.json said "dir": "pr-13" (relative to meta.json's own
+    folder), the builder looked for it in the working folder, found nothing, and
+    wrote a 29 KB page with no screenshots that --smoke passed."""
+
+    def _entry(self, d, **extra):
+        return dict({"number": 13, "title": "T", "branch": "b", "dir": d, "absent_reason": "",
+                     "cost": "", "tests": "", "narrative": "", "recommendation": "wait",
+                     "human_findings": []}, **extra)
+
+    def _build(self, tmp, entries, cwd=None):
+        import contextlib, io
+        meta_dir = os.path.join(tmp, ".proofs", "evidence")
+        os.makedirs(meta_dir, exist_ok=True)
+        meta = os.path.join(meta_dir, "meta.json")
+        with open(meta, "w", encoding="utf-8") as handle:
+            json.dump({"prs": entries}, handle)
+        err = io.StringIO()
+        old = os.getcwd()
+        os.chdir(cwd or tmp)
+        try:
+            with contextlib.redirect_stderr(err):
+                page = build(meta, os.path.join(tmp, "page.html"), "P", "a/b")
+        finally:
+            os.chdir(old)
+        return page, err.getvalue()
+
+    def test_a_dir_relative_to_meta_json_resolves(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = os.path.realpath(tmp)
+            write_evidence(os.path.join(tmp, ".proofs", "evidence", "pr-13"))
+            page, err = self._build(tmp, [self._entry("pr-13")])
+            data = payload_of(page)
+            self.assertFalse(data["prs"][0]["absent"])
+            self.assertTrue(data["prs"][0]["pairs"][0]["after"].startswith("data:"))
+            self.assertEqual(data["evidenceGaps"], [])
+            self.assertNotIn("warning: PR #%d" % 13, err)
+
+    def test_a_dir_relative_to_the_working_folder_still_resolves(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = os.path.realpath(tmp)
+            write_evidence(os.path.join(tmp, ".proofs", "evidence", "pr-13"))
+            page, _ = self._build(tmp, [self._entry(".proofs/evidence/pr-13")])
+            self.assertFalse(payload_of(page)["prs"][0]["absent"])
+
+    def test_a_dir_that_does_not_resolve_warns_loudly_and_is_a_gap(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = os.path.realpath(tmp)
+            page, err = self._build(tmp, [self._entry("pr-99")])
+            self.assertIn("warning: PR #%d" % 13, err)
+            self.assertIn("pr-99", err)
+            self.assertIn("not found", err)
+            self.assertIn(os.path.join(tmp, ".proofs", "evidence", "pr-99"), err)
+            gaps = payload_of(page)["evidenceGaps"]
+            self.assertEqual(len(gaps), 1)
+            self.assertIn("PR #%d" % 13, gaps[0])
+            self.assertIn("no screenshots", page.lower() + " ".join(gaps).lower())
+
+    def test_evidence_with_no_shots_is_a_gap(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = os.path.realpath(tmp)
+            write_evidence(os.path.join(tmp, "ev"), shots=[])
+            page, err = self._build(tmp, [self._entry(os.path.join(tmp, "ev"))])
+            gaps = payload_of(page)["evidenceGaps"]
+            self.assertEqual(len(gaps), 1, gaps)
+            self.assertIn("no before or after shots", gaps[0])
+            self.assertIn("warning:", err)
+
+    def test_a_missing_file_is_a_gap_unless_given_a_reason(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = os.path.realpath(tmp)
+            ev = os.path.join(tmp, "ev")
+            write_evidence(ev)
+            os.remove(os.path.join(ev, "before-x-phone.png"))
+            page, _ = self._build(tmp, [self._entry(ev)])
+            gaps = payload_of(page)["evidenceGaps"]
+            self.assertEqual(len(gaps), 1, gaps)
+            self.assertIn("X at phone", gaps[0])
+            page, err = self._build(tmp, [self._entry(ev, missing_shots=[
+                {"page": "x", "size": "phone", "reason": "the page did not exist before this PR"}])])
+            data = payload_of(page)
+            self.assertEqual(data["evidenceGaps"], [])
+            self.assertEqual(data["prs"][0]["pairs"][0]["missingReason"], "the page did not exist before this PR")
+            self.assertNotIn("warning: PR #%d" % 13, err)
+
+    def test_no_dir_needs_an_absent_reason(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = os.path.realpath(tmp)
+            page, _ = self._build(tmp, [self._entry(None)])
+            self.assertEqual(len(payload_of(page)["evidenceGaps"]), 1)
+            page, _ = self._build(tmp, [self._entry(None, absent_reason="no QA run for this PR")])
+            self.assertEqual(payload_of(page)["evidenceGaps"], [])
+
+    def test_smoke_fails_a_page_with_screenshot_gaps(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = os.path.realpath(tmp)
+            page, _ = self._build(tmp, [self._entry("pr-99")])
+            ok, result = smoke(os.path.join(tmp, "page.html"))
+            if ok is None:
+                self.skipTest("Playwright is not installed: " + result["error"])
+            self.assertFalse(ok, result)
+            self.assertTrue(any("PR #%d" % 13 in p and "screenshot" in p for p in result["problems"]), result)
+
+
+class ChatLineTest(unittest.TestCase):
+    """SvelteKit run 1: the page said "Look first" and the chat said "I recommend
+    merging and holding the push". The build prints the line the chat quotes."""
+
+    def test_build_prints_each_prs_verdict_and_recommendation(self):
+        script = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts", "pr_qa_page.py")
+        with tempfile.TemporaryDirectory() as tmp:
+            ev = os.path.join(tmp, "ev")
+            write_evidence(ev, findings={"findings": [{"severity": "warning", "title": "w", "detail": "d",
+                                                       "evidence": {}}],
+                                         "counts": {"blocker": 0, "warning": 1, "good": 0}, "verdict": "look"})
+            meta = os.path.join(tmp, "meta.json")
+            with open(meta, "w", encoding="utf-8") as handle:
+                json.dump([{"number": 13, "title": "Hero links", "branch": "b", "dir": ev, "absent_reason": "",
+                            "cost": "", "tests": "", "narrative": "", "recommendation": "merge-hold-push",
+                            "human_findings": []}], handle)
+            r = subprocess.run([sys.executable, script, "--meta", meta, "--out", os.path.join(tmp, "p.html"),
+                                "--repo", "a/b", "--session", "s"], capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertIn("PR #%d (Hero links): Look first; recommended: Merge, hold the push" % 13, r.stdout)
+
 if __name__ == "__main__":
     unittest.main()

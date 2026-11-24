@@ -256,6 +256,56 @@ class PhoneWidth(unittest.TestCase):
             self.assertEqual(len(m["midWord"]), 1, m["midWord"])
             self.assertTrue(m["midWord"][0].startswith("authentic"), m["midWord"])
 
+    def capture_fails(self, tmp, page, *extra):
+        cfg = Path(tmp) / "pages.json"
+        cfg.write_text(json.dumps({"base": self.base, "pages": [{"name": "t", "path": "/" + page}]}))
+        out = Path(tmp) / "out"
+        env = dict(os.environ, PROOFS_PLAYWRIGHT=playwright_dir())
+        return subprocess.run([NODE, str(CAPTURE), str(cfg), "--out", str(out), *extra],
+                              env=env, capture_output=True, text=True, timeout=180), out
+
+    def test_a_404_is_a_loud_capture_failure_not_a_page(self):
+        # SvelteKit run 1: "base/" + "/" made "//", which SvelteKit answers with its 404 page;
+        # the capture measured it and pr-qa's findings called it clean.
+        with tempfile.TemporaryDirectory() as tmp:
+            r, out = self.capture_fails(tmp, "no-such-page.html", "--sizes", "390", "--evidence", "before")
+            self.assertEqual(r.returncode, 6, r.stdout + r.stderr)
+            self.assertIn("answered HTTP 404", r.stderr)
+            self.assertIn("not the page", r.stderr)
+            self.assertIn("/no-such-page.html", r.stderr)
+            res = json.loads((out / "before-measures.json").read_text())["results"][0]
+            self.assertEqual(res["status"], 404)
+            self.assertIn("404", res["error"])
+            ev = json.loads((out / "before.json").read_text())
+            self.assertEqual(ev["shots"], [])
+            self.assertEqual(ev["failures"][0]["status"], 404)
+            self.assertIn("FAILED", r.stdout)
+            f = subprocess.run(["python3", str(FINDINGS), "--dir", str(out)], capture_output=True, text=True)
+            self.assertNotEqual(json.loads(f.stdout)["verdict"], "clean")
+
+    def test_an_error_page_served_with_200_is_a_capture_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            r, out = self.capture_fails(tmp, "error-page.html", "--sizes", "1440")
+            self.assertEqual(r.returncode, 6, r.stdout + r.stderr)
+            self.assertIn("looks like an error page", r.stderr)
+            self.assertIn("404 Not Found", r.stderr)
+
+    def test_a_page_that_only_mentions_errors_is_captured(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, out = self.capture(tmp, "about-errors.html", "--sizes", "1440")
+            self.assertEqual(self.result(out)["measures"]["sideways"], 0)
+
+    def test_base_with_a_trailing_slash_and_a_rooted_path_reach_the_page(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = Path(tmp) / "pages.json"
+            cfg.write_text(json.dumps({"base": self.base + "/", "pages": [{"name": "t", "path": "/fits.html"}]}))
+            out = Path(tmp) / "out"
+            env = dict(os.environ, PROOFS_PLAYWRIGHT=playwright_dir())
+            r = subprocess.run([NODE, str(CAPTURE), str(cfg), "--out", str(out), "--sizes", "390"],
+                               env=env, capture_output=True, text=True, timeout=180)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            self.assertEqual(self.result(out)["url"], self.base + "/fits.html")
+
     def test_fitting_page_passes(self):
         with tempfile.TemporaryDirectory() as tmp:
             _, out = self.capture(tmp, "fits.html", "--sizes", "390")
@@ -320,6 +370,91 @@ class CaptureOptions(unittest.TestCase):
             subprocess.run([NODE, str(CAPTURE), str(tmp / "pages.json"), "--out", str(tmp / "out"), "--sizes", "390"],
                            cwd=tmp, env=env, capture_output=True, text=True, timeout=60)
             self.assertEqual(log.read_text().split(), ["http://127.0.0.1:4567/p"])
+
+    def join(self, base, path):
+        js = "process.stdout.write(require(process.argv[1]).joinUrl(process.argv[2], process.argv[3]))"
+        r = subprocess.run([NODE, "-e", js, str(CAPTURE), base, path], capture_output=True, text=True, timeout=60)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return r.stdout
+
+    def test_join_url_makes_exactly_one_slash(self):
+        cases = [
+            ("http://localhost:3311/", "/", "http://localhost:3311/"),
+            ("http://localhost:3311", "/", "http://localhost:3311/"),
+            ("http://localhost:3311/", "", "http://localhost:3311/"),
+            ("http://localhost:3311", "", "http://localhost:3311/"),
+            ("http://localhost:3311/", "/pricing", "http://localhost:3311/pricing"),
+            ("http://localhost:3311", "pricing", "http://localhost:3311/pricing"),
+            ("http://localhost:3311//", "//pricing", "http://localhost:3311/pricing"),
+            ("http://localhost:3311/app/", "/pricing?x=1", "http://localhost:3311/app/pricing?x=1"),
+            ("http://localhost:3311/app", "list#top", "http://localhost:3311/app/list#top"),
+            ("http://localhost:3311/list", "?as=empty", "http://localhost:3311/list?as=empty"),
+            ("http://localhost:3311/", "#top", "http://localhost:3311/#top"),
+            ("file:///srv/site/.proofs/pages", "/review.html", "file:///srv/site/.proofs/pages/review.html"),
+            ("file:///srv/site/.proofs/pages/", "review.html", "file:///srv/site/.proofs/pages/review.html"),
+            ("http://localhost:3311/", "http://127.0.0.1:4000/other", "http://127.0.0.1:4000/other"),
+        ]
+        for base, path, want in cases:
+            with self.subTest(base=base, path=path):
+                self.assertEqual(self.join(base, path), want)
+
+    def test_base_url_with_trailing_slash_does_not_double_the_slash(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            pkg = tmp / "node_modules" / "playwright"
+            pkg.mkdir(parents=True)
+            (pkg / "package.json").write_text('{"name": "playwright", "main": "index.js"}')
+            (pkg / "index.js").write_text(FAKE_PAGE)
+            (tmp / "pages.json").write_text(json.dumps({"base": "http://localhost:9", "pages": [{"name": "x", "path": "/"}]}))
+            log = tmp / "urls.log"
+            env = {k: v for k, v in os.environ.items() if k not in ("NODE_PATH", "PLAYWRIGHT_PATH", "PROOFS_PLAYWRIGHT")}
+            env.update(HOME=str(tmp), FAKE_LOG=str(log), PROOFS_BASE_URL="http://localhost:3311/")
+            subprocess.run([NODE, str(CAPTURE), str(tmp / "pages.json"), "--out", str(tmp / "out"), "--sizes", "390"],
+                           cwd=tmp, env=env, capture_output=True, text=True, timeout=60)
+            self.assertEqual(log.read_text().split(), ["http://localhost:3311/"])
+
+    def run_pages_file(self, text):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            pkg = tmp / "node_modules" / "playwright"
+            pkg.mkdir(parents=True)
+            (pkg / "package.json").write_text('{"name": "playwright", "main": "index.js"}')
+            (pkg / "index.js").write_text(FAKE_PAGE)
+            (tmp / "pages.json").write_text(text)
+            env = {k: v for k, v in os.environ.items() if k not in ("NODE_PATH", "PLAYWRIGHT_PATH", "PROOFS_PLAYWRIGHT", "PROOFS_BASE_URL")}
+            env.update(HOME=str(tmp), FAKE_LOG=str(tmp / "urls.log"))
+            return subprocess.run([NODE, str(CAPTURE), str(tmp / "pages.json"), "--out", str(tmp / "out"), "--sizes", "390"],
+                                  cwd=tmp, env=env, capture_output=True, text=True, timeout=60)
+
+    def test_malformed_pages_file_is_one_plain_line(self):
+        # SvelteKit run 1: a bare list crashed with "TypeError: cfg.pages is not iterable" and a stack trace.
+        cases = [
+            ('[{"name": "home", "path": "/"}]', 'needs a top-level "pages" list'),
+            ('{"base": "http://localhost:9", "pages": {"name": "home"}}', '"pages" must be a list'),
+            ('{"base": "http://localhost:9", "pages": [{"name": "home", "path": "/"},', "is not valid JSON"),
+            ('{"base": "http://localhost:9", "pages": [{"name": "home"}]}', 'pages[0] needs a "path"'),
+            ('{"base": "http://localhost:9", "pages": [{"path": "/"}]}', 'pages[0] needs a "name"'),
+            ('{"pages": [{"name": "home", "path": "/"}]}', 'needs a "base"'),
+            ('{"base": "http://localhost:9", "pages": []}', '"pages" is empty'),
+        ]
+        for text, want in cases:
+            with self.subTest(text=text):
+                r = self.run_pages_file(text)
+                self.assertEqual(r.returncode, 1, r.stderr)
+                self.assertIn(want, r.stderr)
+                self.assertIn("pages.json", r.stderr)
+                self.assertNotIn("    at ", r.stderr)
+                self.assertNotIn("TypeError", r.stderr)
+                self.assertEqual(len(r.stderr.strip().splitlines()), 1, r.stderr)
+
+    def test_missing_pages_file_is_one_plain_line(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            r = subprocess.run([NODE, str(CAPTURE), str(Path(tmp) / "nope.json")], cwd=tmp,
+                               capture_output=True, text=True, timeout=60)
+            self.assertEqual(r.returncode, 1, r.stderr)
+            self.assertIn("nope.json", r.stderr)
+            self.assertIn("cannot read", r.stderr)
+            self.assertNotIn("    at ", r.stderr)
 
     def test_untrusted_width_exits_3(self):
         fake = r"""

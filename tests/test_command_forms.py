@@ -125,7 +125,7 @@ class CommandFormsTest(unittest.TestCase):
                 self.assertFalse(allowed(cmd))
 
     def test_matcher_accepts_the_new_forms(self):
-        capture = ("python3 %s/shared/capture/with_server.py --start \"npm run dev -- -p 3311\" "
+        capture = ("python3 %s/shared/capture/with_server.py --start \"npm run dev -- --port 3311\" "
                    "--url http://localhost:3311/ -- node %s/skills/visual-qa/scripts/capture.cjs "
                    ".proofs/visual-qa/pages.json --out .proofs/visual-qa/before" % (VERSION_ROOT, VERSION_ROOT))
         for cmd in (

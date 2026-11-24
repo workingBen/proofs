@@ -20,6 +20,14 @@
 // PROOFS_BASE_URL, when set, replaces "base" (so it runs unchanged after with_server.py --).
 // --evidence <label> prefixes every file the run writes with "<label>-" (a before and an
 // after run can share one --out) and also writes <out>/<label>.json in the shape pr-qa reads.
+// Each address is base and path joined with exactly one slash ("http://host:3311/" + "/" is
+// "http://host:3311/", never "//", which SvelteKit answers with its 404 page).
+//
+// Exit codes: 0 every page captured; 1 bad arguments or pages file (one plain line on stderr);
+// 2 Playwright missing; 3 the browser ignored the viewport (not trustworthy); 6 a page
+// answered HTTP 400 or above, or rendered an error page ("Not Found"): that shot is not the
+// page, so it is left out of the evidence and listed under "failures", and nothing may call
+// the run clean.
 //
 // Writes <out>/<name>-<state>-<width>.png, ...-full.png, measures.json and summary.md.
 // Prints only the summary table, so the run stays small in context.
@@ -73,6 +81,75 @@ function pickViewports(sizes) {
     .sort((a, b) => b - a).map((w) => ({ label: String(w), width: w, height: 900 }));
   const phone = named.filter((v) => v.isMobile);
   return [...named.filter((v) => !v.isMobile), ...extra, ...phone];
+}
+
+// Base and path with exactly one slash between them, whatever either looks like. A path that
+// is a whole URL is used as is; one that starts with "?" or "#" goes straight onto the base.
+function joinUrl(base, p) {
+  const pathPart = p == null ? '' : String(p);
+  if (/^[a-z][a-z0-9+.-]*:/i.test(pathPart)) return pathPart;
+  const b = String(base || '');
+  if (pathPart.startsWith('?') || pathPart.startsWith('#')) return b + pathPart;
+  const scheme = (b.match(/^[a-z][a-z0-9+.-]*:\/\/\/?/i) || [''])[0];
+  const head = scheme + b.slice(scheme.length).replace(/\/+$/, '');
+  return head + '/' + pathPart.replace(/^\/+/, '');
+}
+
+class PagesFileError extends Error {}
+
+// The pages file, checked, or a PagesFileError whose message is one plain line.
+function readPagesFile(cfgPath, envBase) {
+  let text;
+  try {
+    text = fs.readFileSync(cfgPath, 'utf8');
+  } catch (e) {
+    throw new PagesFileError(`${cfgPath}: cannot read the pages file (${e.code || e.message})`);
+  }
+  let cfg;
+  try {
+    cfg = JSON.parse(text);
+  } catch (e) {
+    throw new PagesFileError(`${cfgPath}: is not valid JSON (${String(e.message).split('\n')[0]})`);
+  }
+  const example = path.join(__dirname, 'pages.example.json');
+  const shape = `{"base": "http://localhost:3000", "pages": [{"name": "home", "path": "/"}]}; see ${example}`;
+  if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) {
+    throw new PagesFileError(`${cfgPath}: needs a top-level "pages" list, as in ${shape}`);
+  }
+  if (!('pages' in cfg)) throw new PagesFileError(`${cfgPath}: needs a top-level "pages" list, as in ${shape}`);
+  if (!Array.isArray(cfg.pages)) throw new PagesFileError(`${cfgPath}: "pages" must be a list, as in ${shape}`);
+  if (!cfg.pages.length) throw new PagesFileError(`${cfgPath}: "pages" is empty; list at least one page, as in ${shape}`);
+  cfg.pages.forEach((p, i) => {
+    if (!p || typeof p !== 'object' || Array.isArray(p)) {
+      throw new PagesFileError(`${cfgPath}: pages[${i}] must be an object such as {"name": "home", "path": "/"}`);
+    }
+    if (typeof p.name !== 'string' || !p.name) throw new PagesFileError(`${cfgPath}: pages[${i}] needs a "name" (a short word used in file names)`);
+    if (typeof p.path !== 'string') throw new PagesFileError(`${cfgPath}: pages[${i}] needs a "path" string such as "/" or "/pricing" (page "${p.name}")`);
+  });
+  if (!envBase && !cfg.base) {
+    throw new PagesFileError(`${cfgPath}: needs a "base" such as "http://localhost:3000" (or run through with_server.py, which sets PROOFS_BASE_URL)`);
+  }
+  return cfg;
+}
+
+// Runs in the page: its title and first heading, when they read like an error page and
+// nothing else ("404", "Not Found", "500 Internal Server Error", "Error: 404").
+function errorPageText() {
+  const words = /^(?:error\s*)?(?:[:\-|–—]\s*)?(?:(?:40[0-9]|50[0-9])\s*)?(?:[:\-|–—]\s*)?(?:page\s+)?(?:not\s+found|internal\s+server\s+error|server\s+error|bad\s+request|forbidden|unauthorized|service\s+unavailable|bad\s+gateway)?$/i;
+  const code = /^(?:error\s*)?(?:[:\-|–—]\s*)?(?:40[0-9]|50[0-9])\b/i;
+  const plain = (t) => (t || '').replace(/\s+/g, ' ').trim();
+  const looks = (t) => t && t.length <= 60 && (words.test(t) && /[a-z0-9]/i.test(t))
+    && (code.test(t) || /not\s+found|server\s+error|bad\s+request|forbidden|unauthorized|unavailable|bad\s+gateway/i.test(t));
+  const title = plain(document.title);
+  const h1 = document.querySelector('h1');
+  const head = plain(h1 && h1.innerText);
+  if (looks(title)) return title;
+  if (looks(head)) return head;
+  return null;
+}
+
+class PageFailed extends Error {
+  constructor(message, status) { super(message); this.status = status; }
 }
 
 // Runs in the page. Returns raw numbers; pass/fail is decided in Node.
@@ -244,7 +321,16 @@ function overflowOf(m) {
 
 // Goes to the page and runs its actions (shared by the capture and the plain recheck).
 async function openPage(page, base, p) {
-  await page.goto(base + p.path, { waitUntil: 'networkidle' });
+  const url = joinUrl(base, p.path);
+  const response = await page.goto(url, { waitUntil: 'networkidle' });
+  const status = response && typeof response.status === 'function' ? response.status() : null;
+  if (status && status >= 400) {
+    throw new PageFailed(`${url} answered HTTP ${status}; this is not the page. Check "base" and "path" in the pages file and the server log`, status);
+  }
+  const looks = await page.evaluate(errorPageText);
+  if (typeof looks === 'string' && looks) {
+    throw new PageFailed(`${url} looks like an error page ("${looks}"); this is not the page. Check "base" and "path" in the pages file and the server log`, status);
+  }
   for (const a of p.actions || []) {
     if (a.click) await page.click(a.click);
     if (a.waitFor) await page.waitForSelector(a.waitFor);
@@ -292,7 +378,7 @@ function verdicts(m, vpLabel) {
   return out;
 }
 
-(async () => {
+async function main() {
   const argv = process.argv.slice(2);
   const opt = (name) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined; };
   const cfgPath = argv[0];
@@ -300,7 +386,14 @@ function verdicts(m, vpLabel) {
     console.error('usage: capture.cjs pages.json [--out DIR] [--sizes 390,1440] [--evidence before|after]');
     process.exit(1);
   }
-  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  let cfg;
+  try {
+    cfg = readPagesFile(cfgPath, process.env.PROOFS_BASE_URL);
+  } catch (e) {
+    if (!(e instanceof PagesFileError)) throw e;
+    console.error(e.message);
+    process.exit(1);
+  }
   const out = opt('--out') || path.join(path.dirname(cfgPath), 'shots');
   const evidence = opt('--evidence');
   const prefix = evidence ? `${evidence}-` : '';
@@ -339,6 +432,7 @@ function verdicts(m, vpLabel) {
   const browser = await launchChromium(chromium, process.env);
   const results = [];
   const errors = [];
+  const failures = [];
   let untrusted = null;
 
   for (const vp of viewports) {
@@ -352,6 +446,7 @@ function verdicts(m, vpLabel) {
     for (const p of cfg.pages) {
       const state = p.state || 'default';
       const file = `${prefix}${p.name}-${state}-${label}`;
+      const url = joinUrl(base, p.path);
       try {
         await openPage(page, base, p);
         await page.screenshot({ path: path.join(out, `${file}.png`) });
@@ -375,9 +470,15 @@ function verdicts(m, vpLabel) {
         m.midWord = (await page.evaluate(midWordBreaks, { selector: 'body', limit: 20 })).map((w) => w.at);
         m.pngWidth = pngWidth(path.join(out, `${file}-full.png`));
         overflowOf(m);
-        results.push({ page: p.name, state, viewport: label, file, measures: m, verdicts: verdicts(m, label) });
+        results.push({ page: p.name, state, viewport: label, file, url, measures: m, verdicts: verdicts(m, label) });
       } catch (e) {
-        results.push({ page: p.name, state, viewport: label, file, error: e.message.split('\n')[0] });
+        const error = e.message.split('\n')[0];
+        if (e instanceof PageFailed) {
+          failures.push({ page: p.name, state, viewport: label, path: p.path, url, status: e.status, error });
+          results.push({ page: p.name, state, viewport: label, file, url, status: e.status, failed: true, error });
+        } else {
+          results.push({ page: p.name, state, viewport: label, file, url, error });
+        }
       }
     }
     await context.close();
@@ -385,7 +486,7 @@ function verdicts(m, vpLabel) {
   await browser.close();
   if (untrusted) { console.error(untrusted); process.exit(3); }
 
-  fs.writeFileSync(path.join(out, `${prefix}measures.json`), JSON.stringify({ results, errors }, null, 2));
+  fs.writeFileSync(path.join(out, `${prefix}measures.json`), JSON.stringify({ results, errors, failures }, null, 2));
   if (evidence) {
     const shots = results.filter((r) => !r.error).map((r) => ({
       label: r.viewport, size: r.viewport === '390' ? 'phone' : 'desktop',
@@ -400,11 +501,12 @@ function verdicts(m, vpLabel) {
       widestRight: r.measures.widestRight, pngWidth: r.measures.pngWidth, innerWidth: r.measures.innerWidth,
       errors: errors.filter((e) => e.startsWith(`${r.viewport}:`)),
     }));
-    fs.writeFileSync(path.join(out, `${evidence}.json`), JSON.stringify({ shots }, null, 2));
+    fs.writeFileSync(path.join(out, `${evidence}.json`), JSON.stringify({ shots, failures }, null, 2));
   }
   const lines = ['| page | state | vp | fails | notes |', '|---|---|---|---|---|'];
   const seen = new Set();
   for (const r of results) {
+    if (r.failed) { lines.push(`| ${r.page} | ${r.state} | ${r.viewport} | FAILED | ${r.error} |`); continue; }
     if (r.error) { lines.push(`| ${r.page} | ${r.state} | ${r.viewport} | ERROR | ${r.error} |`); continue; }
     const fails = r.verdicts.filter(([, , ok]) => ok === false).map(([k, v]) => `${k}: ${v}`);
     const info = r.verdicts.filter(([, , ok]) => ok === null).map(([k, v]) => `${k}: ${v}`);
@@ -423,4 +525,15 @@ function verdicts(m, vpLabel) {
   fs.writeFileSync(path.join(out, `${prefix}summary.md`), lines.join('\n') + '\n');
   console.log(lines.join('\n'));
   console.log(`\nScreenshots + ${prefix}measures.json in ${out}`);
-})();
+  if (failures.length) {
+    console.error(`capture FAILED: ${failures.length} shot(s) are not the page, so this run proves nothing about them:`);
+    for (const f of failures) console.error(`- ${f.page} at ${f.viewport}: ${f.error}`);
+    process.exit(6);
+  }
+}
+
+if (require.main === module) {
+  main().catch((e) => { console.error(e && e.stack ? e.stack : String(e)); process.exit(1); });
+}
+
+module.exports = { joinUrl, readPagesFile, PagesFileError };

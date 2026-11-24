@@ -1,6 +1,6 @@
 ---
 name: visual-qa
-version: 1.4.4
+version: 1.4.5
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs *)
@@ -56,10 +56,11 @@ and colors (mockups reuse them), and anything already decided that must not be "
 - Run it exactly as written; Claude Code fills in `${CLAUDE_PLUGIN_ROOT}`, and the allow rule only matches the unquoted form. The helper starts the server, waits for the URL, runs the capture with `PROOFS_BASE_URL` set, then stops the server:
 
   ```bash
-  python3 ${CLAUDE_PLUGIN_ROOT}/shared/capture/with_server.py --start "npm run dev -- -p 3311" --url http://localhost:3311/ -- node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs .proofs/visual-qa/pages.json --out .proofs/visual-qa/before
+  python3 ${CLAUDE_PLUGIN_ROOT}/shared/capture/with_server.py --start "npm run dev -- --port 3311" --url http://localhost:3311/ -- node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs .proofs/visual-qa/pages.json --out .proofs/visual-qa/before
   ```
 
-  Never start the server yourself with `run_in_background` or `&`: in `claude -p` the turn then never ends. If the helper prints `server: already answering at <url>; not started by this helper`, the shot may be of another app: rerun on a different port. Only when a server you were given is already running, drop the helper and run `node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs .proofs/visual-qa/pages.json --out .proofs/visual-qa/before` alone.
+  The port flag belongs to the dev server: `--port` for Vite (SvelteKit, Vue, Astro), Nuxt and Angular, `-p` or `--port` for Next.js; copy the project's own start command when its README or `CLAUDE.md` gives one, and read `package.json`'s `dev` script otherwise (`vite dev` means `--port`). Never start the server yourself with `run_in_background` or `&`: in `claude -p` the turn then never ends. If the helper prints `server: already answering at <url>; not started by this helper`, the shot may be of another app: rerun on a different port. Only when a server you were given is already running, drop the helper and run `node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs .proofs/visual-qa/pages.json --out .proofs/visual-qa/before` alone.
+  Each address is `base` and `path` joined with exactly one slash. A page that answers HTTP 400 or above, or renders an error page ("Not Found"), is a failed shot, not a finding: the capture lists it as FAILED, leaves it out of the evidence and exits 6; fix the `path` or the server and run it again. A malformed pages file stops with one line naming what is wrong (exit 1).
   Three viewports (1440, 1280, 390 CSS px; `--sizes 390,1280` picks some, and a plain width such as `1040` adds a desktop viewport just above a breakpoint), a first-screen and a full-page PNG each,
   named `<page>-<state>-<width>[-full].png`, plus `measures.json`, `summary.md` and a printed table.
   The 390 view is a true 390 px viewport, and the overflow is measured three ways. A page wider than the phone

@@ -484,5 +484,25 @@ class AdHocShellAndOpen(unittest.TestCase):
         self.assertIn("helpers' own checks", text)
 
 
+
+PORT_SENTENCE = ("The port flag belongs to the dev server: `--port` for Vite (SvelteKit, Vue, Astro), "
+                 "Nuxt and Angular, `-p` or `--port` for Next.js")
+
+
+class PortFlag(unittest.TestCase):
+    """SvelteKit run 1: two sessions copied `npm run dev -- -p 3311` and Vite rejected -p."""
+
+    def test_no_skill_passes_p_through_npm(self):
+        for path in sorted((REPO / "skills").glob("*/SKILL.md")) + sorted((REPO / "reference").glob("*.md")):
+            with self.subTest(path=path.name):
+                self.assertNotIn("-- -p ", path.read_text())
+
+    def test_every_capture_skill_names_the_flag_per_tool(self):
+        for skill in ("design-review", "visual-qa", "pr-qa"):
+            with self.subTest(skill=skill):
+                text = (REPO / "skills" / skill / "SKILL.md").read_text()
+                self.assertIn('--start "npm run dev -- --port 3', text)
+                self.assertIn(PORT_SENTENCE, text)
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,6 @@
 ---
 name: pr-qa
-version: 1.9.3
+version: 1.9.4
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/skills/pr-qa/scripts/pr_qa_page.py *)
@@ -67,15 +67,15 @@ git fetch origin
 gh pr list --state open --json number,title
 git worktree add --detach .proofs/base origin/<base>
 npm ci --prefix .proofs/base/<app-dir>
-python3 ${CLAUDE_PLUGIN_ROOT}/shared/capture/with_server.py --cwd .proofs/base/<app-dir> --start "npm run dev -- -p 3411" --url http://localhost:3411/ -- node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs .proofs/capture/pages.json --out .proofs/evidence/pr-<n> --sizes 390,1440 --evidence before
+python3 ${CLAUDE_PLUGIN_ROOT}/shared/capture/with_server.py --cwd .proofs/base/<app-dir> --start "npm run dev -- --port 3411" --url http://localhost:3411/ -- node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs .proofs/capture/pages.json --out .proofs/evidence/pr-<n> --sizes 390,1440 --evidence before
 git worktree remove --force .proofs/base
 gh pr checkout <n>
-python3 ${CLAUDE_PLUGIN_ROOT}/shared/capture/with_server.py --start "npm run dev -- -p 3411" --url http://localhost:3411/ -- node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs .proofs/capture/pages.json --out .proofs/evidence/pr-<n> --sizes 390,1440 --evidence after
+python3 ${CLAUDE_PLUGIN_ROOT}/shared/capture/with_server.py --start "npm run dev -- --port 3411" --url http://localhost:3411/ -- node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs .proofs/capture/pages.json --out .proofs/evidence/pr-<n> --sizes 390,1440 --evidence after
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/pr-qa/scripts/pr_qa_findings.py --dir .proofs/evidence/pr-<n> --out .proofs/evidence/pr-<n>/findings.json
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/pr-qa/scripts/pr_qa_page.py --meta .proofs/evidence/meta.json --out .proofs/pages/pr-qa.html --session "<session name>"
 ```
 
-4. **Write `.proofs/evidence/meta.json`** with the Write tool before the last line (shape: see the helper scripts below). List every other open PR from `gh pr list` that is not on the page in a top-level `skipped`: `{"prs": [...entries...], "skipped": [{"number": 2, "reason": "not requested"}]}` (a bare list of entries still works and means none skipped). If you were asked for one PR, still list the others in `skipped` with the reason; the page shows them as one line, `Other open PRs: #2 (not requested)`, under the verdict table. Then build the page with that last line (it prints the page's size) and run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pr-qa/scripts/pr_qa_page.py --smoke .proofs/pages/pr-qa.html` before you report: it opens the page in a real browser and checks for page or console errors, images that did not load, decision radios that will not check and an empty copy button, prints one JSON line (`ok`, `problems`) and exits 0 only when ok. Exit 2 means Playwright is missing: say so instead of calling the page checked. Fix every problem it names and rebuild. **The page is built in this turn, before any extra checks.** Open it with one Bash call, exactly `open .proofs/pages/pr-qa.html`; if that is refused, do not retry: print the path and the command. Before and after share one `--out` folder: every file is prefixed `before-` or `after-`, and any width besides 1440 and 390 (a breakpoint width from step 2, or 1280) is labeled with its width on the page, "(1040)", so it reads differently from 1440.
+4. **Write `.proofs/evidence/meta.json`** with the Write tool before the last line (shape: see the helper scripts below). List every other open PR from `gh pr list` that is not on the page in a top-level `skipped`: `{"prs": [...entries...], "skipped": [{"number": 2, "reason": "not requested"}]}` (a bare list of entries still works and means none skipped). If you were asked for one PR, still list the others in `skipped` with the reason; the page shows them as one line, `Other open PRs: #2 (not requested)`, under the verdict table. Give each entry `"dir": "pr-<n>"` (relative to `meta.json`'s folder) or `.proofs/evidence/pr-<n>`; either resolves. Then build the page with that last line. It prints the page's size, then one line per PR in the page's own words (`PR #<n> (title): Look first; recommended: Merge, hold the push`), and a `warning:` line for every screenshot the page should carry and does not (an evidence folder that did not resolve, a pair with no file). Fix each warning and rebuild; for a shot that truly cannot exist (a page the PR adds has no before), add `"missing_shots": [{"page": "<slug>", "size": "phone", "reason": "<why>"}]` to that entry. **In chat, quote each PR's line word for word** for its verdict and recommendation: never a verdict or a recommendation the page does not show. Then run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pr-qa/scripts/pr_qa_page.py --smoke .proofs/pages/pr-qa.html` before you report: it opens the page in a real browser and checks for screenshot gaps the build warned about, page or console errors, images that did not load, decision radios that will not check and an empty copy button, prints one JSON line (`ok`, `problems`) and exits 0 only when ok. Exit 2 means Playwright is missing: say so instead of calling the page checked. Fix every problem it names and rebuild. **The page is built in this turn, before any extra checks.** Open it with one Bash call, exactly `open .proofs/pages/pr-qa.html`; if that is refused, do not retry: print the path and the command. Before and after share one `--out` folder: every file is prefixed `before-` or `after-`, and any width besides 1440 and 390 (a breakpoint width from step 2, or 1280) is labeled with its width on the page, "(1040)", so it reads differently from 1440.
 5. **Only then, polish if time allows:** menu taps (an `actions` entry in pages.json), more states, the PR's own tests (in `claude -p`, only if their command is pre-approved; otherwise say on the page they were not run). A page wider than the phone screen is a finding, not a failed capture: the summary's `sideways scroll` row says, for example, `17px, zoomed` (the phone lays the page out at 407 px and zooms out to fit), and the other phone numbers are still measured, so compare before and after as usual. The capture's `innerWidth` guard (exit 3, "not trustworthy") now fires only when the browser ignored the viewport itself. A phone measurement it rejected, or any phone view you could not take because Playwright is missing, goes on the page as "not measured" (the guard aborts the whole run, so rerun that line with `--sizes 1440`), never as a pass, and never gets a Chrome `--window-size` substitute.
 
 Do not ask the user which capture method to use. Use the one above; if it fails, use the fallback in design-review step 2 and say on the page which one ran. The capture helper adds `.proofs/` to `.git/info/exclude` the first time it runs; you do not need to. `git status` may list `.proofs/` until then; ignore it.
@@ -170,13 +170,14 @@ no token, no network, or no open PR, so it can never keep a session from startin
    capture and always stops the server, so nothing dies between turns.
    - **Find the start command** in the project's `CLAUDE.md`, README, `package.json`
      scripts, `Procfile` or `bin/dev`; if none gives one, **ask the user**.
+     The port flag belongs to the dev server: `--port` for Vite (SvelteKit, Vue, Astro), Nuxt and Angular, `-p` or `--port` for Next.js; the lines above use `--port`, so check `package.json`'s `dev` script before you copy them (`vite dev` means `--port`).
    - **Pick free high ports.** A server already answering at `--url` is treated as
      ready and left running, so a reused port would be captured by mistake.
    - **The capture command is the default path's `capture.cjs` line**, run through
      `with_server.py --cwd <base-dir>` for the before run, and the same line with no `--cwd`
      for the after run. Exit codes: 3 the server never answered (read `<base-dir>/.proofs/server.log`
      for the before run, `.proofs/server.log` for the after run), 4 it exited early, 5
-     another run holds the lock; anything else is the capture's own. 3 is also `capture.cjs`'s untrusted-width exit and 2 with "Playwright not found" is the missing install; the stderr line says which. Exit 0 does not
+     another run holds the lock; anything else is the capture's own. 3 is also `capture.cjs`'s untrusted-width exit and 2 with "Playwright not found" is the missing install; the stderr line says which. **6 means a page answered HTTP 400 or above, or rendered an error page ("Not Found")**: that shot is not the page, so it is left out of the evidence and the findings can never call the PR clean. Fix the pages file's `path` or the server and capture that side again; never build the page on it. Exit 0 does not
      prove the page is right: read each PNG and confirm it shows the route you meant.
      Never start a server yourself with `run_in_background` or `&`: in `claude -p` the
      turn then never ends.
@@ -224,6 +225,7 @@ why, because an omission that looks like coverage is worse than a gap.
 | `recommendation` | One of `merge-and-push`, `merge-hold-push`, `send-back`, `wait` |
 | `rise_explained` | Only when a merge is recommended over a finding that rose: one sentence naming the elements and why they are acceptable. Renders under "Why merge anyway" |
 | `human_findings` | What Step 5 found that the machine could not |
+| `missing_shots` | Only for a screenshot that cannot exist: `[{"page": "<slug>", "size": "phone", "reason": "<why>"}]`. Without it, a pair with no file is a gap that fails `--smoke` |
 
 `python3 ${CLAUDE_PLUGIN_ROOT}/skills/pr-qa/scripts/pr_qa_page.py --meta <dir>/meta.json --out <file>.html` renders
 that skeleton into the Artifact described below (`--project` and `--repo` set the

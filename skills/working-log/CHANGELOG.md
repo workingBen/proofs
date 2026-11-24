@@ -1,5 +1,6 @@
 # Changelog
 
+- **1.12.4** (2026-11-24): Ticking "Read this" on a log entry no longer leaves the page at an unrelated spot: the next unread entry's top lands just under the sticky bars (the first unread one above when none is left below; nothing moves when nothing unread is left), with a short smooth scroll or an instant one under reduced motion. Unticking keeps the returning entry where it was.
 - **1.12.3** (2026-11-23): Gives the exact build line, `review_page.py .proofs/session.json --out .proofs/pages/session.html`: a page built at `.proofs/session.html` was outside `.proofs/pages/`, so the `open` allow rule missed it. A session or log spec built with no `--out` now goes to `.proofs/pages/<spec name>.html`. A spec's asset path that is not found next to the spec is now tried from the working directory, and the error names both paths.
 - **1.12.2** (2026-11-23): House rule 2: never `ls` or Read `~/.cache/proofs-playwright` to see whether Playwright is installed (outside the project, so the call is refused); the capture and `--smoke` report a missing install themselves.
 

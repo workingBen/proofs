@@ -17,6 +17,7 @@ needed for --check and --smoke, Playwright only for --smoke.
 import argparse
 import base64
 import html
+import hashlib
 import json
 import mimetypes
 import os
@@ -29,6 +30,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ENGINE = HERE / "engine.js"
+ANSWERS = HERE / "answers.cjs"
 STYLE = HERE / "style.css"
 SMOKE = HERE / "smoke.cjs"
 
@@ -760,6 +762,10 @@ def page(spec):
     preamble, chunks, js["sections"] = render_sections(spec)
     js["mode"] = mode
     proj = spec.get("project") or {}
+    # Stamped on each answer saved to the page's database, so a reader of the rows can
+    # tell which build of the page an answer was given on.
+    js["page_version"] = spec.get("version") or hashlib.sha1(
+        json.dumps(js, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:10]
     js["key"] = spec.get("storage_key") or "proofs:%s:%s" % (mode, slug("%s %s %s" % (
         proj.get("name", ""), proj.get("session", proj.get("stream", "")), spec["title"])))
     mark = brand(skill_name(spec, js["sections"]))
@@ -1254,6 +1260,18 @@ def smoke(path, playwright=None):
     return not res.get("problems"), res
 
 
+def answers(page_path, rows):
+    """Print a page's answers from its database rows, as its Copy export. Returns the exit code."""
+    node = shutil.which("node")
+    if not node:
+        print("node is not installed: use the page's Copy button instead", file=sys.stderr)
+        return 2
+    r = subprocess.run([node, str(ANSWERS), str(page_path), str(rows)], capture_output=True, text=True)
+    sys.stdout.write(r.stdout)
+    sys.stderr.write(r.stderr)
+    return r.returncode
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("spec", nargs="?", help="JSON spec to build")
@@ -1262,7 +1280,14 @@ def main(argv=None):
     ap.add_argument("--check", metavar="PAGE", help="check a built page")
     ap.add_argument("--smoke", metavar="PAGE", help="click through a built page in headless Chromium")
     ap.add_argument("--playwright", help="folder of an installed playwright package")
+    ap.add_argument("--answers", metavar="PAGE", help="print PAGE's answers from its database rows (--rows) "
+                    "as the same text its Copy button makes")
+    ap.add_argument("--rows", metavar="PATH", help="with --answers: the out_dir ArtifactData list wrote, or a JSON file")
     a = ap.parse_args(argv)
+    if a.answers:
+        if not a.rows:
+            ap.error("--answers needs --rows (the folder ArtifactData list wrote with out_dir)")
+        return answers(a.answers, a.rows)
     if a.check or a.smoke:
         target = a.check or a.smoke
         errs = check(target)

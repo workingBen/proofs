@@ -170,14 +170,114 @@
 
   function exportText(S, st, now) { return FRAME[S.mode](S, st || {}, now || new Date()); }
 
-  if (typeof module !== "undefined" && module.exports) module.exports = { exportText: exportText };
+  /* ------------------------------------------------- answers in the page's database
+     On a published claude.ai page with the db capability, each card's answer is one
+     document in the "proofs-answers" collection, so Claude can read the answers with
+     ArtifactData instead of waiting for a Copy and paste. These two functions turn page
+     state into documents and back; both are pure, so node tests and answers.cjs share
+     them with the page. */
+  var DB_COLLECTION = "proofs-answers";
+  function hash(s) {
+    var h = 5381;
+    for (var i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
+    return h.toString(36);
+  }
+  // A document id is one path segment: letters, digits and _ - . ~ : @ + only.
+  function docIdFor(secId, itemId) {
+    var raw = secId + "." + itemId;
+    var safe = raw.replace(/[^A-Za-z0-9_\-.~:@+]/g, "_").slice(0, 150);
+    return safe === raw ? safe : safe + "~" + hash(raw);
+  }
+  function hasContent(b) {
+    var a = b.answer;
+    return !!((a && (typeof a !== "object" || Object.keys(a).length)) || b.note || b.read || b.variant || b.works_as_designed);
+  }
+  // { docId: body } for every card that holds anything. Bodies carry no timestamp.
+  function answerDocs(S, st) {
+    var out = {};
+    function put(sec, id, kind, fields) {
+      var b = { id: id, section: sec ? sec.id : "", kind: kind, answer: null, note: "", read: false };
+      Object.keys(fields).forEach(function (k) { b[k] = fields[k]; });
+      if (hasContent(b)) out[sec ? docIdFor(sec.id, id) : "_page.extra"] = b;
+    }
+    S.sections.forEach(function (sec) {
+      var ss = ((st.sec || {})[sec.id]) || {}, ans = ss.ans || {}, notes = ss.notes || {}, read = ss.read || {};
+      sec.items.forEach(function (it) {
+        if (sec.kind === "review") {
+          var r = (ss.items || {})[it.id] || {};
+          put(sec, it.id, "review", { answer: r.s || null, variant: r.v || null, works_as_designed: !!r.w,
+                                     note: r.c || "", read: !!r.r });
+        } else if (sec.kind === "questions" || sec.kind === "qa") {
+          var id = it.qid || it.qaid;
+          put(sec, id, sec.kind === "qa" ? "qa" : "question", { answer: ans[id] || null, note: notes[id] || "" });
+        } else if (sec.kind === "log") {
+          var groups = {};
+          (it.groups || []).forEach(function (g) { if (ans[it.id + "::" + g]) groups[g] = ans[it.id + "::" + g]; });
+          put(sec, it.id, "log", { answer: groups, note: notes[it.id] || "", read: !!read[it.id] });
+        }
+      });
+    });
+    if (st.extra) put(null, "extra", "extra", { note: st.extra });
+    return out;
+  }
+  // Write documents (as answerDocs makes them, plus any metadata) back into page state.
+  // Documents for cards no longer on the page are ignored. Mutates and returns st.
+  function applyAnswerDocs(S, st, docs) {
+    st.sec = st.sec || {};
+    (docs || []).forEach(function (d) {
+      if (!d || typeof d !== "object") return;
+      if (d.kind === "extra") { st.extra = d.note || ""; return; }
+      var sec = S.sections.filter(function (x) { return x.id === d.section; })[0];
+      if (!sec) return;
+      var it = sec.items.filter(function (i) { return (i.id || i.qid || i.qaid) === d.id; })[0];
+      if (!it) return;
+      var ss = secState(st, sec);
+      if (sec.kind === "review") {
+        ss.items = ss.items || {};
+        var r = ss.items[d.id] = ss.items[d.id] || {};
+        r.s = d.answer || null; r.v = d.variant || undefined; r.w = !!d.works_as_designed;
+        r.c = d.note || ""; r.r = !!d.read;
+      } else if (sec.kind === "questions" || sec.kind === "qa") {
+        ss.ans = ss.ans || {}; ss.notes = ss.notes || {};
+        if (d.answer) ss.ans[d.id] = d.answer; else delete ss.ans[d.id];
+        ss.notes[d.id] = d.note || "";
+      } else if (sec.kind === "log") {
+        ss.ans = ss.ans || {}; ss.notes = ss.notes || {}; ss.read = ss.read || {};
+        var a = d.answer && typeof d.answer === "object" ? d.answer : {};
+        (it.groups || []).forEach(function (g) {
+          if (a[g]) ss.ans[d.id + "::" + g] = a[g]; else delete ss.ans[d.id + "::" + g];
+        });
+        ss.notes[d.id] = d.note || "";
+        ss.read[d.id] = !!d.read;
+      }
+    });
+    return st;
+  }
+  // Key-order-independent JSON, to compare a stored body with the page's.
+  function canon(v) {
+    if (v === null || typeof v !== "object") return JSON.stringify(v === undefined ? null : v);
+    if (Array.isArray(v)) return "[" + v.map(canon).join(",") + "]";
+    return "{" + Object.keys(v).sort().map(function (k) { return JSON.stringify(k) + ":" + canon(v[k]); }).join(",") + "}";
+  }
+  var META = ["updated_at", "page_version", "page"];
+  function bodyOf(d) {
+    var b = {};
+    Object.keys(d || {}).forEach(function (k) { if (META.indexOf(k) < 0) b[k] = d[k]; });
+    return b;
+  }
+
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports = { exportText: exportText, answerDocs: answerDocs, applyAnswerDocs: applyAnswerDocs,
+                       docIdFor: docIdFor, DB_COLLECTION: DB_COLLECTION };
+  }
   if (typeof document === "undefined") return;
 
   /* ------------------------------------------------- the page */
   var S = JSON.parse(document.getElementById("rp-spec").textContent);
   var st = {};
   try { st = JSON.parse(localStorage.getItem(S.key) || "{}") || {}; } catch (e) { st = {}; }
-  function save() { try { localStorage.setItem(S.key, JSON.stringify(st)); } catch (e) { /* private window */ } }
+  function store() { try { localStorage.setItem(S.key, JSON.stringify(st)); } catch (e) { /* private window */ } }
+  function save() { store(); dbSchedule(); }
   function all(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
   function one(sel, root) { return (root || document).querySelector(sel); }
   function rootOf(sec) { return one('[data-section="' + sec.id + '"]'); }
@@ -309,6 +409,7 @@
         if (read) { read.checked = !!r.r; card.classList.toggle("rp-is-read", !!r.r); }
       }
       function paint() { all(".rp-item", root).forEach(paintItem); tally(); }
+      root.__rpRefresh = paint;
       all(".rp-item", root).forEach(function (card) {
         var id = card.dataset.id;
         all(".rp-btn", card).forEach(function (b) {
@@ -353,9 +454,13 @@
         if (head) head.hidden = !anyRead;
         tally();
       }
-      all("input[type=radio]", root).forEach(function (r) { r.checked = ss.ans[r.name] === r.value; });
-      all("[data-note]", root).forEach(function (t) { t.value = ss.notes[t.dataset.note] || ""; });
-      all("[data-tick]", root).forEach(function (t) { t.checked = !!ss.read[t.dataset.tick]; });
+      function restore() {
+        all("input[type=radio]", root).forEach(function (r) { r.checked = ss.ans[r.name] === r.value; });
+        all("[data-note]", root).forEach(function (t) { t.value = ss.notes[t.dataset.note] || ""; });
+        all("[data-tick]", root).forEach(function (t) { t.checked = !!ss.read[t.dataset.tick]; });
+      }
+      restore();
+      root.__rpRefresh = function () { restore(); paint(); };
       root.addEventListener("change", function (e) {
         var t = e.target;
         if (t.type === "radio") { ss.ans[t.name] = t.value; save(); paint(); return; }
@@ -431,6 +536,7 @@
       if ((byId[id] || {}).text) paint();
     });
     root.__rpReset = function () { ss.ans = {}; ss.notes = {}; restore(); paint(); };
+    root.__rpRefresh = function () { restore(); paint(); };
     restore(); paint();
   }
 
@@ -438,6 +544,97 @@
     var root = rootOf(sec);
     if (root) SETUP[sec.kind](sec, root, secState(st, sec));
   });
+
+  /* ------------------------------------------------- the page's database, when present
+     Without the runtime (a local file, an older contract, a signed-out viewer) none of
+     this runs and the page works from localStorage alone, as before. Copy never waits
+     on it. */
+  var DB_DEBOUNCE_MS = 800, DB_LOAD_TIMEOUT_MS = 10000;
+  var dbs = { db: null, base: {}, timer: null, chain: {}, off: false };
+  function dbState(v) { document.body.setAttribute("data-answers-db", v); }
+  function dbSchedule() {
+    if (!dbs.db || dbs.off) return;
+    clearTimeout(dbs.timer);
+    dbs.timer = setTimeout(dbFlush, DB_DEBOUNCE_MS);
+  }
+  function cleared(b) {
+    return { id: b.id, section: b.section, kind: b.kind, answer: b.kind === "log" ? {} : null, note: "", read: false,
+             variant: b.kind === "review" ? null : undefined, works_as_designed: b.kind === "review" ? false : undefined };
+  }
+  function dbFlush() {
+    if (!dbs.db || dbs.off) return;
+    var cur = answerDocs(S, st);
+    Object.keys(cur).concat(Object.keys(dbs.base)).forEach(function (id) {
+      var body = cur[id] || cleared(dbs.base[id]);
+      if (dbs.base[id] && canon(bodyOf(body)) === canon(dbs.base[id])) return;
+      dbWrite(id, JSON.parse(JSON.stringify(body)));
+    });
+  }
+  function dbWrite(id, body, retried) {
+    var now = new Date().toISOString();
+    var full = bodyOf(body);
+    full.updated_at = now; full.page_version = S.page_version || null; full.page = S.key;
+    dbs.base[id] = bodyOf(body);
+    st.at = st.at || {}; st.at[id] = now; store();
+    // One write at a time per document.
+    dbs.chain[id] = (dbs.chain[id] || Promise.resolve()).then(function () {
+      return dbs.db.collection(DB_COLLECTION).doc(id).set(full);
+    }).then(function () { dbState("on"); }, function (e) {
+      delete dbs.base[id];
+      var code = e && e.code;
+      if (code === "unavailable" && !retried) {
+        setTimeout(function () { if (!dbs.base[id]) dbWrite(id, body, true); }, 1000 + Math.random() * 1000);
+      } else if (code !== "unavailable" && code !== "resource_exhausted") {
+        dbs.off = true;  // not allowed to write here (or gone): stay on localStorage and Copy
+        dbState("off");
+      } else {
+        dbState("error");
+      }
+    });
+  }
+  function refreshAll() {
+    all("[data-section]").forEach(function (r) { if (r.__rpRefresh) r.__rpRefresh(); });
+    var ex = one("[data-extra]");
+    if (ex) ex.value = st.extra || "";
+    tally();
+  }
+  function dbLoad(db) {
+    var done = false;
+    var timer = setTimeout(function () { done = true; dbState("unreachable"); }, DB_LOAD_TIMEOUT_MS);
+    db.collection(DB_COLLECTION).get().then(function (snap) {
+      if (done) return;
+      clearTimeout(timer);
+      dbs.db = db;
+      var at = st.at || {}, remote = [];
+      (snap.docs || []).forEach(function (d) {
+        if (!d.exists) return;
+        var body = d.data() || {};
+        // Only cards still on this page take part, so a republish never clears old rows.
+        var sec = S.sections.filter(function (x) { return x.id === body.section; })[0];
+        if (body.kind !== "extra" && !(sec && sec.items.some(function (i) { return (i.id || i.qid || i.qaid) === body.id; }))) return;
+        dbs.base[d.id] = bodyOf(body);
+        // The newer updated_at wins: a local change the store never got is pushed below.
+        if (!(at[d.id] && at[d.id] > (body.updated_at || ""))) {
+          remote.push(body);
+          st.at = st.at || {}; st.at[d.id] = body.updated_at || "";
+        }
+      });
+      applyAnswerDocs(S, st, remote);
+      store();
+      refreshAll();
+      dbState("on");
+      dbFlush();
+    }, function () { clearTimeout(timer); dbState("off"); });
+  }
+  function dbConnect() {
+    var c = window.claude;
+    if (!c || typeof c.use !== "function") return false;
+    Promise.resolve().then(function () { return c.use("db"); }).then(function (db) {
+      if (db) dbLoad(db); else dbState("off");
+    }, function () { dbState("off"); });
+    return true;
+  }
+  if (!dbConnect()) window.addEventListener("load", dbConnect, { once: true });
 
   /* ------------------------------------------------- page-level controls */
   all("[data-filter]").forEach(function (b) {

@@ -151,6 +151,28 @@ class ExportText(unittest.TestCase):
         text = self.export_spec(spec, {"items": {"1": {"s": "accept"}}})
         self.assertIn("1. Article card layout — ACCEPT (Use Selected: Variant A", text)
 
+    def test_capture_findings_go_on_the_page_as_their_own_section(self):
+        # Astro run 2: the capture's findings were offered only in chat. design-review now puts
+        # them in a second review section, "Found by the capture", one item each, after the
+        # requested items; the reader accepts or denies each, and the export numbers run on.
+        spec = json.loads((EXAMPLES / "design-review.json").read_text())
+        spec.pop("assets")
+        spec["sections"][0]["items"][0].pop("body_html")
+        spec["sections"].append({"title": "Found by the capture", "items": [
+            {"label": "Steps column out of line at 1440", "category": "capture", "recommended": True,
+             "body_html": "<p>off-center columns: edge at 232 px, the columns around it at 104 px</p>",
+             "reason_html": "<p>Give it its neighbors' max-width.</p>"},
+            {"label": "Quick-start command breaks mid-word at 390", "category": "capture",
+             "body_html": "<p>mid-word breaks: tem|plate</p>"}]})
+        page = Path(self._tmp.name) / "c.json"
+        page.write_text(json.dumps(spec))
+        html = review_page.page(review_page.load_spec(page))
+        self.assertIn("Found by the capture", html)
+        self.assertLess(html.index("Article card layout"), html.index("Found by the capture"))
+        text = self.export_spec(spec, {"items": {"3": {"s": "accept"}, "4": {"s": "deny"}}})
+        self.assertIn("3. Steps column out of line at 1440 — ACCEPT (Use Proposed)", text)
+        self.assertIn("4. Quick-start command breaks mid-word at 390 — DENY", text)
+
     def _recommend_b(self, **item):
         # The example's first item, three variants, B recommended (no asset: the spec moves).
         spec = json.loads((EXAMPLES / "design-review.json").read_text())

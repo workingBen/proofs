@@ -28,7 +28,7 @@ SEVERITY_RANK = {"blocker": 0, "warning": 1, "good": 2}
 # is how an unreviewed PR goes quiet, which is how an unreviewed PR sits for days.
 VERDICT_RANK = {"hold": 0, "unknown": 1, "look": 2, "clean": 3}
 
-ABSENT = {"present": False, "verdict": "unknown", "findings": [],
+ABSENT = {"present": False, "verdict": "unknown", "findings": [], "already_on_main": [],
           "before": [], "after": [], "counts": {}, "unmapped_changes": [],
           "pages_covered": [], "plan": {}}
 
@@ -60,6 +60,8 @@ def load_evidence(directory):
         "measured": findings.get("measured", True),
         "note": findings.get("note", ""),
         "findings": findings.get("findings", []),
+        # Flaws on both sides (already on the base branch): listed apart, never in the verdict.
+        "already_on_main": findings.get("already_on_main", []),
         "counts": findings.get("counts", {}),
         "unmapped_changes": findings.get("unmapped_changes", []),
         "pages_covered": findings.get("pages_covered", []),
@@ -300,6 +302,7 @@ def render(prs, dropped, project, repo, session=None, skipped=None, gaps=None):
                            else "",
             "findings": merge_findings(pr.get("evidence") or {},
                                        pr.get("human_findings") or []),
+            "alreadyOnMain": (pr.get("evidence") or {}).get("already_on_main") or [],
             "pairs": pr.get("pairs", []),
         } for pr in order_prs(prs)],
     }
@@ -715,6 +718,19 @@ PAGE_TEMPLATE = """<!doctype html>
                        letter-spacing: .04em; font-size: .85rem; background: var(--surface-alt); }
   .verdict-table tr:last-child td { border-bottom: none; }
   .verdict-table td.num { font-variant-numeric: tabular-nums; }
+  /* Astro run 2: at 390 the five columns squeezed the PR title to one word per line. On a
+     phone each PR is a stacked block, one labeled line per column, inside its own box. */
+  @media (max-width: 600px) {
+    table.verdict-table { min-width: 0; }
+    .verdict-table, .verdict-table tbody, .verdict-table tr, .verdict-table td { display: block; }
+    .verdict-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden;
+                           clip-path: inset(50%); white-space: nowrap; }
+    .verdict-table tr { padding: .6rem 0; border-bottom: 1px solid var(--border); }
+    .verdict-table tr:last-child { border-bottom: none; }
+    .verdict-table td { border-bottom: none; padding: .3rem 1.1rem; }
+    .verdict-table td[data-label]::before { content: attr(data-label) ": "; color: var(--muted);
+      font-weight: 700; font-size: .85rem; text-transform: uppercase; letter-spacing: .04em; }
+  }
 
   .chip { display: inline-flex; align-items: center; padding: .3rem .75rem; border-radius: 999px;
           font-weight: 700; font-size: .95rem; color: #fff; white-space: nowrap; }
@@ -728,6 +744,15 @@ PAGE_TEMPLATE = """<!doctype html>
   .pr-meta { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; color: var(--muted); font-size: 1rem; }
   .pr-meta code { background: var(--surface-alt); padding: .15rem .45rem; border-radius: 6px; }
   .narrative { margin: 0; color: var(--ink); }
+  /* A long URL, path or branch name wraps instead of widening the page (Astro run 2: a URL in a
+     finding pushed the page 3 px past a 390 screen). Flex items also need min-width: 0. */
+  .pr-card > *, .finding-body, .on-main li { min-width: 0; }
+  .pr-head h2, .pr-meta, .narrative, .notice, .finding-body, .on-main, .verdict-table td {
+    overflow-wrap: anywhere; }
+  .on-main { border: 1px dashed var(--border); border-radius: 8px; padding: 1rem 1.1rem; }
+  .on-main h3 { margin: 0 0 .3rem; }
+  .on-main p { margin: 0 0 .6rem; color: var(--muted); }
+  .on-main ul { margin: 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: .4rem; }
 
   .notice { background: var(--surface-alt); border: 1px solid var(--border); border-radius: 8px;
             padding: .9rem 1.1rem; font-size: 1rem; }
@@ -1050,6 +1075,18 @@ const DATA = __PAYLOAD__;
         text: "Machine check: " + pr.machineNote }));
     }
     card.appendChild(buildFindings(pr.findings));
+    if (pr.alreadyOnMain && pr.alreadyOnMain.length) {
+      var onMain = el("div", { class: "on-main" },
+        el("h3", { text: "Already on main (not caused by this PR)" }),
+        el("p", { text: "The capture found these on the base branch too, before this PR. They are listed " +
+          "so you see them; they do not count toward the verdict." }));
+      var items = el("ul");
+      pr.alreadyOnMain.forEach(function (note) {
+        items.appendChild(el("li", {}, el("strong", { text: note.title || "" }), " ", note.detail || ""));
+      });
+      onMain.appendChild(items);
+      card.appendChild(onMain);
+    }
     card.appendChild(el("h3", { text: "Your decision" }));
     card.appendChild(buildDecisions(pr));
     return card;
@@ -1066,11 +1103,11 @@ const DATA = __PAYLOAD__;
       tbody.appendChild(el("tr", {},
         el("td", {}, el("a", { href: "#pr-" + pr.number,
           text: "#" + pr.number + " " + pr.title })),
-        el("td", {}, el("span", { class: "chip small", style: "background:" + pr.color,
+        el("td", { "data-label": "Verdict" }, el("span", { class: "chip small", style: "background:" + pr.color,
           text: pr.chip })),
-        el("td", { class: "num", text: pr.cost || "--" }),
-        el("td", { text: pr.tests || "--" }),
-        el("td", { text: humanizeDecision(pr.recommendation) })));
+        el("td", { class: "num", "data-label": "Cost", text: pr.cost || "--" }),
+        el("td", { "data-label": "Tests", text: pr.tests || "--" }),
+        el("td", { "data-label": "Recommendation", text: humanizeDecision(pr.recommendation) })));
     });
     table.appendChild(tbody);
     wrap.appendChild(table);

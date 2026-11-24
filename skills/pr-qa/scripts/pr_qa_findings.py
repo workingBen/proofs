@@ -11,6 +11,9 @@ an app already overflow slightly at some width; a QA that lists those buries
 the one the PR caused. A finding is raised when the after is worse than the
 before for the same page at the same size.
 
+A flaw on both sides is not dropped: it goes under "already_on_main" (severity
+"note"), which the page lists apart and never counts toward the verdict.
+
     python3 scripts/pr_qa_findings.py --dir work/pr-7 --out work/pr-7/findings.json
 
 With --out the JSON goes to that file and stdout carries a one-line summary;
@@ -182,6 +185,21 @@ def compare(before, after):
                 f"columns around it: {name_items([off_column_label(o) for o in fresh_cols])}.",
                 {"columns": fresh_cols[:4]}))
 
+        fresh_mid = fresh_by_key(old, shot, "midWord", lambda w: w)
+        if fresh_mid:
+            findings.append(finding(
+                "warning", f"{where}: a word now breaks mid-word",
+                f"Split across two lines with no hyphen: {name_items(fresh_mid)}.",
+                {"words": fresh_mid[:4]}))
+
+        fresh_untitled = fresh_by_key(old, shot, "untitled", untitled_key)
+        if fresh_untitled:
+            findings.append(finding(
+                "warning", f"{where}: a new section without a heading",
+                "A page-wide section with content and no h1-h6 inside, so a reader scanning by headings "
+                f"skips it: {name_items([untitled_label(u) for u in fresh_untitled])}.",
+                {"sections": fresh_untitled[:4]}))
+
         fresh_errors = [e for e in shot.get("errors") or []
                         if e not in ((old or {}).get("errors") or [])]
         if fresh_errors:
@@ -309,6 +327,78 @@ def fresh_off_columns(old, shot):
                           lambda o: (o.get("kind"), o.get("text"), o.get("tag")))
 
 
+def fresh_by_key(old, shot, field, keyfn):
+    """Items of `field` the after shot has beyond the before's. An older capture without
+    the field is "not measured", not "zero", so nothing is fresh against it."""
+    if old is not None and field not in old:
+        return []
+    return fresh_by_count((old or {}).get(field) or [], shot.get(field) or [], keyfn)
+
+
+def untitled_key(u):
+    return (u.get("tag"), u.get("id"), u.get("text"))
+
+
+def untitled_label(u):
+    ident = f' (#{u.get("id")})' if u.get("id") else ""
+    return f'"{u.get("text") or u.get("tag")}"{ident}'
+
+
+def shared_by_count(old_items, new_items, keyfn):
+    """Items of new_items that old_items had too (a multiset intersection)."""
+    budget = Counter(keyfn(t) for t in old_items)
+    shared = []
+    for item in new_items:
+        k = keyfn(item)
+        if budget[k] > 0:
+            budget[k] -= 1
+            shared.append(item)
+    return shared
+
+
+# What already_on_main() looks at: (field, title, label for one item, key for one item).
+ON_MAIN = (
+    ("midWord", "a word breaks mid-word", lambda w: f'"{w}"', lambda w: w),
+    ("offCenter", "a row is off-center", off_center_label, lambda o: (o.get("text"), o.get("tag"))),
+    ("offColumns", "a section column is off-center or out of line", off_column_label,
+     lambda o: (o.get("kind"), o.get("text"), o.get("tag"))),
+    ("untitled", "a section without a heading", untitled_label, untitled_key),
+    ("smallTargets", "small tap targets", target_label, lambda t: (t.get("text"), t.get("tag"))),
+    ("smallText", "text below the size floor", text_label, lambda t: t.get("text")),
+)
+
+
+def already_on_main(before, after):
+    """Flaws the capture found on both sides: already on the base branch, so not this PR's.
+
+    Astro run 2: the off-center steps column and the "tem|plate" break were caught, and the
+    page left them out because they were on main too, so a reader of the page never saw them.
+    They go in their own list, severity "note", and never count toward the verdict.
+    """
+    olds = {key(s): s for s in before}
+    notes = []
+    for shot in after:
+        old = olds.get(key(shot))
+        if old is None or shot.get("redirected") or not is_measured(shot) or not is_measured(old):
+            continue
+        where = where_of(shot)
+        both = min(shot.get("overflow", 0), old.get("overflow", 0))
+        if both > OVERFLOW_NOISE_PX:
+            notes.append(finding(
+                "note", f"{where}: the page scrolls sideways",
+                f'{old.get("overflow")}px over before this PR and {shot.get("overflow")}px after, '
+                f'on a {shot.get("clientWidth")}px viewport.', {"before": old.get("overflow"),
+                                                               "after": shot.get("overflow")}))
+        for field, title, labelfn, keyfn in ON_MAIN:
+            if field not in old or field not in shot:
+                continue
+            shared = shared_by_count(old.get(field) or [], shot.get(field) or [], keyfn)
+            if shared:
+                notes.append(finding("note", f"{where}: {title}", name_items([labelfn(x) for x in shared]) + ".",
+                                     {field: shared[:4]}))
+    return notes
+
+
 def is_measured(shot):
     return any(name in shot for name in MEASURES)
 
@@ -342,7 +432,7 @@ def measured(before, after):
             and not unmeasured_routes(before, after))
 
 
-def summarize(findings, plan=None, measured=True, unmeasured=None, failures=None):
+def summarize(findings, plan=None, measured=True, unmeasured=None, failures=None, already=None):
     counts = {"blocker": 0, "warning": 0, "good": 0}
     for item in findings:
         counts[item["severity"]] = counts.get(item["severity"], 0) + 1
@@ -372,6 +462,9 @@ def summarize(findings, plan=None, measured=True, unmeasured=None, failures=None
         out["measured"] = False
         out["capture_failures"] = list(failures)
         out["note"] = failure_note(failures) + (("; " + out["note"]) if out.get("note") else "")
+    if already:
+        # Listed apart, after the verdict is set: these never change it.
+        out["already_on_main"] = list(already)
     if plan:
         # An unmapped view means the QA covered less than it appears to. Saying
         # so is the difference between a gap and a silent gap.
@@ -396,12 +489,15 @@ def main(argv=None):
     after = load(args.dir, "after")
     failures = capture_failures(args.dir)
     result = summarize(compare(before, after), plan, measured=measured(before, after),
-                       unmeasured=unmeasured_routes(before, after), failures=failures)
+                       unmeasured=unmeasured_routes(before, after), failures=failures,
+                       already=already_on_main(before, after))
     if args.out:
         with open(args.out, "w", encoding="utf-8") as handle:
             json.dump(result, handle, indent=2)
         counts = result.get("counts") or {}
-        print(f"verdict: {result.get('verdict')}; {sum(counts.values()) if counts else len(result.get('findings', []))} finding(s) -> {args.out}")
+        on_main = len(result.get("already_on_main") or [])
+        extra = f"; {on_main} already on main (not counted)" if on_main else ""
+        print(f"verdict: {result.get('verdict')}; {sum(counts.values()) if counts else len(result.get('findings', []))} finding(s){extra} -> {args.out}")
         if failures:
             print(result["note"])
     else:

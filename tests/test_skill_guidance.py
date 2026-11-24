@@ -504,5 +504,41 @@ class PortFlag(unittest.TestCase):
                 self.assertIn('--start "npm run dev -- --port 3', text)
                 self.assertIn(PORT_SENTENCE, text)
 
+
+class AngularRun1(unittest.TestCase):
+    """Angular run 1: no build before the commit or the QA, an undersold description, an
+    unasked lockfile in the commit, and string human findings that crashed the builder."""
+
+    def test_pr_qa_and_design_review_build_or_type_check(self):
+        for skill, where in (("pr-qa", "Default path"), ("design-review", "5.")):
+            with self.subTest(skill=skill):
+                text = section(skill, where)
+                for cmd in ("npm run build", "npx ng build", "npx tsc --noEmit"):
+                    self.assertIn(cmd, text)
+                self.assertIn("build or type", text.lower())
+
+    def test_pr_qa_checks_the_description_against_the_diff(self):
+        text = section("pr-qa", "What to look for")
+        self.assertIn("A description that does not match the diff", text)
+        self.assertIn("gh pr view <n> --json body", text)
+        self.assertIn('"severity": "warning"', text)
+
+    def test_committing_skills_leave_unintended_lockfiles_out(self):
+        for skill in ("design-review", "review-cycle"):
+            with self.subTest(skill=skill):
+                text = (REPO / "skills" / skill / "SKILL.md").read_text()
+                self.assertIn("lockfile", text)
+                self.assertIn("stays out", text.replace("left out of the commit", "stays out"))
+
+    def test_pr_qa_documents_the_human_finding_shapes_the_builder_takes(self):
+        row = [l for l in section("pr-qa", "The helper scripts").splitlines() if l.startswith("| `human_findings`")][0]
+        self.assertIn('"severity"', row)
+        self.assertIn("plain string", row)
+
+    def test_off_center_rows_are_a_measured_target(self):
+        self.assertIn("| Off-center rows |", (REPO / "skills" / "visual-qa" / "SKILL.md").read_text())
+        self.assertIn("`off-center rows`", section("design-review", "5."))
+
+
 if __name__ == "__main__":
     unittest.main()

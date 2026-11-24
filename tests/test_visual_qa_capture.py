@@ -256,6 +256,38 @@ class PhoneWidth(unittest.TestCase):
             self.assertEqual(len(m["midWord"]), 1, m["midWord"])
             self.assertTrue(m["midWord"][0].startswith("authentic"), m["midWord"])
 
+    def test_a_row_text_align_does_not_center_is_flagged(self):
+        # Angular run 1: a footer column centered with text-align at 390, and its "Events"
+        # link made display:flex for a badge, so it sat at the left. Nothing flagged it.
+        with tempfile.TemporaryDirectory() as tmp:
+            r, out = self.capture(tmp, "off-center.html", "--sizes", "390", "--evidence", "after")
+            res = self.result(out, "after-")
+            rows = res["measures"]["offCenter"]
+            self.assertEqual(len(rows), 2, rows)
+            self.assertEqual(res["measures"]["offCenterCount"], 2)
+            events = rows[0]
+            self.assertTrue(events["text"].startswith("Events"), events)
+            self.assertEqual(events["tag"], "a")
+            self.assertEqual(events["left"], 0)
+            self.assertGreater(events["right"] - events["left"], 100)
+            self.assertEqual(rows[1]["tag"], "div")
+            verdict = {k: (v, ok) for k, v, ok in res["verdicts"]}
+            self.assertEqual(verdict["off-center rows"], (2, False))
+            self.assertIn("off-center rows: 2", r.stdout)
+            self.assertIn("off-center:", r.stdout)
+            shot = json.loads((out / "after.json").read_text())["shots"][0]
+            self.assertEqual(shot["offCenterCount"], 2)
+            self.assertTrue(shot["offCenter"][0]["text"].startswith("Events"))
+
+    def test_centered_rows_and_left_aligned_pages_are_not_off_center(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, out = self.capture(tmp, "fits.html", "--sizes", "390,1440")
+            data = json.loads((out / "measures.json").read_text())
+            for res in data["results"]:
+                self.assertEqual(res["measures"]["offCenter"], [], res["viewport"])
+            _, out = self.capture(tmp, "midword.html", "--sizes", "1440")
+            self.assertEqual(self.result(out)["measures"]["offCenterCount"], 0)
+
     def capture_fails(self, tmp, page, *extra):
         cfg = Path(tmp) / "pages.json"
         cfg.write_text(json.dumps({"base": self.base, "pages": [{"name": "t", "path": "/" + page}]}))

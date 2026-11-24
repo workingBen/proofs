@@ -1,5 +1,6 @@
 # Changelog
 
+- **1.13.1** (2026-11-24): Stage only what the item changed: a lockfile an install rewrote stays out of the commit, or the PR body says why it is in (Angular run 1 committed one unasked).
 - **1.13.0** (2026-11-22): The per-item push is now `git push -u origin HEAD`, which the opt-in `--commit` allow block permits; deleting the branch afterward still asks.
 - **1.12.0** (2026-11-19): The tracking page's docked bar starts with the proofs mark, a `review-cycle` pill, the project and the session, reusing the shared builder's markup and CSS, so it is never mistaken for another session's page.
 - **1.11.4** (2026-11-19): The tracking page is delivered as "Where the page goes" says rather than always via artifacts. Says plainly that it needs the whole plugin.

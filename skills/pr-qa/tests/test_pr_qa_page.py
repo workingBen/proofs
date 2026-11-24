@@ -8,6 +8,7 @@ Run:  python3 -m unittest discover skills/pr-qa/tests
 """
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -21,6 +22,8 @@ from pr_qa_page import (
     data_uri, pair_shots, embed, MAX_PAGE_BYTES,
     render, build, validate_meta, ABSENT, smoke, load_meta, skipped_line,
 )
+
+SCRIPT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts", "pr_qa_page.py")
 
 
 def write_evidence(directory, findings=None, shots=None, plan=None):
@@ -719,6 +722,57 @@ class BuildValidationTest(unittest.TestCase):
             out_path = os.path.join(tmp, ".proofs", "pages", "pr-qa.html")
             build(meta_path, out_path, "Sample Project", "acme/widgets")
             self.assertTrue(os.path.exists(out_path))
+
+    N = 16
+
+    def _entry(self, **extra):
+        return dict({"number": self.N, "title": "T", "branch": "b", "dir": None,
+                     "absent_reason": "no run", "recommendation": "wait"}, **extra)
+
+    def _cli(self, tmp, meta):
+        meta_path = os.path.join(tmp, "meta.json")
+        with open(meta_path, "w", encoding="utf-8") as handle:
+            handle.write(meta if isinstance(meta, str) else json.dumps(meta))
+        return subprocess.run([sys.executable, SCRIPT, "--meta", meta_path, "--out",
+                               os.path.join(tmp, "page.html"), "--session", "s"],
+                              capture_output=True, text=True, timeout=60)
+
+    def test_plain_string_human_findings_are_taken_as_their_text(self):
+        # Angular run 1, session C2: human_findings written as strings crashed the build
+        # with AttributeError: 'str' object has no attribute 'get'.
+        with tempfile.TemporaryDirectory() as tmp:
+            r = self._cli(tmp, [self._entry(human_findings=[
+                "The new See features button is 41px tall, under 44",
+                "The PR description does not mention the new button"])])
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertNotIn("Traceback", r.stderr)
+            page = open(os.path.join(tmp, "page.html"), encoding="utf-8").read()
+            data = json.loads(re.search(r"const DATA = (.*?);\n", page).group(1))
+            found = data["prs"][0]["findings"]
+            self.assertEqual([f["title"] for f in found],
+                             ["The new See features button is 41px tall, under 44",
+                              "The PR description does not mention the new button"])
+            self.assertEqual({f["severity"] for f in found}, {"warning"})
+            self.assertTrue(data["prs"][0]["reviewed"])
+
+    def test_malformed_meta_is_one_plain_line_naming_the_field(self):
+        cases = [
+            ([self._entry(human_findings=[42])], f"PR #{self.N}: human_findings[0]"),
+            ([self._entry(human_findings=[{"severity": "warning"}])], f"PR #{self.N}: human_findings[0]"),
+            ([self._entry(human_findings="look at the button")], f"PR #{self.N}: human_findings"),
+            ([self._entry(human_findings=[{"severity": "critical", "title": "x"}])], "critical"),
+            ([self._entry(recommendation="ship-it")], "ship-it"),
+            (["pr-16"], "entry 1"),
+            ('{"prs": [', "not valid JSON"),
+            ('"just text"', "list"),
+        ]
+        for meta, needle in cases:
+            with self.subTest(meta=meta), tempfile.TemporaryDirectory() as tmp:
+                r = self._cli(tmp, meta)
+                self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+                self.assertNotIn("Traceback", r.stderr)
+                self.assertIn(needle, r.stderr)
+                self.assertEqual(len([l for l in r.stderr.splitlines() if not l.startswith("warning:")]), 1, r.stderr)
 
     def test_validate_meta_directly_names_offending_value_and_pr(self):
         with self.assertRaises(ValueError) as ctx:

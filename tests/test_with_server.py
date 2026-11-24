@@ -509,6 +509,39 @@ class WithServerTest(unittest.TestCase):
         self.assertFalse((self.dir / "started").exists())
         self.assertFalse((self.dir / "captured").exists())
 
+    def test_no_lock_file_is_left_behind(self):
+        # Angular run 1: an empty .proofs/server.pid.lock stayed in the app folder.
+        r = self.run_helper(self.simple_server(), ["sh", "-c", "true"])
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertTrue((self.dir / ".proofs" / "server.log").exists())
+        self.assertFalse((self.dir / ".proofs" / "server.pid.lock").exists(), "lock file left behind")
+        self.assertFalse((self.dir / ".proofs" / "server.pid").exists())
+
+    def test_a_waiter_never_holds_a_lock_file_that_was_removed(self):
+        # Removing the lock file is safe only if a run that opened it before the removal
+        # does not then hold a lock nobody else can see: it must retry on the new file.
+        import fcntl
+        path = str(self.dir / "x.lock")
+        first = with_server._take_lock(path, time.monotonic() + 5)
+        got = {}
+        t = threading.Thread(target=lambda: got.update(fd=with_server._take_lock(path, time.monotonic() + 10)))
+        t.start()
+        time.sleep(0.5)  # the waiter has opened the old file and is polling its flock
+        with_server._release_lock(path, first)
+        t.join(timeout=10)
+        self.assertIsNotNone(got.get("fd"))
+        try:
+            self.assertEqual(os.fstat(got["fd"]).st_ino, os.stat(path).st_ino, "the waiter holds a removed file")
+            third = os.open(path, os.O_RDWR)
+            try:
+                with self.assertRaises(BlockingIOError):
+                    fcntl.flock(third, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            finally:
+                os.close(third)
+        finally:
+            with_server._release_lock(path, got["fd"])
+        self.assertFalse(os.path.exists(path))
+
     def test_missing_ps_warns_that_reaping_is_off(self):
         empty = self.dir / "empty-bin"
         empty.mkdir()

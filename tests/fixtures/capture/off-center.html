@@ -1,0 +1,27 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>off-center</title>
+<!-- Angular run 1's footer at 390: a column centered with text-align, one link made
+     display:flex (for its badge), which text-align does not center. -->
+<style>body{margin:0;font:20px/1.5 sans-serif} .col{text-align:center;padding:0 48px}
+a{display:block;color:#333;margin-bottom:8px} .flex{display:flex;align-items:center}
+.badge{display:inline-block;width:42px;height:18px;margin-left:8px;background:#0a0}
+.ok{display:flex;align-items:center;justify-content:center}
+.btn{display:inline-block;padding:8px 16px;background:#eee}
+.split{display:flex;justify-content:space-between}
+.pic{display:block;width:120px;height:40px;background:#00a}
+.pic-ok{display:block;width:120px;height:40px;margin:0 auto;background:#00a}
+</style>
+</head><body><main>
+<div class="col">
+  <h4>Community</h4>
+  <a>Discord</a>
+  <a class="flex">Events<span class="badge"></span></a>
+  <a class="ok">Meetups<span class="badge"></span></a>
+  <a>FAQ</a>
+  <p><span class="btn">Centered button</span></p>
+  <div class="split"><span>Left end</span><span>Right end</span></div>
+  <div class="pic-ok"></div>
+</div>
+<div class="col"><div class="pic"></div></div>
+</main></body></html>

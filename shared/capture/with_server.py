@@ -23,6 +23,7 @@ This helper owns the server for exactly as long as the capture runs:
 - If a server already answers at --url, it is not this helper's, so it is used and left running.
 - Runs that share a pidfile take turns: each holds an flock on <pidfile>.lock for its whole
   life (the kernel drops it even on SIGKILL) and a second run waits up to --timeout for it.
+  A run that stops normally removes the lock file, so nothing is left in .proofs/.
 - SIGKILL to the helper is the one exit nothing can catch: the server keeps running (its
   output goes to the log, so it holds no pipe) until the next run in that folder reaps it.
   The pidfile records the server's pid and exact start time (read by ps in UTC, so a time
@@ -266,22 +267,51 @@ def _reap_stale(pidfile, grace):
             pass
 
 
+def _same_file(fd, path):
+    try:
+        a, b = os.fstat(fd), os.stat(path)
+    except FileNotFoundError:
+        return False
+    return (a.st_dev, a.st_ino) == (b.st_dev, b.st_ino)
+
+
 def _take_lock(path, deadline):
-    """Open and flock path, waiting until deadline (monotonic) when another run holds it."""
-    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o644)
+    """Open and flock path, waiting until deadline (monotonic) when another run holds it.
+
+    The holder removes the file when it is done (_release_lock), so a run that opened the
+    file before that may get the flock on a file no longer at `path`; it then opens the new
+    one and tries again, which keeps exactly one holder of the file every run can see.
+    """
     told = False
     while True:
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            return fd
-        except BlockingIOError:
-            if not told:
-                say("server: waiting for another with_server.py run using %s" % path)
-                told = True
-            if time.monotonic() >= deadline:
-                os.close(fd)
-                return None
-            time.sleep(0.2)
+        fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o644)
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                if not told:
+                    say("server: waiting for another with_server.py run using %s" % path)
+                    told = True
+                if time.monotonic() >= deadline:
+                    os.close(fd)
+                    return None
+                time.sleep(0.2)
+                continue
+            if _same_file(fd, path):
+                return fd
+            os.close(fd)  # locked a removed file: take the current one
+            break
+
+
+def _release_lock(path, fd):
+    """Remove the lock file while still holding it, then release it (Angular run 1: an empty
+    server.pid.lock stayed in .proofs/). Removing it first means no run can take it between."""
+    try:
+        if _same_file(fd, path):
+            os.unlink(path)
+    except OSError:
+        pass
+    os.close(fd)
 
 
 # The port flag differs by tool: Vite (SvelteKit, Vue, Astro, Remix), Nuxt, Angular and
@@ -490,7 +520,7 @@ def _cleanup(args, state):
         except FileNotFoundError:
             pass
     if state["lock"] is not None:
-        os.close(state["lock"])  # releases the flock; the lock file itself stays, by design
+        _release_lock(args.pidfile + ".lock", state["lock"])
 
 
 def main(argv=None):

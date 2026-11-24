@@ -91,6 +91,27 @@ class TapTargetTest(unittest.TestCase):
         found = compare([shot("before")], [shot(small=small)])
         self.assertIn("and 2 more", found[0]["detail"])
 
+    def test_a_new_off_center_row_is_a_warning(self):
+        # Angular run 1: a flex row inside a text-align:center column sat at the left at 390.
+        events = {"tag": "a", "text": "Events", "left": 0, "right": 164}
+        before = [dict(shot("before"), offCenter=[], offCenterCount=0)]
+        after = [dict(shot(), offCenter=[events], offCenterCount=1)]
+        found = [f for f in compare(before, after) if "off-center" in f["title"]]
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0]["severity"], "warning")
+        self.assertIn('"Events" (0px left, 164px right)', found[0]["detail"])
+
+    def test_an_off_center_row_that_was_already_there_is_not_news(self):
+        events = {"tag": "a", "text": "Events", "left": 0, "right": 164}
+        before = [dict(shot("before"), offCenter=[events], offCenterCount=1)]
+        after = [dict(shot(), offCenter=[events], offCenterCount=1)]
+        self.assertEqual(compare(before, after), [])
+
+    def test_an_older_before_without_off_center_is_not_a_zero_baseline(self):
+        events = {"tag": "a", "text": "Events", "left": 0, "right": 164}
+        after = [dict(shot(), offCenter=[events], offCenterCount=1)]
+        self.assertEqual(compare([shot("before")], after), [])
+
     def test_small_text_rise_named(self):
         old = [{"text": "Old a", "px": 11}, {"text": "Old b", "px": 11}]
         new = [{"text": "New c", "px": 11.5}, {"text": "New d", "px": 10}]

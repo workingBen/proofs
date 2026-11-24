@@ -155,7 +155,7 @@ class PageFailed extends Error {
 // Runs in the page. Returns raw numbers; pass/fail is decided in Node.
 // `edge`, when given, is the screen's width to measure overflow against (the plain
 // recheck of a phone layout that came out wider than the screen).
-function measure({ items, minText, minTap, edge }) {
+function measure({ items, minText, minTap, edge, offCenterPx = 16 }) {
   const vw = edge || document.documentElement.clientWidth;
   const vh = window.innerHeight;
   const visible = (el) => {
@@ -261,6 +261,47 @@ function measure({ items, minText, minTap, edge }) {
     truncated.push({ text: label(el), roomPx: Math.round(room) });
   }
 
+  // Rows that should be centered and are not. `text-align: center` centers text and inline
+  // boxes, but not a flex or grid container's items, nor a block child narrower than its
+  // parent. Angular run 1: a footer column centered at 390, its "Events" link made
+  // `display: flex` for a badge, sat at the left, and no measure or look caught it. For each
+  // box whose text-align is center, take its in-flow children's extent (elements and text)
+  // inside its content box; a gap on one side larger than the other by more than offCenterPx
+  // is a finding. A full-width child (block text, a space-between row) leaves no gaps.
+  const offCenter = [];
+  for (const el of document.querySelectorAll('body *')) {
+    if (el instanceof SVGElement || !visible(el)) continue;
+    const s = getComputedStyle(el);
+    if (s.textAlign !== 'center' || s.display === 'inline' || s.display === 'contents') continue;
+    let cl = Infinity, cr = -Infinity;
+    for (const node of el.childNodes) {
+      let rects = [];
+      if (node.nodeType === Node.TEXT_NODE) {
+        if (!node.textContent.trim()) continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        rects = [...range.getClientRects()];
+      } else if (node.nodeType === Node.ELEMENT_NODE) {
+        const cs = getComputedStyle(node);
+        if (cs.position === 'absolute' || cs.position === 'fixed' || cs.float !== 'none' || !visible(node)) continue;
+        rects = [node.getBoundingClientRect()];
+      }
+      for (const r of rects) {
+        if (r.width <= 0) continue;
+        cl = Math.min(cl, r.left);
+        cr = Math.max(cr, r.right);
+      }
+    }
+    if (cl === Infinity) continue;
+    const box = el.getBoundingClientRect();
+    const left = cl - (box.left + parseFloat(s.borderLeftWidth) + parseFloat(s.paddingLeft));
+    const right = (box.right - parseFloat(s.borderRightWidth) - parseFloat(s.paddingRight)) - cr;
+    if (left < -1 || right < -1) continue; // overflowing content is the sideways measure's job
+    if (Math.abs(left - right) > offCenterPx) {
+      offCenter.push({ text: label(el), tag: el.tagName.toLowerCase(), left: Math.round(left), right: Math.round(right) });
+    }
+  }
+
   // Repeated items: how many fit the first screen, how tall, where the first starts
   let itemStats = null;
   if (items) {
@@ -289,6 +330,7 @@ function measure({ items, minText, minTap, edge }) {
     smallText: smallText.slice(0, 25), smallTextCount: smallText.length,
     smallTaps: smallTaps.slice(0, 25), smallTapCount: smallTaps.length,
     truncated: truncated.slice(0, 15),
+    offCenter: offCenter.slice(0, 15), offCenterCount: offCenter.length,
     items: itemStats,
   };
 }
@@ -370,6 +412,7 @@ function verdicts(m, vpLabel) {
   out.push(['truncated with room', m.truncated.filter((t) => t.roomPx > 24).length,
     m.truncated.every((t) => t.roomPx <= 24)]);
   out.push(['mid-word breaks', m.midWord.length, m.midWord.length === 0]);
+  out.push(['off-center rows', m.offCenterCount, m.offCenterCount === 0]);
   if (m.items) {
     out.push(['chrome before first item', m.items.chromeShare, m.items.chromeShare < 0.4]);
     out.push(['items in first screen', m.items.fullyVisible, null]);
@@ -499,6 +542,7 @@ async function main() {
       smallTargets: r.measures.smallTaps.map((t) => ({ text: t.el, tag: t.tag, width: t.w, height: t.h })), smallText: r.measures.smallText, smallTextCount: r.measures.smallTextCount,
       scrollWidth: r.measures.scrollWidth, clientWidth: r.measures.clientWidth,
       widestRight: r.measures.widestRight, pngWidth: r.measures.pngWidth, innerWidth: r.measures.innerWidth,
+      offCenter: r.measures.offCenter, offCenterCount: r.measures.offCenterCount,
       errors: errors.filter((e) => e.startsWith(`${r.viewport}:`)),
     }));
     fs.writeFileSync(path.join(out, `${evidence}.json`), JSON.stringify({ shots, failures }, null, 2));
@@ -521,6 +565,17 @@ async function main() {
       + 'shrinking everything; the other phone numbers were measured at that wider layout.',
   };
   if (seen.size) lines.push('', ...[...seen].map((s) => `- ${WORDS[s]}`));
+  const offRows = results.filter((r) => !r.error && r.measures.offCenterCount);
+  if (offRows.length) {
+    lines.push('', 'off-center: a row inside a centered column (text-align: center) whose content sits to one side, '
+      + 'usually a flex or grid row (text-align does not center its items; add justify-content: center) '
+      + 'or a fixed-width block (add margin-inline: auto). Gaps are left/right of the content:');
+    for (const r of offRows) {
+      const rows = r.measures.offCenter.slice(0, 4).map((o) => `"${o.text || o.tag}" ${o.left}px/${o.right}px`);
+      const more = r.measures.offCenterCount > 4 ? `; and ${r.measures.offCenterCount - 4} more` : '';
+      lines.push(`- ${r.page} ${r.state} at ${r.viewport}: ${rows.join('; ')}${more}`);
+    }
+  }
   if (errors.length) lines.push('', 'Page errors:', ...errors.map((e) => `- ${e}`));
   fs.writeFileSync(path.join(out, `${prefix}summary.md`), lines.join('\n') + '\n');
   console.log(lines.join('\n'));

@@ -517,7 +517,10 @@ def render_questions(sec, ctx):
             out.append('<label class="opt"><input type="radio" name="%s" value="%s"><span><span class="opt-label">%s%s</span>%s</span></label>'
                        % (esc(qid), esc(o.get("value") or o["label"]), esc(o["label"]), rec, note))
         out.append("</div>" + notes_box(qid, q.get("notes_label", "Or in your own words")) + "</div>")
-        items.append({"qid": qid, "ask": ask, "round": r})
+        item = {"qid": qid, "ask": ask, "round": r}
+        if not q.get("options"):
+            item["text"] = True  # only a text box: what the reader types is the answer
+        items.append(item)
     return out, {"items": items}
 
 

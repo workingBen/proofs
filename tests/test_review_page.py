@@ -266,6 +266,23 @@ class ExportText(unittest.TestCase):
                                "  -> COULDN'T TEST\n"
                                "  note: no attachment handy\n")
 
+    def test_a_text_box_question_counts_its_typed_text_as_the_answer(self):
+        # Astro run 2: a question with no options and a notes_label shows only a text box,
+        # and its typed text went out as "(UNANSWERED)" plus a note.
+        spec = {"mode": "questions", "title": "T", "project": {"name": "P", "stream": "s", "round": 1},
+                "questions": [{"qid": "why", "ask": "Why?", "options": [], "notes_label": "Your answer"},
+                              {"qid": "pick", "ask": "Pick", "options": [{"label": "A"}, {"label": "B"}]}]}
+        src = Path(self._tmp.name) / "text-q.json"
+        src.write_text(json.dumps(spec))
+        page = Path(self._tmp.name) / "text-q.html"
+        r = subprocess.run([sys.executable, str(BUILD), str(src), "--out", str(page)], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        r = subprocess.run([NODE, str(self.driver), str(page), json.dumps({"notes": {"why": "because\nit is", "pick": "x"}})],
+                           capture_output=True, text=True, env=dict(os.environ, TZ="UTC"))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("Q why (raised r1) | Why?\n  -> because\n     it is\n\n", r.stdout)
+        self.assertIn("Q pick (raised r1) | Pick\n  -> (UNANSWERED)\n  note: x\n", r.stdout)
+
     def test_questions_unchecked_qa(self):
         self.assertIn("QA qa-delete-item | Delete an item that has an attachment\n  -> (NOT CHECKED)\n",
                       self.export("questions", {}))
@@ -1324,6 +1341,43 @@ class ClickThrough(unittest.TestCase):
             self.assertEqual(res["export"], "[Articles Index — Design Review]\n"
                                             "1. Article card layout — REVISE — READ — COMMENT: smoke comment\n"
                                             "2. Read More button placement — PENDING")
+
+
+    def test_a_text_box_question_is_answered_once_typed(self):
+        spec = {"mode": "questions", "title": "T", "project": {"name": "P", "stream": "s", "round": 1},
+                "questions": [{"qid": "why", "ask": "Why?", "options": [], "notes_label": "Your answer"}]}
+        script = r"""
+const { chromium } = require(process.argv[2]);
+const { launchChromium } = require(process.argv[3]);
+(async () => {
+  const browser = await launchChromium(chromium, process.env);
+  const page = await browser.newPage();
+  await page.goto("file://" + process.argv[4]);
+  const before = await page.locator("#rp-tally").innerText();
+  await page.locator('[data-note="why"]').fill("because");
+  const r = { before, tally: await page.locator("#rp-tally").innerText(),
+              answered: await page.locator('.q[data-qid="why"]').evaluate((c) => c.classList.contains("answered")),
+              export: await page.evaluate(() => window.rpExport()) };
+  await browser.close();
+  console.log(JSON.stringify(r));
+})().catch((e) => { console.log(JSON.stringify({ crash: String(e && e.stack || e) })); process.exit(1); });
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            src, out, js = Path(tmp) / "s.json", Path(tmp) / "p.html", Path(tmp) / "t.cjs"
+            src.write_text(json.dumps(spec))
+            js.write_text(script)
+            r = subprocess.run([sys.executable, str(BUILD), str(src), "--out", str(out)], capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            r = subprocess.run([NODE, str(js), playwright_dir(), str(RP / "launch.cjs"), str(out)],
+                               capture_output=True, text=True, timeout=180)
+            res = json.loads(r.stdout.strip().splitlines()[-1])
+            self.assertNotIn("crash", res, res)
+            self.assertIn("0", res["before"])
+            self.assertEqual(res["tally"], "all 1 answered")
+            self.assertTrue(res["answered"])
+            self.assertIn("Q why (raised r1) | Why?\n  -> because\n", res["export"])
+            self.assertNotIn("UNANSWERED", res["export"])
+            self.assertNotIn("note:", res["export"])
 
 
 

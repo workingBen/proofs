@@ -74,8 +74,15 @@
       var ans = ss.ans || {}, notes = ss.notes || {}, lines = [];
       sec.items.forEach(function (q) {
         lines.push("Q " + q.qid + " (raised r" + q.round + ") | " + q.ask);
-        lines.push("  -> " + (ans[q.qid] || "(UNANSWERED)"));
-        lines.push.apply(lines, noteLines("  note: ", notes[q.qid]));
+        // A question with only a text box: what the reader typed is the answer.
+        var typed = q.text && !ans[q.qid] ? noteLines("", notes[q.qid]) : [];
+        if (typed.length) {
+          lines.push("  -> " + typed[0]);
+          typed.slice(1).forEach(function (l) { lines.push("     " + l); });
+        } else {
+          lines.push("  -> " + (ans[q.qid] || "(UNANSWERED)"));
+          lines.push.apply(lines, noteLines("  note: ", notes[q.qid]));
+        }
         lines.push("");
       });
       return lines;
@@ -155,6 +162,12 @@
     }
   };
 
+  // An item counts as answered when it has a pick, or, for a text-box-only question, typed text.
+  function isAnswered(it, ss) {
+    var id = it.qid || it.qaid;
+    return !!((ss.ans || {})[id] || (it.text && trimmed((ss.notes || {})[id])));
+  }
+
   function exportText(S, st, now) { return FRAME[S.mode](S, st || {}, now || new Date()); }
 
   if (typeof module !== "undefined" && module.exports) module.exports = { exportText: exportText };
@@ -218,8 +231,8 @@
   function answered(kind) {
     var total = 0, done = 0;
     ofKind(kind).forEach(function (sec) {
-      var ans = secState(st, sec).ans || {};
-      sec.items.forEach(function (it) { total++; if (ans[it.qid || it.qaid]) done++; });
+      var ss = secState(st, sec);
+      sec.items.forEach(function (it) { total++; if (isAnswered(it, ss)) done++; });
     });
     return { total: total, done: done };
   }
@@ -396,8 +409,10 @@
       all("input[type=radio]", root).forEach(function (r) { r.checked = ss.ans[r.name] === r.value; });
       all("[data-note]", root).forEach(function (t) { t.value = ss.notes[t.dataset.note] || ""; });
     }
+    var byId = {};
+    sec.items.forEach(function (it) { byId[it.qid || it.qaid] = it; });
     function paint() {
-      all(".q", root).forEach(function (c) { c.classList.toggle("answered", !!ss.ans[c.dataset.qid]); });
+      all(".q", root).forEach(function (c) { c.classList.toggle("answered", isAnswered(byId[c.dataset.qid] || {}, ss)); });
       all(".qa", root).forEach(function (c) {
         var v = ss.ans[c.dataset.qaid];
         c.classList.toggle("pass", v === "PASS");
@@ -410,7 +425,10 @@
       if (e.target.type === "radio") { ss.ans[e.target.name] = e.target.value; save(); paint(); }
     });
     root.addEventListener("input", function (e) {
-      if (e.target.dataset && e.target.dataset.note) { ss.notes[e.target.dataset.note] = e.target.value; save(); }
+      var id = e.target.dataset && e.target.dataset.note;
+      if (!id) return;
+      ss.notes[id] = e.target.value; save();
+      if ((byId[id] || {}).text) paint();
     });
     root.__rpReset = function () { ss.ans = {}; ss.notes = {}; restore(); paint(); };
     restore(); paint();

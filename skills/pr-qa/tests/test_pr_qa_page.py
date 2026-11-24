@@ -1073,6 +1073,118 @@ class SmokeTest(unittest.TestCase):
 
 
 
+class AstroRun2PageTest(unittest.TestCase):
+    """Astro run 2: at 390 the page scrolled sideways by 3 px (a long URL in a finding),
+    the verdict table squeezed the PR title to one word per line, and --smoke passed it.
+    And flaws already on main never reached the page."""
+
+    DRIVER = (
+        "const {chromium}=require(process.argv[2]);"
+        "const {launchChromium}=require(process.argv[4]);"
+        "(async()=>{const b=await launchChromium(chromium,process.env);"
+        "const p=await b.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});"
+        "await p.goto('file://'+process.argv[3]);await p.waitForTimeout(200);"
+        "const out=await p.evaluate(()=>{const d=document.documentElement;"
+        "const a=document.querySelector('.verdict-table td a');const t=document.querySelector('.verdict-table');"
+        "const w=document.querySelector('.verdict-wrap');const on=document.querySelector('.on-main');"
+        "return {scroll:Math.max(d.scrollWidth,window.innerWidth)-390,titleWidth:a.getBoundingClientRect().width,"
+        "tableRight:t.getBoundingClientRect().right,wrapRight:w.getBoundingClientRect().right,"
+        "onMain:on?on.textContent:'',onMainItems:on?on.querySelectorAll('li').length:0};});"
+        "console.log(JSON.stringify(out));await b.close()})()")
+
+    LONG_URL = "https://example.com/astrowind/a-long-path-with-no-break-in-it"
+
+    def _page(self, tmp):
+        evidence = os.path.join(tmp, "ev")
+        write_evidence(evidence, findings={
+            "findings": [], "counts": {"blocker": 0, "warning": 0, "good": 0}, "verdict": "clean",
+            "unmapped_changes": [], "pages_covered": ["/"],
+            "already_on_main": [
+                {"severity": "note", "title": "home at desktop: a section column is off-center or out of line",
+                 "detail": '"Get your dream website" (edge at 232px, the columns around it at 104px).', "evidence": {}},
+                {"severity": "note", "title": "home at phone: a word breaks mid-word",
+                 "detail": '"tem|plate".', "evidence": {}}]})
+        for name in os.listdir(evidence):
+            if name.endswith(".png"):
+                with open(os.path.join(evidence, name), "wb") as handle:
+                    handle.write(REAL_PNG)
+        meta = os.path.join(tmp, "meta.json")
+        with open(meta, "w", encoding="utf-8") as handle:
+            json.dump([{"number": 21, "title": "Home page: split hero with proof row",
+                        "branch": "design-review/home-split-hero-with-a-long-branch-name", "dir": evidence,
+                        "cost": "", "tests": "No tests in the project and none added. npx tsc --noEmit passed.",
+                        "narrative": "See " + self.LONG_URL, "recommendation": "send-back",
+                        "human_findings": [{"severity": "warning",
+                                            "title": "The description does not say the SocialProof link was dropped",
+                                            "detail": "Its item linked to " + self.LONG_URL + " and is gone."}]}],
+                      handle)
+        out = os.path.join(tmp, "page.html")
+        build(meta, out, "AstroWind", "workingBen/proofs-in-the-wild", "astro-run2")
+        return out
+
+    def _measure(self, page):
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                        "..", "..", "..", "shared", "review_page"))
+        import review_page
+        pw = review_page.find_playwright(None)
+        if not pw:
+            self.skipTest("Playwright is not installed")
+        script = os.path.join(os.path.dirname(page), "m.cjs")
+        with open(script, "w", encoding="utf-8") as handle:
+            handle.write(self.DRIVER)
+        launch = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..",
+                                              "shared", "review_page", "launch.cjs"))
+        r = subprocess.run(["node", script, pw, page, launch], capture_output=True, text=True, timeout=120)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return json.loads(r.stdout.strip().splitlines()[-1])
+
+    def test_the_page_fits_390_and_the_title_keeps_its_width(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = self._measure(self._page(tmp))
+            self.assertEqual(out["scroll"], 0, out)
+            self.assertGreaterEqual(out["titleWidth"], 200, out)
+            self.assertLessEqual(out["tableRight"], out["wrapRight"] + 1, out)
+
+    def test_flaws_already_on_main_are_listed_apart_and_keep_the_verdict(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            page = self._page(tmp)
+            with open(page, encoding="utf-8") as handle:
+                data = payload_of(handle.read())
+            pr = data["prs"][0]
+            self.assertEqual(len(pr["alreadyOnMain"]), 2)
+            self.assertNotIn("tem|plate", json.dumps(pr["findings"]))
+            out = self._measure(page)
+            self.assertIn("Already on main (not caused by this PR)", out["onMain"])
+            self.assertIn("do not count toward the verdict", out["onMain"])
+            self.assertIn("tem|plate", out["onMain"])
+            self.assertEqual(out["onMainItems"], 2)
+
+    def test_smoke_passes_the_run_2_page(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ok, result = smoke(self._page(tmp))
+            if ok is None:
+                self.skipTest("Playwright is not installed")
+            self.assertTrue(ok, result)
+
+    def test_smoke_fails_a_page_that_scrolls_sideways_at_390(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            page = os.path.join(tmp, "wide.html")
+            with open(page, "w", encoding="utf-8") as handle:
+                handle.write('<!doctype html><html><head><meta name="viewport" content="width=device-width">'
+                             '<style>body{margin:0}</style></head><body>'
+                             '<div class="finding-body" style="width:393px">three pixels too wide</div></body></html>')
+            ok, result = smoke(page)
+            if ok is None:
+                self.skipTest("Playwright is not installed")
+            self.assertFalse(ok, result)
+            problem = [p for p in result["problems"] if "sideways" in p]
+            self.assertTrue(problem, result)
+            self.assertIn("390", problem[0])
+            self.assertIn("3px", problem[0])
+            self.assertIn("finding-body", problem[0])
+
+
+
 def payload_of(page):
     import re
     m = re.search(r"const DATA = (.*?);\n", page)

@@ -366,6 +366,36 @@ class PhoneWidth(unittest.TestCase):
             _, out = self.capture(tmp, "columns.html", "--sizes", "390")
             self.assertEqual(self.result(out)["measures"]["offColumns"], [])
 
+    # Astro run 2: AstroWind's proof strip and stats band have no heading, and nothing checked.
+    def test_sections_without_headings_are_a_finding_not_a_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for size in ("1440", "390"):
+                with self.subTest(size=size):
+                    r, out = self.capture(tmp, "untitled.html", "--sizes", size, "--evidence", "after")
+                    res = self.result(out, "after-")
+                    rows = res["measures"]["untitled"]
+                    self.assertEqual([x["id"] for x in rows], ["proof", "stats"], rows)
+                    self.assertEqual(res["measures"]["untitledCount"], 2)
+                    self.assertTrue(rows[0]["text"].startswith("#1 most starred"), rows[0])
+                    self.assertGreaterEqual(rows[0]["height"], 120)
+                    verdict = {k: (v, ok) for k, v, ok in res["verdicts"]}
+                    # A note for the reader, not a failed check.
+                    self.assertEqual(verdict["sections without headings"], (2, None))
+                    self.assertIn("sections without headings: 2", r.stdout)
+                    self.assertIn("without a heading:", r.stdout)
+                    self.assertIn('"#1 most starred', r.stdout)
+                    shot = json.loads((out / "after.json").read_text())["shots"][0]
+                    self.assertEqual(shot["untitledCount"], 2)
+
+    def test_pages_with_headed_sections_have_no_untitled_row(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for page in ("columns.html", "fits.html", "reveal.html"):
+                with self.subTest(page=page):
+                    r, out = self.capture(tmp, page, "--sizes", "1440")
+                    m = self.result(out)["measures"]
+                    self.assertEqual(m["untitled"], [], page)
+                    self.assertNotIn("sections without headings", r.stdout)
+
     def test_a_mid_word_break_in_a_break_all_pre_is_counted(self):
         # Astro run 1: the quick-start command, a <pre> with break-all, broke "--tem" / "plate" at 390.
         with tempfile.TemporaryDirectory() as tmp:
@@ -551,7 +581,12 @@ class CaptureOptions(unittest.TestCase):
     def test_malformed_pages_file_is_one_plain_line(self):
         # SvelteKit run 1: a bare list crashed with "TypeError: cfg.pages is not iterable" and a stack trace.
         cases = [
-            ('[{"name": "home", "path": "/"}]', 'needs a top-level "pages" list'),
+            ('{"base": "http://localhost:9", "routes": [{"name": "home", "path": "/"}]}', 'needs a top-level "pages" list'),
+            ('"home"', 'needs a top-level "pages" list'),
+            # A bare list is taken (below), but without with_server.py there is no base for it.
+            ('[{"name": "home", "path": "/"}]', 'needs a "base"'),
+            ('[]', '"pages" is empty'),
+            ('[{"name": "home"}]', 'pages[0] needs a "path"'),
             ('{"base": "http://localhost:9", "pages": {"name": "home"}}', '"pages" must be a list'),
             ('{"base": "http://localhost:9", "pages": [{"name": "home", "path": "/"},', "is not valid JSON"),
             ('{"base": "http://localhost:9", "pages": [{"name": "home"}]}', 'pages[0] needs a "path"'),
@@ -568,6 +603,32 @@ class CaptureOptions(unittest.TestCase):
                 self.assertNotIn("    at ", r.stderr)
                 self.assertNotIn("TypeError", r.stderr)
                 self.assertEqual(len(r.stderr.strip().splitlines()), 1, r.stderr)
+
+    def test_a_bare_list_of_pages_is_taken_when_with_server_sets_the_base(self):
+        # Astro runs 1 and 2: pr-qa's first pages.json was a bare list both times, and the
+        # plain error cost a server start (about 18 s) before the second try worked.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            pkg = tmp / "node_modules" / "playwright"
+            pkg.mkdir(parents=True)
+            (pkg / "package.json").write_text('{"name": "playwright", "main": "index.js"}')
+            (pkg / "index.js").write_text(FAKE_PAGE)
+            (tmp / "pages.json").write_text('[{"name": "home", "path": "/"}, {"name": "about", "path": "/about"}]')
+            log = tmp / "urls.log"
+            env = {k: v for k, v in os.environ.items() if k not in ("NODE_PATH", "PLAYWRIGHT_PATH", "PROOFS_PLAYWRIGHT")}
+            env.update(HOME=str(tmp), FAKE_LOG=str(log), PROOFS_BASE_URL="http://127.0.0.1:3411/")
+            r = subprocess.run([NODE, str(CAPTURE), str(tmp / "pages.json"), "--out", str(tmp / "out"), "--sizes", "390"],
+                               cwd=tmp, env=env, capture_output=True, text=True, timeout=60)
+            self.assertNotIn('top-level "pages"', r.stderr)
+            self.assertEqual(log.read_text().split(), ["http://127.0.0.1:3411/", "http://127.0.0.1:3411/about"])
+
+    def test_the_example_pages_file_has_the_shape_the_capture_takes(self):
+        js = ("const c=require(process.argv[1]);const f=c.readPagesFile(process.argv[2]);"
+              "process.stdout.write(JSON.stringify({base:f.base,n:f.pages.length}))")
+        example = CAPTURE.parent / "pages.example.json"
+        r = subprocess.run([NODE, "-e", js, str(CAPTURE), str(example)], capture_output=True, text=True, timeout=60)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(json.loads(r.stdout)["base"].startswith("http"))
 
     def test_missing_pages_file_is_one_plain_line(self):
         with tempfile.TemporaryDirectory() as tmp:

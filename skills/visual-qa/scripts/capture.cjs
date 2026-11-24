@@ -14,6 +14,8 @@
 //         "actions": [{ "click": "summary" }, { "waitFor": ".editor" }] }
 //     ]
 //   }
+// A bare list of pages ([{"name": "home", "path": "/"}]) is taken too, when PROOFS_BASE_URL
+// gives the base (as it does under with_server.py).
 //
 // --sizes picks viewports by label (default: all of 1440, 1280, 390), or adds a desktop width
 // such as 1040 (400 to 2560), for a shot just above a breakpoint.
@@ -118,7 +120,10 @@ function readPagesFile(cfgPath, envBase) {
   }
   const example = path.join(__dirname, 'pages.example.json');
   const shape = `{"base": "http://localhost:3000", "pages": [{"name": "home", "path": "/"}]}; see ${example}`;
-  if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) {
+  // A bare list of pages is the pages list (Astro runs 1 and 2: pr-qa wrote one first both
+  // times); its base comes from PROOFS_BASE_URL, which with_server.py sets.
+  if (Array.isArray(cfg)) cfg = { pages: cfg, bareList: true };
+  if (!cfg || typeof cfg !== 'object') {
     throw new PagesFileError(`${cfgPath}: needs a top-level "pages" list, as in ${shape}`);
   }
   if (!('pages' in cfg)) throw new PagesFileError(`${cfgPath}: needs a top-level "pages" list, as in ${shape}`);
@@ -132,6 +137,9 @@ function readPagesFile(cfgPath, envBase) {
     if (typeof p.path !== 'string') throw new PagesFileError(`${cfgPath}: pages[${i}] needs a "path" string such as "/" or "/pricing" (page "${p.name}")`);
   });
   if (!envBase && !cfg.base) {
+    if (cfg.bareList) {
+      throw new PagesFileError(`${cfgPath}: needs a "base": a bare list of pages works only through with_server.py (which sets PROOFS_BASE_URL); otherwise write ${shape}`);
+    }
     throw new PagesFileError(`${cfgPath}: needs a "base" such as "http://localhost:3000" (or run through with_server.py, which sets PROOFS_BASE_URL)`);
   }
   return cfg;
@@ -187,7 +195,7 @@ async function scrollThrough({ step, pause, settle, imageWait, maxSteps }) {
 // Runs in the page. Returns raw numbers; pass/fail is decided in Node.
 // `edge`, when given, is the screen's width to measure overflow against (the plain
 // recheck of a phone layout that came out wider than the screen).
-function measure({ items, minText, minTap, edge, offCenterPx = 16 }) {
+function measure({ items, minText, minTap, edge, offCenterPx = 16, untitledMinHeight = 120 }) {
   const vw = edge || document.documentElement.clientWidth;
   const vh = window.innerHeight;
   const visible = (el) => {
@@ -406,6 +414,24 @@ function measure({ items, minText, minTap, edge, offCenterPx = 16 }) {
       edge: Math.round(c.edge), neighbors: Math.round((prev.edge + next.edge) / 2) });
   });
 
+  // Sections without a heading (Astro run 2: AstroWind's proof strip and stats band). A
+  // `section`, `article`, `aside` or `role="region"` block, the outermost of a nested set, at
+  // least untitledMinHeight tall and half the page wide, holding visible text, with no h1-h6
+  // or role="heading" inside: a reader scanning by headings (or a screen reader's heading list)
+  // skips it. A note, not a failure: some bands are deliberately unheaded.
+  const blockSel = 'section, article, aside, [role=region]';
+  const untitled = [];
+  for (const el of document.querySelectorAll(blockSel)) {
+    if (!visible(el)) continue;
+    if (el.parentElement && el.parentElement.closest(blockSel)) continue;
+    const r = el.getBoundingClientRect();
+    if (r.height < untitledMinHeight || r.width < vw * 0.5) continue;
+    if (!(el.innerText || '').trim()) continue;
+    if (el.querySelector('h1,h2,h3,h4,h5,h6,[role=heading]')) continue;
+    untitled.push({ text: label(el), tag: el.tagName.toLowerCase(), id: el.id || '',
+      top: Math.round(r.top + window.scrollY), height: Math.round(r.height) });
+  }
+
   // Repeated items: how many fit the first screen, how tall, where the first starts
   let itemStats = null;
   if (items) {
@@ -437,6 +463,7 @@ function measure({ items, minText, minTap, edge, offCenterPx = 16 }) {
     offCenter: offCenter.slice(0, 15), offCenterCount: offCenter.length,
     offColumns: offColumns.slice(0, 15), offColumnCount: offColumns.length,
     hiddenBlocks: hiddenBlocks.length, hiddenList: hiddenBlocks.slice(0, 5),
+    untitled: untitled.slice(0, 15), untitledCount: untitled.length,
     items: itemStats,
   };
 }
@@ -604,6 +631,8 @@ function verdicts(m, vpLabel) {
   out.push(['off-center rows', m.offCenterCount, m.offCenterCount === 0]);
   out.push(['off-center columns', m.offColumnCount, m.offColumnCount === 0]);
   out.push(['blank or hidden content', m.blank.flagged ? blankText(m.blank) : 'no', !m.blank.flagged]);
+  // A note (null), not a failed check: listed only when there is one.
+  if (m.untitledCount) out.push(['sections without headings', m.untitledCount, null]);
   if (m.items) {
     out.push(['chrome before first item', m.items.chromeShare, m.items.chromeShare < 0.4]);
     out.push(['items in first screen', m.items.fullyVisible, null]);
@@ -738,6 +767,8 @@ async function main() {
       offCenter: r.measures.offCenter, offCenterCount: r.measures.offCenterCount,
       offColumns: r.measures.offColumns, offColumnCount: r.measures.offColumnCount,
       blank: r.measures.blank, hiddenBlocks: r.measures.hiddenBlocks,
+      untitled: r.measures.untitled, untitledCount: r.measures.untitledCount,
+      midWord: r.measures.midWord,
       errors: errors.filter((e) => e.startsWith(`${r.viewport}:`)),
     }));
     fs.writeFileSync(path.join(out, `${evidence}.json`), JSON.stringify({ shots, failures }, null, 2));
@@ -782,6 +813,17 @@ async function main() {
         : `"${o.text || o.tag}" edge at ${o.edge}px, the columns around it at ${o.neighbors}px`));
       const more = r.measures.offColumnCount > 4 ? `; and ${r.measures.offColumnCount - 4} more` : '';
       lines.push(`- ${r.page} ${r.state} at ${r.viewport}: ${cols.join('; ')}${more}`);
+    }
+  }
+  const untitledRows = results.filter((r) => !r.error && r.measures.untitledCount);
+  if (untitledRows.length) {
+    lines.push('', 'without a heading: a page-wide section with content and no h1-h6 inside, so a reader '
+      + 'scanning by headings (or a screen reader\'s heading list) skips it. A note, not a failure: give it a '
+      + 'heading (a visually hidden one is fine) unless it is meant to be unheaded:');
+    for (const r of untitledRows) {
+      const rows = r.measures.untitled.slice(0, 4).map((u) => `"${u.text || u.tag}"${u.id ? ` (#${u.id})` : ''} ${u.height}px tall`);
+      const more = r.measures.untitledCount > 4 ? `; and ${r.measures.untitledCount - 4} more` : '';
+      lines.push(`- ${r.page} ${r.state} at ${r.viewport}: ${rows.join('; ')}${more}`);
     }
   }
   const blanks = results.filter((r) => !r.error && r.measures.blank.flagged);

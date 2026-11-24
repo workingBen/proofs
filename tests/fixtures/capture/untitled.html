@@ -1,0 +1,29 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>untitled</title>
+<!-- Astro run 2 (AstroWind's proof strip and stats band): page-wide sections full of content
+     with no heading inside, between sections that have one. A one-line banner, a hidden section,
+     a narrow aside and a section whose heading sits deep inside it are not findings. -->
+<style>body{margin:0;font:20px/1.5 sans-serif}
+section,aside{padding:24px}
+.row{display:flex;flex-wrap:wrap;gap:24px 48px;justify-content:center}
+.stat{font-size:48px;font-weight:700}
+.tall{min-height:200px}
+.banner{padding:8px 24px}
+.side{width:100px}
+</style>
+</head><body>
+<header><nav><a href="#">Home</a></nav></header>
+<main>
+<section id="hero"><h1>A page with sections</h1><p>The hero has a heading, as it should.</p></section>
+<section id="proof" class="tall"><div class="row"><span>#1 most starred</span><span>100 Lighthouse score</span><span>MIT license</span></div></section>
+<section id="features"><div><div><h2>Features</h2></div><p>Each feature in a card.</p></div><section class="tall"><p>A nested part with no heading of its own; the heading above covers it.</p></section></section>
+<section id="note" class="banner"><p>Philosophy: simplicity.</p></section>
+<section id="gone" class="tall" style="display:none"><p>Hidden.</p></section>
+<aside class="side tall"><p>A narrow aside.</p></aside>
+<section id="stats" class="tall"><div class="row"><span class="stat">6K</span><span class="stat">1.7K</span><span class="stat">34</span></div></section>
+<section id="empty" class="tall"></section>
+<section id="faq"><h3>Questions</h3><p>Answers.</p></section>
+</main>
+<footer><p>Footer text with no heading, as footers go.</p></footer>
+</body></html>

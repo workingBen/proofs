@@ -11,7 +11,7 @@ import tempfile
 from io import StringIO
 from contextlib import redirect_stdout
 
-from pr_qa_findings import compare, summarize, measured, unmeasured_routes, main
+from pr_qa_findings import compare, summarize, measured, unmeasured_routes, main, already_on_main
 
 
 def shot(label="after", slug="admin-contacts-14", size="phone", overflow=0,
@@ -363,6 +363,85 @@ class CaptureFailureTest(unittest.TestCase):
                                  {"shots": [shot(overflow=23)], "failures": [fail]})
         self.assertEqual(result["verdict"], "hold")
         self.assertIn("capture failed", result["note"])
+
+
+class AlreadyOnMainTest(unittest.TestCase):
+    """Astro run 2: the capture caught the steps column 128 px off and "tem|plate" breaking
+    mid-word, both already on main, and pr-qa's page left them out entirely. They are listed
+    apart, labeled, and never change the verdict."""
+
+    def pair(self, **extra):
+        base = dict(offCenter=[], offColumns=[], midWord=[], untitled=[], untitledCount=0)
+        before = dict(shot("before", slug="home-default", size="desktop", client=1440), **base)
+        after = dict(shot(slug="home-default", size="desktop", client=1440), **base)
+        for k, v in extra.items():
+            before[k] = v
+            after[k] = v
+        return before, after
+
+    def test_flaws_on_both_sides_are_listed_apart_and_do_not_change_the_verdict(self):
+        col = {"kind": "edge", "text": "Get your dream website", "tag": "div", "edge": 232, "neighbors": 104}
+        before, after = self.pair(offColumns=[col], midWord=["tem|plate"], untitledCount=2,
+                                  untitled=[{"text": "#1 most starred", "tag": "section", "id": "proof", "height": 155},
+                                            {"text": "6K GITHUB STARS", "tag": "section", "id": "stats", "height": 244}])
+        found = compare([before], [after])
+        self.assertEqual(found, [])
+        result = summarize(found, measured=measured([before], [after]),
+                           already=already_on_main([before], [after]))
+        self.assertEqual(result["verdict"], "clean")
+        notes = result["already_on_main"]
+        titles = " ".join(n["title"] for n in notes)
+        self.assertIn("off-center", titles)
+        self.assertIn("mid-word", titles)
+        self.assertIn("without a heading", titles)
+        detail = " ".join(n["detail"] for n in notes)
+        self.assertIn("Get your dream website", detail)
+        self.assertIn("tem|plate", detail)
+        self.assertIn("#1 most starred", detail)
+        self.assertTrue(all(n["severity"] == "note" for n in notes))
+        self.assertEqual(result["counts"], {"blocker": 0, "warning": 0, "good": 0})
+
+    def test_pre_existing_overflow_is_listed_too(self):
+        before = shot("before", overflow=12)
+        after = shot(overflow=12)
+        notes = already_on_main([before], [after])
+        self.assertEqual(len(notes), 1, notes)
+        self.assertIn("scrolls sideways", notes[0]["title"])
+        self.assertIn("12px", notes[0]["detail"])
+
+    def test_a_flaw_only_the_pr_adds_is_a_finding_not_a_note(self):
+        before, after = self.pair()
+        after = dict(after, midWord=["authentic|ation"], untitledCount=1,
+                     untitled=[{"text": "Stats band", "tag": "section", "id": "", "height": 200}])
+        found = compare([before], [after])
+        titles = [f["title"] for f in found]
+        self.assertTrue(any("mid-word" in t for t in titles), titles)
+        self.assertTrue(any("without a heading" in t for t in titles), titles)
+        self.assertTrue(all(f["severity"] == "warning" for f in found), found)
+        self.assertEqual(already_on_main([before], [after]), [])
+
+    def test_a_flaw_the_pr_fixed_is_not_listed(self):
+        before, after = self.pair()
+        before = dict(before, midWord=["tem|plate"])
+        self.assertEqual(already_on_main([before], [after]), [])
+
+    def test_older_captures_without_the_fields_list_nothing(self):
+        self.assertEqual(already_on_main([shot("before")], [shot()]), [])
+
+    def test_cli_writes_already_on_main(self):
+        before, after = self.pair(midWord=["tem|plate"])
+        with tempfile.TemporaryDirectory() as tmp:
+            for label, s in (("before", before), ("after", after)):
+                with open(os.path.join(tmp, f"{label}.json"), "w") as handle:
+                    json.dump({"shots": [s]}, handle)
+            out = os.path.join(tmp, "findings.json")
+            with redirect_stdout(StringIO()) as buf:
+                main(["--dir", tmp, "--out", out])
+            result = json.load(open(out))
+            self.assertEqual(result["verdict"], "clean")
+            self.assertEqual(len(result["already_on_main"]), 1)
+            self.assertIn("1 already on main", buf.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

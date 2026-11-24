@@ -515,7 +515,8 @@ class AngularRun1(unittest.TestCase):
                 text = section(skill, where)
                 for cmd in ("npm run build", "npx ng build", "npx tsc --noEmit"):
                     self.assertIn(cmd, text)
-                self.assertIn("build or type", text.lower())
+                # Astro run 2 made it "build and type-check": both, when the project has both.
+                self.assertIn("build and type", text.lower())
 
     def test_pr_qa_checks_the_description_against_the_diff(self):
         text = section("pr-qa", "What to look for")
@@ -567,6 +568,51 @@ class AstroRun1(unittest.TestCase):
         self.assertIn("| Off-center columns |", text)
         self.assertIn("| Blank or hidden content |", text)
         self.assertIn("`off-center columns`", section("design-review", "5."))
+
+
+class AstroRun2(unittest.TestCase):
+    """Astro run 2: design-review called a change built that did not type-check, committed
+    unasked, and offered the capture's findings only in chat; pr-qa left flaws already on
+    main off its page; and its first pages.json had the wrong shape again."""
+
+    def test_build_and_type_check_both_run_and_a_build_alone_proves_no_types(self):
+        for skill, where in (("design-review", "5."), ("pr-qa", "Default path")):
+            with self.subTest(skill=skill):
+                text = section(skill, where)
+                self.assertIn("A build alone does not prove the types", text)
+                for cmd in ("npx tsc --noEmit", "npx astro check", "npx vue-tsc --noEmit", "npx svelte-check",
+                            "npx ng build", "@astrojs/check"):
+                    self.assertIn(cmd, text)
+
+    def test_type_check_commands_are_allowed(self):
+        text = (REPO / "shared" / "allow_block.py").read_text()
+        for cmd in ("npx tsc --noEmit", "npx astro check", "npx vue-tsc --noEmit", "npx svelte-check",
+                    "npx ng build", "npm run type-check", "npm run typecheck", "npm run check"):
+            self.assertIn(f"Bash({cmd})", text)
+
+    def test_design_review_does_not_commit_unasked(self):
+        text = section("design-review", "5.")
+        self.assertIn("Do not commit unless the user asked you to", text)
+        self.assertIn("uncommitted", text)
+        self.assertNotIn("commit following the project's own notes", text)
+
+    def test_design_review_puts_capture_findings_on_the_page(self):
+        text = section("design-review", "4.")
+        self.assertIn('"Found by the capture"', text)
+        self.assertIn("one item per flaw", text)
+        self.assertIn("if this change caused it", section("design-review", "5."))
+
+    def test_pr_qa_lists_flaws_already_on_main_apart(self):
+        text = section("pr-qa", "Default path")
+        self.assertIn("Already on main (not caused by this PR)", text)
+        self.assertIn("never change the verdict", text)
+
+    def test_pr_qa_shows_the_pages_file_shape(self):
+        text = section("pr-qa", "Default path")
+        self.assertIn('{"base": "http://localhost:3411", "pages": [{"name": "home", "path": "/"}]}', text)
+
+    def test_sections_without_headings_are_a_target(self):
+        self.assertIn("| Sections without headings |", (REPO / "skills" / "visual-qa" / "SKILL.md").read_text())
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
 import contextlib
+import importlib.machinery
 import importlib.util
 import io
 import re
@@ -727,3 +728,65 @@ class ResultsFirst(unittest.TestCase):
     def test_readme_says_it(self):
         self.assertIn("And every skill puts the result first: it saves tokens by cutting waste, never by cutting "
                       "the checks that make the result right.", (REPO / "README.md").read_text())
+
+
+_privacy_loader = importlib.machinery.SourceFileLoader("privacy_scan", str(REPO / "bin" / "privacy-scan"))
+_privacy_spec = importlib.util.spec_from_loader("privacy_scan", _privacy_loader)
+privacy_scan = importlib.util.module_from_spec(_privacy_spec)
+_privacy_loader.exec_module(privacy_scan)
+
+
+class DesignerReferences(unittest.TestCase):
+    """The designer upgrade: the critic's rubric and the optional design profile."""
+
+    KEYS = ("hierarchy", "action", "fold", "grouping", "fit", "care")
+
+    def rubric(self):
+        return " ".join((REPO / "reference" / "design-rubric.md").read_text().split())
+
+    def profile(self):
+        return " ".join((REPO / "reference" / "design-profile.md").read_text().split())
+
+    def test_rubric_names_every_score_key_with_its_anchors(self):
+        text = self.rubric()
+        for key in self.KEYS:
+            with self.subTest(key=key):
+                self.assertIn(f"`{key}`", text)
+        for anchor in ("**1**", "**3**", "**5**"):
+            self.assertGreaterEqual(text.count(anchor), len(self.KEYS), anchor)
+
+    def test_rubric_sets_the_bar(self):
+        text = self.rubric()
+        self.assertIn("2 or below", text)
+        self.assertIn("any failed design check", text)
+        self.assertIn("revise it once or drop it", text)
+        self.assertIn("reason on the page", text)
+
+    def test_rubric_judges_the_three_roles_and_the_measured_checks(self):
+        text = self.rubric()
+        for needle in ("**Careful**", "**Step up**", "**Bold**", "`--smoke`", "not measured", "near-copies",
+                       "`judged_by`"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+
+    def test_profile_documents_path_setting_and_headings(self):
+        text = self.profile()
+        self.assertIn("`docs/design-profile.md`", text)
+        self.assertIn("`PROOFS_DESIGN_PROFILE`", text)
+        for heading in ("References", "Rules", "Audience", "Tokens"):
+            with self.subTest(heading=heading):
+                self.assertIn(f"## {heading}", (REPO / "reference" / "design-profile.md").read_text())
+
+    def test_profile_is_optional_and_created_on_a_questions_page(self):
+        text = self.profile()
+        self.assertIn("never required", text)
+        self.assertIn("questions page", text)
+        for word in ("Love", "Like", "Not for us"):
+            self.assertIn(word, text)
+
+    def test_neither_file_names_anything_private(self):
+        deny = privacy_scan.load_deny(None) or privacy_scan.Deny(None, None)
+        for name in ("design-rubric.md", "design-profile.md"):
+            for num, line in enumerate((REPO / "reference" / name).read_text().splitlines(), 1):
+                with self.subTest(file=name, line=num):
+                    self.assertEqual(privacy_scan.categories(line, deny), [])

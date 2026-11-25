@@ -141,6 +141,8 @@ flat `items` list. Item fields:
 | variant `role` | `careful`, `step-up` or `bold`: shown as "Careful", "Step up", "Bold" in the variant head. Unknown value is a spec error |
 | variant `inventory` | `[{element, status, reason}]`, `status` is `kept`, `moved` or `removed`; a compact table under the mockup, removed rows in the deny color. `element` matches a captured element of `before_sections` by its text (its kind when it has none), ignoring case and extra spaces; a captured element with no row shows "removed — no reason given". Optional `brand`: `true` on a row for a logo, wordmark, company or product name, brand color or tagline shows a small "Brand" tag after the element (in the deny color when the row is removed); anything but `true` or `false` is a spec error |
 | variant `scores` | `{hierarchy, action, fold, grouping, fit, care}`, each a whole number 1 to 5, one line under the mockup. In an item where any variant is scored, an unscored one says "Not scored", and recommending (or `selected`) an unscored variant is a spec error |
+| `before_sections` | the current page's section this item changes: **one** section object from the before capture's `measures.json` (`label`, `top`, `left`, `width`, `height` and an `elements` list; `layout` when the capture has it). Better, name it and the builder reads it: `{"from": ".proofs/capture/before/measures.json", "page": "home", "width": 1280, "label": "Hero"}` (`"state"` defaults to `default`; `from` is relative to the spec's folder, then the working directory). Drives the inventory's "removed — no reason given" rows and `--smoke`'s near-copy check against the page. A list, a string, an object without an `elements` list, or a label the file does not have (the error lists the labels it has) is a spec error |
+| `before_font_sizes` | the page's own type scale: a list of numbers, measures.json's `fontSizes`, or `{"from": …, "page": …, "width": 1280}` to read it from the file. `--smoke` notes each mockup text size more than 1 px from all of them. Anything but a list of numbers is a spec error |
 | `before_scores` | the critic's scores for the current page, the baseline every option must beat (`design-rubric.md`): same keys and 1 to 5 checks as `scores`, errors naming "current page". Shown once per item above its options as a row labeled "Current page"; none, no row |
 | `judged_by` | `helper` ("Judged by a separate helper") or `self` ("Checked by the designer itself"); none, no line |
 | `inventory`, `scores` on an item with no `variants` | the single proposal's inventory and scores, validated and shown the same way; no `role` needed. Its score row shows only when it has `scores` or `judged_by` ("Not scored" when only `judged_by`), so copy-edit and capture items show none |
@@ -313,7 +315,13 @@ forces a clipboard failure to prove the fallback, checks every image loaded (sha
 blank) and every `<picture>` has a PNG or JPEG `<img>` fallback, and
 checks for sideways scroll at 1280 and 390. On a review page it also flags any word a mockup
 breaks mid-word ("authenticat|ion"), naming the item and variant, the same measure
-visual-qa's capture uses. A headless 390 px viewport renders correctly;
+visual-qa's capture uses. On a design-review page only, it also measures every option
+(and a one-option item's `.rp-mockup`) for contrast (any CSS color, oklch included; text
+faded by `opacity` is composited), tap targets, line length, left edges and off-scale
+type, and compares options for near-copies; what it cannot measure goes in `notes`, as
+does a one-option item with no `.rp-mockup` and a one-option fix that keeps the page's
+layout (expected, not a failure). Other kinds of page get none of these design checks:
+a style guide's examples are deliberately small or low in contrast. A headless 390 px viewport renders correctly;
 the smoke check measures sideways scroll at 390 itself.
 
 Then look at the page: take a screenshot at a desktop and a phone width (or open it)

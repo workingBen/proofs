@@ -348,6 +348,7 @@ def load_spec(spec_path):
         assets[name] = embed_asset(p, settings, tool, report)
     spec["_assets"] = assets
     spec["_image_report"] = report
+    spec["_base"] = path.parent
     return spec
 
 
@@ -492,18 +493,76 @@ def check_scores(where, sc):
             raise SpecError("%s: score %s must be a whole number from 1 to 5, got %r" % (where, k, val))
 
 
+def _capture_row(where, ref, base):
+    """The measures.json result a {"from", "page", "width", "state"} reference names."""
+    rel = ref.get("from")
+    if not isinstance(rel, str) or not rel:
+        raise SpecError("%s: \"from\" must name the capture's measures.json" % where)
+    p, tried = find_file(rel, base)
+    if p is None:
+        raise SpecError("%s: %s not found (tried %s)" % (where, rel, " and ".join(map(str, tried))))
+    try:
+        data = json.loads(p.read_text())
+    except ValueError as e:
+        raise SpecError("%s: %s is not JSON (%s)" % (where, rel, e))
+    page, width, state = ref.get("page"), str(ref.get("width", "")), ref.get("state", "default")
+    rows = [r for r in (data.get("results") if isinstance(data, dict) else None) or []
+            if isinstance(r, dict) and isinstance(r.get("measures"), dict)]
+    for r in rows:
+        if r.get("page") == page and str(r.get("viewport")) == width and r.get("state", "default") == state:
+            return r["measures"], "%s at %s" % (page, width)
+    have = ", ".join("%s at %s%s" % (r.get("page"), r.get("viewport"),
+                                     "" if r.get("state", "default") == "default" else " (%s)" % r.get("state"))
+                     for r in rows) or "nothing"
+    raise SpecError("%s: no capture of %s at %s%s in %s; it has: %s"
+                    % (where, page, width, "" if state == "default" else " (%s)" % state, rel, have))
+
+
+def resolve_before(it, base):
+    """before_sections / before_font_sizes given as {"from": measures.json, ...} become the captured
+    section object and the page's fontSizes list, so a session never copies them out by hand."""
+    iid = it["id"]
+    ref = it.get("before_sections")
+    if isinstance(ref, dict) and "from" in ref:
+        where = "item %s: before_sections" % iid
+        m, at = _capture_row(where, ref, base)
+        secs = [s for s in m.get("sections") or [] if isinstance(s, dict)]
+        found = [s for s in secs if s.get("label") == ref.get("label")]
+        if not found:
+            raise SpecError("%s: no section labeled %r in %s (%s); it has: %s"
+                            % (where, ref.get("label"), ref["from"], at,
+                               ", ".join(str(s.get("label")) for s in secs) or "no sections"))
+        it["before_sections"] = found[0]
+    ref = it.get("before_font_sizes")
+    if isinstance(ref, dict) and "from" in ref:
+        m, _ = _capture_row("item %s: before_font_sizes" % iid, ref, base)
+        it["before_font_sizes"] = m.get("fontSizes") or []
+
+
 def check_designer_fields(it):
     """Validate role, inventory, scores and judged_by on an item and its variants (plain one-line errors)."""
     iid = it["id"]
-    if it.get("judged_by") is not None and it["judged_by"] not in JUDGED_BY:
-        raise SpecError("item %s: judged_by %r must be helper or self" % (iid, it["judged_by"]))
+    jb = it.get("judged_by")
+    if jb is not None and (not isinstance(jb, str) or jb not in JUDGED_BY):
+        raise SpecError("item %s: judged_by %r must be helper or self" % (iid, jb))
+    # before_sections: one section object from the capture's measures.json (its `elements` drive
+    # the inventory's "removed" rows and smoke's near-copy check); before_font_sizes: its fontSizes.
+    bs = it.get("before_sections")
+    if bs is not None and not (isinstance(bs, dict) and isinstance(bs.get("elements"), list)):
+        raise SpecError("item %s: before_sections must be one captured section object with an elements list "
+                        "(from measures.json), got %s" % (iid, type(bs).__name__))
+    fs = it.get("before_font_sizes")
+    if fs is not None and not (isinstance(fs, list) and all(
+            isinstance(n, (int, float)) and not isinstance(n, bool) for n in fs)):
+        raise SpecError("item %s: before_font_sizes must be a list of numbers (measures.json's fontSizes), got %r"
+                        % (iid, fs))
     # before_scores: the critic's scores for the current page, the baseline every option must beat.
     check_scores("item %s, current page" % iid, it.get("before_scores"))
     variants = it.get("variants") or []
     owners = [("item %s" % iid, it)] if not variants else []
     owners += [("item %s, variant %s" % (iid, v["key"]), v) for v in variants]
     for where, o in owners:
-        if o.get("role") is not None and o["role"] not in ROLES:
+        if o.get("role") is not None and (not isinstance(o["role"], str) or o["role"] not in ROLES):
             raise SpecError("%s: unknown role %r (use %s)" % (where, o["role"], ", ".join(ROLES)))
         inv = o.get("inventory")
         if inv is not None:
@@ -582,6 +641,7 @@ def render_review(sec, ctx):
         if it.get("selected") is not None and it["selected"] not in keys:
             raise SpecError("item %s: selected %r is not one of its variants (%s)"
                             % (it["id"], it["selected"], ", ".join(keys) or "it has none"))
+        resolve_before(it, ctx.spec.get("_base") or Path.cwd())
         check_designer_fields(it)
         out.append(review_item(it, dec, ctx.colors))
         items.append({"id": it["id"], "num": it["num"], "label": it["label"], "category": it.get("category"),

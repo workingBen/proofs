@@ -1562,6 +1562,79 @@ class DesignChecks(unittest.TestCase):
         self.assertTrue([n for n in res["notes"] if "off the page's own scale" in n and "27px" in n], res["notes"])
 
 
+FR_BOX = "font:16px sans-serif;padding:20px;"
+FR_VARIANTS = [
+    # A: light gray in oklch on an oklch white: measured, and below AA.
+    '<div style="%sbackground:oklch(1 0 0);color:oklch(0.75 0 0)"><p style="margin:0">Pale oklch text</p></div>' % FR_BOX,
+    # B: near-black in color() on white: measured and clean.
+    '<div style="%sbackground:color(srgb 1 1 1);color:color(srgb 0.07 0.07 0.07)"><p style="margin:0">Dark color() text</p></div>'
+    % FR_BOX,
+    # C: dark text faded to 30%%: composited, so it fails like the pale gray it looks.
+    '<div style="%sbackground:#fff;color:#111"><p style="margin:0;opacity:.3">Faded text</p></div>' % FR_BOX,
+    # D: a gradient overlay that ignores the pointer still covers the text.
+    '<div style="%sbackground:#fff;color:#111;position:relative"><p style="margin:0">Under a scrim</p>'
+    '<div style="position:absolute;inset:0;pointer-events:none;background:linear-gradient(#0008,#0000)"></div></div>'
+    % FR_BOX,
+]
+
+
+@unittest.skipUnless(NODE and playwright_dir(), "Playwright not found")
+class DesignChecksScope(unittest.TestCase):
+    """Final review, items 3-5: what the design checks measure and on which pages."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        spec = {"title": "Scope", "project": {"name": "P", "session": "s"}, "decisions": "design-review",
+                "items": [{"label": "Colors", "reason_html": "<p>r</p>", "recommended": True, "stack_variants": True,
+                           "variants": [{"html": h} for h in FR_VARIANTS]},
+                          {"label": "No mockup", "reason_html": "<p>r</p>", "body_html": "<p>Just words</p>"},
+                          {"label": "Capture find", "category": "capture", "reason_html": "<p>r</p>",
+                           "body_html": "<p>measured numbers</p>"}]}
+        cls.dr = DesignChecks.smoke(spec, cls.tmp.name, "dr")
+        sg = json.loads(json.dumps(spec))
+        sg["decisions"] = "style-guide"
+        cls.sg = DesignChecks.smoke(sg, cls.tmp.name, "sg")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def row(self, variant):
+        rows = [c for c in self.dr["design_checks"] if c["item"] == "1" and c["variant"] == variant and c["width"] == 1280]
+        self.assertEqual(len(rows), 1, self.dr["design_checks"])
+        return rows[0]
+
+    def test_oklch_colors_are_measured(self):
+        c = self.row("A")
+        self.assertEqual([x["text"] for x in c["contrast"]], ["Pale oklch text"], c)
+        self.assertLess(c["contrast"][0]["ratio"], 4.5)
+        self.assertEqual(c["unmeasured"], [])
+
+    def test_color_function_colors_are_measured_and_clean(self):
+        c = self.row("B")
+        self.assertEqual((c["contrast"], c["unmeasured"]), ([], []), c)
+
+    def test_a_faded_element_is_composited(self):
+        c = self.row("C")
+        self.assertEqual([x["text"] for x in c["contrast"]], ["Faded text"], c)
+
+    def test_a_pointer_events_none_overlay_still_covers_the_text(self):
+        c = self.row("D")
+        self.assertEqual([u["text"] for u in c["unmeasured"]], ["Under a scrim"], c)
+        self.assertEqual(c["contrast"], [])
+
+    def test_style_guide_pages_get_no_design_checks(self):
+        self.assertEqual(self.sg["design_checks"], [])
+        self.assertFalse([p for p in self.sg["problems"] if "contrast" in p], self.sg["problems"])
+        self.assertTrue([p for p in self.dr["problems"] if "below AA contrast" in p], self.dr["problems"])
+
+    def test_one_option_item_without_a_mockup_is_a_note(self):
+        self.assertIn("item 2: no .rp-mockup, design checks skipped", self.dr["notes"])
+        self.assertFalse([n for n in self.dr["notes"] if n.startswith("item 3:")], self.dr["notes"])
+        self.assertFalse([n for n in self.sg["notes"] if "rp-mockup" in n], self.sg["notes"])
+
+
 class DesignerFields(unittest.TestCase):
     """Option roles, the element inventory and the critic's scores on a design-review item."""
     SC = {"hierarchy": 4, "action": 5, "fold": 3, "grouping": 4, "fit": 4, "care": 5}
@@ -1733,6 +1806,89 @@ class DesignerFields(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertNotIn("Not scored", build("copy-edit", tmp).read_text())
 
+    # Final review, item 2: before_sections, before_font_sizes, role and judged_by of the wrong
+    # shape are one-line spec errors, never a Python crash.
+    def test_before_sections_must_be_one_section_object(self):
+        sec = {"label": "Hero", "elements": [{"kind": "heading", "text": "Hi"}]}
+        for bad in ([sec], "Hero", 3, {"label": "Hero"}, {"label": "Hero", "elements": "x"}):
+            with self.subTest(bad=bad):
+                msg = self.error([{"label": "Hero", "before_sections": bad, "variants": self.variants()}])
+                self.assertEqual(msg, "item 1: before_sections must be one captured section object with an "
+                                      "elements list (from measures.json), got %s" % type(bad).__name__)
+
+    def test_before_font_sizes_must_be_a_list_of_numbers(self):
+        for bad in (16, "16", [16, "20"], [True], {"a": 1}):
+            with self.subTest(bad=bad):
+                msg = self.error([{"label": "Hero", "before_font_sizes": bad, "variants": self.variants()}])
+                self.assertIn("item 1: before_font_sizes must be a list of numbers", msg)
+        self.page([{"label": "Hero", "before_font_sizes": [16, 20.5], "variants": self.variants()}])
+
+    def test_unhashable_role_and_judged_by_are_spec_errors(self):
+        self.assertIn("unknown role", self.error([{"label": "Hero", "variants": self.variants(role=["bold"])}]))
+        self.assertIn("unknown role", self.error([{"label": "Hero", "role": {"a": 1}, "body_html": "x"}]))
+        for bad in (["helper"], {"by": "self"}):
+            with self.subTest(bad=bad):
+                self.assertIn("judged_by", self.error([{"label": "Hero", "judged_by": bad, "variants": self.variants()}]))
+
+
+class BeforeFromMeasures(unittest.TestCase):
+    """Final review, item 7b: before_sections and before_font_sizes can name the capture's measures.json."""
+    SEC = {"id": "", "tag": "section", "label": "Hero", "top": 0, "left": 0, "width": 1280, "height": 500,
+           "elements": [{"kind": "heading", "text": "Big title", "tag": "h1", "top": 0, "left": 0,
+                         "width": 100, "height": 40}]}
+
+    def measures(self):
+        other = dict(self.SEC, label="Footer", elements=[])
+        res = [{"page": "home", "state": "default", "viewport": "390",
+                "measures": {"sections": [dict(self.SEC, width=390)], "fontSizes": [14, 28]}},
+               {"page": "home", "state": "default", "viewport": "1280",
+                "measures": {"sections": [self.SEC, other], "fontSizes": [16, 20, 40]}},
+               {"page": "about", "state": "default", "viewport": "1280", "error": "boom"}]
+        return {"results": res, "errors": [], "failures": []}
+
+    def load(self, item):
+        spec = {"title": "D", "project": {"name": "P", "session": "s"}, "decisions": "design-review",
+                "items": [dict({"label": "Hero", "variants": [{"html": "<p>a</p>", "inventory": []}]}, **item)]}
+        with tempfile.TemporaryDirectory() as tmp:
+            cap = Path(tmp) / "capture"
+            cap.mkdir()
+            (cap / "measures.json").write_text(json.dumps(self.measures()))
+            p = Path(tmp) / "s.json"
+            p.write_text(json.dumps(spec))
+            loaded = review_page.load_spec(p)
+            return loaded, review_page.page(loaded)
+
+    def error(self, item):
+        with self.assertRaises(review_page.SpecError) as cm:
+            self.load(item)
+        return str(cm.exception)
+
+    def test_before_sections_from_measures_resolves_to_the_section(self):
+        spec, html = self.load({"before_sections": {"from": "capture/measures.json", "page": "home",
+                                                    "width": 1280, "label": "Hero"}})
+        self.assertEqual(spec["items"][0]["before_sections"], self.SEC)
+        self.assertIn("<td>Big title</td><td>removed — no reason given</td>", html)
+
+    def test_before_font_sizes_from_measures_resolves_to_the_list(self):
+        spec, _ = self.load({"before_font_sizes": {"from": "capture/measures.json", "page": "home", "width": 1280}})
+        self.assertEqual(spec["items"][0]["before_font_sizes"], [16, 20, 40])
+
+    def test_a_label_not_found_lists_the_labels_it_has(self):
+        msg = self.error({"before_sections": {"from": "capture/measures.json", "page": "home", "width": 1280,
+                                              "label": "Heroes"}})
+        self.assertEqual(msg, "item 1: before_sections: no section labeled 'Heroes' in capture/measures.json "
+                              "(home at 1280); it has: Hero, Footer")
+
+    def test_a_page_or_width_not_found_says_what_was_captured(self):
+        msg = self.error({"before_font_sizes": {"from": "capture/measures.json", "page": "home", "width": 1440}})
+        self.assertIn("item 1: before_font_sizes: no capture of home at 1440 in capture/measures.json", msg)
+        self.assertIn("home at 390, home at 1280", msg)
+
+    def test_a_missing_measures_file_is_a_spec_error(self):
+        msg = self.error({"before_sections": {"from": "nope/measures.json", "page": "home", "width": 1280,
+                                              "label": "Hero"}})
+        self.assertIn("item 1: before_sections: nope/measures.json not found", msg)
+
 @unittest.skipUnless(NODE and playwright_dir(), "Playwright not found")
 class InventoryFit(unittest.TestCase):
     def test_long_inventory_rows_do_not_scroll_the_page_sideways(self):
@@ -1848,8 +2004,11 @@ class NearCopy(unittest.TestCase):
                          before_sections=self.before(**STACKED))
         res = self.run_smoke(spec)
         self.assertEqual(self.copies(res), [("proposed", "before")], res["near_copies"])
-        self.assertTrue([p for p in res["problems"]
-                         if p.startswith("item 1 (Hero): Proposed and the current page are near-copies (")], res["problems"])
+        # Final review, item 4: a one-option fix keeps its layout by design, so this is a note.
+        self.assertFalse([p for p in res["problems"] if "near-copies" in p], res["problems"])
+        self.assertTrue([n for n in res["notes"]
+                         if n.startswith("item 1 (Hero): Proposed and the current page are near-copies (")
+                         and "expected for a one-option fix" in n], res["notes"])
 
     def test_one_variant_item_is_compared_with_the_page_too(self):
         res = self.run_smoke(self.spec([abs_box(**STACKED)], before_sections=self.before(**STACKED)))

@@ -190,24 +190,36 @@ const file = "file://" + path.resolve(process.argv[3]);
     }
     // Contrast, tap targets, line length and edges on each mockup, by item and variant. A one-option
     // item's proposal is the .rp-mockup inside its body ("Proposed"); the page's own labels are not.
-    // Unmeasured text and off-scale type sizes are notes, never problem lines.
+    // Unmeasured text and off-scale type sizes are notes, never problem lines. Design reviews only:
+    // a style guide's or photo picker's options hold deliberately small or low-contrast examples.
     for (const it of reviewItems) {
       const sigs = [];
       const item = `.rp-item[data-id=${JSON.stringify(it.id)}]`;
-      const boxes = (it.variants || []).length
+      const oneOption = !(it.variants || []).length;
+      const boxes = !oneOption
         ? it.variants.map((v) => [v.key, v.label, `${item} .rp-variant[data-variant=${JSON.stringify(v.key)}] .rp-vbody`])
         : [["proposed", "Proposed", `${item} .rp-body .rp-mockup`]];
       for (const [key, name, sel] of boxes) {
-        if (!(await page.locator(sel).count())) continue;
+        if (!(await page.locator(sel).count())) {
+          // A capture item needs no mockup; any other one-option design-review item without one is
+          // never checked, which must not read as clean.
+          if (oneOption && it.design_review && w === 1280 && it.category !== "capture")
+            out.notes.push(`item ${it.num}: no .rp-mockup, design checks skipped`);
+          continue;
+        }
+        if (w === 1280) sigs.push([key, name, await layoutSignature(page, sel)]);
+        if (!it.design_review) continue;
         const d = await designChecks(page, sel, { width: w, beforeFontSizes: it.before_font_sizes || [] });
         out.design_checks.push({ item: it.num, variant: key, width: w, ...d });
-        if (w === 1280) sigs.push([key, name, await layoutSignature(page, sel)]);
         const where = `item ${it.num} (${it.label}), ${name}`;
         if (d.contrast.length) problems.push(`${where}: ${d.contrast.length} text elements below AA contrast at ${w}px`);
         if (d.smallTargets.length) problems.push(`${where}: ${d.smallTargets.length} tap targets under 44x44 at ${w}px`);
         if (d.longLines.length) problems.push(`${where}: ${d.longLines.length} lines over 80 characters at ${w}px`);
         if (d.edges.length) problems.push(`${where}: ${d.edges.length} left edges 1 to 6px out of line at ${w}px`);
-        if (d.unmeasured.length) out.notes.push(`${where}: contrast not measured for ${d.unmeasured.length} text elements (text over an image or gradient) at ${w}px`);
+        if (d.unmeasured.length) {
+          const why = [...new Set(d.unmeasured.map((u) => u.reason.replace(/^contrast: not measured \((.*)\)$/, "$1")))];
+          out.notes.push(`${where}: contrast not measured for ${d.unmeasured.length} text elements (${why.join("; ")}) at ${w}px`);
+        }
         if (d.offScale.length) out.notes.push(`${where}: ${d.offScale.length} text sizes off the page's own scale at ${w}px (${d.offScale.map((o) => o.size + "px").join(", ")})`);
       }
       // Near-copies, measured once at 1280: each pair of options, then each option against the
@@ -219,7 +231,10 @@ const file = "file://" + path.resolve(process.argv[3]);
         out.layout_scores.push({ item: it.num, a, b, score });
         if (score < NEAR_COPY) return;
         out.near_copies.push({ item: it.num, a, b, score });
-        problems.push(`item ${it.num} (${it.label}): ${an} and ${bn} are near-copies (${score.toFixed(2)})`);
+        const line = `item ${it.num} (${it.label}): ${an} and ${bn} are near-copies (${score.toFixed(2)})`;
+        // A one-option fix keeps the page's layout by design: a note, and the Reason says what changed.
+        if (oneOption) out.notes.push(`${line}; expected for a one-option fix: say what changed in the Reason`);
+        else problems.push(line);
       };
       for (let i = 0; i < sigs.length; i++) {
         for (let j = i + 1; j < sigs.length; j++) near(sigs[i][0], sigs[i][1], sigs[j][0], sigs[j][1], sigs[i][2], sigs[j][2]);

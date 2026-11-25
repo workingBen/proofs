@@ -941,6 +941,17 @@ class SectionInventory(unittest.TestCase):
         self.assertIn("Sections (", text)
         self.assertIn("  - Second section: 1 heading, 1 text, 1 button, 1 image, 1 list", text)
 
+    def test_summary_lists_sections_once_per_page_at_1280(self):
+        # Final review, item 7a: the list is for picking a section label, so one width is enough.
+        with tempfile.TemporaryDirectory() as tmp:
+            _, out = self.capture(tmp, "inventory.html", "--sizes", "390,1280,1440")
+            text = (out / "summary.md").read_text()
+        block = text.split("Sections (", 1)[1].split("\n\n", 1)[0]
+        self.assertIn("- t default at 1280:", block)
+        self.assertNotIn("at 390:", block)
+        self.assertNotIn("at 1440:", block)
+        self.assertEqual(block.count("  - Second section:"), 1)
+
     def test_font_sizes_are_distinct_and_sorted(self):
         sizes = self.measures("inventory.html")["fontSizes"]
         self.assertEqual(sizes, sorted(set(sizes)))

@@ -802,7 +802,6 @@ function overflowOf(m) {
   m.sideways = Math.max(scroll, clipped, image, 0);
 }
 
-// Goes to the page and runs its actions (shared by the capture and the plain recheck).
 // The site's own logo, for a design review that cannot find the logo file in the project. In the
 // header (else the first section), the first visible: (1) element whose id, class or alt says
 // "logo"; (2) img, svg or picture inside the header's link to "/"; (3) that link itself; (4) img,
@@ -842,6 +841,7 @@ function findLogo() {
   };
 }
 
+// Goes to the page and runs its actions (shared by the capture and the plain recheck).
 async function openPage(page, base, p, scroll = true) {
   const url = joinUrl(base, p.path);
   const response = await page.goto(url, { waitUntil: 'networkidle' });
@@ -1221,9 +1221,17 @@ async function main() {
       lines.push(`- ${r.page} ${r.state} at ${r.viewport}: ${rows.join('; ')}${more}`);
     }
   }
-  const sectionRows = results.filter((r) => !r.error && r.measures.sections && r.measures.sections.length);
+  // Once per page, at 1280 (else the widest width this run took): the list is for picking a
+  // section's label, and every width and state repeats it (measures.json keeps them all).
+  const withSections = results.filter((r) => !r.error && r.measures.sections && r.measures.sections.length);
+  const sectionRows = [...new Set(withSections.map((r) => r.page))].map((name) => {
+    const rows = withSections.filter((r) => r.page === name);
+    const pick = (list) => list.find((r) => r.viewport === '1280')
+      || list.slice().sort((a, b) => Number(b.viewport) - Number(a.viewport))[0];
+    return pick(rows.filter((r) => r.state === 'default')) || pick(rows);
+  });
   if (sectionRows.length) {
-    lines.push('', 'Sections (label: element counts by kind; positions are in measures.json "sections"):');
+    lines.push('', 'Sections (label: element counts by kind; one width per page; every width\'s positions are in measures.json "sections"):');
     for (const r of sectionRows) {
       lines.push(`- ${r.page} ${r.state} at ${r.viewport}:`);
       for (const sec of r.measures.sections) {

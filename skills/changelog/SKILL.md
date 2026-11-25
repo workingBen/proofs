@@ -10,6 +10,8 @@ Builds a signed-in-only changelog page (one per app or sub-app) backed by plain 
 
 **Results first.** Nothing matters more than a result the user wants. Save tokens by cutting waste, never by cutting a check, an option or a revise pass the result needs (full text: `../../reference/house-rules.md`).
 
+**Needs the whole plugin.** This skill reads shared files at `../../reference/` and `../../shared/`, relative to its folder. If they are missing, the skill was copied on its own: install the whole plugin (`/plugin install proofs@proofs`) rather than recreating them.
+
 ## When to use
 
 - **Setup**: the user asks for a changelog page, or you're bringing this skill into a new project for the first time.

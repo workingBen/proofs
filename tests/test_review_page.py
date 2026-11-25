@@ -1467,5 +1467,978 @@ class ReadTickScroll(unittest.TestCase):
                     gap = m["above"]["e2"] - m["above"]["bars"]
                     self.assertTrue(0 <= gap <= 12, m)
 
+FIXTURES = ROOT / "tests" / "fixtures" / "review_page"
+
+
+@unittest.skipUnless(NODE and playwright_dir(), "Playwright not found")
+class DesignChecks(unittest.TestCase):
+    """Every mockup in a review page is measured for contrast, tap targets, line length and edges."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        cls.res = cls.smoke(json.loads((FIXTURES / "design_checks.json").read_text()), cls.tmp.name)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    @staticmethod
+    def smoke(spec, tmp, name="s"):
+        src, out = Path(tmp) / (name + ".json"), Path(tmp) / (name + ".html")
+        src.write_text(json.dumps(spec))
+        r = subprocess.run([sys.executable, str(BUILD), str(src), "--out", str(out)], capture_output=True, text=True)
+        if r.returncode:
+            raise AssertionError(r.stdout + r.stderr)
+        return review_page.smoke(out)[1]
+
+    def checks(self, variant, width):
+        rows = [c for c in self.res["design_checks"] if c["variant"] == variant and c["width"] == width]
+        self.assertEqual(len(rows), 1, self.res["design_checks"])
+        return rows[0]
+
+    def design_problems(self, variant):
+        return [p for p in self.res["problems"] if p.startswith("item 1 (Hero), Variant %s:" % variant)]
+
+    def test_low_contrast_is_reported_with_its_ratio(self):
+        c = self.checks("B", 1280)
+        gray = [x for x in c["contrast"] if x["text"].startswith("Gray on white")]
+        self.assertEqual(len(gray), 1, c["contrast"])
+        self.assertAlmostEqual(gray[0]["ratio"], 2.85, places=1)
+        self.assertEqual(gray[0]["needed"], 4.5)
+        self.assertIn("item 1 (Hero), Variant B: 1 text elements below AA contrast at 1280px", self.res["problems"])
+
+    def test_small_target_at_390(self):
+        c = self.checks("B", 390)
+        self.assertEqual([(t["w"], t["h"]) for t in c["smallTargets"]], [(30, 30)])
+        self.assertTrue(any("tap targets under 44x44 at 390px" in p for p in self.design_problems("B")))
+
+    def test_long_line_at_1280(self):
+        c = self.checks("B", 1280)
+        self.assertEqual(len(c["longLines"]), 1, c)
+        self.assertGreaterEqual(c["longLines"][0]["chars"], 120)
+        self.assertTrue(any("over 80 characters at 1280px" in p for p in self.design_problems("B")))
+
+    def test_text_on_gradient_is_unmeasured_not_failed(self):
+        c = self.checks("C", 1280)
+        self.assertTrue(any(u["text"].startswith("Text on a gradient") for u in c["unmeasured"]), c)
+        self.assertEqual(c["contrast"], [])
+        self.assertEqual(self.design_problems("C"), [])
+        self.assertIn("item 1 (Hero), Variant C: contrast not measured for 1 text elements "
+                      "(text over an image or gradient) at 1280px", self.res["notes"])
+
+    def test_text_over_an_image_is_unmeasured_not_failed(self):
+        c = self.checks("D", 1280)
+        self.assertEqual([u["text"] for u in c["unmeasured"]], ["Text over a picture"], c)
+        self.assertEqual(c["unmeasured"][0]["reason"], "contrast: not measured (text over an image or gradient)")
+        self.assertEqual(c["contrast"], [])
+        self.assertEqual(self.design_problems("D"), [])
+
+    def test_one_option_proposal_is_checked_and_the_pages_own_label_is_not(self):
+        rows = [c for c in self.res["design_checks"] if c["item"] == "2" and c["width"] == 1280]
+        self.assertEqual([r["variant"] for r in rows], ["proposed"], rows)
+        self.assertEqual([x["text"] for x in rows[0]["contrast"]], ["Proposed gray text"])
+        self.assertIn("item 2 (One option), Proposed: 1 text elements below AA contrast at 1280px", self.res["problems"])
+        self.assertFalse([p for p in self.res["problems"] if p.startswith("item 2") and "Original" in p])
+
+    def test_clean_variant_has_no_design_problems(self):
+        for w in (1280, 390):
+            c = self.checks("A", w)
+            for k in ("contrast", "unmeasured", "smallTargets", "longLines", "edges"):
+                self.assertEqual(c[k], [], (w, k, c))
+        self.assertEqual(self.design_problems("A"), [])
+
+    def test_off_scale_size_is_a_note(self):
+        spec = {"title": "Scale", "project": {"name": "P", "session": "s"}, "decisions": "design-review",
+                "items": [{"label": "Hero", "reason_html": "<p>r</p>", "recommended": True,
+                           "before_font_sizes": [16, 20, 32],
+                           "variants": [{"html": '<div style="font:16px sans-serif"><h1 style="font-size:27px;margin:0">Big</h1>'
+                                                 '<p style="margin:0">Body</p></div>'}]}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            res = self.smoke(spec, tmp)
+        notes = [o for c in res["design_checks"] if c["width"] == 1280 for o in c["offScale"]]
+        self.assertEqual([(o["text"], o["size"]) for o in notes], [("Big", 27)], res["design_checks"])
+        self.assertEqual([p for p in res["problems"] if "scale" in p.lower()], [])
+        self.assertTrue([n for n in res["notes"] if "off the page's own scale" in n and "27px" in n], res["notes"])
+
+
+FR_BOX = "font:16px sans-serif;padding:20px;"
+FR_VARIANTS = [
+    # A: light gray in oklch on an oklch white: measured, and below AA.
+    '<div style="%sbackground:oklch(1 0 0);color:oklch(0.75 0 0)"><p style="margin:0">Pale oklch text</p></div>' % FR_BOX,
+    # B: near-black in color() on white: measured and clean.
+    '<div style="%sbackground:color(srgb 1 1 1);color:color(srgb 0.07 0.07 0.07)"><p style="margin:0">Dark color() text</p></div>'
+    % FR_BOX,
+    # C: dark text faded to 30%%: composited, so it fails like the pale gray it looks.
+    '<div style="%sbackground:#fff;color:#111"><p style="margin:0;opacity:.3">Faded text</p></div>' % FR_BOX,
+    # D: a gradient overlay that ignores the pointer still covers the text.
+    '<div style="%sbackground:#fff;color:#111;position:relative"><p style="margin:0">Under a scrim</p>'
+    '<div style="position:absolute;inset:0;pointer-events:none;background:linear-gradient(#0008,#0000)"></div></div>'
+    % FR_BOX,
+    # E: an opaque background inside a faded element: still faded, so not a full-contrast pass.
+    '<div style="%sbackground:#fff;color:#111"><div style="opacity:.3"><p style="margin:0;background:#fff;color:#111">'
+    'Opaque under a fade</p></div></div>' % FR_BOX,
+]
+
+
+@unittest.skipUnless(NODE and playwright_dir(), "Playwright not found")
+class DesignChecksScope(unittest.TestCase):
+    """Final review, items 3-5: what the design checks measure and on which pages."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        spec = {"title": "Scope", "project": {"name": "P", "session": "s"}, "decisions": "design-review",
+                "items": [{"label": "Colors", "reason_html": "<p>r</p>", "recommended": True, "stack_variants": True,
+                           "variants": [{"html": h} for h in FR_VARIANTS]},
+                          {"label": "No mockup", "reason_html": "<p>r</p>", "body_html": "<p>Just words</p>"},
+                          {"label": "Capture find", "category": "capture", "reason_html": "<p>r</p>",
+                           "body_html": "<p>measured numbers</p>"}]}
+        cls.dr = DesignChecks.smoke(spec, cls.tmp.name, "dr")
+        sg = json.loads(json.dumps(spec))
+        sg["decisions"] = "style-guide"
+        cls.sg = DesignChecks.smoke(sg, cls.tmp.name, "sg")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def row(self, variant):
+        rows = [c for c in self.dr["design_checks"] if c["item"] == "1" and c["variant"] == variant and c["width"] == 1280]
+        self.assertEqual(len(rows), 1, self.dr["design_checks"])
+        return rows[0]
+
+    def test_oklch_colors_are_measured(self):
+        c = self.row("A")
+        self.assertEqual([x["text"] for x in c["contrast"]], ["Pale oklch text"], c)
+        self.assertLess(c["contrast"][0]["ratio"], 4.5)
+        self.assertEqual(c["unmeasured"], [])
+
+    def test_color_function_colors_are_measured_and_clean(self):
+        c = self.row("B")
+        self.assertEqual((c["contrast"], c["unmeasured"]), ([], []), c)
+
+    def test_a_faded_element_is_composited(self):
+        c = self.row("C")
+        self.assertEqual([x["text"] for x in c["contrast"]], ["Faded text"], c)
+
+    def test_an_opaque_background_inside_a_faded_element_is_not_a_pass(self):
+        c = self.row("E")
+        self.assertEqual(c["contrast"], [], c)
+        self.assertEqual([(u["text"], u["reason"]) for u in c["unmeasured"]],
+                         [("Opaque under a fade", "contrast: not measured (a translucent element over its own background)")], c)
+
+    def test_a_pointer_events_none_overlay_still_covers_the_text(self):
+        c = self.row("D")
+        self.assertEqual([u["text"] for u in c["unmeasured"]], ["Under a scrim"], c)
+        self.assertEqual(c["contrast"], [])
+
+    def test_style_guide_pages_get_no_design_checks(self):
+        self.assertEqual(self.sg["design_checks"], [])
+        self.assertFalse([p for p in self.sg["problems"] if "contrast" in p], self.sg["problems"])
+        self.assertTrue([p for p in self.dr["problems"] if "below AA contrast" in p], self.dr["problems"])
+
+    def test_one_option_item_without_a_mockup_is_a_note(self):
+        self.assertIn("item 2: no .rp-mockup, design checks skipped", self.dr["notes"])
+        self.assertFalse([n for n in self.dr["notes"] if n.startswith("item 3:")], self.dr["notes"])
+        self.assertFalse([n for n in self.sg["notes"] if "rp-mockup" in n], self.sg["notes"])
+
+
+CR_LINKS = ["Pricing &amp; trial", "Features", "Paths", "Works with AI helpers", "Dependable uptime"]
+CR_ROW = ("display:flex;gap:0 18px;font:14px sans-serif;color:#111;background:#fff;padding:0 14px;%s")
+CR_LINK = '<a href="#" style="flex:none;white-space:nowrap;padding:14px 0;color:#111">%s</a>'
+CR_VARIANTS = [
+    # A: the hillock nav (bench run hillock-new, options B and C): one row that scrolls sideways
+    # with its scrollbar hidden, so the last link it shows is cut mid-word at the phone's edge.
+    '<nav style="%s">%s</nav>' % (CR_ROW % "flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none",
+                                  "".join(CR_LINK % t for t in CR_LINKS)),
+    # B: the same links allowed to wrap: nothing is cut.
+    '<nav style="%s">%s</nav>' % (CR_ROW % "flex-wrap:wrap", "".join(CR_LINK % t for t in CR_LINKS)),
+    # C: a card carousel whose next card peeks in: a swipe affordance, a note and never a problem.
+    '<div style="display:flex;gap:12px;overflow-x:auto;font:16px sans-serif;color:#111;background:#fff">%s</div>'
+    % "".join('<div style="flex:none;width:80%%;padding:16px;border:1px solid #ccc"><h3 style="margin:0">Card %d</h3>'
+              '<p style="margin:0">A longer card body.</p></div>' % i for i in (1, 2, 3)),
+    # D: the cut row's links sit in a track wider than the scroller (nav > div > a): still the links.
+    '<nav style="%s"><div style="display:flex;gap:0 18px;flex:none">%s</div></nav>'
+    % (CR_ROW % "overflow-x:hidden", "".join(CR_LINK % t for t in CR_LINKS)),
+    # E: hillock option C in the review page's 292px box: the cut link is over half the row wide,
+    # but a one-line label is a link, never a carousel card.
+    '<nav style="%s">%s</nav>' % (CR_ROW % "overflow-x:auto;scrollbar-width:none",
+                                  "".join(CR_LINK % t for t in ["Pricing", "Paths", "Works with AI helpers and agents"])),
+    # F: hillock option B in the review page's box: the row ends in the gap after a link, so nothing
+    # is partly visible, and the rest of the links sit wholly past the edge with no scrollbar to show it.
+    '<nav style="display:flex;gap:0 20px;width:240px;overflow-x:auto;scrollbar-width:none;font:14px sans-serif;'
+    'background:#fff">%s</nav>' % "".join(
+        '<a href="#" style="flex:none;width:100px;white-space:nowrap;overflow:hidden;padding:14px 0;color:#111">%s</a>' % t
+        for t in ["Pricing", "Paths", "Works with AI", "Uptime"]),
+]
+
+
+@unittest.skipUnless(NODE and playwright_dir(), "Playwright not found")
+class ClippedRows(unittest.TestCase):
+    """A sideways row cut at the phone's edge: the page never scrolls, so nothing else saw it."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        spec = {"title": "Rows", "project": {"name": "P", "session": "s"}, "decisions": "design-review",
+                "items": [{"label": "Nav", "reason_html": "<p>r</p>", "recommended": True, "stack_variants": True,
+                           "variants": [{"html": h} for h in CR_VARIANTS]}]}
+        cls.res = DesignChecks.smoke(spec, cls.tmp.name, "rows")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def row(self, variant, width):
+        rows = [c for c in self.res["design_checks"] if c["variant"] == variant and c["width"] == width]
+        self.assertEqual(len(rows), 1, self.res["design_checks"])
+        return rows[0]
+
+    def cut_problems(self, variant):
+        return [p for p in self.res["problems"] if p.startswith("item 1 (Nav), Variant %s:" % variant) and "cut" in p]
+
+    def test_a_cut_nav_row_at_390_is_a_problem(self):
+        c = self.row("A", 390)
+        self.assertEqual(len(c["clippedRows"]), 1, c)
+        cut = c["clippedRows"][0]
+        self.assertIn(cut["text"], [t.replace("&amp;", "&") for t in CR_LINKS])
+        self.assertTrue(cut["text"].startswith(cut["cut"]) and cut["cut"] != cut["text"], cut)
+        self.assertGreater(cut["px"], 0)
+        self.assertTrue(cut["hidden"], cut)
+        self.assertEqual(self.cut_problems("A"),
+                         ['item 1 (Nav), Variant A: 1 row cut at the right edge at 390px ("%s" cut; %d more hidden past it)'
+                          % (cut["cut"], len(cut["hidden"]))])
+
+    def test_the_same_row_wrapping_is_clean(self):
+        self.assertEqual(self.row("B", 390)["clippedRows"], [])
+        self.assertEqual(self.cut_problems("B"), [])
+
+    def test_a_card_carousel_peek_is_a_note_only(self):
+        c = self.row("C", 390)
+        self.assertEqual(c["clippedRows"], [], c)
+        self.assertEqual(len(c["peekRows"]), 1, c)
+        self.assertEqual(self.cut_problems("C"), [])
+        self.assertTrue([n for n in self.res["notes"] if n.startswith("item 1 (Nav), Variant C:") and "peek" in n],
+                        self.res["notes"])
+
+    def test_links_inside_a_wide_track_are_still_cut_items(self):
+        c = self.row("D", 390)
+        self.assertEqual(len(c["clippedRows"]), 1, c)
+        self.assertEqual(c["peekRows"], [])
+        self.assertEqual(len(self.cut_problems("D")), 1, self.res["problems"])
+
+    def test_a_one_line_link_wider_than_half_the_row_is_still_cut(self):
+        c = self.row("E", 390)
+        self.assertEqual(c["peekRows"], [], c)
+        self.assertEqual([r["text"] for r in c["clippedRows"]], ["Works with AI helpers and agents"], c)
+        self.assertEqual(len(self.cut_problems("E")), 1, self.res["problems"])
+
+    def test_links_wholly_past_the_edge_are_hidden_items(self):
+        c = self.row("F", 390)
+        self.assertEqual(c["peekRows"], [], c)
+        self.assertEqual(len(c["clippedRows"]), 1, c)
+        r = c["clippedRows"][0]
+        self.assertEqual((r["text"], r["cut"], r["hidden"]), (None, None, ["Works with AI", "Uptime"]), r)
+        self.assertEqual(self.cut_problems("F") + [p for p in self.res["problems"]
+                                                   if p.startswith("item 1 (Nav), Variant F:") and "hides" in p],
+                         ['item 1 (Nav), Variant F: 1 row hides 2 items past the right edge at 390px '
+                          '("Works with AI", "Uptime")'])
+
+    def test_a_carousels_hidden_cards_are_not_hidden_items(self):
+        c = self.row("C", 390)
+        self.assertEqual(c["clippedRows"], [], c)
+
+    def test_the_cut_row_at_1280_where_it_fits_is_clean(self):
+        for v in ("A", "D"):
+            c = self.row(v, 1280)
+            self.assertEqual((c["clippedRows"], c["peekRows"]), ([], []), c)
+        self.assertFalse([p for p in self.res["problems"] if "cut" in p and "1280px" in p], self.res["problems"])
+
+
+class DesignerFields(unittest.TestCase):
+    """Option roles, the element inventory and the critic's scores on a design-review item."""
+    SC = {"hierarchy": 4, "action": 5, "fold": 3, "grouping": 4, "fit": 4, "care": 5}
+
+    @staticmethod
+    def page(items):
+        spec = {"title": "D", "project": {"name": "P", "session": "s"}, "decisions": "design-review",
+                "items": items}
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "s.json"
+            p.write_text(json.dumps(spec))
+            return review_page.page(review_page.load_spec(p))
+
+    def variants(self, **second):
+        return [{"html": "<p>a</p>", "role": "careful", "scores": self.SC},
+                dict({"html": "<p>b</p>", "role": "bold", "scores": self.SC}, **second)]
+
+    def error(self, items):
+        with self.assertRaises(review_page.SpecError) as cm:
+            self.page(items)
+        return str(cm.exception)
+
+    def test_roles_render_as_labels(self):
+        v = self.variants()
+        v.append({"html": "<p>c</p>", "role": "step-up", "scores": self.SC})
+        html = self.page([{"label": "Hero", "variants": v}])
+        for label in ("Careful", "Step up", "Bold"):
+            self.assertIn('<span class="rp-vrole">%s</span>' % label, html)
+        self.assertIn("unknown role", self.error([{"label": "Hero", "variants": self.variants(role="loud")}]))
+
+    def test_removed_element_is_marked(self):
+        inv = [{"element": "Hero title", "status": "kept"}, {"element": "Promo bar", "status": "removed",
+                                                              "reason": "competes with the call to action"}]
+        html = self.page([{"label": "Hero", "variants": [{"html": "<p>a</p>", "inventory": inv}]}])
+        self.assertIn('<tr class="rp-inv-removed"><td>Promo bar</td><td>removed</td>'
+                      '<td>competes with the call to action</td></tr>', html)
+        self.assertIn('<tr class="rp-inv-kept"><td>Hero title</td>', html)
+        self.assertIn(".rp-inv tr.rp-inv-removed td { color:var(--rp-deny); }", html)
+        self.assertIn("status", self.error([{"label": "Hero", "variants": [
+            {"html": "x", "inventory": [{"element": "a", "status": "gone"}]}]}]))
+
+    def test_brand_row_carries_a_brand_tag(self):
+        inv = [{"element": "Acme logo", "status": "kept", "brand": True},
+               {"element": "Hero title", "status": "kept", "brand": False}]
+        html = self.page([{"label": "Hero", "variants": [{"html": "<p>a</p>", "inventory": inv}]}])
+        self.assertIn('<tr class="rp-inv-kept rp-inv-brand"><td>Acme logo <span class="rp-inv-brandtag">Brand</span>'
+                      '</td><td>kept</td>', html)
+        self.assertIn('<tr class="rp-inv-kept"><td>Hero title</td>', html)
+        self.assertEqual(html.count('<span class="rp-inv-brandtag">'), 1)
+        self.assertIn(".rp-inv-brandtag {", html)
+
+    def test_brand_must_be_a_boolean(self):
+        for bad in ("yes", 1, None):
+            with self.subTest(bad=bad):
+                msg = self.error([{"label": "Hero", "variants": [
+                    {"html": "x", "inventory": [{"element": "Logo", "status": "kept", "brand": bad}]}]}])
+                self.assertIn("brand", msg)
+                self.assertIn("true or false", msg)
+
+    def test_inventory_missing_a_captured_element_counts_as_removed(self):
+        before = {"id": "hero", "tag": "section", "label": "Hero", "top": 0, "left": 0, "width": 1000, "height": 400,
+                  "elements": [{"kind": "heading", "text": "  Hero   title ", "tag": "h1", "top": 0, "left": 0,
+                                "width": 10, "height": 10},
+                               {"kind": "image", "text": "", "tag": "img", "top": 0, "left": 0, "width": 10, "height": 10},
+                               {"kind": "text", "text": "Free shipping", "tag": "p", "top": 0, "left": 0,
+                                "width": 10, "height": 10}]}
+        inv = [{"element": "hero title", "status": "kept"}, {"element": "Newsletter", "status": "moved"}]
+        html = self.page([{"label": "Hero", "before_sections": before,
+                           "variants": [{"html": "<p>a</p>", "inventory": inv}]}])
+        self.assertIn("<td>Free shipping</td><td>removed — no reason given</td>", html)
+        self.assertIn("<td>image</td><td>removed — no reason given</td>", html)
+        self.assertIn("<td>Newsletter</td><td>moved</td>", html)
+        self.assertEqual(html.count("removed — no reason given"), 2)
+
+    def test_scores_render_and_unscored_says_not_scored(self):
+        html = self.page([{"label": "Hero", "variants": [
+            {"html": "<p>a</p>", "scores": self.SC}, {"html": "<p>b</p>"}]}])
+        self.assertIn('<div class="rp-scores">Hierarchy <b>4</b> · Action <b>5</b> · Fold <b>3</b> · '
+                      'Grouping <b>4</b> · Fit <b>4</b> · Care <b>5</b></div>', html)
+        self.assertIn('<div class="rp-scores rp-unscored">Not scored</div>', html)
+        for bad in (0, 6, 3.5, "4"):
+            msg = self.error([{"label": "Hero", "variants": [{"html": "a", "scores": dict(self.SC, fold=bad)}]}])
+            self.assertIn("fold", msg)
+            self.assertIn("1 to 5", msg)
+
+    def test_before_scores_render_once_above_the_options(self):
+        before = {"hierarchy": 2, "action": 3, "fold": 2, "grouping": 3, "fit": 4, "care": 5}
+        html = self.page([{"label": "Hero", "before_scores": before, "variants": self.variants()}])
+        row = ('<div class="rp-scores rp-before-scores"><span class="rp-scores-label">Current page</span> '
+               'Hierarchy <b>2</b> · Action <b>3</b> · Fold <b>2</b> · Grouping <b>3</b> · Fit <b>4</b> · Care <b>5</b></div>')
+        self.assertEqual(html.count(row), 1)
+        self.assertLess(html.index(row), html.index('class="rp-gallery'))
+        single = self.page([{"label": "Hero", "before_scores": before, "body_html": "<p>x</p>", "scores": self.SC}])
+        self.assertEqual(single.count(row), 1)
+
+    def test_before_scores_out_of_range_is_a_spec_error(self):
+        for bad in (0, 6, 3.5, "4"):
+            with self.subTest(bad=bad):
+                msg = self.error([{"label": "Hero", "before_scores": dict(self.SC, fold=bad),
+                                   "variants": self.variants()}])
+                self.assertEqual(msg, "item 1, current page: score fold must be a whole number from 1 to 5, got %r"
+                                 % (bad,))
+        self.assertIn("unknown score", self.error([{"label": "Hero", "before_scores": {"vibe": 3},
+                                                    "variants": self.variants()}]))
+        self.assertIn("must be an object", self.error([{"label": "Hero", "before_scores": [3],
+                                                        "variants": self.variants()}]))
+
+    def test_no_before_scores_renders_no_current_page_row(self):
+        html = self.page([{"label": "Hero", "variants": self.variants()}])
+        self.assertNotIn("rp-before-scores", html.split("<style>")[0] + html.split("</style>")[-1])
+        self.assertNotIn("Current page</span>", html)
+
+    def test_recommending_an_unscored_variant_is_a_spec_error(self):
+        msg = self.error([{"label": "Hero", "variants": [
+            {"html": "<p>a</p>", "scores": self.SC}, {"html": "<p>b</p>", "recommended": True}]}])
+        self.assertEqual(msg, "item 1: variant B is recommended but has no scores")
+        self.assertIn("variant B", self.error([{"label": "Hero", "selected": "B", "variants": [
+            {"html": "<p>a</p>", "scores": self.SC}, {"html": "<p>b</p>"}]}]))
+
+    def test_one_variant_item_needs_no_role_or_scores(self):
+        self.page([{"label": "Hero", "variants": [{"html": "<p>a</p>", "recommended": True}]}])
+        html = self.page([{"label": "Hero", "scores": self.SC,
+                           "inventory": [{"element": "Promo", "status": "removed", "reason": "noise"}]}])
+        self.assertIn("Hierarchy <b>4</b>", html)
+        self.assertIn('<tr class="rp-inv-removed"><td>Promo</td>', html)
+        self.assertNotIn("<span class=\"rp-vrole\">", html)
+        self.assertNotIn("Not scored", html)
+
+    def test_judged_by_line(self):
+        v = self.variants()
+        self.assertIn("Judged by a separate helper",
+                      self.page([{"label": "Hero", "judged_by": "helper", "variants": v}]))
+        self.assertIn("Checked by the designer itself",
+                      self.page([{"label": "Hero", "judged_by": "self", "variants": v}]))
+        html = self.page([{"label": "Hero", "variants": v}])
+        self.assertNotIn("Judged by", html)
+        self.assertNotIn("Checked by the designer", html)
+        self.assertIn("judged_by", self.error([{"label": "Hero", "judged_by": "robot", "variants": v}]))
+
+    def test_judged_by_with_nothing_scored_recommending_is_a_spec_error(self):
+        msg = self.error([{"label": "Hero", "judged_by": "helper", "variants": [
+            {"html": "<p>a</p>"}, {"html": "<p>b</p>", "recommended": True}]}])
+        self.assertEqual(msg, "item 1: variant B is recommended but has no scores")
+
+    def test_judged_by_with_nothing_scored_says_not_scored_on_every_variant(self):
+        html = self.page([{"label": "Hero", "judged_by": "helper", "variants": [
+            {"html": "<p>a</p>"}, {"html": "<p>b</p>"}]}])
+        self.assertEqual(html.count('<div class="rp-scores rp-unscored">Not scored</div>'), 2)
+
+    def test_no_judged_by_and_nothing_scored_builds_as_before(self):
+        html = self.page([{"label": "Hero", "variants": [
+            {"html": "<p>a</p>"}, {"html": "<p>b</p>", "recommended": True}]}])
+        self.assertNotIn('<div class="rp-scores', html)
+
+
+    def test_item_without_variants_shows_no_score_row_unless_scored_or_judged(self):
+        # Task 6 fix round: a copy-edit item and a capture item carry neither scores nor judged_by.
+        for item in ({"label": "Line 3", "body_html": "<p>old</p><p>new</p>", "recommended": True},
+                     {"label": "Mid-word break", "category": "capture", "body_html": "<p>fix</p>"}):
+            with self.subTest(item=item["label"]):
+                self.assertNotIn('<div class="rp-scores', self.page([item]))
+
+    def test_one_option_item_with_judged_by_and_no_scores_says_not_scored(self):
+        html = self.page([{"label": "Hero", "judged_by": "self",
+                           "body_html": '<div class="rp-mockup"><p>a</p></div>'}])
+        self.assertEqual(html.count('<div class="rp-scores rp-unscored">Not scored</div>'), 1)
+
+    def test_copy_edit_example_has_no_score_rows(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertNotIn("Not scored", build("copy-edit", tmp).read_text())
+
+    # Final review, item 2: before_sections, before_font_sizes, role and judged_by of the wrong
+    # shape are one-line spec errors, never a Python crash.
+    def test_before_sections_must_be_one_section_object(self):
+        sec = {"label": "Hero", "elements": [{"kind": "heading", "text": "Hi"}]}
+        for bad in ([sec], "Hero", 3, {"label": "Hero"}, {"label": "Hero", "elements": "x"}):
+            with self.subTest(bad=bad):
+                msg = self.error([{"label": "Hero", "before_sections": bad, "variants": self.variants()}])
+                self.assertEqual(msg, "item 1: before_sections must be one captured section object with an "
+                                      "elements list (from measures.json), got %s" % type(bad).__name__)
+
+    def test_before_font_sizes_must_be_a_list_of_numbers(self):
+        for bad in (16, "16", [16, "20"], [True], {"a": 1}):
+            with self.subTest(bad=bad):
+                msg = self.error([{"label": "Hero", "before_font_sizes": bad, "variants": self.variants()}])
+                self.assertIn("item 1: before_font_sizes must be a list of numbers", msg)
+        self.page([{"label": "Hero", "before_font_sizes": [16, 20.5], "variants": self.variants()}])
+
+    def test_unhashable_role_and_judged_by_are_spec_errors(self):
+        self.assertIn("unknown role", self.error([{"label": "Hero", "variants": self.variants(role=["bold"])}]))
+        self.assertIn("unknown role", self.error([{"label": "Hero", "role": {"a": 1}, "body_html": "x"}]))
+        for bad in (["helper"], {"by": "self"}):
+            with self.subTest(bad=bad):
+                self.assertIn("judged_by", self.error([{"label": "Hero", "judged_by": bad, "variants": self.variants()}]))
+
+
+class BeforeFromMeasures(unittest.TestCase):
+    """Final review, item 7b: before_sections and before_font_sizes can name the capture's measures.json."""
+    SEC = {"id": "", "tag": "section", "label": "Hero", "top": 0, "left": 0, "width": 1280, "height": 500,
+           "elements": [{"kind": "heading", "text": "Big title", "tag": "h1", "top": 0, "left": 0,
+                         "width": 100, "height": 40}]}
+
+    def measures(self):
+        other = dict(self.SEC, label="Footer", elements=[])
+        res = [{"page": "home", "state": "default", "viewport": "390",
+                "measures": {"sections": [dict(self.SEC, width=390)], "fontSizes": [14, 28]}},
+               {"page": "home", "state": "default", "viewport": "1280",
+                "measures": {"sections": [self.SEC, other], "fontSizes": [16, 20, 40]}},
+               {"page": "about", "state": "default", "viewport": "1280", "error": "boom"}]
+        return {"results": res, "errors": [], "failures": []}
+
+    def load(self, item):
+        spec = {"title": "D", "project": {"name": "P", "session": "s"}, "decisions": "design-review",
+                "items": [dict({"label": "Hero", "variants": [{"html": "<p>a</p>", "inventory": []}]}, **item)]}
+        with tempfile.TemporaryDirectory() as tmp:
+            cap = Path(tmp) / "capture"
+            cap.mkdir()
+            (cap / "measures.json").write_text(json.dumps(self.measures()))
+            p = Path(tmp) / "s.json"
+            p.write_text(json.dumps(spec))
+            loaded = review_page.load_spec(p)
+            return loaded, review_page.page(loaded)
+
+    def error(self, item):
+        with self.assertRaises(review_page.SpecError) as cm:
+            self.load(item)
+        return str(cm.exception)
+
+    def test_before_sections_from_measures_resolves_to_the_section(self):
+        spec, html = self.load({"before_sections": {"from": "capture/measures.json", "page": "home",
+                                                    "width": 1280, "label": "Hero"}})
+        self.assertEqual(spec["items"][0]["before_sections"], self.SEC)
+        self.assertIn("<td>Big title</td><td>removed — no reason given</td>", html)
+
+    def test_before_font_sizes_from_measures_resolves_to_the_list(self):
+        spec, _ = self.load({"before_font_sizes": {"from": "capture/measures.json", "page": "home", "width": 1280}})
+        self.assertEqual(spec["items"][0]["before_font_sizes"], [16, 20, 40])
+
+    def test_a_label_not_found_lists_the_labels_it_has(self):
+        msg = self.error({"before_sections": {"from": "capture/measures.json", "page": "home", "width": 1280,
+                                              "label": "Heroes"}})
+        self.assertEqual(msg, "item 1: before_sections: no section labeled 'Heroes' in capture/measures.json "
+                              "(home at 1280); it has: Hero, Footer")
+
+    def test_a_page_or_width_not_found_says_what_was_captured(self):
+        msg = self.error({"before_font_sizes": {"from": "capture/measures.json", "page": "home", "width": 1440}})
+        self.assertIn("item 1: before_font_sizes: no capture of home at 1440 in capture/measures.json", msg)
+        self.assertIn("home at 390, home at 1280", msg)
+
+    def test_a_missing_measures_file_is_a_spec_error(self):
+        msg = self.error({"before_sections": {"from": "nope/measures.json", "page": "home", "width": 1280,
+                                              "label": "Hero"}})
+        self.assertIn("item 1: before_sections: nope/measures.json not found", msg)
+
+@unittest.skipUnless(NODE and playwright_dir(), "Playwright not found")
+class InventoryFit(unittest.TestCase):
+    def test_long_inventory_rows_do_not_scroll_the_page_sideways(self):
+        long = "Promotional banner with a very long caption " * 3
+        inv = [{"element": long + str(i), "status": "removed" if i % 2 else "kept",
+                "reason": "a long reason that also runs on and on " * 2} for i in range(5)]
+        sc = {"hierarchy": 4, "action": 5, "fold": 3, "grouping": 4, "fit": 4, "care": 5}
+        spec = {"title": "Fit", "project": {"name": "P", "session": "s"}, "decisions": "design-review",
+                "items": [{"label": "Hero", "judged_by": "helper", "reason_html": "<p>r</p>", "recommended": True,
+                           "variants": [
+                               {"html": '<h1 style="margin:0">Alpha</h1><p>one</p>', "role": "careful",
+                                "scores": sc, "inventory": inv, "recommended": True},
+                               {"html": '<div style="display:flex;gap:30px"><b>Beta</b><i>two</i><u>x</u></div>',
+                                "role": "bold", "scores": sc, "inventory": inv}]}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            res = DesignChecks.smoke(spec, tmp)
+        self.assertEqual([p for p in res["problems"] if "sideways" in p], [], res["problems"])
+
+
+def abs_box(h1="", p="", btn="", color="#111"):
+    """A 400px-tall mockup whose elements sit at fixed fractions of its box, so the near-copy
+    signature is known in advance. Each argument is a 'left,top,width,height' tuple in percent.
+    Each block is painted, so the signature measures its box, not just its few words of text."""
+    def at(tag, g, text, extra=""):
+        l, t, w, h = g
+        return ('<%s style="position:absolute;margin:0;left:%s%%;top:%s%%;width:%s%%;height:%s%%;'
+                'background:#eef2f7;%s">%s</%s>' % (tag, l, t, w, h, extra, text, tag))
+    inner = at("h1", h1, "Title", "font-size:20px;") + at("p", p, "Body text here", "font-size:16px;") \
+        + at("button", btn, "Go", "font-size:16px;")
+    return '<div style="position:relative;height:400px;background:#fff;color:%s">%s</div>' % (color, inner)
+
+
+STACKED = dict(h1=(5, 5, 60, 10), p=(5, 25, 60, 20), btn=(5, 60, 30, 12))
+TWO_COL = dict(h1=(55, 40, 40, 10), p=(55, 55, 40, 20), btn=(5, 5, 30, 12))
+# The same arrangement as STACKED with every block resized and nudged, as a reproduction of a
+# real page is (the two-app trial scored such mockups 0.33 to 0.54 against the capture).
+STACKED_RESIZED = dict(h1=(5, 5, 60, 16), p=(5, 30, 60, 25), btn=(5, 66, 26, 16))
+
+
+@unittest.skipUnless(NODE and playwright_dir(), "Playwright not found")
+class NearCopy(unittest.TestCase):
+    """A variant that only recolors another variant, or the page it replaces, is not a second option."""
+
+    @staticmethod
+    def spec(variants, **item):
+        return {"title": "Near", "project": {"name": "P", "session": "s"}, "decisions": "design-review",
+                "items": [dict({"label": "Hero", "reason_html": "<p>r</p>", "recommended": True,
+                                "stack_variants": True,
+                                "variants": [{"html": v} for v in variants]}, **item)]}
+
+    def run_smoke(self, spec):
+        with tempfile.TemporaryDirectory() as tmp:
+            return DesignChecks.smoke(spec, tmp)
+
+    @staticmethod
+    def before(**g):
+        """A before_sections object (the capture's shape) at the given fractions of a 1000 x 400 section."""
+        kinds = {"h1": ("heading", "h1"), "p": ("text", "p"), "btn": ("button", "button")}
+        els = [{"kind": kinds[k][0], "text": k, "tag": kinds[k][1], "top": 1000 + round(4 * t),
+                "left": round(10 * l), "width": round(10 * w), "height": round(4 * h)}
+               for k, (l, t, w, h) in g.items()]
+        return {"id": "", "tag": "section", "label": "Hero", "top": 1000, "height": 400, "left": 0, "width": 1000,
+                "elements": els}
+
+    @staticmethod
+    def centered_before(**g):
+        """A before_sections with no left/width, its elements in a 600px column starting at x=200."""
+        kinds = {"h1": ("heading", "h1"), "p": ("text", "p"), "btn": ("button", "button")}
+        els = [{"kind": kinds[k][0], "text": k, "tag": kinds[k][1], "top": 1000 + round(4 * t),
+                "left": 200 + round(6 * l), "width": round(6 * w), "height": round(4 * h)}
+               for k, (l, t, w, h) in g.items()]
+        return {"id": "", "tag": "section", "label": "Hero", "top": 1000, "height": 400, "elements": els}
+
+    def copies(self, res):
+        return [(c["a"], c["b"]) for c in res["near_copies"]]
+
+    def test_identical_variants_flagged(self):
+        res = self.run_smoke(self.spec([abs_box(color="#111", **STACKED), abs_box(color="#900", **STACKED)]))
+        self.assertEqual(self.copies(res), [("A", "B")], res["near_copies"])
+        self.assertGreaterEqual(res["near_copies"][0]["score"], 0.85)
+        self.assertEqual(res["near_copies"][0]["item"], "1")
+        self.assertTrue([p for p in res["problems"]
+                         if p.startswith("item 1 (Hero): Variant A and Variant B are near-copies (")], res["problems"])
+
+    def test_same_arrangement_resized_is_flagged(self):
+        res = self.run_smoke(self.spec([abs_box(**STACKED), abs_box(**STACKED_RESIZED)]))
+        self.assertEqual(self.copies(res), [("A", "B")], res["near_copies"])
+        self.assertEqual([(s["a"], s["b"]) for s in res["layout_scores"]], [("A", "B")])
+
+    def test_same_arrangement_resized_matches_the_page(self):
+        res = self.run_smoke(self.spec([abs_box(**STACKED_RESIZED), abs_box(**TWO_COL)],
+                                       before_sections=self.before(**STACKED)))
+        self.assertEqual(self.copies(res), [("A", "before")], res["near_copies"])
+
+    def test_different_layouts_pass(self):
+        res = self.run_smoke(self.spec([abs_box(**STACKED), abs_box(**TWO_COL)]))
+        self.assertEqual(res["near_copies"], [])
+        self.assertFalse([p for p in res["problems"] if "near-copies" in p])
+
+    def test_variant_matching_before_sections_flagged(self):
+        res = self.run_smoke(self.spec([abs_box(color="#900", **STACKED), abs_box(**TWO_COL)],
+                                       before_sections=self.before(**STACKED)))
+        self.assertEqual(self.copies(res), [("A", "before")], res["near_copies"])
+        self.assertTrue([p for p in res["problems"]
+                         if p.startswith("item 1 (Hero): Variant A and the current page are near-copies (")], res["problems"])
+
+    def test_one_variant_item_has_no_pair_check(self):
+        res = self.run_smoke(self.spec([abs_box(**STACKED)]))
+        self.assertEqual(res["near_copies"], [])
+
+    def test_one_option_item_is_still_compared_with_the_page(self):
+        spec = self.spec([], body_html='<div class="rp-mockup">%s</div>' % abs_box(**STACKED),
+                         before_sections=self.before(**STACKED))
+        res = self.run_smoke(spec)
+        self.assertEqual(self.copies(res), [("proposed", "before")], res["near_copies"])
+        # Final review, item 4: a one-option fix keeps its layout by design, so this is a note.
+        self.assertFalse([p for p in res["problems"] if "near-copies" in p], res["problems"])
+        self.assertTrue([n for n in res["notes"]
+                         if n.startswith("item 1 (Hero): Proposed and the current page are near-copies (")
+                         and "expected for a one-option fix" in n], res["notes"])
+
+    def test_one_variant_item_is_compared_with_the_page_too(self):
+        res = self.run_smoke(self.spec([abs_box(**STACKED)], before_sections=self.before(**STACKED)))
+        self.assertEqual(self.copies(res), [("A", "before")], res["near_copies"])
+        # Ruling 30: one variant is a one-option fix too, so its page near-copy is a note.
+        self.assertFalse([p for p in res["problems"] if "near-copies" in p], res["problems"])
+        self.assertTrue([n for n in res["notes"]
+                         if n.startswith("item 1 (Hero): Variant A and the current page are near-copies (")
+                         and "expected for a one-option fix" in n], res["notes"])
+
+    def test_centered_column_without_left_and_width_still_matches(self):
+        full = dict(h1=(0, 5, 100, 10), p=(0, 25, 100, 20), btn=(0, 60, 50, 12))
+        res = self.run_smoke(self.spec([abs_box(**full), abs_box(**TWO_COL)],
+                                       before_sections=self.centered_before(**full)))
+        self.assertEqual(self.copies(res), [("A", "before")], res["near_copies"])
+
+    def test_before_sections_are_compared_on_any_kind_of_page_but_pairs_are_not(self):
+        spec = self.spec([abs_box(**STACKED), abs_box(**STACKED)], before_sections=self.before(**STACKED))
+        spec["decisions"] = "style-guide"
+        res = self.run_smoke(spec)
+        self.assertEqual(self.copies(res), [("A", "before"), ("B", "before")], res["near_copies"])
+
+    def test_options_on_other_kinds_of_page_are_not_flagged(self):
+        spec = self.spec([abs_box(**STACKED), abs_box(**STACKED)])
+        spec["decisions"] = "style-guide"
+        res = self.run_smoke(spec)
+        self.assertEqual(res["near_copies"], [])
+
+    def test_kind_classifier_matches_the_captures(self):
+        def grab(path, start, end):
+            text = (ROOT / path).read_text()
+            i = text.index(start)
+            return re.sub(r"\s+", "", text[i:text.index(end, i)])
+        a = grab("skills/visual-qa/scripts/capture.cjs", "const kindOf", "const elementSel")
+        b = grab("shared/review_page/signature.cjs", "const kindOf", "const elementSel")
+        self.assertEqual(a, b)
+        a = grab("skills/visual-qa/scripts/capture.cjs", "const elementSel", "// What an element")
+        b = grab("shared/review_page/signature.cjs", "const elementSel", "// What an element")
+        self.assertEqual(a, b)
+        a = grab("skills/visual-qa/scripts/capture.cjs", "// Layout boxes:", "// End of layout boxes.")
+        b = grab("shared/review_page/signature.cjs", "// Layout boxes:", "// End of layout boxes.")
+        self.assertEqual(a, b)
+
+    def test_layout_list_from_a_new_capture_is_the_before_signature(self):
+        # A section whose `layout` says the heading's text sits in the right half, while its block
+        # box (`elements`) spans the row: the layout wins, so a right-column option matches it.
+        right = '<div style="position:relative;height:400px"><h1 style="position:absolute;margin:0;left:55%;top:10%;font-size:20px">Title</h1></div>'
+        sec = self.before(h1=(0, 10, 100, 10))
+        sec["layout"] = [{"kind": "heading", "top": 1040, "left": 550, "width": 400, "height": 40}]
+        res = self.run_smoke(self.spec([right], before_sections=sec))
+        score = res["layout_scores"][0]["score"]
+        del sec["layout"]
+        old = self.run_smoke(self.spec([right], before_sections=sec))["layout_scores"][0]["score"]
+        self.assertGreater(score, old)
+
+
+# The near-copy labeled set (Task 7b). Realistic flow-layout mockups, not absolute boxes: the
+# metric has to hold on what a designer actually writes. Each case is one item with two options.
+LB_FONT = "font-family:Arial,Helvetica,sans-serif;color:%s;background:#fff"
+LB_IMG = ("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='450'%3E"
+          "%3Crect width='800' height='450' fill='%23dbeafe'/%3E%3C/svg%3E")
+LB_H1 = "Plan a calmer week with one simple list"
+LB_P = ("Bring your tasks, notes and reminders into one quiet place, so the next step is always clear "
+        "and nothing slips through the gaps between your apps.")
+
+
+def lb_buttons(s=1.0, justify="center", accent="#1d4ed8"):
+    btn = ('<a href="#" style="display:inline-block;padding:14px 24px;border-radius:8px;font-size:16px;'
+           'text-decoration:none;%s">%s</a>')
+    return ('<div style="display:flex;gap:%dpx;justify-content:%s;margin:0 0 %dpx">%s%s</div>'
+            % (round(16 * s), justify, round(32 * s),
+               btn % ("background:%s;color:#fff" % accent, "Start free"),
+               btn % ("border:2px solid %s;color:%s" % (accent, accent), "See how it works")))
+
+
+def lb_img(h=320, w="100%"):
+    return '<img alt="" src="%s" style="display:block;width:%s;height:%dpx;object-fit:cover">' % (LB_IMG, w, h)
+
+
+LB_BADGE = ('<span class="badge" style="%sfont-size:12px;background:#eef2f7;color:#111827;padding:2px 6px;'
+            'border-radius:4px">New</span>')
+
+
+def lb_stacked(s=1.0, ink="#111827", accent="#1d4ed8", h1=44, pmax=620, buttons_last=False, badge=None):
+    """A centered hero: heading, line, two buttons, picture. `s` scales every gap and padding.
+    `badge`: a small "New" badge, "top" (centered above the heading) or "corner" (top right)."""
+    head = '<h1 style="font-size:%dpx;line-height:1.15;margin:0 0 %dpx">%s</h1>' % (h1, round(16 * s), LB_H1)
+    if badge == "top":
+        head = '<div style="margin:0 0 12px">%s</div>' % (LB_BADGE % "display:inline-block;") + head
+    elif badge == "corner":
+        head = LB_BADGE % "position:absolute;right:16px;top:16px;" + head
+    para = ('<p style="font-size:18px;line-height:1.5;max-width:%dpx;margin:0 auto %dpx">%s</p>'
+            % (pmax, round(24 * s), LB_P))
+    btns = lb_buttons(s, accent=accent)
+    body = head + para + (lb_img() + '<div style="height:%dpx"></div>' % round(24 * s) + btns
+                          if buttons_last else btns + lb_img())
+    return ('<div style="%s;padding:%dpx;text-align:center;position:relative">%s</div>'
+            % (LB_FONT % ink, round(48 * s), body))
+
+
+def lb_split(image_first=False):
+    text = ('<div><h1 style="font-size:40px;line-height:1.15;margin:0 0 16px">%s</h1>'
+            '<p style="font-size:18px;line-height:1.5;margin:0 0 24px">%s</p>%s</div>'
+            % (LB_H1, LB_P, lb_buttons(justify="flex-start")))
+    cols = (lb_img(), text) if image_first else (text, lb_img())
+    return ('<div style="%s;padding:48px;display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center">'
+            '%s%s</div>' % (LB_FONT % "#111827", cols[0], cols[1]))
+
+
+def lb_text(column=False):
+    """Heading and paragraph, full width or in a 57% column on the right."""
+    inner = ('<h1 style="font-size:40px;line-height:1.15;margin:0 0 16px">%s</h1>'
+             '<p style="font-size:18px;line-height:1.5;margin:0">%s %s</p>' % (LB_H1, LB_P, LB_P))
+    if column:
+        inner = '<div style="margin-left:43%%">%s</div>' % inner
+    return '<div style="%s;padding:48px">%s</div>' % (LB_FONT % "#111827", inner)
+
+
+def lb_features(grid=False):
+    items = "".join('<div><h3 style="font-size:22px;margin:0 0 8px">Feature %s</h3>'
+                    '<p style="font-size:16px;line-height:1.5;margin:0 0 24px">%s</p></div>' % (n, LB_P)
+                    for n in ("one", "two", "three"))
+    wrap = ('<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:32px">%s</div>' if grid
+            else '<div>%s</div>') % items
+    return ('<div style="%s;padding:48px"><h2 style="font-size:32px;margin:0 0 24px">Everything in one place</h2>'
+            '%s</div>' % (LB_FONT % "#111827", wrap))
+
+
+def lb_card(picture=True):
+    """Text beside a placeholder picture (a painted div, no <img>), or the text alone."""
+    pic = '<div style="flex:0 0 40%;min-height:220px;background:#d1d5db;border-radius:8px"></div>' if picture else ""
+    return ('<div style="%s;padding:32px;display:flex;gap:24px;align-items:center">%s<div style="flex:1">'
+            '<h3 style="font-size:24px;margin:0 0 8px">Two columns</h3>'
+            '<p style="font-size:16px;line-height:1.5;margin:0">%s</p></div></div>'
+            % (LB_FONT % "#111827", pic, LB_P))
+
+
+# name: (option A, option B, a near-copy?)
+LABELED = {
+    "recolor_only": (lb_stacked(), lb_stacked(ink="#7c2d12", accent="#c2410c"), True),
+    "spacing_x1_1": (lb_stacked(), lb_stacked(s=1.1), True),
+    "spacing_x1_35": (lb_stacked(), lb_stacked(s=1.35), True),
+    "text_reflowed_slightly": (lb_stacked(), lb_stacked(pmax=560), True),
+    "same_plus_one_small_badge": (lb_stacked(), lb_stacked(badge="corner"), True),
+    "small_badge_moved_to_a_corner": (lb_stacked(badge="top"), lb_stacked(badge="corner"), True),
+    "bigger_heading_and_moved_buttons": (lb_stacked(), lb_stacked(h1=72, buttons_last=True), False),
+    "text_column_vs_full_width": (lb_text(), lb_text(column=True), False),
+    "mirrored_split": (lb_split(), lb_split(image_first=True), False),
+    "stacked_vs_split": (lb_stacked(), lb_split(), False),
+    "stacked_vs_grid": (lb_features(), lb_features(grid=True), False),
+    "placeholder_picture_vs_text_alone": (lb_card(), lb_card(picture=False), False),
+}
+# Each labeled score must clear the cut by this much, so the labels hold with room to spare.
+LABEL_MARGIN = 0.15
+
+
+def near_copy_cut():
+    text = (RP / "signature.cjs").read_text()
+    return float(re.search(r"const NEAR_COPY = ([0-9.]+);", text).group(1))
+
+
+@unittest.skipUnless(NODE and playwright_dir(), "Playwright not found")
+class NearCopyLabeled(unittest.TestCase):
+    """The labeled set: what must and must not read as a near-copy, each with margin, both orders."""
+
+    @classmethod
+    def setUpClass(cls):
+        # Each case twice: (A, B) as item 2k+1 and (B, A) as item 2k+2.
+        items = [{"label": name, "reason_html": "<p>r</p>", "stack_variants": True,
+                  "variants": [{"html": x}, {"html": y}]}
+                 for name, (a, b, _) in LABELED.items() for (x, y) in ((a, b), (b, a))]
+        items[0]["recommended"] = True
+        spec = {"title": "Labeled", "project": {"name": "P", "session": "s"}, "decisions": "design-review",
+                "items": items}
+        with tempfile.TemporaryDirectory() as tmp:
+            cls.res = DesignChecks.smoke(spec, tmp)
+        cls.cut = near_copy_cut()
+
+    def score(self, num):
+        rows = [s for s in self.res.get("layout_scores", []) if s["item"] == num and s["b"] != "before"]
+        self.assertEqual(len(rows), 1, self.res.get("layout_scores"))
+        return rows[0]["score"]
+
+    def check(self, name):
+        flag = LABELED[name][2]
+        k = list(LABELED).index(name)
+        scores = []
+        for num in (str(2 * k + 1), str(2 * k + 2)):
+            score = self.score(num)
+            scores.append(score)
+            flagged = [c for c in self.res["near_copies"] if c["item"] == num]
+            if flag:
+                self.assertGreaterEqual(score, self.cut + LABEL_MARGIN, f"{name} #{num}: {score} vs cut {self.cut}")
+                self.assertEqual(len(flagged), 1, self.res["near_copies"])
+            else:
+                self.assertLessEqual(score, self.cut - LABEL_MARGIN, f"{name} #{num}: {score} vs cut {self.cut}")
+                self.assertEqual(flagged, [], self.res["near_copies"])
+        self.assertEqual(scores[0], scores[1], f"{name}: the two orders differ")
+
+    def test_recolor_only_is_flagged(self):
+        self.check("recolor_only")
+
+    def test_spacing_only_x1_1_is_flagged(self):
+        self.check("spacing_x1_1")
+
+    def test_spacing_only_x1_35_is_flagged(self):
+        self.check("spacing_x1_35")
+
+    def test_slightly_reflowed_text_is_flagged(self):
+        self.check("text_reflowed_slightly")
+
+    def test_same_plus_one_small_badge_is_flagged(self):
+        self.check("same_plus_one_small_badge")
+
+    def test_small_badge_moved_to_a_corner_is_flagged(self):
+        self.check("small_badge_moved_to_a_corner")
+
+    def test_bigger_heading_and_moved_buttons_pass(self):
+        self.check("bigger_heading_and_moved_buttons")
+
+    def test_text_column_vs_full_width_passes(self):
+        self.check("text_column_vs_full_width")
+
+    def test_mirrored_split_passes(self):
+        self.check("mirrored_split")
+
+    def test_stacked_vs_split_passes(self):
+        self.check("stacked_vs_split")
+
+    def test_stacked_vs_grid_passes(self):
+        self.check("stacked_vs_grid")
+
+    def test_placeholder_picture_beside_text_vs_text_alone_passes(self):
+        self.check("placeholder_picture_vs_text_alone")
+
+
+@unittest.skipUnless(NODE, "node not found")
+class NearCopyMetric(unittest.TestCase):
+    """similarity() on hand-made signatures: symmetric, 1 for identical, and insensitive to spacing."""
+
+    @staticmethod
+    def sim(pairs):
+        js = ("const { similarity } = require(%s);\nconst pairs = %s;\n"
+              "console.log(JSON.stringify(pairs.map(([a, b]) => [similarity(a, b), similarity(b, a)])));"
+              % (json.dumps(str(RP / "signature.cjs")), json.dumps(pairs)))
+        r = subprocess.run(["node", "-e", js], capture_output=True, text=True)
+        if r.returncode:
+            raise AssertionError(r.stderr)
+        return json.loads(r.stdout)
+
+    def test_symmetric_and_identical_is_one(self):
+        e = lambda k, x, y, w, h: {"kind": k, "x": x, "y": y, "w": w, "h": h}
+        hero = [e("heading", 0.1, 0.05, 0.8, 0.14), e("text", 0.2, 0.21, 0.6, 0.08),
+                e("button", 0.38, 0.33, 0.11, 0.06), e("button", 0.51, 0.33, 0.11, 0.06),
+                e("image", 0.05, 0.43, 0.9, 0.52)]
+        spaced = [dict(x, y=x["y"] * 1.35) for x in hero]
+        mirrored = [e("image", 0, 0.1, 0.45, 0.6), e("heading", 0.55, 0.2, 0.45, 0.1), e("text", 0.55, 0.35, 0.45, 0.1)]
+        mirrored_b = [dict(x, x=1 - x["x"] - x["w"]) for x in mirrored]
+        # Repeated kinds: the tied-pair walk depends on which side goes first (review probe:
+        # 0.24 one way, 0.35 the other, before both directions were averaged).
+        rep_a = [e("text", 0.1, 0.1, 0.8, 0.05), e("heading", 0.1, 0.2, 0.8, 0.1),
+                 e("text", 0.1, 0.35, 0.3, 0.05), e("text", 0.1, 0.45, 0.8, 0.2)]
+        rep_b = [e("heading", 0.1, 0.1, 0.8, 0.1), e("text", 0.1, 0.25, 0.8, 0.2),
+                 e("text", 0.1, 0.5, 0.3, 0.05), e("text", 0.1, 0.6, 0.8, 0.05)]
+        (same, spacing, mirror, rep) = self.sim([[hero, hero], [hero, spaced], [mirrored, mirrored_b], [rep_a, rep_b]])
+        self.assertAlmostEqual(rep[0], rep[1], places=9)
+        self.assertAlmostEqual(same[0], 1.0, places=6)
+        self.assertAlmostEqual(spacing[0], spacing[1], places=9)
+        self.assertAlmostEqual(mirror[0], mirror[1], places=9)
+        self.assertGreater(spacing[0], 0.95)
+        self.assertLess(mirror[0], 0.2)
+
+    def test_full_bleed_section_with_centered_content_matches_a_mockup_that_fills_its_box(self):
+        # Astro trial, fresh capture: the page's hero sits in a 1024px container centered in a
+        # 1280px section (x 0.10 to 0.90); a mockup reproducing it fills its box (0.02 to 0.98).
+        e = lambda k, x, y, w, h: {"kind": k, "x": x, "y": y, "w": w, "h": h}
+        page = [e("text", 0.43, 0.13, 0.14, 0.02), e("heading", 0.14, 0.15, 0.73, 0.11),
+                e("text", 0.21, 0.27, 0.59, 0.07), e("link", 0.37, 0.35, 0.14, 0.04),
+                e("link", 0.52, 0.35, 0.12, 0.04), e("image", 0.10, 0.45, 0.80, 0.48)]
+        mock = [dict(x, x=0.5 + (x["x"] - 0.5) * 1.2, w=x["w"] * 1.2, y=x["y"] * 0.6) for x in page]
+        [(score, _)] = self.sim([[mock, page]])
+        self.assertGreater(score, 0.9)
+
+    def test_a_short_line_just_above_a_heading_reads_before_it(self):
+        # A 20px eyebrow 16px above a heading, in a tall section: two rows, not one.
+        e = lambda k, x, y, w, h: {"kind": k, "x": x, "y": y, "w": w, "h": h}
+        page = [e("text", 0.43, 0.130, 0.14, 0.017), e("heading", 0.14, 0.143, 0.73, 0.11)]
+        mock = [e("text", 0.43, 0.06, 0.14, 0.02), e("heading", 0.14, 0.10, 0.73, 0.12)]
+        [(score, _)] = self.sim([[mock, page]])
+        self.assertGreater(score, 0.9)
+
+    def test_a_narrower_box_does_not_read_as_a_size_change(self):
+        # Vue trial: type keeps its px size while the picture scales with the box, so the same hero
+        # in a 1046px box has text-to-picture shares about (1046/1280)^2 of the page's.
+        e = lambda k, x, y, w, h: {"kind": k, "x": x, "y": y, "w": w, "h": h}
+        page = [e("heading", 0.20, 0.13, 0.59, 0.09), e("text", 0.26, 0.23, 0.48, 0.03),
+                e("button", 0.34, 0.29, 0.15, 0.03), e("link", 0.51, 0.29, 0.15, 0.03),
+                e("image", 0.03, 0.37, 0.94, 0.54)]
+        k = 1280 / 1046
+        box = [dict(x, x=0.5 + (x["x"] - 0.5) * k, w=x["w"] * k) if x["kind"] != "image" else x for x in page]
+        js = ("const { similarityParts } = require(%s);\nconsole.log(JSON.stringify(similarityParts(%s, %s)));"
+              % (json.dumps(str(RP / "signature.cjs")), json.dumps(box), json.dumps(page)))
+        r = subprocess.run(["node", "-e", js], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertGreater(json.loads(r.stdout)["size"], 0.97)
+
+    def test_empty_signature_scores_zero(self):
+        self.assertEqual(self.sim([[[], []]]), [[0, 0]])
+
+
 if __name__ == "__main__":
     unittest.main()

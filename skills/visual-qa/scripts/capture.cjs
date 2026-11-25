@@ -41,6 +41,7 @@
 // PNG pixel per CSS pixel, with each part's y range in measures.json ("parts"): an image reader
 // shrinks a tall full-page shot until nothing in it is legible (Astro run 3: 31,354 px at 2x). A
 // full shot that would pass 16,384 px at the device scale is taken at 1x ("fullScale").
+// The site's logo is cropped to <name>-logo-<width>.png ("logo": file, box, source; null when none).
 // Each mid-word break names its element, the heading above it, its y and its part ("midWordAt").
 // --compare takes an earlier run's measures.json and lists, per page, size and check, the entries
 // that are new since then, by text, not by count ("newSince"): a fix that took small tap targets
@@ -460,6 +461,147 @@ function measure({ items, minText, minTap, edge, offCenterPx = 16, untitledMinHe
     };
   }
 
+  // Section inventory, for the designer: each section's label and position and the elements in
+  // it, in DOM order. A section is a landmark or a direct child of <main>, deduped to the
+  // outermost. `main > *` has no height floor on purpose: whatever the author put directly in
+  // <main> is a section. Landmarks that cover under SECTION_MIN_COVER of the page's height (a
+  // lone <header> over a div soup, or no landmarks at all) are topped up with the direct children
+  // of <main> (else <body>) at least SECTION_MIN_HEIGHT tall that are not already inside a
+  // section: anything shorter is a bar or a divider, not a section. If that still leaves nothing
+  // (a short page), the whole <main> (else <body>) is the one section, so the list is never empty.
+  // Caps keep measures.json small: 30 sections, 40 elements each.
+  const SECTION_MIN_HEIGHT = 200, SECTION_MIN_COVER = 0.5, MAX_SECTIONS = 30, MAX_ELEMENTS = 40, TEXT_CAP = 80;
+  const clip = (t) => (t || '').trim().replace(/\s+/g, ' ').slice(0, TEXT_CAP);
+  const pageTop = (r) => Math.round(r.top + window.scrollY);
+  let sectionEls = [...document.querySelectorAll(
+    'section, header, footer, main > *, [role=region], [role=banner], [role=contentinfo]')].filter(visible);
+  sectionEls = sectionEls.filter((el) => !sectionEls.some((o) => o !== el && o.contains(el)));
+  const covered = sectionEls.reduce((sum, el) => sum + el.getBoundingClientRect().height, 0);
+  if (covered < SECTION_MIN_COVER * document.documentElement.scrollHeight) {
+    const root = document.querySelector('main') || document.body;
+    const extra = [...root.children].filter((el) => visible(el)
+      && el.getBoundingClientRect().height > SECTION_MIN_HEIGHT
+      && !sectionEls.some((o) => o === el || o.contains(el)));
+    sectionEls = [...sectionEls, ...extra].sort((x, y) => (x.compareDocumentPosition(y) & 4 ? -1 : 1));
+  }
+  if (!sectionEls.length) sectionEls = [document.querySelector('main') || document.body];
+  const kindOf = (el) => {
+    const t = el.tagName.toLowerCase();
+    if (/^h[1-6]$/.test(t)) return 'heading';
+    if (t === 'p' || t === 'blockquote') return 'text';
+    if (t === 'button' || el.getAttribute('role') === 'button' || (t === 'input' && /^(button|submit)$/.test(el.type))) return 'button';
+    if (t === 'a') return 'link';
+    if (t === 'img') return 'image';
+    if (t === 'ul' || t === 'ol') return 'list';
+    if (t === 'form') return 'form';
+    return 'badge';
+  };
+  const elementSel = 'h1,h2,h3,h4,h5,h6,p,blockquote,button,[role=button],input[type=button],input[type=submit],'
+    + 'a,img,ul,ol,form,[class*=badge],[class*=pill],[class*=chip]';
+  // What an element inside one of these is part of, not a separate row (links and images
+  // are not containers: a card link still lists its image).
+  const holds = new Set(['heading', 'text', 'button', 'list', 'form', 'badge']);
+  // Layout boxes: where an element shows, for the near-copy signature. Text with no painted
+  // shape of its own (no background, no border) is measured by its text (the union of its text
+  // nodes' line boxes), not its block box, which stretches to whatever holds it. A picture is any
+  // large element (at least minArea px) that is media (svg, video, canvas, iframe), has a CSS
+  // background image, or is painted (a background color or gradient) and holds no text and none
+  // of the elements above: a placeholder div. A candidate at least half covered by an image or a
+  // picture already found (a glow or a fade laid over a screenshot) is part of that picture.
+  // capture.cjs and signature.cjs share this text (tested).
+  const painted = (s) => s.backgroundImage !== 'none' || !/^(transparent|rgba\(0, 0, 0, 0\))$/.test(s.backgroundColor);
+  const shaped = (el) => {
+    const s = getComputedStyle(el);
+    return painted(s) || ['Top', 'Right', 'Bottom', 'Left'].some((side) =>
+      s[`border${side}Style`] !== 'none' && parseFloat(s[`border${side}Width`]) > 0);
+  };
+  const textRect = (el) => {
+    let l = Infinity, t = Infinity, r = -Infinity, b = -Infinity;
+    const tw = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    while (tw.nextNode()) {
+      const n = tw.currentNode;
+      if (!n.textContent.trim() || !n.parentElement || !visible(n.parentElement)) continue;
+      const range = document.createRange();
+      range.selectNodeContents(n);
+      for (const q of range.getClientRects()) {
+        if (!(q.width > 0 && q.height > 0)) continue;
+        l = Math.min(l, q.left); t = Math.min(t, q.top); r = Math.max(r, q.right); b = Math.max(b, q.bottom);
+      }
+    }
+    return l === Infinity ? null : { left: l, top: t, width: r - l, height: b - t };
+  };
+  const layoutRect = (el, kind) => (kind === 'image' || kind === 'form' || shaped(el)
+    ? el.getBoundingClientRect() : textRect(el) || el.getBoundingClientRect());
+  const pictureEls = (root, taken, minArea) => {
+    const found = [];
+    const shots = [...root.querySelectorAll('img')].filter((i) => visible(i)).map((i) => i.getBoundingClientRect());
+    const covered = (r, q) => Math.max(0, Math.min(r.right, q.right) - Math.max(r.left, q.left))
+      * Math.max(0, Math.min(r.bottom, q.bottom) - Math.max(r.top, q.top)) / (r.width * r.height);
+    for (const el of root.querySelectorAll('*')) {
+      if (found.length >= 40) break;
+      if (el.matches(elementSel)) continue;
+      let inside = false;
+      for (let a = el.parentElement; a && a !== root; a = a.parentElement) {
+        if (taken.has(a) || found.includes(a)) { inside = true; break; }
+      }
+      if (inside) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width * r.height < minArea || !visible(el)) continue;
+      const s = getComputedStyle(el);
+      const media = /^(svg|video|canvas|iframe)$/.test(el.tagName.toLowerCase());
+      const empty = !(el.innerText || el.textContent || '').trim() && !el.querySelector(elementSel);
+      if (!(media || /url\(/.test(s.backgroundImage) || (painted(s) && empty))) continue;
+      if ([...shots, ...found.map((f) => f.getBoundingClientRect())].some((q) => covered(r, q) >= 0.5)) continue;
+      found.push(el);
+    }
+    return found;
+  };
+  // End of layout boxes.
+  const sections = sectionEls.slice(0, MAX_SECTIONS).map((sec, i) => {
+    const sr = sec.getBoundingClientRect();
+    const heading = sec.querySelector('h1,h2,h3,h4,h5,h6,[role=heading]');
+    const headingText = heading ? clip(heading.innerText) : '';
+    const className = typeof sec.className === 'string' ? sec.className.trim().split(/\s+/)[0] : '';
+    const taken = new Set();
+    const elements = [];
+    // `layout` is the near-copy signature's view of the same elements (see "Layout boxes"
+    // above) plus the section's pictures, page px; `elements` keeps the block boxes.
+    const layout = [];
+    const place = (kind, r) => ({ kind, top: pageTop(r), left: Math.round(r.left),
+      width: Math.round(r.width), height: Math.round(r.height) });
+    for (const el of sec.querySelectorAll(elementSel)) {
+      if (elements.length >= MAX_ELEMENTS) break;
+      if (!visible(el)) continue;
+      let inside = false;
+      for (let a = el.parentElement; a && a !== sec; a = a.parentElement) if (taken.has(a)) { inside = true; break; }
+      if (inside) continue;
+      const kind = kindOf(el);
+      if (holds.has(kind)) taken.add(el);
+      const r = el.getBoundingClientRect();
+      const text = kind === 'image' ? clip(el.getAttribute('alt')) : clip(el.innerText || el.value);
+      elements.push({ kind, text, tag: el.tagName.toLowerCase(), top: pageTop(r),
+        left: Math.round(r.left), width: Math.round(r.width), height: Math.round(r.height) });
+      layout.push(place(kind, layoutRect(el, kind)));
+    }
+    for (const el of pictureEls(sec, taken, 0.02 * sr.width * sr.height)) {
+      if (layout.length >= MAX_ELEMENTS) break;
+      layout.push(place('image', el.getBoundingClientRect()));
+    }
+    return { id: sec.id || '', tag: sec.tagName.toLowerCase(),
+      label: headingText || sec.id || className || `section ${i + 1}`,
+      top: pageTop(sr), height: Math.round(sr.height),
+      left: Math.round(sr.left), width: Math.round(sr.width), elements, layout };
+  });
+
+  // Distinct computed text sizes (px) of the visible elements that hold text of their own.
+  const sizeSet = new Set();
+  for (const el of document.querySelectorAll('body *')) {
+    if (![...el.childNodes].some((n) => n.nodeType === 3 && n.nodeValue.trim())) continue;
+    if (!visible(el)) continue;
+    sizeSet.add(+parseFloat(getComputedStyle(el).fontSize).toFixed(2));
+  }
+  const fontSizes = [...sizeSet].filter((n) => n > 0).sort((a, b) => a - b);
+
   return {
     viewport: { w: vw, h: vh },
     innerWidth: window.innerWidth, dpr: window.devicePixelRatio,
@@ -476,6 +618,7 @@ function measure({ items, minText, minTap, edge, offCenterPx = 16, untitledMinHe
     hiddenBlocks: hiddenBlocks.length, hiddenList: hiddenBlocks.slice(0, 5),
     untitled: untitled.slice(0, 15), untitledCount: untitled.length,
     items: itemStats,
+    sections, fontSizes,
   };
 }
 
@@ -657,6 +800,45 @@ function overflowOf(m) {
   if (image > 1 && !z) signals.push('image');
   m.signals = signals;
   m.sideways = Math.max(scroll, clipped, image, 0);
+}
+
+// The site's own logo, for a design review that cannot find the logo file in the project. In the
+// header (else the first section), the first visible: (1) element whose id, class or alt says
+// "logo"; (2) img, svg or picture inside the header's link to "/"; (3) that link itself; (4) img,
+// svg or picture. Tiers, not document order, because many headers open with a menu or search
+// icon before the logo, and a single pass cropped that icon. Marks it with
+// data-proofs-logo so the caller can take an element screenshot, and returns its page box and
+// a "tag#id.class" source, or null when there is none.
+function findLogo() {
+  const seen = (el) => {
+    const r = el.getBoundingClientRect();
+    const cs = getComputedStyle(el);
+    return r.width > 0 && r.height > 0 && cs.visibility !== 'hidden' && cs.display !== 'none' && Number(cs.opacity) > 0;
+  };
+  const header = document.querySelector('header, [role="banner"]');
+  const root = header || document.querySelector('main > section, section, main > *');
+  if (!root) return null;
+  const named = (el) => /logo/i.test([el.id, el.getAttribute('class'), el.getAttribute('alt')].filter(Boolean).join(' '));
+  const all = [...root.querySelectorAll('*')].filter(seen);
+  const picture = (e) => ['img', 'svg', 'picture'].includes(e.localName);
+  const home = header ? [...header.querySelectorAll('a[href]')].find((a) => {
+    if (!seen(a)) return false;
+    try { const u = new URL(a.href); return u.origin === location.origin && u.pathname === '/'; } catch { return false; }
+  }) : null;
+  const el = all.find(named)
+    || (home && [...home.querySelectorAll('img, svg, picture')].find(seen))
+    || home
+    || all.find(picture);
+  if (!el) return null;
+  document.querySelectorAll('[data-proofs-logo]').forEach((x) => x.removeAttribute('data-proofs-logo'));
+  el.setAttribute('data-proofs-logo', '');
+  const r = el.getBoundingClientRect();
+  const cls = (el.getAttribute('class') || '').trim().split(/\s+/).filter(Boolean);
+  return {
+    box: { left: Math.round(r.left + window.scrollX), top: Math.round(r.top + window.scrollY),
+      width: Math.round(r.width), height: Math.round(r.height) },
+    source: el.localName + (el.id ? `#${el.id}` : '') + cls.map((c) => `.${c}`).join(''),
+  };
 }
 
 // Goes to the page and runs its actions (shared by the capture and the plain recheck).
@@ -891,6 +1073,19 @@ async function main() {
           m.widestRight = flat.widestRight;
           m.overflowing = flat.overflowing;
         }
+        // Additive (Task 6b): the logo crop design-review uses when the project has no logo file.
+        const found = await page.evaluate(findLogo);
+        m.logo = null;
+        if (found && found.box) {
+          const logoFile = `${prefix}${p.name}-${state === 'default' ? '' : `${state}-`}logo-${label}.png`;
+          try {
+            await page.locator('[data-proofs-logo]').first().screenshot({ path: path.join(out, logoFile) });
+            m.logo = { file: logoFile, ...found };
+          } catch (e) {
+            m.logo = { file: null, ...found, error: e.message.split('\n')[0] };
+          }
+          await page.evaluate(() => document.querySelectorAll('[data-proofs-logo]').forEach((x) => x.removeAttribute('data-proofs-logo')));
+        }
         const breaks = await page.evaluate(midWordBreaks, { selector: 'body', limit: 20 });
         m.midWord = breaks.map((w) => w.at);
         m.midWordAt = breaks.map((w) => ({ at: w.at, el: w.el, near: w.near, y: w.y, part: partOf(m.parts, w.y) }));
@@ -1024,6 +1219,27 @@ async function main() {
       const rows = r.measures.untitled.slice(0, 4).map((u) => `"${u.text || u.tag}"${u.id ? ` (#${u.id})` : ''} ${u.height}px tall`);
       const more = r.measures.untitledCount > 4 ? `; and ${r.measures.untitledCount - 4} more` : '';
       lines.push(`- ${r.page} ${r.state} at ${r.viewport}: ${rows.join('; ')}${more}`);
+    }
+  }
+  // Once per page, at 1280 (else the widest width this run took): the list is for picking a
+  // section's label, and every width and state repeats it (measures.json keeps them all).
+  const withSections = results.filter((r) => !r.error && r.measures.sections && r.measures.sections.length);
+  const sectionRows = [...new Set(withSections.map((r) => r.page))].map((name) => {
+    const rows = withSections.filter((r) => r.page === name);
+    const pick = (list) => list.find((r) => r.viewport === '1280')
+      || list.slice().sort((a, b) => Number(b.viewport) - Number(a.viewport))[0];
+    return pick(rows.filter((r) => r.state === 'default')) || pick(rows);
+  });
+  if (sectionRows.length) {
+    lines.push('', 'Sections (label: element counts by kind; one width per page; every width\'s positions are in measures.json "sections"):');
+    for (const r of sectionRows) {
+      lines.push(`- ${r.page} ${r.state} at ${r.viewport}:`);
+      for (const sec of r.measures.sections) {
+        const counts = {};
+        sec.elements.forEach((e) => { counts[e.kind] = (counts[e.kind] || 0) + 1; });
+        const kinds = Object.entries(counts).map(([k, n]) => `${n} ${k}`).join(', ');
+        lines.push(`  - ${sec.label}: ${kinds || 'no elements'}`);
+      }
     }
   }
   const blanks = results.filter((r) => !r.error && r.measures.blank.flagged);

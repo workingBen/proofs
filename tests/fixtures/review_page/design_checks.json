@@ -1,0 +1,41 @@
+{
+ "title": "Design checks",
+ "project": {
+  "name": "P",
+  "session": "s"
+ },
+ "decisions": "design-review",
+ "items": [
+  {
+   "label": "Hero",
+   "reason_html": "<p>r</p>",
+   "recommended": true,
+   "stack_variants": true,
+   "before_font_sizes": [
+    16,
+    20,
+    32
+   ],
+   "variants": [
+    {
+     "html": "<div style=\"font:14px sans-serif;background:#fff;color:#111;padding:20px;\"><h3 style=\"font-size:20px;margin:0 0 8px\">Clean hero</h3><p style=\"margin:0 0 8px;font-size:16px\">Short readable text.</p><a href=\"#\" style=\"display:inline-block;padding:14px 24px;background:#065f2c;color:#fff;font-size:16px\">Start</a></div>"
+    },
+    {
+     "html": "<div style=\"font:14px sans-serif;background:#fff;color:#111;padding:20px;\"><p id=\"gray\" style=\"margin:0 0 8px;color:#999\">Gray on white</p><button style=\"width:30px;height:30px;padding:0\">x</button><p style=\"margin:8px 0 0\">This sentence is deliberately padded out so that it runs well past the readable line length of eighty characters on a wide screen without wrapping at all.</p></div>"
+    },
+    {
+     "html": "<div style=\"font:14px sans-serif;background:#fff;color:#111;padding:20px;\"><div style=\"background:linear-gradient(90deg,#036,#08c);padding:16px\"><p style=\"margin:0;color:#fff\">Text on a gradient</p></div></div>"
+    },
+    {
+     "html": "<div style=\"font:14px sans-serif;background:#fff;color:#111;padding:20px;position:relative;height:120px\"><img alt=\"\" src=\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10'%3E%3Crect width='10' height='10' fill='%23888'/%3E%3C/svg%3E\" style=\"position:absolute;left:0;top:0;width:100%;height:100%\"><p style=\"position:absolute;left:20px;top:20px;margin:0;color:#fff\">Text over a picture</p></div>"
+    }
+   ]
+  },
+  {
+   "label": "One option",
+   "reason_html": "<p>r</p>",
+   "recommended": true,
+   "body_html": "<div class=\"rp-mockup\" style=\"font:14px sans-serif;background:#fff;color:#111;padding:20px\"><p style=\"margin:0;color:#999\">Proposed gray text</p></div>"
+  }
+ ]
+}

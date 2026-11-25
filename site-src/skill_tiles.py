@@ -16,7 +16,7 @@ REPO = os.path.dirname(HERE)
 # (skill, top-pick label or "", description) in README order: most useful first
 TILES = [
     ('working-log', 'Most used', "One page per session: what's waiting on you first, then the log, with one Copy button."),
-    ('design-review', 'Start here', 'Your live page next to one to three mockups per section. You pick, Claude builds it.'),
+    ('design-review', 'Start here', 'Your live page next to three scored mockups per section, one for a small fix. You pick, Claude builds it.'),
     ('pr-qa', 'Critical for UI changes', 'Before and after screenshots of each open pull request, with one decision per PR.'),
     ('questions', '', "Claude's questions on a page, with real buttons, its pick marked and one Copy."),
     ('visual-qa', '', 'Measures pages at three screen sizes, finds layout problems, and designs the fixes.'),

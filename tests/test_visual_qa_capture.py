@@ -859,5 +859,186 @@ module.exports = { chromium: { launch: async () => ({ close: async () => {},
                     self.assertIsNone(re.match(r"^`?[A-Z_]+=", l.strip()), l)
 
 
+@unittest.skipUnless(NODE and playwright_dir(), "Playwright not found: set PROOFS_PLAYWRIGHT or install it in ~/.cache/proofs-playwright")
+class SectionInventory(unittest.TestCase):
+    """measures.sections: each section's elements, in DOM order, with page positions."""
+
+    setUpClass = PhoneWidth.__dict__["setUpClass"]
+    tearDownClass = PhoneWidth.__dict__["tearDownClass"]
+    capture = PhoneWidth.capture
+    result = PhoneWidth.result
+
+    def measures(self, page):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, out = self.capture(tmp, page, "--sizes", "1440")
+            return self.result(out)["measures"]
+
+    def test_sections_are_listed_with_their_elements(self):
+        m = self.measures("inventory.html")
+        secs = m["sections"]
+        self.assertEqual([s["tag"] for s in secs], ["header", "section", "section", "footer"])
+        self.assertEqual([s["label"] for s in secs], ["Site header", "First section", "Second section", "Site footer"])
+        self.assertEqual(secs[2]["id"], "second")
+        self.assertEqual([e["kind"] for e in secs[2]["elements"]], ["heading", "text", "button", "image", "list"])
+        heading, text, button, image, lst = secs[2]["elements"]
+        self.assertEqual(heading["text"], "Second section")
+        self.assertEqual(button["text"], "Second section action")
+        self.assertEqual(lst["tag"], "ul")
+        for e in secs[2]["elements"]:
+            self.assertEqual(set(e), {"kind", "text", "tag", "top", "left", "width", "height"})
+        self.assertGreaterEqual(heading["top"], secs[2]["top"])
+        self.assertEqual((image["width"], image["height"]), (120, 80))
+        self.assertEqual([s["top"] for s in secs], sorted(s["top"] for s in secs))
+        self.assertTrue(all(s["height"] > 0 for s in secs))
+        self.assertTrue(all(s["width"] > 0 and s["left"] >= 0 for s in secs), secs)
+        self.assertTrue(all(isinstance(s["left"], int) and isinstance(s["width"], int) for s in secs))
+
+    def test_sections_carry_a_layout_list_for_the_near_copy_check(self):
+        # Task 7b, additive: `elements` keeps block boxes; `layout` measures unpainted text by its
+        # text and adds painted placeholder divs and CSS background images as pictures; a painted
+        # layer mostly over an image (a glow, a fade) is part of that image.
+        sec = self.measures("inventory-layout.html")["sections"][0]
+        heading = [e for e in sec["elements"] if e["kind"] == "heading"][0]
+        lay = {e["kind"]: e for e in sec["layout"] if e["kind"] != "image"}
+        self.assertEqual(set(lay), {"heading", "link"})
+        self.assertLess(lay["heading"]["width"], heading["width"] / 2)
+        link = [e for e in sec["elements"] if e["kind"] == "link"][0]
+        self.assertEqual((lay["link"]["left"], lay["link"]["width"]), (link["left"], link["width"]))
+        pics = sorted((e["width"], e["height"]) for e in sec["layout"] if e["kind"] == "image")
+        # The gradient laid over the screenshot is part of that picture, not a second one.
+        self.assertEqual(pics, [(200, 300), (300, 300), (400, 300)])
+        for e in sec["layout"]:
+            self.assertEqual(set(e), {"kind", "top", "left", "width", "height"})
+
+    def test_divs_directly_under_main_are_sections(self):
+        # The `main > *` path: no height floor, so this is not the fallback.
+        secs = self.measures("inventory-divs.html")["sections"]
+        self.assertEqual(len(secs), 4)
+        self.assertEqual([s["tag"] for s in secs], ["div"] * 4)
+        self.assertEqual(secs[1]["label"], "Second block")
+        self.assertTrue(all(s["height"] > 200 for s in secs))
+
+    def test_no_main_page_falls_back_to_tall_body_children(self):
+        secs = self.measures("inventory-no-main.html")["sections"]
+        self.assertEqual([s["label"] for s in secs], ["First block", "Second block", "Third block"])
+        self.assertNotIn("Announcement bar", [e["text"] for s in secs for e in s["elements"]])
+
+    def test_stray_header_does_not_hide_the_tall_divs(self):
+        secs = self.measures("inventory-stray-header.html")["sections"]
+        self.assertEqual([s["tag"] for s in secs], ["header", "div", "div", "div"])
+        self.assertEqual(secs[0]["label"], "Lone header")
+        self.assertEqual(secs[3]["label"], "Third block")
+
+    def test_short_page_is_one_body_section(self):
+        secs = self.measures("inventory-short.html")["sections"]
+        self.assertEqual([s["tag"] for s in secs], ["body"])
+        self.assertTrue(any(e["text"] == "Short page." for e in secs[0]["elements"]))
+
+    def test_summary_lists_each_section_with_counts_by_kind(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, out = self.capture(tmp, "inventory.html", "--sizes", "1440")
+            text = (out / "summary.md").read_text()
+        self.assertIn("Sections (", text)
+        self.assertIn("  - Second section: 1 heading, 1 text, 1 button, 1 image, 1 list", text)
+
+    def test_summary_lists_sections_once_per_page_at_1280(self):
+        # Final review, item 7a: the list is for picking a section label, so one width is enough.
+        with tempfile.TemporaryDirectory() as tmp:
+            _, out = self.capture(tmp, "inventory.html", "--sizes", "390,1280,1440")
+            text = (out / "summary.md").read_text()
+        block = text.split("Sections (", 1)[1].split("\n\n", 1)[0]
+        self.assertIn("- t default at 1280:", block)
+        self.assertNotIn("at 390:", block)
+        self.assertNotIn("at 1440:", block)
+        self.assertEqual(block.count("  - Second section:"), 1)
+
+    def test_font_sizes_are_distinct_and_sorted(self):
+        sizes = self.measures("inventory.html")["fontSizes"]
+        self.assertEqual(sizes, sorted(set(sizes)))
+        self.assertIn(16, sizes)
+        self.assertIn(24, sizes)  # the default h2
+
+    def test_existing_measures_fields_unchanged(self):
+        kinds = {
+            "viewport": dict, "innerWidth": int, "dpr": (int, float), "scrollWidth": int, "clientWidth": int,
+            "widestRight": int, "overflowing": list, "pageHeight": int, "sideways": int, "contentWidth": int,
+            "contentShare": (int, float), "smallText": list, "smallTextCount": int, "smallTaps": list,
+            "smallTapCount": int, "truncated": list, "offCenter": list, "offCenterCount": int,
+            "offColumns": list, "offColumnCount": int, "hiddenBlocks": int, "hiddenList": list,
+            "untitled": list, "untitledCount": int, "fullScale": (int, float), "parts": list,
+            "midWord": list, "midWordAt": list, "pngWidth": int, "blank": dict, "signals": list,
+        }
+        for page in ("fits.html", "columns.html"):
+            m = self.measures(page)
+            for key, kind in kinds.items():
+                self.assertIn(key, m, f"{page}: {key}")
+                self.assertIsInstance(m[key], kind, f"{page}: {key}")
+            self.assertIn("items", m)
+
+
+
+@unittest.skipUnless(NODE and playwright_dir(), "Playwright not found: set PROOFS_PLAYWRIGHT or install it in ~/.cache/proofs-playwright")
+class LogoCrop(unittest.TestCase):
+    """Task 6b: the capture crops the site's own logo, so a review without the logo file keeps the real one."""
+
+    setUpClass = PhoneWidth.__dict__["setUpClass"]
+    tearDownClass = PhoneWidth.__dict__["tearDownClass"]
+    capture = PhoneWidth.capture
+    result = PhoneWidth.result
+
+    def logo(self, page, size="1440"):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, out = self.capture(tmp, page, "--sizes", size)
+            logo = self.result(out)["measures"]["logo"]
+            if logo:
+                png = out / logo["file"]
+                self.assertTrue(png.is_file(), logo)
+                logo["png_width"] = decode_png(png.read_bytes())[0]
+            return logo
+
+    def test_img_logo_is_cropped(self):
+        logo = self.logo("logo-img.html")
+        self.assertEqual(logo["file"], "t-logo-1440.png")
+        self.assertEqual(logo["source"], "img#brand-logo.brand")
+        self.assertEqual((logo["box"]["width"], logo["box"]["height"]), (120, 40))
+        self.assertEqual(set(logo["box"]), {"left", "top", "width", "height"})
+        self.assertTrue(all(isinstance(v, int) for v in logo["box"].values()))
+        self.assertGreater(logo["box"]["left"], 24)  # after the About link, not the header's edge
+        # An element shot rounds a subpixel box outward, so allow one CSS px.
+        self.assertAlmostEqual(logo["png_width"], 120, delta=1)
+
+    def test_inline_svg_logo_is_cropped(self):
+        logo = self.logo("logo-svg.html")
+        self.assertEqual(logo["source"], "svg.mark")
+        self.assertEqual((logo["box"]["width"], logo["box"]["height"]), (100, 30))
+
+    def test_logo_class_wins_with_text_inside(self):
+        logo = self.logo("logo-class.html")
+        self.assertEqual(logo["source"], "div.Site-Logo")
+        self.assertGreater(logo["box"]["width"], 0)
+
+    def test_header_link_home_is_the_last_resort(self):
+        self.assertEqual(self.logo("logo-home-link.html")["source"], "a")
+
+    def test_icons_before_a_named_logo_are_skipped(self):
+        # Review round 2: a hamburger and a search svg come first in many headers.
+        logo = self.logo("logo-icons-named.html")
+        self.assertEqual(logo["source"], "div.site-logo")
+        self.assertEqual(logo["box"]["width"], 110)
+
+    def test_icons_before_a_logo_in_the_home_link_are_skipped(self):
+        logo = self.logo("logo-icons-home.html")
+        self.assertEqual(logo["source"], "svg.wordmark")
+        self.assertEqual((logo["box"]["width"], logo["box"]["height"]), (110, 32))
+
+    def test_no_logo_is_null(self):
+        self.assertIsNone(self.logo("logo-none.html"))
+
+    def test_phone_width_names_its_own_file(self):
+        logo = self.logo("logo-img.html", "390")
+        self.assertEqual(logo["file"], "t-logo-390.png")
+        self.assertAlmostEqual(logo["png_width"], 240, delta=2)  # the phone shoots at 2x
+
+
 if __name__ == "__main__":
     unittest.main()

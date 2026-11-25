@@ -9,6 +9,8 @@ const path = require("path");
 const { chromium } = require(process.argv[2]);
 const { launchChromium } = require("./launch.cjs");
 const { midWordBreaks } = require("./midword.cjs");
+const { designChecks } = require("./designchecks.cjs");
+const { layoutSignature, signatureFromSection, similarity, NEAR_COPY } = require("./signature.cjs");
 const file = "file://" + path.resolve(process.argv[3]);
 
 (async () => {
@@ -147,6 +149,11 @@ const file = "file://" + path.resolve(process.argv[3]);
   const reviewItems = S.mode === "review" ? items("review").map(([, it]) => it) : [];
   const seenBreaks = new Set();
   out.mid_word = [];
+  out.design_checks = [];
+  out.notes = [];
+  out.near_copies = [];
+  // Every pair's score, flagged or not, so a session (and the tests) can see how far below the cut.
+  out.layout_scores = [];
   // How wide each mockup's box is at 1280, so a session sizes its mockups to the box (or sets
   // the item's stack_variants) before it builds, not after rounds of captures.
   out.mockup_widths = [];
@@ -180,6 +187,69 @@ const file = "file://" + path.resolve(process.argv[3]);
       out.mid_word.push({ item: it ? it.num : b.where.item, variant: b.where.variant, word: b.at, width: w });
       const where = `item ${it ? it.num : "?"}${it ? ` (${it.label})` : ""}${v ? `, ${v.label}` : ""}`;
       problems.push(`${where}: "${b.at}" breaks mid-word at ${w}px wide; widen the box, shrink the type or use fewer columns`);
+    }
+    // Contrast, tap targets, line length and edges on each mockup, by item and variant. A one-option
+    // item's proposal is the .rp-mockup inside its body ("Proposed"); the page's own labels are not.
+    // Unmeasured text and off-scale type sizes are notes, never problem lines. Design reviews only:
+    // a style guide's or photo picker's options hold deliberately small or low-contrast examples.
+    for (const it of reviewItems) {
+      const sigs = [];
+      const item = `.rp-item[data-id=${JSON.stringify(it.id)}]`;
+      const oneOption = !(it.variants || []).length;
+      const boxes = !oneOption
+        ? it.variants.map((v) => [v.key, v.label, `${item} .rp-variant[data-variant=${JSON.stringify(v.key)}] .rp-vbody`])
+        : [["proposed", "Proposed", `${item} .rp-body .rp-mockup`]];
+      for (const [key, name, sel] of boxes) {
+        if (!(await page.locator(sel).count())) {
+          // A capture item needs no mockup; any other one-option design-review item without one is
+          // never checked, which must not read as clean.
+          if (oneOption && it.design_review && w === 1280 && it.category !== "capture")
+            out.notes.push(`item ${it.num}: no .rp-mockup, design checks skipped`);
+          continue;
+        }
+        if (w === 1280) sigs.push([key, name, await layoutSignature(page, sel)]);
+        if (!it.design_review) continue;
+        const d = await designChecks(page, sel, { width: w, beforeFontSizes: it.before_font_sizes || [] });
+        out.design_checks.push({ item: it.num, variant: key, width: w, ...d });
+        const where = `item ${it.num} (${it.label}), ${name}`;
+        if (d.contrast.length) problems.push(`${where}: ${d.contrast.length} text elements below AA contrast at ${w}px`);
+        if (d.smallTargets.length) problems.push(`${where}: ${d.smallTargets.length} tap targets under 44x44 at ${w}px`);
+        if (d.longLines.length) problems.push(`${where}: ${d.longLines.length} lines over 80 characters at ${w}px`);
+        if (d.edges.length) problems.push(`${where}: ${d.edges.length} left edges 1 to 6px out of line at ${w}px`);
+        // A row with a partly visible item is "cut"; one whose items sit wholly past the edge "hides" them.
+        const cutRows = d.clippedRows.filter((c) => c.cut !== null);
+        const hideRows = d.clippedRows.filter((c) => c.cut === null);
+        if (cutRows.length) problems.push(`${where}: ${cutRows.length} row${cutRows.length > 1 ? "s" : ""} cut at the right edge at ${w}px (${cutRows.map((c) => `"${c.cut}" cut${c.hidden.length ? `; ${c.hidden.length} more hidden past it` : ""}`).join("; ")})`);
+        for (const c of hideRows) problems.push(`${where}: 1 row hides ${c.hidden.length} item${c.hidden.length > 1 ? "s" : ""} past the right edge at ${w}px (${c.hidden.map((h) => `"${h}"`).join(", ")})`);
+        if (d.peekRows.length) out.notes.push(`${where}: ${d.peekRows.length} carousel${d.peekRows.length > 1 ? "s" : ""} show a partly visible card at ${w}px (${d.peekRows.map((c) => `"${c.cut || c.text}"`).join("; ")}); a swipe peek, check it is meant`);
+        if (d.unmeasured.length) {
+          const why = [...new Set(d.unmeasured.map((u) => u.reason.replace(/^contrast: not measured \((.*)\)$/, "$1")))];
+          out.notes.push(`${where}: contrast not measured for ${d.unmeasured.length} text elements (${why.join("; ")}) at ${w}px`);
+        }
+        if (d.offScale.length) out.notes.push(`${where}: ${d.offScale.length} text sizes off the page's own scale at ${w}px (${d.offScale.map((o) => o.size + "px").join(", ")})`);
+      }
+      // Near-copies, measured once at 1280: each pair of options, then each option against the
+      // page's own section (`before_sections`, when the item carries it).
+      // The pair check is for design reviews only: a style guide's options differ by size and a photo picker's are pictures.
+      const near = (a, an, b, bn, sa, sb) => {
+        if (b !== "before" && !it.design_review) return;
+        const score = Math.round(similarity(sa, sb) * 100) / 100;
+        out.layout_scores.push({ item: it.num, a, b, score });
+        if (score < NEAR_COPY) return;
+        out.near_copies.push({ item: it.num, a, b, score });
+        const line = `item ${it.num} (${it.label}): ${an} and ${bn} are near-copies (${score.toFixed(2)})`;
+        // A one-option fix (no variants, or exactly one) keeps the page's layout by design:
+        // a note, and the Reason says what changed (Rulings 26 and 30).
+        if ((it.variants || []).length <= 1) out.notes.push(`${line}; expected for a one-option fix: say what changed in the Reason`);
+        else problems.push(line);
+      };
+      for (let i = 0; i < sigs.length; i++) {
+        for (let j = i + 1; j < sigs.length; j++) near(sigs[i][0], sigs[i][1], sigs[j][0], sigs[j][1], sigs[i][2], sigs[j][2]);
+      }
+      if (it.before_sections) {
+        const before = signatureFromSection(it.before_sections);
+        for (const [key, name, sig] of sigs) near(key, name, "before", "the current page", sig, before);
+      }
     }
   }
   await browser.close();

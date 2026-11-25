@@ -1,4 +1,5 @@
 import contextlib
+import importlib.machinery
 import importlib.util
 import io
 import re
@@ -727,3 +728,315 @@ class ResultsFirst(unittest.TestCase):
     def test_readme_says_it(self):
         self.assertIn("And every skill puts the result first: it saves tokens by cutting waste, never by cutting "
                       "the checks that make the result right.", (REPO / "README.md").read_text())
+
+
+_privacy_loader = importlib.machinery.SourceFileLoader("privacy_scan", str(REPO / "bin" / "privacy-scan"))
+_privacy_spec = importlib.util.spec_from_loader("privacy_scan", _privacy_loader)
+privacy_scan = importlib.util.module_from_spec(_privacy_spec)
+_privacy_loader.exec_module(privacy_scan)
+
+
+class DesignerReferences(unittest.TestCase):
+    """The designer upgrade: the critic's rubric and the optional design profile."""
+
+    KEYS = ("hierarchy", "action", "fold", "grouping", "fit", "care")
+
+    def rubric(self):
+        return " ".join((REPO / "reference" / "design-rubric.md").read_text().split())
+
+    def profile(self):
+        return " ".join((REPO / "reference" / "design-profile.md").read_text().split())
+
+    def test_rubric_names_every_score_key_with_its_anchors(self):
+        text = self.rubric()
+        for key in self.KEYS:
+            with self.subTest(key=key):
+                self.assertIn(f"`{key}`", text)
+        for anchor in ("**1**", "**3**", "**5**"):
+            self.assertGreaterEqual(text.count(anchor), len(self.KEYS), anchor)
+
+    def test_rubric_sets_the_bar(self):
+        text = self.rubric()
+        self.assertIn("2 or below", text)
+        self.assertIn("any failed design check", text)
+        self.assertIn("revise it once or drop it", text)
+        self.assertIn("reason on the page", text)
+        # Ruling 20: a near-copy kept with a Reason line is not a failed check, in every place
+        # the bar is stated, and a one-option fix still names what changed.
+        carve = "any failed design check other than a near-copy kept with a Reason line"
+        self.assertEqual(text.lower().count(carve.lower()), 2, text)
+        self.assertNotRegex(text, r"(?i)any failed design check(?! other than)")
+        self.assertIn("the Reason line still names what changed", text)
+        skill = " ".join((REPO / "skills" / "design-review" / "SKILL.md").read_text().split())
+        self.assertIn(carve, skill)
+        self.assertNotRegex(skill, r"(?i)any failed design check(?! other than)")
+
+    def test_rubric_judges_the_three_roles_and_the_measured_checks(self):
+        text = self.rubric()
+        for needle in ("**Careful**", "**Step up**", "**Bold**", "`--smoke`", "not measured", "near-copies",
+                       "`judged_by`"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+
+    def test_rubric_scores_the_current_page_and_reads_near_copies_per_case(self):
+        text = self.rubric()
+        for needle in ("`before_scores`", "beat the current page", "`fold` or `hierarchy`",
+                       "Two options that are near-copies of each other fail unless the author, having looked, records what differs",
+                       "never ignored silently", "one line in the item's Reason saying what genuinely differs",
+                       "fails for Step up and Bold", "it is expected and not a failure",
+                       "the current page's screenshots at 1280 and 390", "the style guide's path"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+        self.assertNotIn("always fail", text)
+
+    def test_profile_is_made_on_two_questions_pages_rules_second(self):
+        text = self.profile()
+        self.assertIn("two questions pages", text)
+        self.assertLess(text.index("**First page: references and audience.**"),
+                        text.index("**Second page: rules.**"))
+
+    def test_profile_documents_path_setting_and_headings(self):
+        text = self.profile()
+        self.assertIn("`docs/design-profile.md`", text)
+        self.assertIn("`PROOFS_DESIGN_PROFILE`", text)
+        for heading in ("References", "Rules", "Audience", "Tokens"):
+            with self.subTest(heading=heading):
+                self.assertIn(f"## {heading}", (REPO / "reference" / "design-profile.md").read_text())
+
+    def test_profile_is_optional_and_created_on_a_questions_page(self):
+        text = self.profile()
+        self.assertIn("never required", text)
+        self.assertIn("questions page", text)
+        for word in ("Love", "Like", "Not for us"):
+            self.assertIn(word, text)
+
+    def test_neither_file_names_anything_private(self):
+        deny = privacy_scan.load_deny(None) or privacy_scan.Deny(None, None)
+        for name in ("design-rubric.md", "design-profile.md"):
+            for num, line in enumerate((REPO / "reference" / name).read_text().splitlines(), 1):
+                with self.subTest(file=name, line=num):
+                    self.assertEqual(privacy_scan.categories(line, deny), [])
+
+
+class DesignerGuidance(unittest.TestCase):
+    """1.7.0: design-review reads an optional profile, builds a real range, keeps an inventory and runs a critic."""
+
+    def skill(self):
+        return " ".join((REPO / "skills" / "design-review" / "SKILL.md").read_text().split())
+
+    def step(self, heading):
+        return " ".join(section("design-review", heading).split())
+
+    def test_profile_is_read_when_present_and_never_required(self):
+        text = self.step("1.")
+        for needle in ("`docs/design-profile.md`", "`PROOFS_DESIGN_PROFILE`", "Never require it",
+                       "`../../reference/design-profile.md`", "two questions pages", "one line"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+
+    def test_range_is_three_roles_for_a_redesign_and_one_for_a_bug_sized_fix(self):
+        text = self.step("3.")
+        for needle in ("Careful", "Step up", "Bold", "`careful`", "`step-up`", "`bold`",
+                       "one option for a bug-sized fix", "\"Found by the capture\"",
+                       "layout or hierarchy", "near-copies",
+                       "one line in the item's Reason saying what genuinely differs", "never ignore it silently"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+
+    def test_inventory_comes_from_the_capture(self):
+        text = self.step("3.")
+        for needle in ("`before_sections`", "`before_font_sizes`", "`measures.sections`", "`measures.fontSizes`",
+                       "`inventory`", "1280", "kept", "moved", "removed"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+
+    def test_one_option_proposal_is_wrapped_for_smoke(self):
+        self.assertIn('<div class="rp-mockup">', self.step("4."))
+
+    def test_smoke_notes_are_read_and_said(self):
+        text = self.step("4.")
+        for needle in ("`notes`", "`problems`", "contrast not measured", "by eye", "in chat"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+
+    def test_critic_pass(self):
+        text = self.step("4.")
+        for needle in ("`../../reference/design-rubric.md`", "separate helper", "fresh context", "Who judges",
+                       "`claude -p`", "`judged_by`", "`helper`", "`self`", "`scores`", "`before_scores`",
+                       "Current page", "revise it once or drop it", "Not scored", "Never recommend an unscored option"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+
+    def test_critic_comes_after_smoke_and_before_the_correction_pass_ends(self):
+        text = self.step("4.")
+        self.assertLess(text.index("**Verify before publishing"), text.index("**The critic"))
+        self.assertLess(text.index("**The critic"), text.index("**One build, then at most one correction pass.**"))
+
+    def test_first_build_is_a_critic_build(self):
+        text = self.step("4.")
+        self.assertIn("critic build", text)
+        crit = text.split("**The first build is a critic build.**", 1)[1].split("**The critic judges", 1)[0]
+        for needle in ('`"stack_variants": true`', "`note_html`", "`reason_html`", "`recommended`", "`judged_by`",
+                       "`scores`", "`before_scores`", "rebuild"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, crit)
+        self.assertIn("`reason_html` and `recommended` in the rebuild", text)
+
+    def test_capture_item_without_mockup_has_no_inventory_or_scores(self):
+        self.assertIn("every mockup", self.step("3."))
+        self.assertIn("without a mockup carries neither `inventory` nor `scores`", self.step("3."))
+
+    def test_results_first_keeps_the_critic_and_the_options(self):
+        text = self.step("4.")
+        self.assertIn("never by cutting an option, the critic or the revise pass", text)
+        self.assertIn("$5", text)
+
+    def test_keep_x_on_accept_with_comment(self):
+        text = self.step("5.")
+        accept = text.split("**`ACCEPT WITH COMMENT`**", 1)[1].split("**`DENY`**", 1)[0]
+        self.assertIn("keep", accept)
+        self.assertIn("ask", accept)
+
+    def test_existing_rules_survive(self):
+        text = self.skill()
+        for needle in ("**Never change words the user did not pick.**", "\"Found by the capture\"",
+                       "**Change only what was picked.**", "`../../reference/commit-and-pr.md`",
+                       "**One build, then at most one correction pass.**", "--compare .proofs/capture/before/measures.json"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+
+    def test_style_guide_points_at_design_review(self):
+        text = " ".join((REPO / "skills" / "style-guide" / "SKILL.md").read_text().split())
+        self.assertIn("design-profile.md", text)
+        self.assertIn("design-review", text.rsplit("## Where the page goes", 1)[0][-800:])
+
+    def test_readme_says_three_roles_and_a_critic(self):
+        readme = (REPO / "README.md").read_text()
+        part = readme.split("### design-review:", 1)[1].split("### ", 1)[0]
+        for needle in ("Careful", "Step up", "Bold", "scored"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, part)
+
+
+class BrandKept(unittest.TestCase):
+    """Task 6b: the designer keeps a site's branding intact unless the user asks for a rebrand."""
+
+    def step(self, heading):
+        return " ".join(section("design-review", heading).split())
+
+    def rubric(self):
+        return " ".join((REPO / "reference" / "design-rubric.md").read_text().split())
+
+    def test_brand_elements_are_named_and_kept_exactly(self):
+        text = self.step("3.")
+        for needle in ("**Keep the brand exactly as it is.**", "logo", "wordmark", "company name", "product names",
+                       "brand colors", "tagline", "never redrawn, recolored, simplified or replaced by a text stand-in"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+
+    def test_every_role_keeps_the_brand_and_bold_changes_only_around_it(self):
+        text = self.step("3.")
+        self.assertIn("Careful, Step up and Bold all keep the brand", text)
+        self.assertIn("Bold may change everything around it", text)
+        self.assertIn("Bold may change everything around it", self.rubric())
+
+    def test_inventory_marks_brand_rows(self):
+        self.assertIn('`"brand": true`', self.step("3."))
+        doc = " ".join((REPO / "reference" / "review-page.md").read_text().split())
+        self.assertIn("`brand`", doc)
+        self.assertIn("Brand", doc)
+
+    def test_brand_loss_is_care_1_and_a_failure_not_a_carve_out(self):
+        text = self.rubric()
+        self.assertIn("a brand element removed or changed scores `care` 1", text.lower())
+        self.assertIn("fails the option whatever its other scores", text)
+        self.assertIn("never a carve-out", text)
+        self.assertNotIn("a brand break scores `fit` 2 or below", text)
+        bar = self.step("4.").split("**The bar.**", 1)[1]
+        self.assertIn("brand element", bar)
+        self.assertIn("never a carve-out", bar)
+
+    def test_logo_not_found_falls_back_to_the_capture_crop(self):
+        text = self.step("3.")
+        for needle in ("cannot be found in the project", "on the page and in chat", "crop", "never invent one",
+                       "`logo.file`", "`<name>-logo-<width>.png`", "Put that crop in `assets`",
+                       "counts as the site's own logo", "When `logo` is `null`, show the header's part shot as is",
+                       "never a typed stand-in"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+
+    def test_keep_the_best_one_never_publishes_a_lost_brand(self):
+        needle = "an option that lost the brand is never published"
+        self.assertIn("except a brand failure (care 1): put the brand back first; " + needle, self.rubric())
+        bar = self.step("4.").split("**The bar.**", 1)[1]
+        self.assertIn("put the brand back first", bar)
+        self.assertIn(needle, bar)
+
+    def test_rebrand_request_is_the_only_exception(self):
+        self.assertIn("rebrand", self.step("3."))
+        self.assertIn("rebrand", self.rubric())
+
+
+class FinalReviewGuidance(unittest.TestCase):
+    """The final whole-branch review's wording fixes (1.7.0)."""
+
+    def rubric(self):
+        return " ".join((REPO / "reference" / "design-rubric.md").read_text().split())
+
+    def step(self, heading):
+        return " ".join(section("design-review", heading).split())
+
+    def test_bold_palette_is_carved_out_of_fit(self):
+        text = self.rubric()
+        fit = text.split("### `fit`", 1)[1].split("### `care`", 1)[0]
+        for needle in ("the site's own palette, its style guide or the profile's Love references",
+                       "clash with the brand or the profile", "recolor a brand color"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, fit)
+        self.assertNotIn("brings colors, fonts or a button style the site does not use", fit)
+        roles = text.split("## The three roles", 1)[1].split("## The bar", 1)[0]
+        self.assertIn("new colors only from the site's own palette, its style guide or the profile's Love references",
+                      roles)
+        self.assertIn("new colors only from the site's own palette, its style guide or the profile's Love references",
+                      self.step("3."))
+
+    def test_step_up_when_careful_is_already_5_and_a_trade_for_the_target(self):
+        roles = self.rubric().split("## The three roles", 1)[1].split("## The bar", 1)[0]
+        self.assertIn('drop Step up with the reason "Careful already at 5"', roles)
+        self.assertIn("rises by 2 or more", roles)
+        self.assertIn("one criterion may drop by one point", roles)
+
+    def test_before_sections_come_from_measures_not_copied(self):
+        text = self.step("3.")
+        self.assertIn('"before_sections": {"from": ".proofs/capture/before/measures.json"', text)
+        self.assertIn('"before_font_sizes": {"from":', text)
+        self.assertIn("never copy", text)
+
+    def test_unscored_recommendation_error_matches_the_code(self):
+        text = self.step("4.")
+        self.assertIn("recommending one is a build error when the item has two or more options", text)
+        self.assertNotIn("with it set, an option without scores shows \"Not scored\" and recommending one is a build error.",
+                         text)
+
+    def test_near_copy_problem_is_for_two_or_more_options_only(self):
+        text = " ".join((REPO / "skills" / "design-review" / "SKILL.md").read_text().split())
+        self.assertIn("on an item with two or more options, that stays a problem line, not a note", text)
+        self.assertIn("A near-copy of the current page on a one-option fix (one proposal, or exactly one variant) "
+                      "is a note instead (Ruling 30)", text)
+        self.assertIn("a near-copy on an item with two or more options)", text)
+        self.assertNotIn("(0.91)`: that stays a problem line, not a note.", text)
+
+    def test_profile_offer_is_one_line_and_pages_only_on_yes(self):
+        text = self.step("1.")
+        self.assertIn("offer in one line to create one", text)
+        self.assertIn("build the questions pages only if the reader says yes", text)
+        self.assertIn("in `claude -p`, just the one line", text)
+
+    def test_logo_crop_with_an_error_is_treated_as_null(self):
+        self.assertIn("`logo.file` is `null` with an `error`", self.step("3."))
+
+    def test_visual_qa_lists_the_logo_crop_and_new_fields(self):
+        text = " ".join((REPO / "skills" / "visual-qa" / "SKILL.md").read_text().split())
+        for needle in ("`<page>-logo-<width>.png`", "`sections`", "`fontSizes`", "`logo`"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)

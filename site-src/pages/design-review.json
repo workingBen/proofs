@@ -17,16 +17,16 @@
     },
     {
      "id": "f2",
-     "title": "Up to three working mockups per section",
-     "what": "Each proposal is built as real HTML and CSS, not an AI image or a text diff, with one to three options per section. You see the actual layout, spacing and type, not an impression of them.",
+     "title": "Three working mockups for a redesign, one for a fix",
+     "what": "Each proposal is built as real HTML and CSS, not an AI image or a text diff. A redesign gets three options, each with its own job: Careful fixes what you asked and keeps the layout, Step up is a clearly better layout in your site's own style, and Bold tries a different arrangement. A small fix gets just one. You see the actual layout, spacing and type, not an impression of them.",
      "picture": "Three small side-by-side cards labeled A, B and C, each showing a slightly different page layout drawn as gray blocks.",
      "label": "See Your Options",
-     "sub": "Up to three working designs for each section"
+     "sub": "Careful, Step up and Bold for a redesign; one option for a small fix"
     },
     {
      "id": "f3",
      "title": "Mockups use your site's own style",
-     "what": "Mockups are drawn with your page's real fonts, colors and spacing, with the fonts and images packed into the page so nothing falls back to a generic look. If your site has light and dark themes, mockups work in both.",
+     "what": "Mockups are drawn with your page's real fonts, colors and spacing, with the fonts and images packed into the page so nothing falls back to a generic look. Your logo, company name and brand colors stay exactly as they are in every option, even the boldest one. If your site has light and dark themes, mockups work in both.",
      "picture": "A mockup card next to a little palette strip of color swatches and an \"Aa\" font sample, with arrows from the swatches into the mockup.",
      "label": "Your Look, Not Ours",
      "sub": "Mockups use your site's own fonts, colors and spacing"
@@ -42,7 +42,7 @@
     {
      "id": "f5",
      "title": "One numbered item per section",
-     "what": "Even a whole-page redesign is split into numbered items, one for each section or component. You can approve the header and send back the footer instead of taking or rejecting everything at once.",
+     "what": "Even a whole-page redesign is split into numbered items, one for each section or component. Under each mockup, a short list shows every element of that section as kept, moved or removed, with the reason, so nothing you like disappears quietly. You can approve the header and send back the footer instead of taking or rejecting everything at once.",
      "picture": "A tall page outline divided into three horizontal bands, each with a numbered circle 1, 2, 3 on its left edge.",
      "label": "One Piece at a Time",
      "sub": "Every section is its own numbered item"
@@ -50,7 +50,7 @@
     {
      "id": "f6",
      "title": "A reason and an honest recommendation",
-     "what": "Every item explains why the change is proposed and carries a Recommended or Not Recommended badge. Readability or accessibility concerns show up right there in the reason.",
+     "what": "Before you see them, every option is scored on six points, such as clear hierarchy and a visible call to action, and so is your current page: an option that does not beat today's page where you asked for the change is revised or dropped. Every item explains why the change is proposed and carries a Recommended or Not Recommended badge. Readability or accessibility concerns show up right there in the reason.",
      "picture": "An item header with a green \"Recommended\" badge and a gray \"Not Recommended\" badge below it, plus a short \"Reason\" text block.",
      "label": "An Honest Opinion",
      "sub": "Each item comes with a reason and a recommendation"

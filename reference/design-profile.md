@@ -46,10 +46,11 @@ docs/style-guide.html
 
 ## Creating one
 
-When the profile is missing, offer to make it on a questions page (the `questions` skill), so the reader can answer from a phone and the answers come back in one export:
+When the profile is missing, offer to make it on two questions pages (the `questions` skill), so the reader can answer from a phone and each page's answers come back in one export. The rules need the references first, so they cannot share a page:
 
-1. **References.** List four to six sites: well-known public product sites that fit the request, plus any the reader names. For each, the reader picks **Love**, **Like** or **Not for us** and writes one line saying why. Leave room to add a site.
-2. **Rules.** Propose three to seven rules drawn from the reader's "why" lines and from what the capture found on the site, each with a recommended keep or drop; the reader keeps, edits or drops each and can add one.
-3. **Audience.** One free-text answer: who reads the site, and anything about them the design must allow for.
+1. **First page: references and audience.**
+   - **References.** List four to six sites: well-known public product sites that fit the request, plus any the reader names. For each, the reader picks **Love**, **Like** or **Not for us** and writes one line saying why. Leave room to add a site.
+   - **Audience.** One free-text answer: who reads the site, and anything about them the design must allow for.
+2. **Second page: rules.** From those answers, the capture and the request, propose three to seven rules, each a plain sentence a critic can check on a screenshot and each with a recommended keep or drop. The reader keeps, edits or drops each and can add one.
 
-Then write the file at the profile path from the answers, in the reader's own words, with Tokens pointing to the style guide when the project has one, else "derived from the site's CSS". Show the reader the file and use it from the next design pass on. Never invent references or rules the reader did not give or pick.
+Then write the file at the profile path from both pages' answers, in the reader's own words, with Tokens pointing to the style guide when the project has one, else "derived from the site's CSS". Show the reader the file and use it from the next design pass on. Never invent references or rules the reader did not give or pick.

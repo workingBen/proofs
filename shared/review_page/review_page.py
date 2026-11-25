@@ -479,11 +479,26 @@ SCORE_DIMS = (("hierarchy", "Hierarchy"), ("action", "Action"), ("fold", "Fold")
 JUDGED_BY = {"helper": "Judged by a separate helper", "self": "Checked by the designer itself"}
 
 
+def check_scores(where, sc):
+    """Scores are an object of SCORE_DIMS keys, each a whole number from 1 to 5; None is fine."""
+    if sc is None:
+        return
+    if not isinstance(sc, dict):
+        raise SpecError("%s: scores must be an object" % where)
+    for k, val in sc.items():
+        if k not in dict(SCORE_DIMS):
+            raise SpecError("%s: unknown score %r (use %s)" % (where, k, ", ".join(d for d, _ in SCORE_DIMS)))
+        if isinstance(val, bool) or not isinstance(val, int) or not 1 <= val <= 5:
+            raise SpecError("%s: score %s must be a whole number from 1 to 5, got %r" % (where, k, val))
+
+
 def check_designer_fields(it):
     """Validate role, inventory, scores and judged_by on an item and its variants (plain one-line errors)."""
     iid = it["id"]
     if it.get("judged_by") is not None and it["judged_by"] not in JUDGED_BY:
         raise SpecError("item %s: judged_by %r must be helper or self" % (iid, it["judged_by"]))
+    # before_scores: the critic's scores for the current page, the baseline every option must beat.
+    check_scores("item %s, current page" % iid, it.get("before_scores"))
     variants = it.get("variants") or []
     owners = [("item %s" % iid, it)] if not variants else []
     owners += [("item %s, variant %s" % (iid, v["key"]), v) for v in variants]
@@ -500,15 +515,7 @@ def check_designer_fields(it):
                 if row.get("status") not in STATUSES:
                     raise SpecError("%s: inventory status %r must be kept, moved or removed"
                                     % (where, row.get("status")))
-        sc = o.get("scores")
-        if sc is not None:
-            if not isinstance(sc, dict):
-                raise SpecError("%s: scores must be an object" % where)
-            for k, val in sc.items():
-                if k not in dict(SCORE_DIMS):
-                    raise SpecError("%s: unknown score %r (use %s)" % (where, k, ", ".join(d for d, _ in SCORE_DIMS)))
-                if isinstance(val, bool) or not isinstance(val, int) or not 1 <= val <= 5:
-                    raise SpecError("%s: score %s must be a whole number from 1 to 5, got %r" % (where, k, val))
+        check_scores(where, o.get("scores"))
     if len(variants) >= 2 and (it.get("judged_by") or any(v.get("scores") for v in variants)):
         unscored = [v for v in variants if not v.get("scores")]
         picked = [v["key"] for v in unscored if v.get("recommended")]
@@ -1061,6 +1068,10 @@ def review_item(it, dec, colors):
     if it.get("body_html"):
         h.append('<div class="rp-body">%s</div>' % it["body_html"])
     scored = bool(it.get("judged_by")) or any(v.get("scores") for v in variants)
+    if it.get("before_scores"):
+        h.append('<div class="rp-scores rp-before-scores"><span class="rp-scores-label">Current page</span> %s</div>'
+                 % " · ".join("%s <b>%d</b>" % (lab, it["before_scores"][k]) for k, lab in SCORE_DIMS
+                              if k in it["before_scores"]))
     if not variants:
         h.append(designer_extras(it, True, it.get("before_sections")))
     if variants:

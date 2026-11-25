@@ -141,6 +141,7 @@ flat `items` list. Item fields:
 | variant `role` | `careful`, `step-up` or `bold`: shown as "Careful", "Step up", "Bold" in the variant head. Unknown value is a spec error |
 | variant `inventory` | `[{element, status, reason}]`, `status` is `kept`, `moved` or `removed`; a compact table under the mockup, removed rows in the deny color. `element` matches a captured element of `before_sections` by its text (its kind when it has none), ignoring case and extra spaces; a captured element with no row shows "removed — no reason given" |
 | variant `scores` | `{hierarchy, action, fold, grouping, fit, care}`, each a whole number 1 to 5, one line under the mockup. In an item where any variant is scored, an unscored one says "Not scored", and recommending (or `selected`) an unscored variant is a spec error |
+| `before_scores` | the critic's scores for the current page, the baseline every option must beat (`design-rubric.md`): same keys and 1 to 5 checks as `scores`, errors naming "current page". Shown once per item above its options as a row labeled "Current page"; none, no row |
 | `judged_by` | `helper` ("Judged by a separate helper") or `self` ("Checked by the designer itself"); none, no line |
 | `inventory`, `scores` on an item with no `variants` | the single proposal's inventory and scores, validated and shown the same way; no `role` needed |
 | `history_html` | earlier rounds, shown dimmed above the body |

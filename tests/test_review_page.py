@@ -1629,6 +1629,33 @@ class DesignerFields(unittest.TestCase):
             self.assertIn("fold", msg)
             self.assertIn("1 to 5", msg)
 
+    def test_before_scores_render_once_above_the_options(self):
+        before = {"hierarchy": 2, "action": 3, "fold": 2, "grouping": 3, "fit": 4, "care": 5}
+        html = self.page([{"label": "Hero", "before_scores": before, "variants": self.variants()}])
+        row = ('<div class="rp-scores rp-before-scores"><span class="rp-scores-label">Current page</span> '
+               'Hierarchy <b>2</b> · Action <b>3</b> · Fold <b>2</b> · Grouping <b>3</b> · Fit <b>4</b> · Care <b>5</b></div>')
+        self.assertEqual(html.count(row), 1)
+        self.assertLess(html.index(row), html.index('class="rp-gallery'))
+        single = self.page([{"label": "Hero", "before_scores": before, "body_html": "<p>x</p>", "scores": self.SC}])
+        self.assertEqual(single.count(row), 1)
+
+    def test_before_scores_out_of_range_is_a_spec_error(self):
+        for bad in (0, 6, 3.5, "4"):
+            with self.subTest(bad=bad):
+                msg = self.error([{"label": "Hero", "before_scores": dict(self.SC, fold=bad),
+                                   "variants": self.variants()}])
+                self.assertEqual(msg, "item 1, current page: score fold must be a whole number from 1 to 5, got %r"
+                                 % (bad,))
+        self.assertIn("unknown score", self.error([{"label": "Hero", "before_scores": {"vibe": 3},
+                                                    "variants": self.variants()}]))
+        self.assertIn("must be an object", self.error([{"label": "Hero", "before_scores": [3],
+                                                        "variants": self.variants()}]))
+
+    def test_no_before_scores_renders_no_current_page_row(self):
+        html = self.page([{"label": "Hero", "variants": self.variants()}])
+        self.assertNotIn("rp-before-scores", html.split("<style>")[0] + html.split("</style>")[-1])
+        self.assertNotIn("Current page</span>", html)
+
     def test_recommending_an_unscored_variant_is_a_spec_error(self):
         msg = self.error([{"label": "Hero", "variants": [
             {"html": "<p>a</p>", "scores": self.SC}, {"html": "<p>b</p>", "recommended": True}]}])

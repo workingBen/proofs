@@ -769,6 +769,21 @@ class DesignerReferences(unittest.TestCase):
             with self.subTest(needle=needle):
                 self.assertIn(needle, text)
 
+    def test_rubric_scores_the_current_page_and_reads_near_copies_per_case(self):
+        text = self.rubric()
+        for needle in ("`before_scores`", "beat the current page", "`fold` or `hierarchy`",
+                       "Two options that are near-copies of each other always fail",
+                       "fails for Step up and Bold", "it is expected and not a failure",
+                       "the current page's screenshots at 1280 and 390", "the style guide's path"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+
+    def test_profile_is_made_on_two_questions_pages_rules_second(self):
+        text = self.profile()
+        self.assertIn("two questions pages", text)
+        self.assertLess(text.index("**First page: references and audience.**"),
+                        text.index("**Second page: rules.**"))
+
     def test_profile_documents_path_setting_and_headings(self):
         text = self.profile()
         self.assertIn("`docs/design-profile.md`", text)

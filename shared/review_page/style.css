@@ -91,6 +91,8 @@ picture.rp-pic { display:contents; }
 .rp-inv tr.rp-inv-removed td { color:var(--rp-deny); }
 .rp-scores { font-size:14px; color:var(--rp-soft); margin-top:8px; }
 .rp-scores b { color:var(--rp-ink, inherit); }
+.rp-before-scores { margin:0 0 8px; }
+.rp-scores-label { font-weight:600; color:var(--rp-ink, inherit); }
 .rp-unscored { color:var(--rp-faint); }
 .rp-judged { font-size:14px; color:var(--rp-soft); margin:8px 0; }
 .rp-vnote { font-size:15px; color:var(--rp-soft); margin-top:8px; }

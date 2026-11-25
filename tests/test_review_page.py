@@ -1699,6 +1699,22 @@ class DesignerFields(unittest.TestCase):
         self.assertNotIn('<div class="rp-scores', html)
 
 
+    def test_item_without_variants_shows_no_score_row_unless_scored_or_judged(self):
+        # Task 6 fix round: a copy-edit item and a capture item carry neither scores nor judged_by.
+        for item in ({"label": "Line 3", "body_html": "<p>old</p><p>new</p>", "recommended": True},
+                     {"label": "Mid-word break", "category": "capture", "body_html": "<p>fix</p>"}):
+            with self.subTest(item=item["label"]):
+                self.assertNotIn('<div class="rp-scores', self.page([item]))
+
+    def test_one_option_item_with_judged_by_and_no_scores_says_not_scored(self):
+        html = self.page([{"label": "Hero", "judged_by": "self",
+                           "body_html": '<div class="rp-mockup"><p>a</p></div>'}])
+        self.assertEqual(html.count('<div class="rp-scores rp-unscored">Not scored</div>'), 1)
+
+    def test_copy_edit_example_has_no_score_rows(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertNotIn("Not scored", build("copy-edit", tmp).read_text())
+
 @unittest.skipUnless(NODE and playwright_dir(), "Playwright not found")
 class InventoryFit(unittest.TestCase):
     def test_long_inventory_rows_do_not_scroll_the_page_sideways(self):

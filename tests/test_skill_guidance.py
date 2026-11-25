@@ -860,6 +860,20 @@ class DesignerGuidance(unittest.TestCase):
         self.assertLess(text.index("**Verify before publishing"), text.index("**The critic"))
         self.assertLess(text.index("**The critic"), text.index("**One build, then at most one correction pass.**"))
 
+    def test_first_build_is_a_critic_build(self):
+        text = self.step("4.")
+        self.assertIn("critic build", text)
+        crit = text.split("**The first build is a critic build.**", 1)[1].split("**The critic judges", 1)[0]
+        for needle in ('`"stack_variants": true`', "`note_html`", "`reason_html`", "`recommended`", "`judged_by`",
+                       "`scores`", "`before_scores`", "rebuild"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, crit)
+        self.assertIn("`reason_html` and `recommended` in the rebuild", text)
+
+    def test_capture_item_without_mockup_has_no_inventory_or_scores(self):
+        self.assertIn("every mockup", self.step("3."))
+        self.assertIn("without a mockup carries neither `inventory` nor `scores`", self.step("3."))
+
     def test_results_first_keeps_the_critic_and_the_options(self):
         text = self.step("4.")
         self.assertIn("never by cutting an option, the critic or the revise pass", text)

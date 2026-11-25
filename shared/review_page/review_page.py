@@ -1073,7 +1073,8 @@ def review_item(it, dec, colors):
                  % " · ".join("%s <b>%d</b>" % (lab, it["before_scores"][k]) for k, lab in SCORE_DIMS
                               if k in it["before_scores"]))
     if not variants:
-        h.append(designer_extras(it, True, it.get("before_sections")))
+        # A score row only when a critic was meant to judge it: copy-edit and capture items get none.
+        h.append(designer_extras(it, bool(it.get("judged_by")), it.get("before_sections")))
     if variants:
         # stack_variants: one variant per row, so a desktop mockup gets the card's full width
         # instead of about 490 px beside its sibling at a 1280 px window (SvelteKit run 1).

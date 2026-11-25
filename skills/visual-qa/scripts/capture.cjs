@@ -41,6 +41,7 @@
 // PNG pixel per CSS pixel, with each part's y range in measures.json ("parts"): an image reader
 // shrinks a tall full-page shot until nothing in it is legible (Astro run 3: 31,354 px at 2x). A
 // full shot that would pass 16,384 px at the device scale is taken at 1x ("fullScale").
+// The site's logo is cropped to <name>-logo-<width>.png ("logo": file, box, source; null when none).
 // Each mid-word break names its element, the heading above it, its y and its part ("midWordAt").
 // --compare takes an earlier run's measures.json and lists, per page, size and check, the entries
 // that are new since then, by text, not by count ("newSince"): a fix that took small tap targets
@@ -802,6 +803,40 @@ function overflowOf(m) {
 }
 
 // Goes to the page and runs its actions (shared by the capture and the plain recheck).
+// The site's own logo, for a design review that cannot find the logo file in the project: the
+// first visible element in the header (else the first section) that is an img, svg or picture,
+// or whose id, class or alt says "logo"; failing that, the header's link to "/". Marks it with
+// data-proofs-logo so the caller can take an element screenshot, and returns its page box and
+// a "tag#id.class" source, or null when there is none.
+function findLogo() {
+  const seen = (el) => {
+    const r = el.getBoundingClientRect();
+    const cs = getComputedStyle(el);
+    return r.width > 0 && r.height > 0 && cs.visibility !== 'hidden' && cs.display !== 'none' && Number(cs.opacity) > 0;
+  };
+  const header = document.querySelector('header, [role="banner"]');
+  const root = header || document.querySelector('main > section, section, main > *');
+  if (!root) return null;
+  const named = (el) => /logo/i.test([el.id, el.getAttribute('class'), el.getAttribute('alt')].filter(Boolean).join(' '));
+  let el = [...root.querySelectorAll('*')].find((e) => seen(e) && (['img', 'svg', 'picture'].includes(e.localName) || named(e)));
+  if (!el && header) {
+    el = [...header.querySelectorAll('a[href]')].find((a) => {
+      if (!seen(a)) return false;
+      try { const u = new URL(a.href); return u.origin === location.origin && u.pathname === '/'; } catch { return false; }
+    });
+  }
+  if (!el) return null;
+  document.querySelectorAll('[data-proofs-logo]').forEach((x) => x.removeAttribute('data-proofs-logo'));
+  el.setAttribute('data-proofs-logo', '');
+  const r = el.getBoundingClientRect();
+  const cls = (el.getAttribute('class') || '').trim().split(/\s+/).filter(Boolean);
+  return {
+    box: { left: Math.round(r.left + window.scrollX), top: Math.round(r.top + window.scrollY),
+      width: Math.round(r.width), height: Math.round(r.height) },
+    source: el.localName + (el.id ? `#${el.id}` : '') + cls.map((c) => `.${c}`).join(''),
+  };
+}
+
 async function openPage(page, base, p, scroll = true) {
   const url = joinUrl(base, p.path);
   const response = await page.goto(url, { waitUntil: 'networkidle' });
@@ -1032,6 +1067,19 @@ async function main() {
           m.clientWidth = vp.width;
           m.widestRight = flat.widestRight;
           m.overflowing = flat.overflowing;
+        }
+        // Additive (Task 6b): the logo crop design-review uses when the project has no logo file.
+        const found = await page.evaluate(findLogo);
+        m.logo = null;
+        if (found && found.box) {
+          const logoFile = `${prefix}${p.name}-${state === 'default' ? '' : `${state}-`}logo-${label}.png`;
+          try {
+            await page.locator('[data-proofs-logo]').first().screenshot({ path: path.join(out, logoFile) });
+            m.logo = { file: logoFile, ...found };
+          } catch (e) {
+            m.logo = { file: null, ...found, error: e.message.split('\n')[0] };
+          }
+          await page.evaluate(() => document.querySelectorAll('[data-proofs-logo]').forEach((x) => x.removeAttribute('data-proofs-logo')));
         }
         const breaks = await page.evaluate(midWordBreaks, { selector: 'body', limit: 20 });
         m.midWord = breaks.map((w) => w.at);

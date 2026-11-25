@@ -89,7 +89,7 @@ A redesign item has three options, each judged on the six criteria and on its ro
 
 - **Revise once.** Fix what failed, rebuild, rerun `--smoke` and score again. Say what changed in the option's note, for example "Revised: the action was below the first screen at 390 (fold 2)."
 - **Drop** an option that still misses the bar after its one revision, or that cannot be fixed without becoming another option. Say so in the item's reason, for example "Dropped Bold: it needed a headline nobody wrote (care 2)." Never publish an option below the bar without saying so.
-- If dropping would leave an item with no option, keep the best one, mark the score that failed in its note, and say on the page that it did not clear the bar. Do not start another round; the one build, at most one correction pass rule still applies.
+- If dropping would leave an item with no option, keep the best one, mark the score that failed in its note, and say on the page that it did not clear the bar, except a brand failure (care 1): put the brand back first; an option that lost the brand is never published. Do not start another round; the one build, at most one correction pass rule still applies.
 - **Recommend** the option with the highest total that clears the bar; on a tie, the one that best answers the request. Never recommend an unscored option or one below the bar.
 
 Results first (`house-rules.md` rule 0): never skip the critic, the measured checks or the revise pass to save cost.

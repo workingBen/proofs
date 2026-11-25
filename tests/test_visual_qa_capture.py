@@ -965,5 +965,58 @@ class SectionInventory(unittest.TestCase):
             self.assertIn("items", m)
 
 
+
+@unittest.skipUnless(NODE and playwright_dir(), "Playwright not found: set PROOFS_PLAYWRIGHT or install it in ~/.cache/proofs-playwright")
+class LogoCrop(unittest.TestCase):
+    """Task 6b: the capture crops the site's own logo, so a review without the logo file keeps the real one."""
+
+    setUpClass = PhoneWidth.__dict__["setUpClass"]
+    tearDownClass = PhoneWidth.__dict__["tearDownClass"]
+    capture = PhoneWidth.capture
+    result = PhoneWidth.result
+
+    def logo(self, page, size="1440"):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, out = self.capture(tmp, page, "--sizes", size)
+            logo = self.result(out)["measures"]["logo"]
+            if logo:
+                png = out / logo["file"]
+                self.assertTrue(png.is_file(), logo)
+                logo["png_width"] = decode_png(png.read_bytes())[0]
+            return logo
+
+    def test_img_logo_is_cropped(self):
+        logo = self.logo("logo-img.html")
+        self.assertEqual(logo["file"], "t-logo-1440.png")
+        self.assertEqual(logo["source"], "img#brand-logo.brand")
+        self.assertEqual((logo["box"]["width"], logo["box"]["height"]), (120, 40))
+        self.assertEqual(set(logo["box"]), {"left", "top", "width", "height"})
+        self.assertTrue(all(isinstance(v, int) for v in logo["box"].values()))
+        self.assertGreater(logo["box"]["left"], 24)  # after the About link, not the header's edge
+        # An element shot rounds a subpixel box outward, so allow one CSS px.
+        self.assertAlmostEqual(logo["png_width"], 120, delta=1)
+
+    def test_inline_svg_logo_is_cropped(self):
+        logo = self.logo("logo-svg.html")
+        self.assertEqual(logo["source"], "svg.mark")
+        self.assertEqual((logo["box"]["width"], logo["box"]["height"]), (100, 30))
+
+    def test_logo_class_wins_with_text_inside(self):
+        logo = self.logo("logo-class.html")
+        self.assertEqual(logo["source"], "div.Site-Logo")
+        self.assertGreater(logo["box"]["width"], 0)
+
+    def test_header_link_home_is_the_last_resort(self):
+        self.assertEqual(self.logo("logo-home-link.html")["source"], "a")
+
+    def test_no_logo_is_null(self):
+        self.assertIsNone(self.logo("logo-none.html"))
+
+    def test_phone_width_names_its_own_file(self):
+        logo = self.logo("logo-img.html", "390")
+        self.assertEqual(logo["file"], "t-logo-390.png")
+        self.assertAlmostEqual(logo["png_width"], 240, delta=2)  # the phone shoots at 2x
+
+
 if __name__ == "__main__":
     unittest.main()

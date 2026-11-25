@@ -958,9 +958,19 @@ class BrandKept(unittest.TestCase):
 
     def test_logo_not_found_falls_back_to_the_capture_crop(self):
         text = self.step("3.")
-        for needle in ("cannot be found in the project", "on the page and in chat", "crop", "never invent one"):
+        for needle in ("cannot be found in the project", "on the page and in chat", "crop", "never invent one",
+                       "`logo.file`", "`<name>-logo-<width>.png`", "Put that crop in `assets`",
+                       "counts as the site's own logo", "When `logo` is `null`, show the header's part shot as is",
+                       "never a typed stand-in"):
             with self.subTest(needle=needle):
                 self.assertIn(needle, text)
+
+    def test_keep_the_best_one_never_publishes_a_lost_brand(self):
+        needle = "an option that lost the brand is never published"
+        self.assertIn("except a brand failure (care 1): put the brand back first; " + needle, self.rubric())
+        bar = self.step("4.").split("**The bar.**", 1)[1]
+        self.assertIn("put the brand back first", bar)
+        self.assertIn(needle, bar)
 
     def test_rebrand_request_is_the_only_exception(self):
         self.assertIn("rebrand", self.step("3."))

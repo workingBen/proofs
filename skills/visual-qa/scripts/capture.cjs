@@ -460,6 +460,71 @@ function measure({ items, minText, minTap, edge, offCenterPx = 16, untitledMinHe
     };
   }
 
+  // Section inventory, for the designer: each section's label and position and the elements in
+  // it, in DOM order. A section is a landmark or a direct child of <main>, deduped to the
+  // outermost. A page with none (a div soup under no <main>) falls back to the direct children
+  // of <body> at least SECTION_MIN_HEIGHT tall: anything shorter is a bar or a divider, not a
+  // section. Caps keep measures.json small: 30 sections, 40 elements each.
+  const SECTION_MIN_HEIGHT = 200, MAX_SECTIONS = 30, MAX_ELEMENTS = 40, TEXT_CAP = 80;
+  const clip = (t) => (t || '').trim().replace(/\s+/g, ' ').slice(0, TEXT_CAP);
+  const pageTop = (r) => Math.round(r.top + window.scrollY);
+  let sectionEls = [...document.querySelectorAll(
+    'section, header, footer, main > *, [role=region], [role=banner], [role=contentinfo]')].filter(visible);
+  sectionEls = sectionEls.filter((el) => !sectionEls.some((o) => o !== el && o.contains(el)));
+  if (!sectionEls.length) {
+    sectionEls = [...(document.querySelector('main') || document.body).children]
+      .filter((el) => visible(el) && el.getBoundingClientRect().height > SECTION_MIN_HEIGHT);
+  }
+  const kindOf = (el) => {
+    const t = el.tagName.toLowerCase();
+    if (/^h[1-6]$/.test(t)) return 'heading';
+    if (t === 'p' || t === 'blockquote') return 'text';
+    if (t === 'button' || el.getAttribute('role') === 'button' || (t === 'input' && /^(button|submit)$/.test(el.type))) return 'button';
+    if (t === 'a') return 'link';
+    if (t === 'img') return 'image';
+    if (t === 'ul' || t === 'ol') return 'list';
+    if (t === 'form') return 'form';
+    return 'badge';
+  };
+  const elementSel = 'h1,h2,h3,h4,h5,h6,p,blockquote,button,[role=button],input[type=button],input[type=submit],'
+    + 'a,img,ul,ol,form,[class*=badge],[class*=pill],[class*=chip]';
+  // What an element inside one of these is part of, not a separate row (links and images
+  // are not containers: a card link still lists its image).
+  const holds = new Set(['heading', 'text', 'button', 'list', 'form', 'badge']);
+  const sections = sectionEls.slice(0, MAX_SECTIONS).map((sec, i) => {
+    const sr = sec.getBoundingClientRect();
+    const heading = sec.querySelector('h1,h2,h3,h4,h5,h6,[role=heading]');
+    const headingText = heading ? clip(heading.innerText) : '';
+    const className = typeof sec.className === 'string' ? sec.className.trim().split(/\s+/)[0] : '';
+    const taken = new Set();
+    const elements = [];
+    for (const el of sec.querySelectorAll(elementSel)) {
+      if (elements.length >= MAX_ELEMENTS) break;
+      if (!visible(el)) continue;
+      let inside = false;
+      for (let a = el.parentElement; a && a !== sec; a = a.parentElement) if (taken.has(a)) { inside = true; break; }
+      if (inside) continue;
+      const kind = kindOf(el);
+      if (holds.has(kind)) taken.add(el);
+      const r = el.getBoundingClientRect();
+      const text = kind === 'image' ? clip(el.getAttribute('alt')) : clip(el.innerText || el.value);
+      elements.push({ kind, text, tag: el.tagName.toLowerCase(), top: pageTop(r),
+        left: Math.round(r.left), width: Math.round(r.width), height: Math.round(r.height) });
+    }
+    return { id: sec.id || '', tag: sec.tagName.toLowerCase(),
+      label: headingText || sec.id || className || `section ${i + 1}`,
+      top: pageTop(sr), height: Math.round(sr.height), elements };
+  });
+
+  // Distinct computed text sizes (px) of the visible elements that hold text of their own.
+  const sizeSet = new Set();
+  for (const el of document.querySelectorAll('body *')) {
+    if (![...el.childNodes].some((n) => n.nodeType === 3 && n.nodeValue.trim())) continue;
+    if (!visible(el)) continue;
+    sizeSet.add(+parseFloat(getComputedStyle(el).fontSize).toFixed(2));
+  }
+  const fontSizes = [...sizeSet].filter((n) => n > 0).sort((a, b) => a - b);
+
   return {
     viewport: { w: vw, h: vh },
     innerWidth: window.innerWidth, dpr: window.devicePixelRatio,
@@ -476,6 +541,7 @@ function measure({ items, minText, minTap, edge, offCenterPx = 16, untitledMinHe
     hiddenBlocks: hiddenBlocks.length, hiddenList: hiddenBlocks.slice(0, 5),
     untitled: untitled.slice(0, 15), untitledCount: untitled.length,
     items: itemStats,
+    sections, fontSizes,
   };
 }
 
@@ -1024,6 +1090,19 @@ async function main() {
       const rows = r.measures.untitled.slice(0, 4).map((u) => `"${u.text || u.tag}"${u.id ? ` (#${u.id})` : ''} ${u.height}px tall`);
       const more = r.measures.untitledCount > 4 ? `; and ${r.measures.untitledCount - 4} more` : '';
       lines.push(`- ${r.page} ${r.state} at ${r.viewport}: ${rows.join('; ')}${more}`);
+    }
+  }
+  const sectionRows = results.filter((r) => !r.error && r.measures.sections && r.measures.sections.length);
+  if (sectionRows.length) {
+    lines.push('', 'Sections (label: element counts by kind; positions are in measures.json "sections"):');
+    for (const r of sectionRows) {
+      lines.push(`- ${r.page} ${r.state} at ${r.viewport}:`);
+      for (const sec of r.measures.sections) {
+        const counts = {};
+        sec.elements.forEach((e) => { counts[e.kind] = (counts[e.kind] || 0) + 1; });
+        const kinds = Object.entries(counts).map(([k, n]) => `${n} ${k}`).join(', ');
+        lines.push(`  - ${sec.label}: ${kinds || 'no elements'}`);
+      }
     }
   }
   const blanks = results.filter((r) => !r.error && r.measures.blank.flagged);

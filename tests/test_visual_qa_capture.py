@@ -859,5 +859,75 @@ module.exports = { chromium: { launch: async () => ({ close: async () => {},
                     self.assertIsNone(re.match(r"^`?[A-Z_]+=", l.strip()), l)
 
 
+@unittest.skipUnless(NODE and playwright_dir(), "Playwright not found: set PROOFS_PLAYWRIGHT or install it in ~/.cache/proofs-playwright")
+class SectionInventory(unittest.TestCase):
+    """measures.sections: each section's elements, in DOM order, with page positions."""
+
+    setUpClass = PhoneWidth.__dict__["setUpClass"]
+    tearDownClass = PhoneWidth.__dict__["tearDownClass"]
+    capture = PhoneWidth.capture
+    result = PhoneWidth.result
+
+    def measures(self, page):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, out = self.capture(tmp, page, "--sizes", "1440")
+            return self.result(out)["measures"]
+
+    def test_sections_are_listed_with_their_elements(self):
+        m = self.measures("inventory.html")
+        secs = m["sections"]
+        self.assertEqual([s["tag"] for s in secs], ["header", "section", "section", "footer"])
+        self.assertEqual([s["label"] for s in secs], ["Site header", "First section", "Second section", "Site footer"])
+        self.assertEqual(secs[2]["id"], "second")
+        self.assertEqual([e["kind"] for e in secs[2]["elements"]], ["heading", "text", "button", "image", "list"])
+        heading, text, button, image, lst = secs[2]["elements"]
+        self.assertEqual(heading["text"], "Second section")
+        self.assertEqual(button["text"], "Second section action")
+        self.assertEqual(lst["tag"], "ul")
+        for e in secs[2]["elements"]:
+            self.assertEqual(set(e), {"kind", "text", "tag", "top", "left", "width", "height"})
+        self.assertGreaterEqual(heading["top"], secs[2]["top"])
+        self.assertEqual((image["width"], image["height"]), (120, 80))
+        self.assertEqual([s["top"] for s in secs], sorted(s["top"] for s in secs))
+        self.assertTrue(all(s["height"] > 0 for s in secs))
+
+    def test_div_only_page_falls_back_to_main_children(self):
+        secs = self.measures("inventory-divs.html")["sections"]
+        self.assertEqual(len(secs), 4)
+        self.assertEqual([s["tag"] for s in secs], ["div"] * 4)
+        self.assertEqual(secs[1]["label"], "Second block")
+        self.assertTrue(all(s["height"] > 200 for s in secs))
+
+    def test_summary_lists_each_section_with_counts_by_kind(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, out = self.capture(tmp, "inventory.html", "--sizes", "1440")
+            text = (out / "summary.md").read_text()
+        self.assertIn("Sections (", text)
+        self.assertIn("  - Second section: 1 heading, 1 text, 1 button, 1 image, 1 list", text)
+
+    def test_font_sizes_are_distinct_and_sorted(self):
+        sizes = self.measures("inventory.html")["fontSizes"]
+        self.assertEqual(sizes, sorted(set(sizes)))
+        self.assertIn(16, sizes)
+        self.assertIn(24, sizes)  # the default h2
+
+    def test_existing_measures_fields_unchanged(self):
+        kinds = {
+            "viewport": dict, "innerWidth": int, "dpr": (int, float), "scrollWidth": int, "clientWidth": int,
+            "widestRight": int, "overflowing": list, "pageHeight": int, "sideways": int, "contentWidth": int,
+            "contentShare": (int, float), "smallText": list, "smallTextCount": int, "smallTaps": list,
+            "smallTapCount": int, "truncated": list, "offCenter": list, "offCenterCount": int,
+            "offColumns": list, "offColumnCount": int, "hiddenBlocks": int, "hiddenList": list,
+            "untitled": list, "untitledCount": int, "fullScale": (int, float), "parts": list,
+            "midWord": list, "midWordAt": list, "pngWidth": int, "blank": dict, "signals": list,
+        }
+        for page in ("fits.html", "columns.html"):
+            m = self.measures(page)
+            for key, kind in kinds.items():
+                self.assertIn(key, m, f"{page}: {key}")
+                self.assertIsInstance(m[key], kind, f"{page}: {key}")
+            self.assertIn("items", m)
+
+
 if __name__ == "__main__":
     unittest.main()

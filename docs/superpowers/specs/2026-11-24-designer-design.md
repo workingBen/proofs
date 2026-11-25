@@ -13,7 +13,7 @@ Today, design-review reads the style guide only for colors and fonts, has no des
 - On a test bench of first screens the maintainer dislikes, the upgraded designer's redesigns are rated higher, **blind**, than the current designer's, and higher than the originals.
 - No option silently drops an element: every element of the section is accounted for (kept, moved or removed, with a reason).
 - The options in an item really differ (layout or hierarchy, not only color or spacing), and none is a near-copy of the current page.
-- Cost per design-review stays close to today's (target: under about $2.50 est. per run on the piw apps; today's runs cost $1.40 to $2.69).
+- Cost is reported, not a target to hit: quality wins up to the $5 est. cap per run (today's runs cost $1.40 to $2.69).
 
 ## Goals
 
@@ -35,7 +35,7 @@ Today, design-review reads the style guide only for colors and fonts, has no des
 - Options that look different but drop an element the owner liked.
 - A profile or style guide becoming a **requirement**. With neither present, design-review must still work: it offers to create a short profile (three or four questions on a questions page), derives what it can from the site's CSS, and goes on.
 - The bold option being reckless: breaking the site's brand, inventing copy, or changing words nobody picked.
-- Cost or turns doubling (Astro run 3 already showed design-review can double its cost by over-measuring).
+- Waste: cost or turns growing from work the result does not need (Astro run 3 doubled its cost building scratch measuring pages).
 - A critic that always passes its own work. Its scores must be able to fail an option, and the page shows them.
 
 ## Constraints
@@ -78,7 +78,7 @@ Today, design-review reads the style guide only for colors and fonts, has no des
 - The measurable checks give pass/fail rows alongside.
 - After the first build: any option below a bar (*builder's call, for example any score of 2 or any failed check*) is revised once or dropped, with the reason on the page. Then the "one build, at most one correction pass" rule applies as today.
 - The page shows each option's scores in a small row under its note, so the reader sees why it is recommended.
-- The critic runs in the same session, with a fresh written checklist. A separate-context critic (a subagent) is an option for interactive sessions only; see open question 2.
+- The critic runs in the same session, with a fresh written checklist. A separate helper runs the critic in interactive sessions (answer 3 below).
 
 ### 5. Measurable checks
 
@@ -101,8 +101,8 @@ Added to `--smoke` for mockups: contrast of text against its background (WCAG AA
 
 Exact file names and settings, the near-copy threshold and layout signature, the critic's bar, the rubric's wording, and how the element table looks on the card, each stated in the PR with its reason.
 
-## Open questions for the maintainer
+## The maintainer's answers (2026-11-24)
 
-1. **Three options for every item?** A misaligned button does not need a Bold rethink. My recommendation: three options (Careful, Step up, Bold) for redesign requests, and one option for a bug-sized fix or a "Found by the capture" item.
-2. **Quality or cost, when they collide?** Three options, a critic and one revise pass may go over the $2.50 target. My recommendation: quality wins up to the existing $5 est. cap per run, and the PR reports the real cost.
-3. **A separate critic?** A critic in its own fresh context (a helper) is more independent than the same session grading its own work, which is the "same model grades itself" weakness the scoring plan names. But it costs more, and `claude -p` cannot always use one. My recommendation: a separate critic in interactive sessions, with the same-session checklist as the fallback in `claude -p`; both use one rubric file.
+1. **Range:** three options (Careful, Step up, Bold) for redesign requests; **one** option for a bug-sized fix or a "Found by the capture" item.
+2. **Quality over cost:** quality wins, up to the $5 est. cap per run; the PR reports the real cost. In his words: *"Quality is much more important than cost, especially for these small dollar amounts. We want to be absolutely respectful of tokens, but nothing matters more than results. Build something people want."* This is now a Proofs-wide house rule ("Results first", 1.6.10). The $2.50 figure under "What success looks like" is a report, not a limit: tokens are saved by cutting waste, never by cutting an option, the critic or the revise pass.
+3. **Critic:** a **separate helper** with a fresh context judges the options in interactive sessions; in `claude -p`, where a helper may not be available, the session checks its own work against the same rubric file, and the page says which one judged.

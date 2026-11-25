@@ -975,3 +975,60 @@ class BrandKept(unittest.TestCase):
     def test_rebrand_request_is_the_only_exception(self):
         self.assertIn("rebrand", self.step("3."))
         self.assertIn("rebrand", self.rubric())
+
+
+class FinalReviewGuidance(unittest.TestCase):
+    """The final whole-branch review's wording fixes (1.7.0)."""
+
+    def rubric(self):
+        return " ".join((REPO / "reference" / "design-rubric.md").read_text().split())
+
+    def step(self, heading):
+        return " ".join(section("design-review", heading).split())
+
+    def test_bold_palette_is_carved_out_of_fit(self):
+        text = self.rubric()
+        fit = text.split("### `fit`", 1)[1].split("### `care`", 1)[0]
+        for needle in ("the site's own palette, its style guide or the profile's Love references",
+                       "clash with the brand or the profile", "recolor a brand color"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, fit)
+        self.assertNotIn("brings colors, fonts or a button style the site does not use", fit)
+        roles = text.split("## The three roles", 1)[1].split("## The bar", 1)[0]
+        self.assertIn("new colors only from the site's own palette, its style guide or the profile's Love references",
+                      roles)
+        self.assertIn("new colors only from the site's own palette, its style guide or the profile's Love references",
+                      self.step("3."))
+
+    def test_step_up_when_careful_is_already_5_and_a_trade_for_the_target(self):
+        roles = self.rubric().split("## The three roles", 1)[1].split("## The bar", 1)[0]
+        self.assertIn('drop Step up with the reason "Careful already at 5"', roles)
+        self.assertIn("rises by 2 or more", roles)
+        self.assertIn("one criterion may drop by one point", roles)
+
+    def test_before_sections_come_from_measures_not_copied(self):
+        text = self.step("3.")
+        self.assertIn('"before_sections": {"from": ".proofs/capture/before/measures.json"', text)
+        self.assertIn('"before_font_sizes": {"from":', text)
+        self.assertIn("never copy", text)
+
+    def test_unscored_recommendation_error_matches_the_code(self):
+        text = self.step("4.")
+        self.assertIn("recommending one is a build error when the item has two or more options", text)
+        self.assertNotIn("with it set, an option without scores shows \"Not scored\" and recommending one is a build error.",
+                         text)
+
+    def test_profile_offer_is_one_line_and_pages_only_on_yes(self):
+        text = self.step("1.")
+        self.assertIn("offer in one line to create one", text)
+        self.assertIn("build the questions pages only if the reader says yes", text)
+        self.assertIn("in `claude -p`, just the one line", text)
+
+    def test_logo_crop_with_an_error_is_treated_as_null(self):
+        self.assertIn("`logo.file` is `null` with an `error`", self.step("3."))
+
+    def test_visual_qa_lists_the_logo_crop_and_new_fields(self):
+        text = " ".join((REPO / "skills" / "visual-qa" / "SKILL.md").read_text().split())
+        for needle in ("`<page>-logo-<width>.png`", "`sections`", "`fontSizes`", "`logo`"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)

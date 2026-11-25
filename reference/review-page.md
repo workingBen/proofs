@@ -138,6 +138,11 @@ flat `items` list. Item fields:
 | `body_html` | what is being judged: before/after panes, screenshot, recipe |
 | `variants` | `[{html, name, note_html, recommended, key, label}]`; `key` defaults to A, B, C and `label` to "Variant A" or "Option A" |
 | `stack_variants` | `true` puts one variant per row (about 1,050 px wide at a 1280 px window instead of about 500 beside a sibling), for a desktop mockup. `--smoke` prints every mockup box's width as `mockup_widths` |
+| variant `role` | `careful`, `step-up` or `bold`: shown as "Careful", "Step up", "Bold" in the variant head. Unknown value is a spec error |
+| variant `inventory` | `[{element, status, reason}]`, `status` is `kept`, `moved` or `removed`; a compact table under the mockup, removed rows in the deny color. `element` matches a captured element of `before_sections` by its text (its kind when it has none), ignoring case and extra spaces; a captured element with no row shows "removed — no reason given" |
+| variant `scores` | `{hierarchy, action, fold, grouping, fit, care}`, each a whole number 1 to 5, one line under the mockup. In an item where any variant is scored, an unscored one says "Not scored", and recommending (or `selected`) an unscored variant is a spec error |
+| `judged_by` | `helper` ("Judged by a separate helper") or `self` ("Checked by the designer itself"); none, no line |
+| `inventory`, `scores` on an item with no `variants` | the single proposal's inventory and scores, validated and shown the same way; no `role` needed |
 | `history_html` | earlier rounds, shown dimmed above the body |
 | `reason_html` | the Reason block |
 

@@ -472,6 +472,82 @@ class Ctx:
         self.seen.add(ident)
 
 
+ROLES = {"careful": "Careful", "step-up": "Step up", "bold": "Bold"}
+STATUSES = ("kept", "moved", "removed")
+SCORE_DIMS = (("hierarchy", "Hierarchy"), ("action", "Action"), ("fold", "Fold"),
+              ("grouping", "Grouping"), ("fit", "Fit"), ("care", "Care"))
+JUDGED_BY = {"helper": "Judged by a separate helper", "self": "Checked by the designer itself"}
+
+
+def check_designer_fields(it):
+    """Validate role, inventory, scores and judged_by on an item and its variants (plain one-line errors)."""
+    iid = it["id"]
+    if it.get("judged_by") is not None and it["judged_by"] not in JUDGED_BY:
+        raise SpecError("item %s: judged_by %r must be helper or self" % (iid, it["judged_by"]))
+    variants = it.get("variants") or []
+    owners = [("item %s" % iid, it)] if not variants else []
+    owners += [("item %s, variant %s" % (iid, v["key"]), v) for v in variants]
+    for where, o in owners:
+        if o.get("role") is not None and o["role"] not in ROLES:
+            raise SpecError("%s: unknown role %r (use %s)" % (where, o["role"], ", ".join(ROLES)))
+        inv = o.get("inventory")
+        if inv is not None:
+            if not isinstance(inv, list):
+                raise SpecError("%s: inventory must be a list" % where)
+            for row in inv:
+                if not isinstance(row, dict) or not str(row.get("element") or "").strip():
+                    raise SpecError("%s: every inventory row needs an element" % where)
+                if row.get("status") not in STATUSES:
+                    raise SpecError("%s: inventory status %r must be kept, moved or removed"
+                                    % (where, row.get("status")))
+        sc = o.get("scores")
+        if sc is not None:
+            if not isinstance(sc, dict):
+                raise SpecError("%s: scores must be an object" % where)
+            for k, val in sc.items():
+                if k not in dict(SCORE_DIMS):
+                    raise SpecError("%s: unknown score %r (use %s)" % (where, k, ", ".join(d for d, _ in SCORE_DIMS)))
+                if isinstance(val, bool) or not isinstance(val, int) or not 1 <= val <= 5:
+                    raise SpecError("%s: score %s must be a whole number from 1 to 5, got %r" % (where, k, val))
+    if len(variants) >= 2 and any(v.get("scores") for v in variants):
+        unscored = [v for v in variants if not v.get("scores")]
+        picked = [v["key"] for v in unscored if v.get("recommended")]
+        if it.get("selected") in [v["key"] for v in unscored]:
+            picked.append(it["selected"])
+        if picked:
+            raise SpecError("item %s: variant %s is recommended but has no scores" % (iid, picked[0]))
+
+
+def _norm(text):
+    return " ".join(str(text or "").split()).lower()
+
+
+def inventory_table(inv, before):
+    """Compact inventory table. A captured element with no row reads as removed, no reason given."""
+    rows = [(str(r["element"]), r["status"], r.get("reason") or "", False) for r in inv or []]
+    if before and inv is not None:
+        have = {_norm(r[0]) for r in rows}
+        for el in before.get("elements") or []:
+            name = (el.get("text") or "").strip() or el.get("kind") or ""
+            if name and _norm(name) not in have:
+                have.add(_norm(name))
+                rows.append((" ".join(name.split()), "removed", "", True))
+    if not rows:
+        return ""
+    body = "".join('<tr class="rp-inv-%s"><td>%s</td><td>%s</td><td>%s</td></tr>'
+                   % (st, esc(el), st + (" — no reason given" if missing else ""), esc(why))
+                   for el, st, why, missing in rows)
+    return ('<div class="rp-inv rp-scroll"><table><thead><tr><th>Element</th><th>Status</th><th>Reason</th></tr></thead>'
+            '<tbody>%s</tbody></table></div>' % body)
+
+
+def score_row(sc):
+    if not sc:
+        return '<div class="rp-scores rp-unscored">Not scored</div>'
+    return '<div class="rp-scores">%s</div>' % " · ".join(
+        "%s <b>%d</b>" % (lab, sc[k]) for k, lab in SCORE_DIMS if k in sc)
+
+
 def render_review(sec, ctx):
     dec, out, items = sec["_dec"], [], []
     word = dec.get("variant_word", "Option")
@@ -491,6 +567,7 @@ def render_review(sec, ctx):
         if it.get("selected") is not None and it["selected"] not in keys:
             raise SpecError("item %s: selected %r is not one of its variants (%s)"
                             % (it["id"], it["selected"], ", ".join(keys) or "it has none"))
+        check_designer_fields(it)
         out.append(review_item(it, dec, ctx.colors))
         items.append({"id": it["id"], "num": it["num"], "label": it["label"], "category": it.get("category"),
                       "variants": [{"key": v["key"], "label": v["label"], "name": v.get("name", ""),
@@ -958,6 +1035,14 @@ def image_line(spec):
     return None
 
 
+def designer_extras(o, scored, before):
+    """Inventory table and score row for one proposal (a variant, or a one-option item)."""
+    out = inventory_table(o.get("inventory"), before)
+    if o.get("scores") or scored:
+        out += score_row(o.get("scores"))
+    return out
+
+
 def review_item(it, dec, colors):
     iid, variants = esc(it["id"]), it.get("variants") or []
     rec = it.get("recommended")
@@ -975,6 +1060,9 @@ def review_item(it, dec, colors):
         h.append('<div class="rp-history">%s</div>' % it["history_html"])
     if it.get("body_html"):
         h.append('<div class="rp-body">%s</div>' % it["body_html"])
+    scored = any(v.get("scores") for v in variants)
+    if not variants:
+        h.append(designer_extras(it, True, it.get("before_sections")))
     if variants:
         # stack_variants: one variant per row, so a desktop mockup gets the card's full width
         # instead of about 490 px beside its sibling at a 1280 px window (SvelteKit run 1).
@@ -982,13 +1070,18 @@ def review_item(it, dec, colors):
                  % (" rp-stack" if it.get("stack_variants") else ""))
         for v in variants:
             name = ' <span class="rp-vname">%s</span>' % esc(v["name"]) if v.get("name") else ""
+            if v.get("role"):
+                name = ' <span class="rp-vrole">%s</span>%s' % (ROLES[v["role"]], name)
             rv = ' <span class="rp-vrec">Recommended</span>' if v.get("recommended") else ""
             note = '<div class="rp-vnote">%s</div>' % v["note_html"] if v.get("note_html") else ""
             h.append('<div class="rp-variant" role="button" tabindex="0" aria-pressed="false" data-variant="%s">'
                      '<div class="rp-vhead"><span class="rp-vcheck" aria-hidden="true"></span>%s%s%s</div>'
-                     '<div class="rp-vbody">%s</div>%s</div>'
-                     % (esc(v["key"]), esc(v["label"]), name, rv, v.get("html", ""), note))
+                     '<div class="rp-vbody">%s</div>%s%s</div>'
+                     % (esc(v["key"]), esc(v["label"]), name, rv, v.get("html", ""),
+                        designer_extras(v, scored, it.get("before_sections")), note))
         h.append("</div>")
+    if it.get("judged_by"):
+        h.append('<div class="rp-judged">%s</div>' % JUDGED_BY[it["judged_by"]])
     if it.get("reason_html"):
         h.append('<div class="rp-reason"><b>Reason</b> %s</div>' % it["reason_html"])
     h.append('<div class="rp-actions">')

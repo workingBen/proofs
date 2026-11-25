@@ -83,6 +83,16 @@ ins.rp-ins, .rp-panes ins { background:color-mix(in srgb, var(--rp-accept) 18%, 
 .rp-vbody img { max-width:100%; height:auto; display:block; }
 /* the builder wraps a WebP screenshot and its fallback in a picture element; lay it out as the bare img */
 picture.rp-pic { display:contents; }
+.rp-vrole { font-weight:600; color:var(--rp-soft); }
+.rp-inv { margin-top:10px; }
+.rp-inv table { border-collapse:collapse; font-size:14px; width:100%; min-width:420px; }
+.rp-inv th, .rp-inv td { text-align:left; padding:4px 8px; border-bottom:1px solid var(--rp-rule); vertical-align:top; }
+.rp-inv th { font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--rp-faint); }
+.rp-inv tr.rp-inv-removed td { color:var(--rp-deny); }
+.rp-scores { font-size:14px; color:var(--rp-soft); margin-top:8px; }
+.rp-scores b { color:var(--rp-ink, inherit); }
+.rp-unscored { color:var(--rp-faint); }
+.rp-judged { font-size:14px; color:var(--rp-soft); margin:8px 0; }
 .rp-vnote { font-size:15px; color:var(--rp-soft); margin-top:8px; }
 
 /* decision buttons */

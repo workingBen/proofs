@@ -1562,6 +1562,101 @@ class DesignChecks(unittest.TestCase):
         self.assertTrue([n for n in res["notes"] if "off the page's own scale" in n and "27px" in n], res["notes"])
 
 
+class DesignerFields(unittest.TestCase):
+    """Option roles, the element inventory and the critic's scores on a design-review item."""
+    SC = {"hierarchy": 4, "action": 5, "fold": 3, "grouping": 4, "fit": 4, "care": 5}
+
+    @staticmethod
+    def page(items):
+        spec = {"title": "D", "project": {"name": "P", "session": "s"}, "decisions": "design-review",
+                "items": items}
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "s.json"
+            p.write_text(json.dumps(spec))
+            return review_page.page(review_page.load_spec(p))
+
+    def variants(self, **second):
+        return [{"html": "<p>a</p>", "role": "careful", "scores": self.SC},
+                dict({"html": "<p>b</p>", "role": "bold", "scores": self.SC}, **second)]
+
+    def error(self, items):
+        with self.assertRaises(review_page.SpecError) as cm:
+            self.page(items)
+        return str(cm.exception)
+
+    def test_roles_render_as_labels(self):
+        v = self.variants()
+        v.append({"html": "<p>c</p>", "role": "step-up", "scores": self.SC})
+        html = self.page([{"label": "Hero", "variants": v}])
+        for label in ("Careful", "Step up", "Bold"):
+            self.assertIn('<span class="rp-vrole">%s</span>' % label, html)
+        self.assertIn("unknown role", self.error([{"label": "Hero", "variants": self.variants(role="loud")}]))
+
+    def test_removed_element_is_marked(self):
+        inv = [{"element": "Hero title", "status": "kept"}, {"element": "Promo bar", "status": "removed",
+                                                              "reason": "competes with the call to action"}]
+        html = self.page([{"label": "Hero", "variants": [{"html": "<p>a</p>", "inventory": inv}]}])
+        self.assertIn('<tr class="rp-inv-removed"><td>Promo bar</td><td>removed</td>'
+                      '<td>competes with the call to action</td></tr>', html)
+        self.assertIn('<tr class="rp-inv-kept"><td>Hero title</td>', html)
+        self.assertIn(".rp-inv tr.rp-inv-removed td { color:var(--rp-deny); }", html)
+        self.assertIn("status", self.error([{"label": "Hero", "variants": [
+            {"html": "x", "inventory": [{"element": "a", "status": "gone"}]}]}]))
+
+    def test_inventory_missing_a_captured_element_counts_as_removed(self):
+        before = {"id": "hero", "tag": "section", "label": "Hero", "top": 0, "left": 0, "width": 1000, "height": 400,
+                  "elements": [{"kind": "heading", "text": "  Hero   title ", "tag": "h1", "top": 0, "left": 0,
+                                "width": 10, "height": 10},
+                               {"kind": "image", "text": "", "tag": "img", "top": 0, "left": 0, "width": 10, "height": 10},
+                               {"kind": "text", "text": "Free shipping", "tag": "p", "top": 0, "left": 0,
+                                "width": 10, "height": 10}]}
+        inv = [{"element": "hero title", "status": "kept"}, {"element": "Newsletter", "status": "moved"}]
+        html = self.page([{"label": "Hero", "before_sections": before,
+                           "variants": [{"html": "<p>a</p>", "inventory": inv}]}])
+        self.assertIn("<td>Free shipping</td><td>removed — no reason given</td>", html)
+        self.assertIn("<td>image</td><td>removed — no reason given</td>", html)
+        self.assertIn("<td>Newsletter</td><td>moved</td>", html)
+        self.assertEqual(html.count("removed — no reason given"), 2)
+
+    def test_scores_render_and_unscored_says_not_scored(self):
+        html = self.page([{"label": "Hero", "variants": [
+            {"html": "<p>a</p>", "scores": self.SC}, {"html": "<p>b</p>"}]}])
+        self.assertIn('<div class="rp-scores">Hierarchy <b>4</b> · Action <b>5</b> · Fold <b>3</b> · '
+                      'Grouping <b>4</b> · Fit <b>4</b> · Care <b>5</b></div>', html)
+        self.assertIn('<div class="rp-scores rp-unscored">Not scored</div>', html)
+        for bad in (0, 6, 3.5, "4"):
+            msg = self.error([{"label": "Hero", "variants": [{"html": "a", "scores": dict(self.SC, fold=bad)}]}])
+            self.assertIn("fold", msg)
+            self.assertIn("1 to 5", msg)
+
+    def test_recommending_an_unscored_variant_is_a_spec_error(self):
+        msg = self.error([{"label": "Hero", "variants": [
+            {"html": "<p>a</p>", "scores": self.SC}, {"html": "<p>b</p>", "recommended": True}]}])
+        self.assertEqual(msg, "item 1: variant B is recommended but has no scores")
+        self.assertIn("variant B", self.error([{"label": "Hero", "selected": "B", "variants": [
+            {"html": "<p>a</p>", "scores": self.SC}, {"html": "<p>b</p>"}]}]))
+
+    def test_one_variant_item_needs_no_role_or_scores(self):
+        self.page([{"label": "Hero", "variants": [{"html": "<p>a</p>", "recommended": True}]}])
+        html = self.page([{"label": "Hero", "scores": self.SC,
+                           "inventory": [{"element": "Promo", "status": "removed", "reason": "noise"}]}])
+        self.assertIn("Hierarchy <b>4</b>", html)
+        self.assertIn('<tr class="rp-inv-removed"><td>Promo</td>', html)
+        self.assertNotIn("<span class=\"rp-vrole\">", html)
+        self.assertNotIn("Not scored", html)
+
+    def test_judged_by_line(self):
+        v = self.variants()
+        self.assertIn("Judged by a separate helper",
+                      self.page([{"label": "Hero", "judged_by": "helper", "variants": v}]))
+        self.assertIn("Checked by the designer itself",
+                      self.page([{"label": "Hero", "judged_by": "self", "variants": v}]))
+        html = self.page([{"label": "Hero", "variants": v}])
+        self.assertNotIn("Judged by", html)
+        self.assertNotIn("Checked by the designer", html)
+        self.assertIn("judged_by", self.error([{"label": "Hero", "judged_by": "robot", "variants": v}]))
+
+
 def abs_box(h1="", p="", btn="", color="#111"):
     """A 400px-tall mockup whose elements sit at fixed fractions of its box, so the near-copy
     signature is known in advance. Each argument is a 'left,top,width,height' tuple in percent."""

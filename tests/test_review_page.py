@@ -1665,6 +1665,12 @@ CR_VARIANTS = [
     # but a one-line label is a link, never a carousel card.
     '<nav style="%s">%s</nav>' % (CR_ROW % "overflow-x:auto;scrollbar-width:none",
                                   "".join(CR_LINK % t for t in ["Pricing", "Paths", "Works with AI helpers and agents"])),
+    # F: hillock option B in the review page's box: the row ends in the gap after a link, so nothing
+    # is partly visible, and the rest of the links sit wholly past the edge with no scrollbar to show it.
+    '<nav style="display:flex;gap:0 20px;width:240px;overflow-x:auto;scrollbar-width:none;font:14px sans-serif;'
+    'background:#fff">%s</nav>' % "".join(
+        '<a href="#" style="flex:none;width:100px;white-space:nowrap;overflow:hidden;padding:14px 0;color:#111">%s</a>' % t
+        for t in ["Pricing", "Paths", "Works with AI", "Uptime"]),
 ]
 
 
@@ -1699,8 +1705,10 @@ class ClippedRows(unittest.TestCase):
         self.assertIn(cut["text"], [t.replace("&amp;", "&") for t in CR_LINKS])
         self.assertTrue(cut["text"].startswith(cut["cut"]) and cut["cut"] != cut["text"], cut)
         self.assertGreater(cut["px"], 0)
+        self.assertTrue(cut["hidden"], cut)
         self.assertEqual(self.cut_problems("A"),
-                         ['item 1 (Nav), Variant A: 1 row cut at the right edge at 390px ("%s" cut)' % cut["cut"]])
+                         ['item 1 (Nav), Variant A: 1 row cut at the right edge at 390px ("%s" cut; %d more hidden past it)'
+                          % (cut["cut"], len(cut["hidden"]))])
 
     def test_the_same_row_wrapping_is_clean(self):
         self.assertEqual(self.row("B", 390)["clippedRows"], [])
@@ -1725,6 +1733,21 @@ class ClippedRows(unittest.TestCase):
         self.assertEqual(c["peekRows"], [], c)
         self.assertEqual([r["text"] for r in c["clippedRows"]], ["Works with AI helpers and agents"], c)
         self.assertEqual(len(self.cut_problems("E")), 1, self.res["problems"])
+
+    def test_links_wholly_past_the_edge_are_hidden_items(self):
+        c = self.row("F", 390)
+        self.assertEqual(c["peekRows"], [], c)
+        self.assertEqual(len(c["clippedRows"]), 1, c)
+        r = c["clippedRows"][0]
+        self.assertEqual((r["text"], r["cut"], r["hidden"]), (None, None, ["Works with AI", "Uptime"]), r)
+        self.assertEqual(self.cut_problems("F") + [p for p in self.res["problems"]
+                                                   if p.startswith("item 1 (Nav), Variant F:") and "hides" in p],
+                         ['item 1 (Nav), Variant F: 1 row hides 2 items past the right edge at 390px '
+                          '("Works with AI", "Uptime")'])
+
+    def test_a_carousels_hidden_cards_are_not_hidden_items(self):
+        c = self.row("C", 390)
+        self.assertEqual(c["clippedRows"], [], c)
 
     def test_the_cut_row_at_1280_where_it_fits_is_clean(self):
         for v in ("A", "D"):

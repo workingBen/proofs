@@ -17,7 +17,7 @@
        ],
        "reason_html": "<p>The stacked card reads better on a phone.</p>"},
       {"label": "Read More button placement", "recommended": false,
-       "body_html": "<div class=\"rp-panes\"><div class=\"rp-pane\"><div class=\"rp-pane-label\">Before</div><div class=\"mock\">Read more at the bottom</div></div><div class=\"rp-pane\"><div class=\"rp-pane-label\">Proposed</div><div class=\"mock\">Read more beside the title</div></div></div>",
+       "body_html": "<div class=\"rp-panes\"><div class=\"rp-pane\"><div class=\"rp-pane-label\">Before</div><div class=\"mock\">Read more at the bottom</div></div><div class=\"rp-pane\"><div class=\"rp-pane-label\">Proposed</div><div class=\"rp-mockup\"><div class=\"mock\">Read more beside the title</div></div></div></div>",
        "reason_html": "<p>Saves a row, but splits the eye.</p>"}
     ]}
   ],

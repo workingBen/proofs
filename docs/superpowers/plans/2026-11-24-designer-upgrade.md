@@ -147,5 +147,5 @@ Not Proofs code; private, in `__agent-projects/piw-handoff/bench/` (never commit
 - [ ] **Step 1:** Screenshot the first screen of Vercel, Raycast, Whoop, GOV.UK, Mayo Clinic, Basecamp, Mailchimp (interactive session). Rebuild each as a static page with a made-up name, same-length made-up copy, no logos or photos. Pick 2 at random as held out; record which in `bench/heldout.txt` before looking at any results.
 - [ ] **Step 2:** For the 5 tuning pages: run design-review at 1.6.10 and at the branch on "make this first screen something I'd like"; apply each run's recommended option.
 - [ ] **Step 3:** Then the 2 held-out pages, same way, once.
-- [ ] **Step 4:** A blind rating page (questions skill) per bench page: original, old result, new result, shuffled and unlabeled, each Love / Like / Not for us. Ben rates.
+- [ ] **Step 4:** A blind rating page (questions skill) per bench page: original, old result, new result, shuffled and unlabeled, each Love / Like / Not for us. The maintainer rates.
 - [ ] **Step 5:** Results to the session page: new beats old and beats the original on the held-out two = pass. Then the designer PR merges once the React Router run is scored.

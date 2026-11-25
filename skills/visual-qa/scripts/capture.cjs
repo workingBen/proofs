@@ -803,9 +803,11 @@ function overflowOf(m) {
 }
 
 // Goes to the page and runs its actions (shared by the capture and the plain recheck).
-// The site's own logo, for a design review that cannot find the logo file in the project: the
-// first visible element in the header (else the first section) that is an img, svg or picture,
-// or whose id, class or alt says "logo"; failing that, the header's link to "/". Marks it with
+// The site's own logo, for a design review that cannot find the logo file in the project. In the
+// header (else the first section), the first visible: (1) element whose id, class or alt says
+// "logo"; (2) img, svg or picture inside the header's link to "/"; (3) that link itself; (4) img,
+// svg or picture. Tiers, not document order, because many headers open with a menu or search
+// icon before the logo, and a single pass cropped that icon. Marks it with
 // data-proofs-logo so the caller can take an element screenshot, and returns its page box and
 // a "tag#id.class" source, or null when there is none.
 function findLogo() {
@@ -818,13 +820,16 @@ function findLogo() {
   const root = header || document.querySelector('main > section, section, main > *');
   if (!root) return null;
   const named = (el) => /logo/i.test([el.id, el.getAttribute('class'), el.getAttribute('alt')].filter(Boolean).join(' '));
-  let el = [...root.querySelectorAll('*')].find((e) => seen(e) && (['img', 'svg', 'picture'].includes(e.localName) || named(e)));
-  if (!el && header) {
-    el = [...header.querySelectorAll('a[href]')].find((a) => {
-      if (!seen(a)) return false;
-      try { const u = new URL(a.href); return u.origin === location.origin && u.pathname === '/'; } catch { return false; }
-    });
-  }
+  const all = [...root.querySelectorAll('*')].filter(seen);
+  const picture = (e) => ['img', 'svg', 'picture'].includes(e.localName);
+  const home = header ? [...header.querySelectorAll('a[href]')].find((a) => {
+    if (!seen(a)) return false;
+    try { const u = new URL(a.href); return u.origin === location.origin && u.pathname === '/'; } catch { return false; }
+  }) : null;
+  const el = all.find(named)
+    || (home && [...home.querySelectorAll('img, svg, picture')].find(seen))
+    || home
+    || all.find(picture);
   if (!el) return null;
   document.querySelectorAll('[data-proofs-logo]').forEach((x) => x.removeAttribute('data-proofs-logo'));
   el.setAttribute('data-proofs-logo', '');

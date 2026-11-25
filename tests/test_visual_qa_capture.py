@@ -1009,6 +1009,17 @@ class LogoCrop(unittest.TestCase):
     def test_header_link_home_is_the_last_resort(self):
         self.assertEqual(self.logo("logo-home-link.html")["source"], "a")
 
+    def test_icons_before_a_named_logo_are_skipped(self):
+        # Review round 2: a hamburger and a search svg come first in many headers.
+        logo = self.logo("logo-icons-named.html")
+        self.assertEqual(logo["source"], "div.site-logo")
+        self.assertEqual(logo["box"]["width"], 110)
+
+    def test_icons_before_a_logo_in_the_home_link_are_skipped(self):
+        logo = self.logo("logo-icons-home.html")
+        self.assertEqual(logo["source"], "svg.wordmark")
+        self.assertEqual((logo["box"]["width"], logo["box"]["height"]), (110, 32))
+
     def test_no_logo_is_null(self):
         self.assertIsNone(self.logo("logo-none.html"))
 

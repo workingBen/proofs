@@ -761,6 +761,15 @@ class DesignerReferences(unittest.TestCase):
         self.assertIn("any failed design check", text)
         self.assertIn("revise it once or drop it", text)
         self.assertIn("reason on the page", text)
+        # Ruling 20: a near-copy kept with a Reason line is not a failed check, in every place
+        # the bar is stated, and a one-option fix still names what changed.
+        carve = "any failed design check other than a near-copy kept with a Reason line"
+        self.assertEqual(text.lower().count(carve.lower()), 2, text)
+        self.assertNotRegex(text, r"(?i)any failed design check(?! other than)")
+        self.assertIn("the Reason line still names what changed", text)
+        skill = " ".join((REPO / "skills" / "design-review" / "SKILL.md").read_text().split())
+        self.assertIn(carve, skill)
+        self.assertNotRegex(skill, r"(?i)any failed design check(?! other than)")
 
     def test_rubric_judges_the_three_roles_and_the_measured_checks(self):
         text = self.rubric()

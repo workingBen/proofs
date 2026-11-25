@@ -1906,15 +1906,25 @@ def lb_img(h=320, w="100%"):
     return '<img alt="" src="%s" style="display:block;width:%s;height:%dpx;object-fit:cover">' % (LB_IMG, w, h)
 
 
-def lb_stacked(s=1.0, ink="#111827", accent="#1d4ed8", h1=44, pmax=620, buttons_last=False):
-    """A centered hero: heading, line, two buttons, picture. `s` scales every gap and padding."""
+LB_BADGE = ('<span class="badge" style="%sfont-size:12px;background:#eef2f7;color:#111827;padding:2px 6px;'
+            'border-radius:4px">New</span>')
+
+
+def lb_stacked(s=1.0, ink="#111827", accent="#1d4ed8", h1=44, pmax=620, buttons_last=False, badge=None):
+    """A centered hero: heading, line, two buttons, picture. `s` scales every gap and padding.
+    `badge`: a small "New" badge, "top" (centered above the heading) or "corner" (top right)."""
     head = '<h1 style="font-size:%dpx;line-height:1.15;margin:0 0 %dpx">%s</h1>' % (h1, round(16 * s), LB_H1)
+    if badge == "top":
+        head = '<div style="margin:0 0 12px">%s</div>' % (LB_BADGE % "display:inline-block;") + head
+    elif badge == "corner":
+        head = LB_BADGE % "position:absolute;right:16px;top:16px;" + head
     para = ('<p style="font-size:18px;line-height:1.5;max-width:%dpx;margin:0 auto %dpx">%s</p>'
             % (pmax, round(24 * s), LB_P))
     btns = lb_buttons(s, accent=accent)
     body = head + para + (lb_img() + '<div style="height:%dpx"></div>' % round(24 * s) + btns
                           if buttons_last else btns + lb_img())
-    return '<div style="%s;padding:%dpx;text-align:center">%s</div>' % (LB_FONT % ink, round(48 * s), body)
+    return ('<div style="%s;padding:%dpx;text-align:center;position:relative">%s</div>'
+            % (LB_FONT % ink, round(48 * s), body))
 
 
 def lb_split(image_first=False):
@@ -1960,6 +1970,8 @@ LABELED = {
     "spacing_x1_1": (lb_stacked(), lb_stacked(s=1.1), True),
     "spacing_x1_35": (lb_stacked(), lb_stacked(s=1.35), True),
     "text_reflowed_slightly": (lb_stacked(), lb_stacked(pmax=560), True),
+    "same_plus_one_small_badge": (lb_stacked(), lb_stacked(badge="corner"), True),
+    "small_badge_moved_to_a_corner": (lb_stacked(badge="top"), lb_stacked(badge="corner"), True),
     "bigger_heading_and_moved_buttons": (lb_stacked(), lb_stacked(h1=72, buttons_last=True), False),
     "text_column_vs_full_width": (lb_text(), lb_text(column=True), False),
     "mirrored_split": (lb_split(), lb_split(image_first=True), False),
@@ -1968,7 +1980,7 @@ LABELED = {
     "placeholder_picture_vs_text_alone": (lb_card(), lb_card(picture=False), False),
 }
 # Each labeled score must clear the cut by this much, so the labels hold with room to spare.
-LABEL_MARGIN = 0.10
+LABEL_MARGIN = 0.15
 
 
 def near_copy_cut():
@@ -1982,8 +1994,10 @@ class NearCopyLabeled(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        # Each case twice: (A, B) as item 2k+1 and (B, A) as item 2k+2.
         items = [{"label": name, "reason_html": "<p>r</p>", "stack_variants": True,
-                  "variants": [{"html": a}, {"html": b}]} for name, (a, b, _) in LABELED.items()]
+                  "variants": [{"html": x}, {"html": y}]}
+                 for name, (a, b, _) in LABELED.items() for (x, y) in ((a, b), (b, a))]
         items[0]["recommended"] = True
         spec = {"title": "Labeled", "project": {"name": "P", "session": "s"}, "decisions": "design-review",
                 "items": items}
@@ -1991,22 +2005,26 @@ class NearCopyLabeled(unittest.TestCase):
             cls.res = DesignChecks.smoke(spec, tmp)
         cls.cut = near_copy_cut()
 
-    def score(self, name):
-        num = str(list(LABELED).index(name) + 1)
+    def score(self, num):
         rows = [s for s in self.res.get("layout_scores", []) if s["item"] == num and s["b"] != "before"]
         self.assertEqual(len(rows), 1, self.res.get("layout_scores"))
         return rows[0]["score"]
 
     def check(self, name):
         flag = LABELED[name][2]
-        score = self.score(name)
-        flagged = [c for c in self.res["near_copies"] if c["item"] == str(list(LABELED).index(name) + 1)]
-        if flag:
-            self.assertGreaterEqual(score, self.cut + LABEL_MARGIN, f"{name}: {score} vs cut {self.cut}")
-            self.assertEqual(len(flagged), 1, self.res["near_copies"])
-        else:
-            self.assertLessEqual(score, self.cut - LABEL_MARGIN, f"{name}: {score} vs cut {self.cut}")
-            self.assertEqual(flagged, [], self.res["near_copies"])
+        k = list(LABELED).index(name)
+        scores = []
+        for num in (str(2 * k + 1), str(2 * k + 2)):
+            score = self.score(num)
+            scores.append(score)
+            flagged = [c for c in self.res["near_copies"] if c["item"] == num]
+            if flag:
+                self.assertGreaterEqual(score, self.cut + LABEL_MARGIN, f"{name} #{num}: {score} vs cut {self.cut}")
+                self.assertEqual(len(flagged), 1, self.res["near_copies"])
+            else:
+                self.assertLessEqual(score, self.cut - LABEL_MARGIN, f"{name} #{num}: {score} vs cut {self.cut}")
+                self.assertEqual(flagged, [], self.res["near_copies"])
+        self.assertEqual(scores[0], scores[1], f"{name}: the two orders differ")
 
     def test_recolor_only_is_flagged(self):
         self.check("recolor_only")
@@ -2019,6 +2037,12 @@ class NearCopyLabeled(unittest.TestCase):
 
     def test_slightly_reflowed_text_is_flagged(self):
         self.check("text_reflowed_slightly")
+
+    def test_same_plus_one_small_badge_is_flagged(self):
+        self.check("same_plus_one_small_badge")
+
+    def test_small_badge_moved_to_a_corner_is_flagged(self):
+        self.check("small_badge_moved_to_a_corner")
 
     def test_bigger_heading_and_moved_buttons_pass(self):
         self.check("bigger_heading_and_moved_buttons")
@@ -2061,7 +2085,14 @@ class NearCopyMetric(unittest.TestCase):
         spaced = [dict(x, y=x["y"] * 1.35) for x in hero]
         mirrored = [e("image", 0, 0.1, 0.45, 0.6), e("heading", 0.55, 0.2, 0.45, 0.1), e("text", 0.55, 0.35, 0.45, 0.1)]
         mirrored_b = [dict(x, x=1 - x["x"] - x["w"]) for x in mirrored]
-        (same, spacing, mirror) = self.sim([[hero, hero], [hero, spaced], [mirrored, mirrored_b]])
+        # Repeated kinds: the tied-pair walk depends on which side goes first (review probe:
+        # 0.24 one way, 0.35 the other, before both directions were averaged).
+        rep_a = [e("text", 0.1, 0.1, 0.8, 0.05), e("heading", 0.1, 0.2, 0.8, 0.1),
+                 e("text", 0.1, 0.35, 0.3, 0.05), e("text", 0.1, 0.45, 0.8, 0.2)]
+        rep_b = [e("heading", 0.1, 0.1, 0.8, 0.1), e("text", 0.1, 0.25, 0.8, 0.2),
+                 e("text", 0.1, 0.5, 0.3, 0.05), e("text", 0.1, 0.6, 0.8, 0.05)]
+        (same, spacing, mirror, rep) = self.sim([[hero, hero], [hero, spaced], [mirrored, mirrored_b], [rep_a, rep_b]])
+        self.assertAlmostEqual(rep[0], rep[1], places=9)
         self.assertAlmostEqual(same[0], 1.0, places=6)
         self.assertAlmostEqual(spacing[0], spacing[1], places=9)
         self.assertAlmostEqual(mirror[0], mirror[1], places=9)

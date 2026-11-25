@@ -13,36 +13,46 @@
 //   (the same measure as above), else its `elements` (block boxes; older captures). A section's
 //   left and width are used when the capture gives them; otherwise the box is the content
 //   extent (leftmost element edge to rightmost).
-// similarity(a, b) is 0 to 1, the product of four parts, each 0 to 1 (similarityParts):
-//   order    the longest common subsequence of the kinds in reading order (top to bottom, a row
-//            left to right) over the longer list: a block moved, added or removed lowers it.
+// similarity(a, b) is 0 to 1, symmetric: the mean of the product of four parts read from each
+//   side (similarityParts gives the parts, each 0 to 1, averaged the same way). Every element
+//   carries a weight, the square root of its area as a share of its side's total, so a 12px
+//   badge counts for a few percent of a hero, not one element in six.
+//   order    the heaviest common subsequence of the kinds in reading order (top to bottom, a
+//            row left to right): the weight that keeps its order. A block moved, added or
+//            removed lowers it by that block's weight.
 //   columns  each element's best x-interval overlap with one of its kind on the other side,
-//            averaged over both sides: which column a block sits in, blind to vertical shifts.
-//            x is measured from the box's center, scaled to the content's half-width
-//            (centered(), below), so a full-bleed section and a mockup box line up.
-//   size     for each pair matched by the subsequence, its share of its side's element area
-//            within its family (pictures, or everything else), smaller over larger, averaged:
-//            a heading made much bigger lowers it; a narrower box (pictures scale, type does not)
-//            does not.
-//   rank     for each matched pair, 1 minus the gap between its places in the two reading
-//            orders (0 first, 1 last), averaged; raised to the power 0.5, so it weighs lightly.
+//            weighted, over both sides: which column a block sits in, blind to vertical
+//            shifts. x is measured from the box's center, scaled to the half-width of the
+//            larger elements (centered(), below), so a full-bleed section and a mockup box
+//            line up and one small badge in a corner cannot rescale the rest.
+//   size     the k-th element of each kind paired with the k-th on the other side (wherever it
+//            moved), its share of its side's element area within its family (pictures, or
+//            everything else), smaller over larger, averaged: a heading made much bigger
+//            lowers it; a narrower box (pictures scale, type does not) does not.
+//   rank     for each pair matched by order, 1 minus the gap between its places (the middle of
+//            its weight along the reading order), weighted; raised to the power 0.5, so it
+//            weighs lightly.
 //   Why a product, not a weighted sum: a near-copy is the same on every count at once, and one
 //   real difference (a mirrored split: order 1.00, size 1.00, columns 0.00) is a real
 //   alternative; a sum let matching sizes and order buy back a mirrored layout. Raw y is not
-//   used at all, so a spacing-only change (every gap x1.1 to x2) still scores 0.87 to 0.99.
+//   used at all, so a spacing-only change (every gap x1.1 to x2) still scores 0.93 to 0.99.
+//   Both directions are averaged because, when kinds repeat, the walk through tied pairs
+//   depends on which side goes first.
 //
 // Threshold, with its reason: NEAR_COPY = 0.70 (Task 7b; was 0.30 on the old IoU metric).
-//   Tuned on the labeled set in tests.test_review_page.NearCopyLabeled (real mockups at 1280):
-//   must flag, scored 0.87 to 1.00: recolor only 1.00, spacing x1.1 0.98, spacing x1.35 0.95,
-//   text reflowed slightly 0.87. Must not flag, scored 0.00 to 0.39: a bigger heading plus moved
-//   buttons 0.39, text column vs full width 0.37, stacked vs grid 0.28, stacked vs split 0.15,
-//   placeholder picture beside text vs text alone 0.10, mirrored split 0.00. Every label clears
-//   0.70 by at least 0.17 (the test asks for 0.10). Checked against real pages (the Astro and
-//   Vue trial heroes, captured fresh): the page's own hero reproduced as a mockup scored 0.96
-//   and 0.86 against the capture; the trial's Step up and Bold options 0.10 to 0.20. One change
-//   on its own lands near the cut (only a bigger heading 0.61, only the buttons moved 0.75):
-//   a flag there is a prompt to look, then change the option or say in the item's Reason what
-//   genuinely differs. A flag is a prompt to look, not proof.
+//   Tuned on the labeled set in tests.test_review_page.NearCopyLabeled (real mockups at 1280,
+//   each scored in both orders, same result): must flag, scored 0.87 to 1.00: recolor only
+//   1.00, spacing x1.1 0.99, spacing x1.35 0.97, the same plus one small badge 0.96, a small
+//   badge moved to a corner 0.97, text reflowed slightly 0.87. Must not flag, scored 0.00 to
+//   0.49: a bigger heading plus moved buttons 0.49, text column vs full width 0.38, stacked vs
+//   grid 0.31, stacked vs split 0.13, placeholder picture beside text vs text alone 0.13,
+//   mirrored split 0.00. Every label clears 0.70 by at least 0.17 (the test asks for 0.15).
+//   Checked against real pages (the Astro and Vue trial heroes, captured fresh): the page's own
+//   hero reproduced as a mockup scored 0.97 and 0.92 against the capture; the trial's Step up
+//   and Bold options 0.09 to 0.30. One change on its own lands near the cut (only a bigger
+//   heading 0.59, only the buttons moved 0.80): a flag there is a prompt to look, then change
+//   the option or say in the item's Reason what genuinely differs. A flag is a prompt to look,
+//   not proof.
 const NEAR_COPY = 0.70;
 
 // The classifier and layout boxes below are copies of those in skills/visual-qa/scripts/capture.cjs (it runs in
@@ -188,33 +198,55 @@ function readingOrder(sig) {
   return rows.flatMap((row) => row.sort((p, q) => p.x - q.x));
 }
 
-// x measured from the box's center, scaled so the content's farthest edge from the center sits
-// at 0 or 1. A captured section is often full-bleed (1280px) with its content in a centered
+// How much an element counts in the order, columns and rank parts: the square root of its area
+// (its linear size). A 12px badge then weighs a few percent of a hero, not one element in six,
+// while a button still counts for more than a badge. Weights are shares of the side's total.
+const weightsOf = (sig) => {
+  const raw = sig.map((e) => Math.sqrt(Math.max(0, e.w * e.h)));
+  const total = raw.reduce((sum, v) => sum + v, 0) || 1;
+  return raw.map((v) => v / total);
+};
+
+// x measured from the box's center, scaled so the edge of the content farthest from the center
+// sits at 0 or 1. A captured section is often full-bleed (1280px) with its content in a centered
 // container (x 0.10 to 0.90), while a mockup fills its box (0.02 to 0.98): measured from the
 // box's edges the two never line up. From the center, left, right and centered placement all
-// survive (a right-hand column stays right of center); only the side margins drop out.
+// survive (a right-hand column stays right of center); only the side margins drop out. The
+// extent counts only elements holding at least EXTENT_SHARE of the side's element area (and
+// always the largest), so one small badge in a corner cannot rescale everything else.
+const EXTENT_SHARE = 0.05;
 function centered(sig) {
-  const half = Math.max(...sig.map((e) => Math.max(Math.abs(e.x - 0.5), Math.abs(e.x + e.w - 0.5))));
+  const area = sig.map((e) => e.w * e.h);
+  const total = area.reduce((sum, v) => sum + v, 0);
+  const top = Math.max(...area);
+  const big = sig.filter((e, i) => area[i] >= EXTENT_SHARE * total || area[i] === top);
+  const half = Math.max(...big.map((e) => Math.max(Math.abs(e.x - 0.5), Math.abs(e.x + e.w - 0.5))));
   if (!(half > 0)) return sig;
   return sig.map((e) => ({ ...e, x: (e.x - 0.5 + half) / (2 * half), w: e.w / (2 * half) }));
 }
 
-// Longest common subsequence of the kinds, with the matched index pairs.
-function lcsPairs(a, b) {
+// The heaviest common subsequence of the kinds: like the longest one, but a matched pair is worth
+// the mean of its two weights, so the result is the share of the layout that keeps its order
+// (1 when every element matches in order). Returns the value and the matched index pairs.
+function orderPairs(a, b, wa, wb) {
   const n = a.length, m = b.length;
   const L = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  const val = (i, j) => (a[i].kind === b[j].kind ? (wa[i] + wb[j]) / 2 : -1);
   for (let i = n - 1; i >= 0; i--) {
     for (let j = m - 1; j >= 0; j--) {
-      L[i][j] = a[i].kind === b[j].kind ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+      const v = val(i, j);
+      L[i][j] = Math.max(L[i + 1][j], L[i][j + 1], v >= 0 ? v + L[i + 1][j + 1] : 0);
     }
   }
   const pairs = [];
+  const eq = (x, y) => Math.abs(x - y) < 1e-12;
   for (let i = 0, j = 0; i < n && j < m;) {
-    if (a[i].kind === b[j].kind && L[i][j] === L[i + 1][j + 1] + 1) { pairs.push([i, j]); i++; j++; }
-    else if (L[i + 1][j] >= L[i][j + 1]) i++;
+    const v = val(i, j);
+    if (v >= 0 && eq(L[i][j], v + L[i + 1][j + 1])) { pairs.push([i, j]); i++; j++; }
+    else if (eq(L[i][j], L[i + 1][j])) i++;
     else j++;
   }
-  return pairs;
+  return { value: L[0][0], pairs };
 }
 
 function xOverlap(a, b) {
@@ -223,19 +255,21 @@ function xOverlap(a, b) {
   return inter / (Math.max(a.x + a.w, b.x + b.w) - Math.min(a.x, b.x));
 }
 
-// The four parts of the similarity, each 0 to 1 (exported for the report and the tests).
-function similarityParts(a, b) {
+// The four parts, read from a's side. The walk through tied pairs depends on which side goes
+// first when kinds repeat, so similarityParts and similarity average both directions.
+function partsOneWay(a, b) {
   if (!a.length || !b.length) return { order: 0, columns: 0, size: 0, rank: 0 };
   const A = readingOrder(centered(a)), B = readingOrder(centered(b));
-  const pairs = lcsPairs(A, B);
-  const order = pairs.length / Math.max(A.length, B.length);
-  // Columns: each element's best x-interval overlap with an element of its kind on the other
-  // side (0 when there is none), averaged over both sides. Blind to vertical position.
-  const best = (from, to) => from.reduce((sum, e) =>
-    sum + Math.max(0, ...to.filter((o) => o.kind === e.kind).map((o) => xOverlap(e, o))), 0);
-  const columns = (best(A, B) + best(B, A)) / (A.length + B.length);
-  // Size: each matched pair's share of its side's element area within its family (pictures,
-  // or everything else), smaller over larger. Families, because a picture scales with the box
+  const wa = weightsOf(A), wb = weightsOf(B);
+  const { value: order, pairs } = orderPairs(A, B, wa, wb);
+  // Columns: each element's best x-interval overlap with one of its kind on the other side
+  // (0 when there is none), weighted, over both sides. Blind to vertical position.
+  const best = (from, to, w) => from.reduce((sum, e, i) =>
+    sum + w[i] * Math.max(0, ...to.filter((o) => o.kind === e.kind).map((o) => xOverlap(e, o))), 0);
+  const columns = (best(A, B, wa) + best(B, A, wb)) / 2;
+  // Size: for each kind, the k-th element of that kind in reading order paired with the k-th on
+  // the other side (wherever it moved: a moved block still has a size), its share of its side's
+  // element area within its family (pictures, or everything else), smaller over larger. Families, because a picture scales with the box
   // while type is set in px: the same page reproduced in a 1046px box instead of a 1280px
   // section shifts every text-to-picture share by about (1046/1280)^2 with nothing changed.
   const fam = (e) => (e.kind === 'image' ? 'image' : 'other');
@@ -243,20 +277,35 @@ function similarityParts(a, b) {
   const ta = totals(A), tb = totals(B);
   const share = (e, t) => (e.w * e.h) / (t[fam(e)] || 1);
   const ratio = (p, q) => (Math.max(p, q) > 0 ? Math.min(p, q) / Math.max(p, q) : 1);
-  const mean = (f) => (pairs.length ? pairs.reduce((sum, [i, j]) => sum + f(A[i], B[j], i, j), 0) / pairs.length : 0);
-  const size = mean((p, q) => ratio(share(p, ta), share(q, tb)));
-  // Rank: each matched pair's place in its side's reading order (0 first, 1 last), compared.
-  const place = (i, n) => (n > 1 ? i / (n - 1) : 0.5);
-  const rank = mean((p, q, i, j) => 1 - Math.abs(place(i, A.length) - place(j, B.length)));
+  if (!pairs.length) return { order, columns, size: 0, rank: 0 };
+  const byKind = (s) => s.reduce((m, e) => { (m[e.kind] = m[e.kind] || []).push(e); return m; }, {});
+  const ka = byKind(A), kb = byKind(B);
+  const same = Object.keys(ka).flatMap((k) => (kb[k] || []).slice(0, ka[k].length).map((q, n) => [ka[k][n], q]));
+  const size = same.reduce((sum, [p, q]) => sum + ratio(share(p, ta), share(q, tb)), 0) / same.length;
+  // Rank: each matched pair's place in its side's reading order, compared, weighted like order.
+  // A place is the middle of the element's weight along the reading order (0 to 1), so a small
+  // element added at the top barely moves the rest.
+  const places = (w) => { let run = 0; return w.map((v) => { const p = run + v / 2; run += v; return p; }); };
+  const pa = places(wa), pb = places(wb);
+  const pw = pairs.map(([i, j]) => (wa[i] + wb[j]) / 2);
+  const pwt = pw.reduce((sum, v) => sum + v, 0) || 1;
+  const rank = pairs.reduce((sum, [i, j], k) => sum + pw[k] * (1 - Math.abs(pa[i] - pb[j])), 0) / pwt;
   return { order, columns, size, rank };
 }
 
 // Exponents of the product (see the header for why a product and why these).
 const WEIGHTS = { order: 1, columns: 1, size: 1, rank: 0.5 };
+const product = (parts) => Object.keys(WEIGHTS).reduce((p, k) => p * Math.pow(parts[k], WEIGHTS[k]), 1);
 
+// The four parts of the similarity, each 0 to 1, the mean of both directions (for the report).
+function similarityParts(a, b) {
+  const x = partsOneWay(a, b), y = partsOneWay(b, a);
+  return Object.fromEntries(Object.keys(x).map((k) => [k, (x[k] + y[k]) / 2]));
+}
+
+// Symmetric: the mean of the two directions' products.
 function similarity(a, b) {
-  const parts = similarityParts(a, b);
-  return Object.keys(WEIGHTS).reduce((p, k) => p * Math.pow(parts[k], WEIGHTS[k]), 1);
+  return (product(partsOneWay(a, b)) + product(partsOneWay(b, a))) / 2;
 }
 
 module.exports = { layoutSignature, signatureFromSection, similarity, similarityParts, WEIGHTS, NEAR_COPY };

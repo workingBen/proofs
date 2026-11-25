@@ -891,12 +891,29 @@ class SectionInventory(unittest.TestCase):
         self.assertEqual([s["top"] for s in secs], sorted(s["top"] for s in secs))
         self.assertTrue(all(s["height"] > 0 for s in secs))
 
-    def test_div_only_page_falls_back_to_main_children(self):
+    def test_divs_directly_under_main_are_sections(self):
+        # The `main > *` path: no height floor, so this is not the fallback.
         secs = self.measures("inventory-divs.html")["sections"]
         self.assertEqual(len(secs), 4)
         self.assertEqual([s["tag"] for s in secs], ["div"] * 4)
         self.assertEqual(secs[1]["label"], "Second block")
         self.assertTrue(all(s["height"] > 200 for s in secs))
+
+    def test_no_main_page_falls_back_to_tall_body_children(self):
+        secs = self.measures("inventory-no-main.html")["sections"]
+        self.assertEqual([s["label"] for s in secs], ["First block", "Second block", "Third block"])
+        self.assertNotIn("Announcement bar", [e["text"] for s in secs for e in s["elements"]])
+
+    def test_stray_header_does_not_hide_the_tall_divs(self):
+        secs = self.measures("inventory-stray-header.html")["sections"]
+        self.assertEqual([s["tag"] for s in secs], ["header", "div", "div", "div"])
+        self.assertEqual(secs[0]["label"], "Lone header")
+        self.assertEqual(secs[3]["label"], "Third block")
+
+    def test_short_page_is_one_body_section(self):
+        secs = self.measures("inventory-short.html")["sections"]
+        self.assertEqual([s["tag"] for s in secs], ["body"])
+        self.assertTrue(any(e["text"] == "Short page." for e in secs[0]["elements"]))
 
     def test_summary_lists_each_section_with_counts_by_kind(self):
         with tempfile.TemporaryDirectory() as tmp:

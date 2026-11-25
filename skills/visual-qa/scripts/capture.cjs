@@ -462,19 +462,28 @@ function measure({ items, minText, minTap, edge, offCenterPx = 16, untitledMinHe
 
   // Section inventory, for the designer: each section's label and position and the elements in
   // it, in DOM order. A section is a landmark or a direct child of <main>, deduped to the
-  // outermost. A page with none (a div soup under no <main>) falls back to the direct children
-  // of <body> at least SECTION_MIN_HEIGHT tall: anything shorter is a bar or a divider, not a
-  // section. Caps keep measures.json small: 30 sections, 40 elements each.
-  const SECTION_MIN_HEIGHT = 200, MAX_SECTIONS = 30, MAX_ELEMENTS = 40, TEXT_CAP = 80;
+  // outermost. `main > *` has no height floor on purpose: whatever the author put directly in
+  // <main> is a section. Landmarks that cover under SECTION_MIN_COVER of the page's height (a
+  // lone <header> over a div soup, or no landmarks at all) are topped up with the direct children
+  // of <main> (else <body>) at least SECTION_MIN_HEIGHT tall that are not already inside a
+  // section: anything shorter is a bar or a divider, not a section. If that still leaves nothing
+  // (a short page), the whole <main> (else <body>) is the one section, so the list is never empty.
+  // Caps keep measures.json small: 30 sections, 40 elements each.
+  const SECTION_MIN_HEIGHT = 200, SECTION_MIN_COVER = 0.5, MAX_SECTIONS = 30, MAX_ELEMENTS = 40, TEXT_CAP = 80;
   const clip = (t) => (t || '').trim().replace(/\s+/g, ' ').slice(0, TEXT_CAP);
   const pageTop = (r) => Math.round(r.top + window.scrollY);
   let sectionEls = [...document.querySelectorAll(
     'section, header, footer, main > *, [role=region], [role=banner], [role=contentinfo]')].filter(visible);
   sectionEls = sectionEls.filter((el) => !sectionEls.some((o) => o !== el && o.contains(el)));
-  if (!sectionEls.length) {
-    sectionEls = [...(document.querySelector('main') || document.body).children]
-      .filter((el) => visible(el) && el.getBoundingClientRect().height > SECTION_MIN_HEIGHT);
+  const covered = sectionEls.reduce((sum, el) => sum + el.getBoundingClientRect().height, 0);
+  if (covered < SECTION_MIN_COVER * document.documentElement.scrollHeight) {
+    const root = document.querySelector('main') || document.body;
+    const extra = [...root.children].filter((el) => visible(el)
+      && el.getBoundingClientRect().height > SECTION_MIN_HEIGHT
+      && !sectionEls.some((o) => o === el || o.contains(el)));
+    sectionEls = [...sectionEls, ...extra].sort((x, y) => (x.compareDocumentPosition(y) & 4 ? -1 : 1));
   }
+  if (!sectionEls.length) sectionEls = [document.querySelector('main') || document.body];
   const kindOf = (el) => {
     const t = el.tagName.toLowerCase();
     if (/^h[1-6]$/.test(t)) return 'heading';

@@ -73,19 +73,26 @@ function measureBox({ selector, width, beforeFontSizes }) {
   // first opaque one (white, the browser's canvas, only when nothing at all is painted). An
   // element inside the mockup box with opacity below 1 fades the text (fade); when a background
   // layer sits inside that faded element too, the composite is not a flat color, so unmeasured.
+  const TRANSLUCENT = 'contrast: not measured (a translucent element over its own background)';
   const backdrop = (el) => {
     const layers = [];
     let fade = 1;
+    let opaque = null;
     for (let a = el; a; a = a.parentElement) {
       const s = getComputedStyle(a);
       if (s.backgroundImage !== 'none') return { why: 'contrast: not measured (text over an image or gradient)' };
       const c = parse(s.backgroundColor);
       if (!c) return { why: `contrast: not measured (background color ${s.backgroundColor} could not be read)` };
       if (box.contains(a) && Number(s.opacity) < 1) {
-        if (layers.length || c.a > 0) return { why: 'contrast: not measured (a translucent element over its own background)' };
+        if (layers.length || c.a > 0) return { why: TRANSLUCENT };
         fade *= Number(s.opacity);
       }
-      if (c.a > 0) { layers.push(c); if (c.a === 1) break; }
+      if (c.a > 0) { layers.push(c); if (c.a === 1) { opaque = a; break; } }
+    }
+    // Past the first opaque background, a faded element inside the box fades that background
+    // and the text together, which is the same translucent case: unmeasured, never a full pass.
+    for (let a = opaque && opaque.parentElement; a && box.contains(a); a = a.parentElement) {
+      if (Number(getComputedStyle(a).opacity) < 1) return { why: TRANSLUCENT };
     }
     let under = { r: 255, g: 255, b: 255, a: 1 };
     for (let k = layers.length - 1; k >= 0; k--) under = over(layers[k], under);
@@ -98,65 +105,68 @@ function measureBox({ selector, width, beforeFontSizes }) {
   const probe = document.createElement('style');
   probe.textContent = '[data-rp-probe], [data-rp-probe] * { pointer-events: auto !important; }';
   document.head.appendChild(probe);
-  const tw = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
-  while (tw.nextNode()) {
-    const node = tw.currentNode;
-    const el = node.parentElement;
-    const text = node.textContent.trim().replace(/\s+/g, ' ');
-    if (!el || !text || el.closest('svg,script,style') || !shown(el)) continue;
-    const s = getComputedStyle(el);
-    const px = parseFloat(s.fontSize);
-    if (beforeFontSizes.length && !beforeFontSizes.some((b) => Math.abs(b - px) <= 1) && !sizes.has(el)) {
-      sizes.add(el);
-      out.offScale.push({ text: text.slice(0, 40), size: Math.round(px * 100) / 100 });
-    }
-    // Long lines: the most characters the browser put on one line of this text.
-    if (width === 1280 && text.length > 80) {
-      const lines = {};
-      for (let i = 0; i < node.textContent.length; i++) {
-        const r = document.createRange();
-        r.setStart(node, i); r.setEnd(node, i + 1);
-        const b = r.getBoundingClientRect();
-        if (b.width === 0) continue;
-        const k = Math.round(b.top);
-        lines[k] = (lines[k] || 0) + 1;
+  try {
+    const tw = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
+    while (tw.nextNode()) {
+      const node = tw.currentNode;
+      const el = node.parentElement;
+      const text = node.textContent.trim().replace(/\s+/g, ' ');
+      if (!el || !text || el.closest('svg,script,style') || !shown(el)) continue;
+      const s = getComputedStyle(el);
+      const px = parseFloat(s.fontSize);
+      if (beforeFontSizes.length && !beforeFontSizes.some((b) => Math.abs(b - px) <= 1) && !sizes.has(el)) {
+        sizes.add(el);
+        out.offScale.push({ text: text.slice(0, 40), size: Math.round(px * 100) / 100 });
       }
-      const chars = Math.max(0, ...Object.values(lines));
-      if (chars > 80) out.longLines.push({ text: text.slice(0, 40), chars });
+      // Long lines: the most characters the browser put on one line of this text.
+      if (width === 1280 && text.length > 80) {
+        const lines = {};
+        for (let i = 0; i < node.textContent.length; i++) {
+          const r = document.createRange();
+          r.setStart(node, i); r.setEnd(node, i + 1);
+          const b = r.getBoundingClientRect();
+          if (b.width === 0) continue;
+          const k = Math.round(b.top);
+          lines[k] = (lines[k] || 0) + 1;
+        }
+        const chars = Math.max(0, ...Object.values(lines));
+        if (chars > 80) out.longLines.push({ text: text.slice(0, 40), chars });
+      }
+      if (seen.has(el)) continue;
+      seen.add(el);
+      const reason = 'contrast: not measured (text over an image or gradient)';
+      // Anything painted under (or over) the text's first line that is not one of its ancestors: an
+      // image, video, canvas or SVG, or an overlay with a background image, makes a flat color wrong.
+      // Every element in the box takes the pointer while this runs (the style below), so a
+      // pointer-events:none scrim is still found.
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      const rect = Array.from(range.getClientRects()).find((r) => r.width > 0 && r.height > 0);
+      let covered = false;
+      if (rect) {
+        el.scrollIntoView({ block: 'center', inline: 'nearest' });
+        const at = Array.from(range.getClientRects()).find((r) => r.width > 0 && r.height > 0);
+        covered = document.elementsFromPoint(at.left + at.width / 2, at.top + at.height / 2)
+          .some((u) => u !== el && !u.contains(el) && (/^(img|picture|video|canvas|svg)$/i.test(u.tagName)
+            || u.closest('svg') || getComputedStyle(u).backgroundImage !== 'none'));
+      }
+      if (covered) { out.unmeasured.push({ text: text.slice(0, 40), reason }); continue; }
+      const under = backdrop(el);
+      if (under.why) { out.unmeasured.push({ text: text.slice(0, 40), reason: under.why }); continue; }
+      const bg = under.bg;
+      const ink = parse(s.color);
+      if (!ink) { out.unmeasured.push({ text: text.slice(0, 40), reason: `contrast: not measured (text color ${s.color} could not be read)` }); continue; }
+      const fg = { ...ink, a: ink.a * under.fade };
+      const top = over(fg, bg);
+      const [hi, lo] = [lum(top), lum(bg)].sort((x, y) => y - x);
+      const ratio = Math.round(((hi + 0.05) / (lo + 0.05)) * 100) / 100;
+      const needed = px >= 24 || (px >= 18.66 && parseInt(s.fontWeight, 10) >= 700) ? 3 : 4.5;
+      if (ratio < needed) out.contrast.push({ text: text.slice(0, 40), ratio, needed });
     }
-    if (seen.has(el)) continue;
-    seen.add(el);
-    const reason = 'contrast: not measured (text over an image or gradient)';
-    // Anything painted under (or over) the text's first line that is not one of its ancestors: an
-    // image, video, canvas or SVG, or an overlay with a background image, makes a flat color wrong.
-    // Every element in the box takes the pointer while this runs (the style below), so a
-    // pointer-events:none scrim is still found.
-    const range = document.createRange();
-    range.selectNodeContents(node);
-    const rect = Array.from(range.getClientRects()).find((r) => r.width > 0 && r.height > 0);
-    let covered = false;
-    if (rect) {
-      el.scrollIntoView({ block: 'center', inline: 'nearest' });
-      const at = Array.from(range.getClientRects()).find((r) => r.width > 0 && r.height > 0);
-      covered = document.elementsFromPoint(at.left + at.width / 2, at.top + at.height / 2)
-        .some((u) => u !== el && !u.contains(el) && (/^(img|picture|video|canvas|svg)$/i.test(u.tagName)
-          || u.closest('svg') || getComputedStyle(u).backgroundImage !== 'none'));
-    }
-    if (covered) { out.unmeasured.push({ text: text.slice(0, 40), reason }); continue; }
-    const under = backdrop(el);
-    if (under.why) { out.unmeasured.push({ text: text.slice(0, 40), reason: under.why }); continue; }
-    const bg = under.bg;
-    const ink = parse(s.color);
-    if (!ink) { out.unmeasured.push({ text: text.slice(0, 40), reason: `contrast: not measured (text color ${s.color} could not be read)` }); continue; }
-    const fg = { ...ink, a: ink.a * under.fade };
-    const top = over(fg, bg);
-    const [hi, lo] = [lum(top), lum(bg)].sort((x, y) => y - x);
-    const ratio = Math.round(((hi + 0.05) / (lo + 0.05)) * 100) / 100;
-    const needed = px >= 24 || (px >= 18.66 && parseInt(s.fontWeight, 10) >= 700) ? 3 : 4.5;
-    if (ratio < needed) out.contrast.push({ text: text.slice(0, 40), ratio, needed });
+  } finally {
+    probe.remove();
+    box.removeAttribute('data-rp-probe');
   }
-  probe.remove();
-  box.removeAttribute('data-rp-probe');
 
   if (width === 390) {
     for (const el of box.querySelectorAll('a, button, [role=button], input, select')) {

@@ -1575,6 +1575,9 @@ FR_VARIANTS = [
     '<div style="%sbackground:#fff;color:#111;position:relative"><p style="margin:0">Under a scrim</p>'
     '<div style="position:absolute;inset:0;pointer-events:none;background:linear-gradient(#0008,#0000)"></div></div>'
     % FR_BOX,
+    # E: an opaque background inside a faded element: still faded, so not a full-contrast pass.
+    '<div style="%sbackground:#fff;color:#111"><div style="opacity:.3"><p style="margin:0;background:#fff;color:#111">'
+    'Opaque under a fade</p></div></div>' % FR_BOX,
 ]
 
 
@@ -1618,6 +1621,12 @@ class DesignChecksScope(unittest.TestCase):
     def test_a_faded_element_is_composited(self):
         c = self.row("C")
         self.assertEqual([x["text"] for x in c["contrast"]], ["Faded text"], c)
+
+    def test_an_opaque_background_inside_a_faded_element_is_not_a_pass(self):
+        c = self.row("E")
+        self.assertEqual(c["contrast"], [], c)
+        self.assertEqual([(u["text"], u["reason"]) for u in c["unmeasured"]],
+                         [("Opaque under a fade", "contrast: not measured (a translucent element over its own background)")], c)
 
     def test_a_pointer_events_none_overlay_still_covers_the_text(self):
         c = self.row("D")

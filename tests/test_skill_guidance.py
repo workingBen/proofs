@@ -1018,6 +1018,14 @@ class FinalReviewGuidance(unittest.TestCase):
         self.assertNotIn("with it set, an option without scores shows \"Not scored\" and recommending one is a build error.",
                          text)
 
+    def test_near_copy_problem_is_for_two_or_more_options_only(self):
+        text = " ".join((REPO / "skills" / "design-review" / "SKILL.md").read_text().split())
+        self.assertIn("on an item with two or more options, that stays a problem line, not a note", text)
+        self.assertIn("A near-copy of the current page on a one-option fix (one proposal, or exactly one variant) "
+                      "is a note instead (Ruling 30)", text)
+        self.assertIn("a near-copy on an item with two or more options)", text)
+        self.assertNotIn("(0.91)`: that stays a problem line, not a note.", text)
+
     def test_profile_offer_is_one_line_and_pages_only_on_yes(self):
         text = self.step("1.")
         self.assertIn("offer in one line to create one", text)

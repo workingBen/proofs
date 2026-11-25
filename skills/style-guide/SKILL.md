@@ -1,6 +1,6 @@
 ---
 name: style-guide
-version: 1.8.2
+version: 1.8.3
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -10,6 +10,8 @@ description: Use when the user wants site-wide design rules settled (type scale,
 # Style Guide Tool
 
 A human-in-the-loop process for auditing and codifying design consistency across an entire site, not one page at a time. Sibling tool to `article-copy-edit` and `design-review`: same Artifact-review loop, but the output is a persistent, living document instead of a one-shot set of edits.
+
+**Results first.** Nothing matters more than a result the user wants. Save tokens by cutting waste, never by cutting a check, an option or a revise pass the result needs (full text: `../../reference/house-rules.md`).
 
 ## Why this exists
 

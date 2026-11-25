@@ -47,10 +47,28 @@ function midWordBreaks({ selector = 'body', limit = 20 } = {}) {
         for (let i = 1; i < m[0].length; i++) { if (top(i) > first + 1) { cut = i; break; } }
         const variant = el.closest('[data-variant]');
         const item = el.closest('[data-id]');
+        // Where it is (Astro run 3: the word alone sent the session to the wrong section): the
+        // nearest block element as tag.class, inside the nearest ancestor with an id; the text of
+        // the heading just before it; and its top in page pixels.
+        let block = el;
+        while (block.parentElement && getComputedStyle(block).display === 'inline') block = block.parentElement;
+        const tagOf = (e) => e.tagName.toLowerCase()
+          + (typeof e.className === 'string' && e.className.trim() ? '.' + e.className.trim().split(/\s+/).slice(0, 2).join('.') : '');
+        let path = block.id ? `${tagOf(block)}#${block.id}` : tagOf(block);
+        const holder = block.parentElement && block.parentElement.closest('[id]');
+        if (holder && !block.id && holder !== document.body) path = `#${holder.id} ${path}`;
+        let near = '';
+        const heads = [...document.querySelectorAll('h1,h2,h3,h4,h5,h6')];
+        for (const h of heads) {
+          if (h !== block && !h.contains(block) && h.compareDocumentPosition(block) & Node.DOCUMENT_POSITION_FOLLOWING) {
+            near = (h.innerText || h.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 40);
+          }
+        }
         out.push({
           word: m[0].slice(0, 30),
           at: cut ? `${m[0].slice(0, cut)}|${m[0].slice(cut)}`.slice(0, 40) : m[0].slice(0, 30),
           where: { item: item ? item.getAttribute('data-id') : null, variant: variant ? variant.getAttribute('data-variant') : null },
+          el: path.slice(0, 80), near, y: Math.round(rects[0].top + window.scrollY),
         });
       }
     }

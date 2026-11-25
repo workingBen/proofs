@@ -1,12 +1,14 @@
 ---
 name: review-cycle
-version: 1.13.1
+version: 1.13.2
 description: Use when the user opens a review session ("starting a review cycle", "let's do a review pass") and feeds a stream of bug reports and requests, often from a phone, to be triaged and handled without questions; fixes ship, design calls go to design-review, big features become to-dos. Not for a single one-off request.
 ---
 
 # Review Cycle Tool
 
 A queue-processing workflow for a live review session: the user reports issues one at a time or in a batch; each is worked to completion (investigate, implement, test, commit, open a pull request, merge it) without stopping to ask questions, because the user isn't available for synchronous back-and-forth during the session. Every item is **triaged first** (see Triage below): easy fixes ship autonomously, and an item that needs a sibling skill in this plugin (`design-review`, `visual-qa`, `article-copy-edit`, `photo-picker`, `style-guide`, `todos`) gets that skill started for it automatically, without the user asking. There's still no blocking review step mid-session: a design review is published and waits for the user's picks while the queue keeps moving. The user reviews once, on a tracking page that is built as the session runs.
+
+**Results first.** Nothing matters more than a result the user wants. Save tokens by cutting waste, never by cutting a check, an option or a revise pass the result needs (full text: `../../reference/house-rules.md`).
 
 **Test first.** If the superpowers plugin is installed, use `superpowers:test-driven-development` for each item's implementation; otherwise write the failing test first yourself, watch it fail, then make it pass.
 **Debugging.** If the superpowers plugin is installed, use `superpowers:systematic-debugging` when a test failure's cause isn't immediately obvious; otherwise debug systematically: reproduce, form one hypothesis, test it, repeat.
@@ -33,14 +35,14 @@ A queue-processing workflow for a live review session: the user reports issues o
    - Resolve any remaining ambiguity yourself with the lowest-risk default; record the assumption in the backlog entry (below). Never stop to ask.
    - TDD: test first, then implementation.
    - Run the relevant test suite; confirm it's green.
-   - Self-review the diff before committing. Stage only what the item changed: a lockfile (`package-lock.json` and the like) that an install rewrote stays out of the commit (`git restore` it); if the item needs it, say so in the PR body.
+   - Self-review the diff before committing. Commit, push and open the PR as `../../reference/commit-and-pr.md` says (stage by name, a body that says what changed, why and how it was checked, and a failed push reported with the exact command, not retried in other spellings). Stage only what the item changed: a lockfile (`package-lock.json` and the like) that an install rewrote stays out of the commit (`git restore` it); if the item needs it, say so in the PR body.
    - **Ship it as its own pull request: one item, one branch, one PR, merged as you go.** Never commit on the main branch. The sequence per item:
      ```text
      git fetch origin main                            # from the session's working copy
      git checkout -b <type>/<short-slug> origin/main   # fresh off main, not off the last item
-     # ... commit the work, explicit paths only; a lockfile you did not mean to change stays out ...
+     git add <path> <path>                             # the files the item changed, by name; never -A or .
      git push -u origin HEAD                           # HEAD is the item's branch
-     gh pr create --fill                               # body: the report, the fix, test evidence
+     gh pr create --title "<title>" --body-file .proofs/pr-body.md   # what changed, why, how it was checked
      gh pr merge <n> --merge                           # NOT --delete-branch; see below
      git push origin --delete <branch>
      ```

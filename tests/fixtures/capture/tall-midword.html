@@ -1,0 +1,17 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tall page with a break far down</title>
+<!-- Astro run 3: the 390 full-page shot was about 31,000 px tall at 2x, too tall to read, and the
+     capture named only the broken word, so the session guessed the hero headline. The real break
+     was in the quick-start command far down the page. -->
+<style>body{margin:0;font:16px/1.5 sans-serif}
+.band{height:3000px;border-bottom:1px solid #ccc}
+pre{font:16px/1.5 monospace;width:200px;margin:8px;white-space:pre-wrap;word-break:break-all}
+</style>
+</head><body><main>
+<section class="band"><h1>Free template for Astro</h1></section>
+<section class="band"><h2>Features</h2></section>
+<section id="quick-start" class="band"><h2>Quick start</h2>
+<pre class="cmd"><code>npm create astro@latest -- --template example/astrowind</code></pre></section>
+<section class="band"><h2>Pricing</h2></section>
+</main></body></html>

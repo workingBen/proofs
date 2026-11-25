@@ -1,6 +1,6 @@
 ---
 name: qa-checklist
-version: 1.2.4
+version: 1.2.5
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -12,6 +12,8 @@ description: Use when shipped work needs checks only the user can run — a real
 A run sheet for the checks you could not do yourself, answered on a page instead of
 in chat, where a list of "please verify" items scrolls away for exactly the reason
 questions do.
+
+**Results first.** Nothing matters more than a result the user wants. Save tokens by cutting waste, never by cutting a check, an option or a revise pass the result needs (full text: `../../reference/house-rules.md`).
 
 ## When it starts on its own
 

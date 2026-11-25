@@ -1,6 +1,6 @@
 ---
 name: pr-qa
-version: 1.9.7
+version: 1.9.8
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/skills/pr-qa/scripts/pr_qa_page.py *)
@@ -50,6 +50,7 @@ The whole flow for a PR whose app runs with one start command. The goal is a bui
 
 **House rules.** Same as every proofs capture skill; full text in `../../reference/house-rules.md`.
 
+0. **Results first.** Nothing matters more than a result the user wants. Save tokens by cutting waste, never by cutting a check, an option or a revise pass the result needs (full text: `../../reference/house-rules.md`).
 1. **Finish in this turn.** Build, smoke-check and screenshot before you reply; the next turn re-reads the whole session and costs more each time. Write big files (HTML, spec JSON, scripts) with the Write tool and never print them back with `cat`, `head` or `Read`; the helpers print short summaries.
 2. **Stay in two folders.** Read only inside the project (the folder Claude Code started in) and the plugin folder. Do not read parent folders: their `CLAUDE.md` is already loaded for you. Write specs, scratch scripts, screenshots and pages only under `.proofs/` in the project, never the system temp folder, `$TMPDIR` or `~`. The exceptions are the Playwright install in `~/.cache/proofs-playwright` and pr-qa's `PROOFS_BASE_DIR` base folder, when it is set. Write the Playwright folder only with its one install line; never `ls` or Read it to see whether Playwright is there (it is outside the project, so the call is refused): the capture and `--smoke` report a missing install themselves, with exit 2 and the line to run.
 3. **One command per Bash call.** No pipes, redirects, `;`, `&&`, `cd`, `$(...)` or `VAR=` in front: Claude Code matches its allow rules against the whole command, and any of those makes it ask (or, in `claude -p`, refuse).
@@ -476,7 +477,8 @@ own test. Compare the full string, or hash the source files.
 
 State the *action*, not the label — "merge" is ambiguous, and the difference
 matters when pushing to the main branch needs permission. How this project merges,
-pushes and deploys is in its own notes; follow them.
+pushes and deploys is in its own notes; follow them. A push that fails is reported as
+`../../reference/commit-and-pr.md` says: what is done, the first error line, the exact command.
 
 Never recommend a merge when a finding rose and you have not named the elements
 and said why it is acceptable (`rise_explained`); otherwise recommend `send-back`

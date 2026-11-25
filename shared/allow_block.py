@@ -20,7 +20,8 @@ names it instead, when there is no marker (for example --stack python, or --stac
 python,node for two). With no marker and no --stack it prints the node rules, as
 before 1.6.0, and says so on stderr. --project may be combined with --headless (the output is both
 sets, so it holds the home folder again). --commit prints a second opt-in block for
-saving and sharing work (git add, git commit, git push -u origin HEAD, gh pr create). It
+saving and sharing work (git add, git commit, git push -u origin HEAD and its larger-buffer
+form, gh pr create). It
 is opt-in, never part of --project, because git push and gh pr create reach GitHub; it
 holds no home path and combines with every other flag. For the default and --headless
 output use ~/.claude/settings.json (every project; with a custom $CLAUDE_CONFIG_DIR, that folder's
@@ -178,6 +179,11 @@ COMMIT_RULES = [
     "Bash(git add *)",
     "Bash(git commit *)",
     "Bash(git push -u origin HEAD)",
+    # Astro run 3 (C1): a push of a large pack over HTTP/2 failed with HTTP 400 and the session's
+    # fix, this exact line, was refused. Same remote and branch as the plain push; only git's
+    # client-side buffer (500 MiB) changes, for this one command. Never `git config *`: it
+    # persists, and can set an alias or core.hooksPath that runs anything.
+    "Bash(git -c http.postBuffer=524288000 push -u origin HEAD)",
     "Bash(gh pr create *)",
 ]
 # Starts a dev server from an arbitrary command, so it is opt-in (--headless), never default.

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Visual QA capture: screenshots + measurements for whole pages at three viewports.
 //
-//   node <skill folder>/scripts/capture.cjs pages.json [--out DIR] [--sizes 390,1440] [--evidence before|after] [--no-scroll]
+//   node <skill folder>/scripts/capture.cjs pages.json [--out DIR] [--sizes 390,1440] [--evidence before|after] [--no-scroll] [--compare EARLIER/measures.json]
 //
 // pages.json (see pages.example.json beside this file):
 //   {
@@ -37,6 +37,14 @@
 // the run clean.
 //
 // Writes <out>/<name>-<state>-<width>.png, ...-full.png, measures.json and summary.md.
+// A page taller than one part (4 widths, at most 1,600 px) is also cut into ...-part-NN.png, one
+// PNG pixel per CSS pixel, with each part's y range in measures.json ("parts"): an image reader
+// shrinks a tall full-page shot until nothing in it is legible (Astro run 3: 31,354 px at 2x). A
+// full shot that would pass 16,384 px at the device scale is taken at 1x ("fullScale").
+// Each mid-word break names its element, the heading above it, its y and its part ("midWordAt").
+// --compare takes an earlier run's measures.json and lists, per page, size and check, the entries
+// that are new since then, by text, not by count ("newSince"): a fix that took small tap targets
+// from 11 to 9 had made 3 of the 9 (Astro run 3).
 // Prints only the summary table, so the run stays small in context.
 
 const fs = require('fs');
@@ -268,7 +276,8 @@ function measure({ items, minText, minTap, edge, offCenterPx = 16, untitledMinHe
       const m = el.getScreenCTM();
       if (m) px = px * Math.hypot(m.a, m.b);
     }
-    if (px < minText - 0.5) smallText.push({ text: node.textContent.trim().slice(0, 40), px: +px.toFixed(1) });
+    if (px < minText - 0.5) smallText.push({ text: node.textContent.trim().slice(0, 40), px: +px.toFixed(1),
+      y: Math.round(el.getBoundingClientRect().top + window.scrollY) });
   }
 
   // Tap targets (a stretched ::after covering the row counts as the row)
@@ -284,7 +293,8 @@ function measure({ items, minText, minTap, edge, offCenterPx = 16, untitledMinHe
     const inline = getComputedStyle(el).display === 'inline' && el.closest('p,li');
     if (inline) continue; // links inside running text are exempt
     if (r.width < minTap - 0.5 || r.height < minTap - 0.5) {
-      smallTaps.push({ el: label(el), tag: el.tagName.toLowerCase(), w: Math.round(r.width), h: Math.round(r.height) });
+      smallTaps.push({ el: label(el), tag: el.tagName.toLowerCase(), w: Math.round(r.width), h: Math.round(r.height),
+        y: Math.round(r.top + window.scrollY) });
     }
   }
 
@@ -338,7 +348,8 @@ function measure({ items, minText, minTap, edge, offCenterPx = 16, untitledMinHe
     const right = (box.right - parseFloat(s.borderRightWidth) - parseFloat(s.paddingRight)) - cr;
     if (left < -1 || right < -1) continue; // overflowing content is the sideways measure's job
     if (Math.abs(left - right) > offCenterPx) {
-      offCenter.push({ text: label(el), tag: el.tagName.toLowerCase(), left: Math.round(left), right: Math.round(right) });
+      offCenter.push({ text: label(el), tag: el.tagName.toLowerCase(), left: Math.round(left), right: Math.round(right),
+        y: Math.round(box.top + window.scrollY) });
     }
   }
 
@@ -488,7 +499,9 @@ const BLANK_SHARE = 0.9;
 // deliberate icon or toggle; three or more is content that never appeared.
 const HIDDEN_BLOCKS = 3;
 
-function regionStats(file, dpr, fromCss) {
+// The rows of an 8-bit, non-interlaced RGB or RGBA PNG (what Chrome writes), unfiltered; null
+// for any other kind.
+function decodePng(file) {
   const zlib = require('zlib');
   const data = fs.readFileSync(file);
   let pos = 8, width = 0, height = 0, depth = 0, ctype = 0, interlace = 0;
@@ -505,9 +518,8 @@ function regionStats(file, dpr, fromCss) {
   if (depth !== 8 || (ctype !== 2 && ctype !== 6) || interlace) return null;
   const bpp = ctype === 6 ? 4 : 3, stride = width * bpp;
   const raw = zlib.inflateSync(Buffer.concat(idat));
-  const start = Math.min(height, Math.round(fromCss * dpr));
-  let prev = Buffer.alloc(stride), flatRows = 0, rows = 0, sampled = 0;
-  const colors = new Map();
+  const rows = [];
+  let prev = Buffer.alloc(stride);
   for (let y = 0; y < height; y++) {
     const f = raw[y * (stride + 1)];
     const line = Buffer.from(raw.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1)));
@@ -521,8 +533,78 @@ function regionStats(file, dpr, fromCss) {
         line[i] = (line[i] + (pa <= pb && pa <= pc ? a : pb <= pc ? b : c)) & 255;
       }
     }
+    rows.push(line);
     prev = line;
-    if (y < start) continue;
+  }
+  return { width, height, bpp, ctype, rows };
+}
+
+const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
+  let c = n;
+  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+  return c >>> 0;
+});
+function crc32(buf) {
+  let c = 0xffffffff;
+  for (const b of buf) c = CRC_TABLE[(c ^ b) & 255] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+function writePng(file, width, height, bpp, rows) {
+  const zlib = require('zlib');
+  const chunk = (kind, body) => {
+    const head = Buffer.alloc(8);
+    head.writeUInt32BE(body.length, 0);
+    head.write(kind, 4, 'latin1');
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(Buffer.concat([head.subarray(4), body])), 0);
+    return Buffer.concat([head, body, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0); ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8; ihdr[9] = bpp === 4 ? 6 : 2; ihdr[10] = 0; ihdr[11] = 0; ihdr[12] = 0;
+  const raw = Buffer.concat(rows.map((r) => Buffer.concat([Buffer.from([0]), r])));
+  fs.writeFileSync(file, Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]));
+}
+
+// Cuts the CSS-px rows [top, bottom) out of a decoded full-page shot taken at `scale` device
+// pixels per CSS px and writes them at one PNG px per CSS px (each scale x scale block averaged).
+// Cropping the full shot, rather than taking a second screenshot of a region, keeps every part
+// identical to it: a clipped screenshot re-lays out the page, and a sticky header then lands on
+// top of the content (AstroWind's header covered its own hero headline).
+function writePart(png, scale, top, bottom, file) {
+  const s = Math.max(1, Math.round(scale));
+  const width = Math.floor(png.width / s);
+  const rows = [];
+  for (let y = top; y < bottom; y++) {
+    const line = Buffer.alloc(width * png.bpp);
+    for (let x = 0; x < width; x++) {
+      for (let ch = 0; ch < png.bpp; ch++) {
+        let sum = 0, n = 0;
+        for (let dy = 0; dy < s; dy++) {
+          const src = png.rows[y * s + dy];
+          if (!src) continue;
+          for (let dx = 0; dx < s; dx++) { sum += src[((x * s) + dx) * png.bpp + ch]; n++; }
+        }
+        line[x * png.bpp + ch] = n ? Math.round(sum / n) : 0;
+      }
+    }
+    rows.push(line);
+  }
+  writePng(file, width, rows.length, png.bpp, rows);
+}
+
+function regionStats(file, dpr, fromCss) {
+  const png = decodePng(file);
+  if (!png) return null;
+  const { width, height, bpp, rows: lines } = png;
+  const stride = width * bpp;
+  const start = Math.min(height, Math.round(fromCss * dpr));
+  let flatRows = 0, rows = 0, sampled = 0;
+  const colors = new Map();
+  for (let y = start; y < height; y++) {
+    const line = lines[y];
     rows++;
     let flat = true;
     for (let i = bpp; i < stride && flat; i++) {
@@ -544,8 +626,9 @@ function regionStats(file, dpr, fromCss) {
 function blankOf(m, file) {
   const vh = m.viewport.h;
   let st = null;
-  try { st = regionStats(file, m.dpr || 1, vh); } catch (_) { st = null; }
-  const regionPx = st ? Math.round(st.rows / (m.dpr || 1)) : 0;
+  const scale = m.fullScale || m.dpr || 1;
+  try { st = regionStats(file, scale, vh); } catch (_) { st = null; }
+  const regionPx = st ? Math.round(st.rows / scale) : 0;
   const image = !!st && regionPx >= vh && st.flatShare >= BLANK_SHARE && st.colorShare >= BLANK_SHARE;
   const hidden = m.hiddenBlocks >= HIDDEN_BLOCKS;
   m.blank = { flagged: image || hidden, image, hidden, regionPx,
@@ -566,7 +649,7 @@ function overflowOf(m) {
   const cw = z ? z.screenWidth : m.clientWidth;
   const scroll = (z ? z.layoutWidth : m.scrollWidth) - cw;
   const clipped = m.widestRight - cw;
-  const image = Math.round(m.pngWidth / m.dpr) - cw;
+  const image = Math.round(m.pngWidth / (m.fullScale || m.dpr)) - cw;
   const signals = [];
   if (z) signals.push('zoomed');
   else if (scroll > 1) signals.push('scroll');
@@ -617,6 +700,56 @@ async function recheckWide(browser, vp, base, p, setup, minText, minTap, scroll)
   }
 }
 
+// Parts: at most PART_ASPECT widths tall and PART_MAX_PX px, so a reader that shrinks an image
+// to fit about 1,568 px on its long side still shows text at a readable size. FULL_MAX_PX is
+// the tallest full-page PNG taken at the device scale; past it the shot is taken at 1x.
+const PART_MAX_PX = 1600;
+const PART_ASPECT = 4;
+const FULL_MAX_PX = 16384;
+
+function partRanges(pageHeight, width) {
+  const h = Math.min(PART_MAX_PX, PART_ASPECT * width);
+  if (!(pageHeight > h)) return [];
+  const out = [];
+  for (let top = 0; top < pageHeight; top += h) out.push({ top, bottom: Math.min(pageHeight, top + h) });
+  return out;
+}
+
+function partOf(parts, y) {
+  const p = parts.find((x) => y >= x.top && y < x.bottom);
+  return p ? p.file : null;
+}
+
+// Entries in `now` that the earlier list does not have as many times, by key.
+function freshEntries(before, now, key) {
+  const left = new Map();
+  for (const e of before || []) left.set(key(e), (left.get(key(e)) || 0) + 1);
+  const out = [];
+  for (const e of now || []) {
+    const k = key(e), n = left.get(k) || 0;
+    if (n > 0) left.set(k, n - 1); else out.push(e);
+  }
+  return out;
+}
+
+const COMPARED = [
+  ['smallTaps', 'small tap targets', (t) => `${t.tag}|${t.el}`, (t) => `"${t.el}" ${t.w}x${t.h}px at y ${t.y}`, 'smallTapCount'],
+  ['smallText', 'text below floor', (t) => t.text, (t) => `"${t.text}" ${t.px}px at y ${t.y}`, 'smallTextCount'],
+  ['midWord', 'mid-word breaks', (w) => w, (w) => `"${w}"`, null],
+  ['offCenter', 'off-center rows', (o) => `${o.tag}|${o.text}`, (o) => `"${o.text || o.tag}" ${o.left}px/${o.right}px`, 'offCenterCount'],
+  ['offColumns', 'off-center columns', (o) => `${o.tag}|${o.text}`, (o) => `"${o.text || o.tag}"`, 'offColumnCount'],
+  ['overflowing', 'wider than the screen', (o) => `${o.tag}|${o.text}`, (o) => `"${o.text || o.tag}" ${o.past}px past`, null],
+];
+
+function newSince(old, m) {
+  const out = { cut: [] };
+  for (const [field, name, key, , count] of COMPARED) {
+    out[field] = freshEntries(old[field], m[field], key);
+    if (count && (old[count] > (old[field] || []).length || m[count] > (m[field] || []).length)) out.cut.push(name);
+  }
+  return out;
+}
+
 function verdicts(m, vpLabel) {
   const phone = vpLabel === '390';
   const out = [];
@@ -660,6 +793,16 @@ async function main() {
   const out = opt('--out') || path.join(path.dirname(cfgPath), 'shots');
   const evidence = opt('--evidence');
   const scroll = !argv.includes('--no-scroll');
+  const comparePath = opt('--compare');
+  let earlier = null;
+  if (comparePath) {
+    try {
+      earlier = JSON.parse(fs.readFileSync(comparePath, 'utf8')).results || [];
+    } catch (e) {
+      console.error(`--compare ${comparePath}: cannot read an earlier measures.json (${e.code || String(e.message).split('\n')[0]})`);
+      process.exit(1);
+    }
+  }
   const prefix = evidence ? `${evidence}-` : '';
   const sizes = opt('--sizes') ? opt('--sizes').split(',').map((x) => x.trim()) : null;
   const viewports = sizes ? pickViewports(sizes) : VIEWPORTS;
@@ -714,8 +857,25 @@ async function main() {
       try {
         await openPage(page, base, p, scroll);
         await page.screenshot({ path: path.join(out, `${file}.png`) });
-        await page.screenshot({ path: path.join(out, `${file}-full.png`), fullPage: true });
+        const tall = await page.evaluate(() => document.documentElement.scrollHeight);
+        const fullScale = tall * (vp.deviceScaleFactor || 1) > FULL_MAX_PX ? 1 : (vp.deviceScaleFactor || 1);
+        await page.screenshot({ path: path.join(out, `${file}-full.png`), fullPage: true, ...(fullScale === 1 && vp.deviceScaleFactor > 1 ? { scale: 'css' } : {}) });
         const m = await page.evaluate(measure, { items: p.items, minText, minTap });
+        m.fullScale = fullScale;
+        m.parts = [];
+        const ranges = m.innerWidth === vp.width ? partRanges(m.pageHeight, m.viewport.w) : [];
+        const fullPng = ranges.length ? decodePng(path.join(out, `${file}-full.png`)) : null;
+        if (fullPng) {
+          // The shot's own height decides the last part's bottom (it can differ from scrollHeight by a px).
+          const cssHeight = Math.floor(fullPng.height / fullScale);
+          ranges.forEach((r, i) => {
+            const bottom = i === ranges.length - 1 ? cssHeight : Math.min(r.bottom, cssHeight);
+            if (r.top >= bottom) return;
+            const name = `${file}-part-${String(i + 1).padStart(2, '0')}.png`;
+            writePart(fullPng, fullScale, r.top, bottom, path.join(out, name));
+            m.parts.push({ file: name, top: r.top, bottom });
+          });
+        }
         if (m.innerWidth !== vp.width) {
           const flat = vp.isMobile && m.innerWidth > vp.width
             ? await recheckWide(browser, vp, base, p, setup, minText, minTap, scroll) : null;
@@ -731,10 +891,16 @@ async function main() {
           m.widestRight = flat.widestRight;
           m.overflowing = flat.overflowing;
         }
-        m.midWord = (await page.evaluate(midWordBreaks, { selector: 'body', limit: 20 })).map((w) => w.at);
+        const breaks = await page.evaluate(midWordBreaks, { selector: 'body', limit: 20 });
+        m.midWord = breaks.map((w) => w.at);
+        m.midWordAt = breaks.map((w) => ({ at: w.at, el: w.el, near: w.near, y: w.y, part: partOf(m.parts, w.y) }));
         m.pngWidth = pngWidth(path.join(out, `${file}-full.png`));
         overflowOf(m);
         blankOf(m, path.join(out, `${file}-full.png`));
+        if (earlier) {
+          const old = earlier.find((x) => x.page === p.name && x.state === state && x.viewport === label && x.measures);
+          m.newSince = old ? newSince(old.measures, m) : null;
+        }
         results.push({ page: p.name, state, viewport: label, file, url, measures: m, verdicts: verdicts(m, label) });
       } catch (e) {
         const error = e.message.split('\n')[0];
@@ -768,7 +934,7 @@ async function main() {
       offColumns: r.measures.offColumns, offColumnCount: r.measures.offColumnCount,
       blank: r.measures.blank, hiddenBlocks: r.measures.hiddenBlocks,
       untitled: r.measures.untitled, untitledCount: r.measures.untitledCount,
-      midWord: r.measures.midWord,
+      midWord: r.measures.midWord, midWordAt: r.measures.midWordAt, parts: r.measures.parts,
       errors: errors.filter((e) => e.startsWith(`${r.viewport}:`)),
     }));
     fs.writeFileSync(path.join(out, `${evidence}.json`), JSON.stringify({ shots, failures }, null, 2));
@@ -813,6 +979,40 @@ async function main() {
         : `"${o.text || o.tag}" edge at ${o.edge}px, the columns around it at ${o.neighbors}px`));
       const more = r.measures.offColumnCount > 4 ? `; and ${r.measures.offColumnCount - 4} more` : '';
       lines.push(`- ${r.page} ${r.state} at ${r.viewport}: ${cols.join('; ')}${more}`);
+    }
+  }
+  const midRows = results.filter((r) => !r.error && r.measures.midWordAt.length);
+  if (midRows.length) {
+    lines.push('', 'mid-word breaks: a word the browser split across two lines. Where each one is (the element, '
+      + 'the heading above it, its top in page px, and the part shot that shows it):');
+    for (const r of midRows) {
+      const spots = r.measures.midWordAt.slice(0, 6).map((w) => `"${w.at}" in ${w.el || '?'}`
+        + `${w.near ? ` (under "${w.near}")` : ''}, y ${w.y}${w.part ? `, in ${w.part}` : ''}`);
+      const more = r.measures.midWordAt.length > 6 ? `; and ${r.measures.midWordAt.length - 6} more` : '';
+      lines.push(`- ${r.page} ${r.state} at ${r.viewport}: ${spots.join('; ')}${more}`);
+    }
+  }
+  const partRows = results.filter((r) => !r.error && r.measures.parts.length);
+  if (partRows.length) {
+    lines.push('', 'parts: the page is too tall to read as one shot, so it is also saved in parts at 1x '
+      + '(one PNG px per CSS px; each part\'s y range is in measures.json "parts"). Open the part a finding names, '
+      + 'not the full shot, and use parts as the crops on a review page:');
+    for (const r of partRows) {
+      const ps = r.measures.parts;
+      lines.push(`- ${r.page} ${r.state} at ${r.viewport}: ${ps.length} parts, ${ps[0].file} to ${ps[ps.length - 1].file}, `
+        + `${ps[0].bottom - ps[0].top} px each${r.measures.fullScale === 1 && r.measures.dpr > 1 ? '; the full shot is at 1x' : ''}`);
+    }
+  }
+  if (earlier) {
+    lines.push('', `new since the earlier capture (${comparePath}), matched by text, not by count. `
+      + 'An entry here that the change made is a failure the change caused:');
+    for (const r of results.filter((x) => !x.error)) {
+      const ns = r.measures.newSince;
+      if (!ns) { lines.push(`- no earlier capture of ${r.page} ${r.state} at ${r.viewport} to compare`); continue; }
+      const parts = COMPARED.filter(([field]) => ns[field].length)
+        .map(([field, name, , show]) => `${name}: ${ns[field].slice(0, 6).map(show).join(', ')}${ns[field].length > 6 ? ` and ${ns[field].length - 6} more` : ''}`);
+      lines.push(`- ${r.page} ${r.state} at ${r.viewport}: ${parts.join('; ') || 'nothing new'}`
+        + `${ns.cut.length ? ` (${ns.cut.join(', ')}: the list holds the first 25, so only those were compared)` : ''}`);
     }
   }
   const untitledRows = results.filter((r) => !r.error && r.measures.untitledCount);

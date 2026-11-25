@@ -2013,6 +2013,11 @@ class NearCopy(unittest.TestCase):
     def test_one_variant_item_is_compared_with_the_page_too(self):
         res = self.run_smoke(self.spec([abs_box(**STACKED)], before_sections=self.before(**STACKED)))
         self.assertEqual(self.copies(res), [("A", "before")], res["near_copies"])
+        # Ruling 30: one variant is a one-option fix too, so its page near-copy is a note.
+        self.assertFalse([p for p in res["problems"] if "near-copies" in p], res["problems"])
+        self.assertTrue([n for n in res["notes"]
+                         if n.startswith("item 1 (Hero): Variant A and the current page are near-copies (")
+                         and "expected for a one-option fix" in n], res["notes"])
 
     def test_centered_column_without_left_and_width_still_matches(self):
         full = dict(h1=(0, 5, 100, 10), p=(0, 25, 100, 20), btn=(0, 60, 50, 12))

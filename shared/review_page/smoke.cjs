@@ -232,8 +232,9 @@ const file = "file://" + path.resolve(process.argv[3]);
         if (score < NEAR_COPY) return;
         out.near_copies.push({ item: it.num, a, b, score });
         const line = `item ${it.num} (${it.label}): ${an} and ${bn} are near-copies (${score.toFixed(2)})`;
-        // A one-option fix keeps the page's layout by design: a note, and the Reason says what changed.
-        if (oneOption) out.notes.push(`${line}; expected for a one-option fix: say what changed in the Reason`);
+        // A one-option fix (no variants, or exactly one) keeps the page's layout by design:
+        // a note, and the Reason says what changed (Rulings 26 and 30).
+        if ((it.variants || []).length <= 1) out.notes.push(`${line}; expected for a one-option fix: say what changed in the Reason`);
         else problems.push(line);
       };
       for (let i = 0; i < sigs.length; i++) {

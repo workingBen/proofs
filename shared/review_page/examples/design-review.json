@@ -12,7 +12,7 @@
       {"label": "Article card layout", "location": "/articles · card grid", "recommended": true,
        "body_html": "<div class=\"rp-pane\"><div class=\"rp-pane-label\">Before</div><img class=\"rp-shot\" alt=\"Current card grid\" src=\"{{asset:before}}\"></div>",
        "variants": [
-         {"html": "<div class=\"mock\"><h4>Two columns</h4><p>Image left, text right.</p></div>"},
+         {"html": "<div class=\"mock\" style=\"display:flex;gap:12px\"><div style=\"flex:0 0 40%;min-height:80px;background:#ddd\"></div><div style=\"flex:1\"><h4>Two columns</h4><p>Image left, text right.</p></div></div>"},
          {"html": "<div class=\"mock\"><h4>Stacked</h4><p>Image on top.</p></div>", "recommended": true}
        ],
        "reason_html": "<p>The stacked card reads better on a phone.</p>"},

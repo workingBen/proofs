@@ -1562,5 +1562,104 @@ class DesignChecks(unittest.TestCase):
         self.assertTrue([n for n in res["notes"] if "off the page's own scale" in n and "27px" in n], res["notes"])
 
 
+def abs_box(h1="", p="", btn="", color="#111"):
+    """A 400px-tall mockup whose elements sit at fixed fractions of its box, so the near-copy
+    signature is known in advance. Each argument is a 'left,top,width,height' tuple in percent."""
+    def at(tag, g, text, extra=""):
+        l, t, w, h = g
+        return ('<%s style="position:absolute;margin:0;left:%s%%;top:%s%%;width:%s%%;height:%s%%;%s">%s</%s>'
+                % (tag, l, t, w, h, extra, text, tag))
+    inner = at("h1", h1, "Title", "font-size:20px;") + at("p", p, "Body text here", "font-size:16px;") \
+        + at("button", btn, "Go", "font-size:16px;")
+    return '<div style="position:relative;height:400px;background:#fff;color:%s">%s</div>' % (color, inner)
+
+
+STACKED = dict(h1=(5, 5, 60, 10), p=(5, 25, 60, 20), btn=(5, 60, 30, 12))
+TWO_COL = dict(h1=(55, 40, 40, 10), p=(55, 55, 40, 20), btn=(5, 5, 30, 12))
+
+
+@unittest.skipUnless(NODE and playwright_dir(), "Playwright not found")
+class NearCopy(unittest.TestCase):
+    """A variant that only recolors another variant, or the page it replaces, is not a second option."""
+
+    @staticmethod
+    def spec(variants, **item):
+        return {"title": "Near", "project": {"name": "P", "session": "s"}, "decisions": "design-review",
+                "items": [dict({"label": "Hero", "reason_html": "<p>r</p>", "recommended": True,
+                                "stack_variants": True,
+                                "variants": [{"html": v} for v in variants]}, **item)]}
+
+    def run_smoke(self, spec):
+        with tempfile.TemporaryDirectory() as tmp:
+            return DesignChecks.smoke(spec, tmp)
+
+    @staticmethod
+    def before(**g):
+        """A before_sections object (the capture's shape) at the given fractions of a 1000 x 400 section."""
+        kinds = {"h1": ("heading", "h1"), "p": ("text", "p"), "btn": ("button", "button")}
+        els = [{"kind": kinds[k][0], "text": k, "tag": kinds[k][1], "top": 1000 + round(4 * t),
+                "left": round(10 * l), "width": round(10 * w), "height": round(4 * h)}
+               for k, (l, t, w, h) in g.items()]
+        return {"id": "", "tag": "section", "label": "Hero", "top": 1000, "height": 400, "left": 0, "width": 1000,
+                "elements": els}
+
+    def copies(self, res):
+        return [(c["a"], c["b"]) for c in res["near_copies"]]
+
+    def test_identical_variants_flagged(self):
+        res = self.run_smoke(self.spec([abs_box(color="#111", **STACKED), abs_box(color="#900", **STACKED)]))
+        self.assertEqual(self.copies(res), [("A", "B")], res["near_copies"])
+        self.assertGreaterEqual(res["near_copies"][0]["score"], 0.85)
+        self.assertEqual(res["near_copies"][0]["item"], "1")
+        self.assertTrue([p for p in res["problems"]
+                         if p.startswith("item 1 (Hero): Variant A and Variant B are near-copies (")], res["problems"])
+
+    def test_different_layouts_pass(self):
+        res = self.run_smoke(self.spec([abs_box(**STACKED), abs_box(**TWO_COL)]))
+        self.assertEqual(res["near_copies"], [])
+        self.assertFalse([p for p in res["problems"] if "near-copies" in p])
+
+    def test_variant_matching_before_sections_flagged(self):
+        res = self.run_smoke(self.spec([abs_box(color="#900", **STACKED), abs_box(**TWO_COL)],
+                                       before_sections=self.before(**STACKED)))
+        self.assertEqual(self.copies(res), [("A", "before")], res["near_copies"])
+        self.assertTrue([p for p in res["problems"]
+                         if p.startswith("item 1 (Hero): Variant A and the current page are near-copies (")], res["problems"])
+
+    def test_one_variant_item_has_no_pair_check(self):
+        res = self.run_smoke(self.spec([abs_box(**STACKED)]))
+        self.assertEqual(res["near_copies"], [])
+
+    def test_one_option_item_is_still_compared_with_the_page(self):
+        spec = self.spec([], body_html='<div class="rp-mockup">%s</div>' % abs_box(**STACKED),
+                         before_sections=self.before(**STACKED))
+        res = self.run_smoke(spec)
+        self.assertEqual(self.copies(res), [("proposed", "before")], res["near_copies"])
+        self.assertTrue([p for p in res["problems"]
+                         if p.startswith("item 1 (Hero): Proposed and the current page are near-copies (")], res["problems"])
+
+    def test_one_variant_item_is_compared_with_the_page_too(self):
+        res = self.run_smoke(self.spec([abs_box(**STACKED)], before_sections=self.before(**STACKED)))
+        self.assertEqual(self.copies(res), [("A", "before")], res["near_copies"])
+
+    def test_options_on_other_kinds_of_page_are_not_flagged(self):
+        spec = self.spec([abs_box(**STACKED), abs_box(**STACKED)])
+        spec["decisions"] = "style-guide"
+        res = self.run_smoke(spec)
+        self.assertEqual(res["near_copies"], [])
+
+    def test_kind_classifier_matches_the_captures(self):
+        def grab(path, start, end):
+            text = (ROOT / path).read_text()
+            i = text.index(start)
+            return re.sub(r"\s+", "", text[i:text.index(end, i)])
+        a = grab("skills/visual-qa/scripts/capture.cjs", "const kindOf", "const elementSel")
+        b = grab("shared/review_page/signature.cjs", "const kindOf", "const elementSel")
+        self.assertEqual(a, b)
+        a = grab("skills/visual-qa/scripts/capture.cjs", "const elementSel", "// What an element")
+        b = grab("shared/review_page/signature.cjs", "const elementSel", "// What an element")
+        self.assertEqual(a, b)
+
+
 if __name__ == "__main__":
     unittest.main()

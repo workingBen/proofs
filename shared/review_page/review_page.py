@@ -457,7 +457,9 @@ class Ctx:
         self.cats = []
         for sec in secs:
             if sec["kind"] == "review":
-                sec["_dec"] = decisions_for(sec.get("decisions", spec.get("decisions", "copy-edit")))
+                raw = sec.get("decisions", spec.get("decisions", "copy-edit"))
+                sec["_dec"] = decisions_for(raw)
+                sec["_preset"] = raw if isinstance(raw, str) else (raw or {}).get("preset")
                 for it in sec["items"]:
                     if it.get("category") and it["category"] not in self.cats:
                         self.cats.append(it["category"])
@@ -495,7 +497,10 @@ def render_review(sec, ctx):
                                     "recommended": bool(v.get("recommended"))}
                                    for v in it.get("variants") or []],
                       "selected": it.get("selected"),
-                      "before_font_sizes": it.get("before_font_sizes") or []})
+                      "before_font_sizes": it.get("before_font_sizes") or [],
+                      "before_sections": it.get("before_sections"),
+                      # Smoke's near-copy check is about layouts: only design reviews get it.
+                      "design_review": sec.get("_preset") == "design-review"})
     js = {"items": items, "decisions": {k: dec.get(k) for k in
                                         ("buttons", "pending", "mark_read", "comment_always", "works_as_designed")}}
     return out, js

@@ -302,11 +302,11 @@ class PageDatabase(unittest.TestCase):
         for k in ("id", "section", "kind", "answer", "note", "read", "updated_at", "page_version", "page"):
             self.assertIn(k, pick)
         self.assertEqual((pick["id"], pick["kind"], pick["answer"]), ("pick", "question", "B"))
-        self.assertEqual(rows["s1.why"]["note"], "because")
+        self.assertEqual((rows["s1.why"]["answer"], rows["s1.why"]["note"]), ("because", ""))  # typed answer
         self.assertRegex(pick["updated_at"], r"^\d{4}-\d\d-\d\dT")
         self.assertEqual(res["state"], "on")
         self.assertIn(EXPECT, res["copied"])
-        self.assertEqual(res["sets"], 2)          # debounced: one write per card, not per keystroke
+        self.assertEqual(res["sets"], 2)          # the tap at once, the typing debounced: one write per card
         self.assertEqual(res["setsLater"], 2)     # nothing rewritten without a change
         rest = res["restored"]
         self.assertTrue(rest["pick"])
@@ -331,8 +331,8 @@ class PageDatabase(unittest.TestCase):
     def test_a_refused_write_falls_back_to_copy(self):
         res = self.drive("readonly")
         self.assertEqual(res["state"], "off")
-        self.assertEqual(res["sets"], 2)       # the first flush tried both cards
-        self.assertEqual(res["setsAfter"], 2)  # after a refusal, nothing more is tried
+        self.assertEqual(res["sets"], 1)       # the tap was sent at once and refused
+        self.assertEqual(res["setsAfter"], 1)  # after a refusal, nothing more is tried
         self.assertIn(EXPECT, res["copied"])
         self.assertIn(EXPECT, res["afterReload"])
 

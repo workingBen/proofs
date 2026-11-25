@@ -209,7 +209,9 @@
                                      note: r.c || "", read: !!r.r });
         } else if (sec.kind === "questions" || sec.kind === "qa") {
           var id = it.qid || it.qaid;
-          put(sec, id, sec.kind === "qa" ? "qa" : "question", { answer: ans[id] || null, note: notes[id] || "" });
+          // A text-box-only question: what the reader typed is the answer.
+          if (it.text && !ans[id]) put(sec, id, "question", { answer: notes[id] || null, note: "" });
+          else put(sec, id, sec.kind === "qa" ? "qa" : "question", { answer: ans[id] || null, note: notes[id] || "" });
         } else if (sec.kind === "log") {
           var groups = {};
           (it.groups || []).forEach(function (g) { if (ans[it.id + "::" + g]) groups[g] = ans[it.id + "::" + g]; });
@@ -239,8 +241,14 @@
         r.c = d.note || ""; r.r = !!d.read;
       } else if (sec.kind === "questions" || sec.kind === "qa") {
         ss.ans = ss.ans || {}; ss.notes = ss.notes || {};
-        if (d.answer) ss.ans[d.id] = d.answer; else delete ss.ans[d.id];
-        ss.notes[d.id] = d.note || "";
+        if (it.text) {
+          // Typed answers are stored as `answer`; rows from 1.6.8 carry them in `note`.
+          delete ss.ans[d.id];
+          ss.notes[d.id] = (typeof d.answer === "string" && d.answer) || d.note || "";
+        } else {
+          if (d.answer) ss.ans[d.id] = d.answer; else delete ss.ans[d.id];
+          ss.notes[d.id] = d.note || "";
+        }
       } else if (sec.kind === "log") {
         ss.ans = ss.ans || {}; ss.notes = ss.notes || {}; ss.read = ss.read || {};
         var a = d.answer && typeof d.answer === "object" ? d.answer : {};
@@ -277,7 +285,21 @@
   var st = {};
   try { st = JSON.parse(localStorage.getItem(S.key) || "{}") || {}; } catch (e) { st = {}; }
   function store() { try { localStorage.setItem(S.key, JSON.stringify(st)); } catch (e) { /* private window */ } }
-  function save() { store(); dbSchedule(); }
+  // Which cards changed since the last save, stamped in st.at (when) and st.unsent (not
+  // yet in the store), so a change the page never got to send survives a reload and is
+  // pushed then. Typing waits for a pause (save()); a tap is sent at once (saveNow()).
+  var lastDocs = answerDocs(S, st);
+  function noteEdits() {
+    var cur = answerDocs(S, st), now = new Date().toISOString();
+    Object.keys(cur).concat(Object.keys(lastDocs)).forEach(function (id) {
+      if (canon(cur[id] || null) === canon(lastDocs[id] || null)) return;
+      st.at = st.at || {}; st.at[id] = now;
+      st.unsent = st.unsent || {}; st.unsent[id] = now;
+    });
+    lastDocs = cur;
+  }
+  function save() { noteEdits(); store(); dbSchedule(); }
+  function saveNow() { noteEdits(); store(); dbFlushNow(); }
   function all(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
   function one(sel, root) { return (root || document).querySelector(sel); }
   function rootOf(sec) { return one('[data-section="' + sec.id + '"]'); }
@@ -416,21 +438,21 @@
           b.addEventListener("click", function () {
             var r = rec(id);
             r.s = r.s === b.dataset.choice ? null : b.dataset.choice;
-            save(); paint();
+            saveNow(); paint();
             var bt = r.s ? buttonFor(sec, r.s) : null;
             if (bt && bt.comment === "required") one("textarea", card).focus();
           });
         });
         all(".rp-variant", card).forEach(function (el) {
-          function pick() { rec(id).v = el.dataset.variant; save(); paint(); }
+          function pick() { rec(id).v = el.dataset.variant; saveNow(); paint(); }
           el.addEventListener("click", function (e) { if (!e.target.closest("a,input,textarea,select")) pick(); });
           el.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
         });
         one("textarea", card).addEventListener("input", function (e) { rec(id).c = e.target.value; save(); tally(); });
         var wad = one("[data-wad]", card);
-        if (wad) wad.addEventListener("change", function () { rec(id).w = wad.checked; save(); });
+        if (wad) wad.addEventListener("change", function () { rec(id).w = wad.checked; saveNow(); });
         var read = one("[data-read]", card);
-        if (read) read.addEventListener("change", function () { rec(id).r = read.checked; save(); paint(); });
+        if (read) read.addEventListener("change", function () { rec(id).r = read.checked; saveNow(); paint(); });
       });
       all(".rp-item", root).forEach(paintItem);
     },
@@ -463,12 +485,12 @@
       root.__rpRefresh = function () { restore(); paint(); };
       root.addEventListener("change", function (e) {
         var t = e.target;
-        if (t.type === "radio") { ss.ans[t.name] = t.value; save(); paint(); return; }
+        if (t.type === "radio") { ss.ans[t.name] = t.value; saveNow(); paint(); return; }
         if (!(t.dataset && t.dataset.tick)) return;
         var card = t.closest("[data-entry]");
         var wasTop = card ? card.getBoundingClientRect().top : 0, wasY = window.scrollY;
         ss.read[t.dataset.tick] = t.checked;
-        save(); paint();
+        saveNow(); paint();
         if (card) keepPlace(card, wasTop, wasY);
       });
       // A tick folds the entry and moves it to the Read list (flex order), which reflows the
@@ -527,7 +549,7 @@
       tally();
     }
     root.addEventListener("change", function (e) {
-      if (e.target.type === "radio") { ss.ans[e.target.name] = e.target.value; save(); paint(); }
+      if (e.target.type === "radio") { ss.ans[e.target.name] = e.target.value; saveNow(); paint(); }
     });
     root.addEventListener("input", function (e) {
       var id = e.target.dataset && e.target.dataset.note;
@@ -549,13 +571,26 @@
      Without the runtime (a local file, an older contract, a signed-out viewer) none of
      this runs and the page works from localStorage alone, as before. Copy never waits
      on it. */
-  var DB_DEBOUNCE_MS = 800, DB_LOAD_TIMEOUT_MS = 10000;
-  var dbs = { db: null, base: {}, timer: null, chain: {}, off: false };
+  var DB_DEBOUNCE_MS = 800, DB_LOAD_TIMEOUT_MS = 10000, DB_RETRY_MAX_MS = 30000;
+  // base: each document as last written (or read); chain: one write at a time per
+  // document; inflight: writes not yet settled, per document; failed: documents whose
+  // last write failed and wait for a retry; stale: documents left unsent by an earlier
+  // visit, shown as "Not saved yet" until they land.
+  var dbs = { db: null, base: {}, timer: null, chain: {}, inflight: {}, failed: {}, stale: {}, off: false,
+              tries: 0, retry: null };
   function dbState(v) { document.body.setAttribute("data-answers-db", v); }
   function dbSchedule() {
     if (!dbs.db || dbs.off) return;
     clearTimeout(dbs.timer);
-    dbs.timer = setTimeout(dbFlush, DB_DEBOUNCE_MS);
+    dbs.timer = setTimeout(function () { dbs.timer = null; dbFlush(); }, DB_DEBOUNCE_MS);
+    syncPaint();
+  }
+  // Taps, blur, leaving the page: write now, not after the debounce.
+  function dbFlushNow() {
+    if (!dbs.db || dbs.off) return;
+    clearTimeout(dbs.timer);
+    dbs.timer = null;
+    dbFlush();
   }
   function cleared(b) {
     return { id: b.id, section: b.section, kind: b.kind, answer: b.kind === "log" ? {} : null, note: "", read: false,
@@ -563,35 +598,99 @@
   }
   function dbFlush() {
     if (!dbs.db || dbs.off) return;
-    var cur = answerDocs(S, st);
-    Object.keys(cur).concat(Object.keys(dbs.base)).forEach(function (id) {
-      var body = cur[id] || cleared(dbs.base[id]);
-      if (dbs.base[id] && canon(bodyOf(body)) === canon(dbs.base[id])) return;
-      dbWrite(id, JSON.parse(JSON.stringify(body)));
+    var cur = answerDocs(S, st), unsent = st.unsent || {};
+    var ids = {};
+    Object.keys(cur).concat(Object.keys(dbs.base), Object.keys(dbs.failed), Object.keys(unsent))
+      .forEach(function (id) { ids[id] = 1; });
+    Object.keys(ids).forEach(function (id) {
+      var body = cur[id] || (dbs.base[id] ? cleared(dbs.base[id]) : null);
+      var same = !body || (dbs.base[id] && canon(bodyOf(body)) === canon(dbs.base[id]));
+      if (same && !dbs.failed[id]) {
+        // Nothing to send: an unsent mark whose content the store already holds is done.
+        if (unsent[id] && !dbs.inflight[id]) { delete unsent[id]; delete dbs.stale[id]; store(); }
+        return;
+      }
+      if (body) dbWrite(id, JSON.parse(JSON.stringify(body)));
     });
+    syncPaint();
   }
-  function dbWrite(id, body, retried) {
+  function dbRetryLater() {
+    if (dbs.retry || dbs.off) return;
+    var wait = Math.min(DB_RETRY_MAX_MS, 1000 * Math.pow(2, dbs.tries)) + Math.random() * 300;
+    dbs.tries++;
+    dbs.retry = setTimeout(function () { dbs.retry = null; dbFlush(); }, wait);
+  }
+  // A failure that retrying will not fix: not allowed to write here, or the store is gone.
+  var DB_RETRYABLE = ["unavailable", "resource_exhausted", "deadline_exceeded", "aborted", "internal", "unknown"];
+  function dbWrite(id, body) {
     var now = new Date().toISOString();
     var full = bodyOf(body);
     full.updated_at = now; full.page_version = S.page_version || null; full.page = S.key;
     dbs.base[id] = bodyOf(body);
+    delete dbs.failed[id];
     st.at = st.at || {}; st.at[id] = now; store();
-    // One write at a time per document.
+    var edit = (st.unsent || {})[id];
+    dbs.inflight[id] = (dbs.inflight[id] || 0) + 1;
     dbs.chain[id] = (dbs.chain[id] || Promise.resolve()).then(function () {
       return dbs.db.collection(DB_COLLECTION).doc(id).set(full);
-    }).then(function () { dbState("on"); }, function (e) {
-      delete dbs.base[id];
+    }).then(function () {
+      dbs.inflight[id]--;
+      delete dbs.stale[id];
+      // Done, unless the reader changed the card again while this write was out.
+      if (st.unsent && st.unsent[id] === edit) { delete st.unsent[id]; store(); }
+      if (!Object.keys(dbs.failed).length) dbs.tries = 0;
+      dbState("on");
+      syncPaint();
+    }, function (e) {
+      dbs.inflight[id]--;
+      dbs.failed[id] = true;
       var code = e && e.code;
-      if (code === "unavailable" && !retried) {
-        setTimeout(function () { if (!dbs.base[id]) dbWrite(id, body, true); }, 1000 + Math.random() * 1000);
-      } else if (code !== "unavailable" && code !== "resource_exhausted") {
-        dbs.off = true;  // not allowed to write here (or gone): stay on localStorage and Copy
+      if (code && DB_RETRYABLE.indexOf(code) < 0) {
+        dbs.off = true;  // stay on localStorage and Copy
+        clearTimeout(dbs.retry);
         dbState("off");
       } else {
         dbState("error");
+        dbRetryLater();
       }
+      syncPaint();
     });
   }
+
+  /* The header's sync indicator: Saved, Saving… or Not saved yet. Shown only once the
+     page's database has answered, so a page that cannot save never claims "Saved". */
+  var SYNC = {
+    saved: ["Saved", "Every answer is stored with this page",
+            '<path d="M3.5 8.5l3 3 6-7"/>'],
+    saving: ["Saving…", "Storing your latest change",
+             '<circle cx="8" cy="8" r="5.5" stroke-dasharray="3 2.2"/>'],
+    // " yet" drops on a phone, where the bar is one line (it is still read out)
+    unsaved: ['Not saved<span class="rp-sync-x"> yet</span>', "Not stored yet; it keeps trying. Copy still sends everything",
+              '<circle cx="8" cy="8" r="6"/><path d="M8 4.6v4.2"/><path d="M8 11.2v.2"/>']
+  };
+  function syncState() {
+    var unsent = Object.keys(st.unsent || {}).length;
+    if (dbs.off) return unsent || Object.keys(dbs.failed).length ? "unsaved" : null;
+    if (!dbs.db) return null;
+    if (Object.keys(dbs.failed).length || Object.keys(dbs.stale).length) return "unsaved";
+    var busy = dbs.timer || Object.keys(dbs.inflight).some(function (id) { return dbs.inflight[id] > 0; });
+    return busy || unsent ? "saving" : "saved";
+  }
+  function syncPaint() {
+    var el = one("[data-sync]");
+    if (!el) return;
+    var s = syncState();
+    if (el.getAttribute("data-state") === (s || "")) return;
+    el.setAttribute("data-state", s || "");
+    document.body.setAttribute("data-rp-sync", s || "none");
+    el.hidden = !s;
+    if (!s) return;
+    var d = SYNC[s];
+    el.title = d[1];
+    one("svg", el).innerHTML = d[2];
+    one(".rp-sync-t", el).innerHTML = d[0];
+  }
+
   function refreshAll() {
     all("[data-section]").forEach(function (r) { if (r.__rpRefresh) r.__rpRefresh(); });
     var ex = one("[data-extra]");
@@ -605,7 +704,7 @@
       if (done) return;
       clearTimeout(timer);
       dbs.db = db;
-      var at = st.at || {}, remote = [];
+      var at = st.at || {}, remote = [], unsent = st.unsent || {};
       (snap.docs || []).forEach(function (d) {
         if (!d.exists) return;
         var body = d.data() || {};
@@ -617,9 +716,13 @@
         if (!(at[d.id] && at[d.id] > (body.updated_at || ""))) {
           remote.push(body);
           st.at = st.at || {}; st.at[d.id] = body.updated_at || "";
+          delete unsent[d.id];
         }
       });
+      // What is left was changed here and never reached the store: say so until it lands.
+      Object.keys(unsent).forEach(function (id) { dbs.stale[id] = true; });
       applyAnswerDocs(S, st, remote);
+      lastDocs = answerDocs(S, st);
       store();
       refreshAll();
       dbState("on");
@@ -635,6 +738,15 @@
     return true;
   }
   if (!dbConnect()) window.addEventListener("load", dbConnect, { once: true });
+  // Leaving the page, switching apps or leaving a text box sends what is pending at once.
+  window.addEventListener("pagehide", dbFlushNow);
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "hidden" || Object.keys(dbs.failed).length) dbFlushNow();
+  });
+  document.addEventListener("focusout", function (e) {
+    if (e.target && /^(TEXTAREA|INPUT)$/.test(e.target.tagName) && dbs.timer) dbFlushNow();
+  });
+  window.addEventListener("online", function () { if (Object.keys(dbs.failed).length) dbFlushNow(); });
 
   /* ------------------------------------------------- page-level controls */
   all("[data-filter]").forEach(function (b) {
@@ -663,7 +775,7 @@
   if (clear) clear.addEventListener("click", function () {
     if (!window.confirm("Clear every answer and note on this page?")) return;
     all("[data-section]").forEach(function (r) { if (r.__rpReset) r.__rpReset(); });
-    save();
+    saveNow();
   });
   tally();
 })();

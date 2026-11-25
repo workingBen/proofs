@@ -142,6 +142,17 @@ picture.rp-pic { display:contents; }
   padding:10px 20px; border-radius:999px; font-weight:650; opacity:0; pointer-events:none; transition:opacity .18s; z-index:90; }
 .rp-flash.on { opacity:1; }
 @media (prefers-reduced-motion: reduce) { .rp-flash { transition:none; } }
+/* the sync indicator in the bar: Saved, Saving… or Not saved yet (hidden with no database) */
+.rp-sync { display:inline-flex; align-items:center; gap:5px; flex:none; white-space:nowrap; font-size:13.5px; font-weight:600;
+  color:var(--rp-soft); }
+.rp-sync[hidden] { display:none; }
+.rp-sync svg { flex:none; }
+.rp-sync[data-state="unsaved"] { color:var(--rp-revise); }
+.rp-sync[data-state="saving"] svg { animation:rp-spin 1.6s linear infinite; }
+@keyframes rp-spin { to { transform:rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .rp-sync[data-state="saving"] svg { animation:none; } }
+.rp-mode-questions .rp-sync { font-family:var(--rp-sans); color:var(--ink-soft); }
+.rp-mode-questions .rp-sync[data-state="unsaved"] { color:var(--warn); }
 
 /* brand: the proofs wordmark and a skill pill, starting the top bar (or, on review
    pages, a slim line above the heading), so one skill's page reads apart from another's */
@@ -266,6 +277,9 @@ body.rp-mode-questions, :root[data-theme] body.rp-mode-questions {
   background:var(--ground); color:var(--ink); font-family:var(--serif); font-size:19px; line-height:1.62;
 }
 .rp-mode-questions .rp-main { max-width:74ch; padding:40px 24px 96px; }
+/* the first section's heading starts at the top of the column: open questions sit
+   right under the sticky bar, not 56px further down */
+.rp-mode-questions .rp-main > .rp-section:first-child > h2:first-child { margin-top:0; }
 .rp-mode-questions .rp-h1 { font-family:var(--rp-sans); font-size:clamp(30px,5vw,40px); }
 .rp-mode-questions .rp-intro { color:var(--ink-soft); }
 .rp-mode-questions h2 { font-family:var(--rp-sans); font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.1em;
@@ -363,4 +377,13 @@ body.rp-mode-questions, :root[data-theme] body.rp-mode-questions {
   .rp-statusbar { flex:1 1 0; min-width:0; flex-wrap:nowrap; padding:6px 16px 6px 10px; border-bottom:0; }
   .rp-statusbar #rp-tally { flex:1 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:14px; }
   .rp-statusbar .rp-copy { flex:none; min-height:44px; padding:8px 14px; }
+  /* the sync indicator keeps the one-line bar: Saved and Saving… show the icon alone (the
+     word is still read out), and Not saved takes the tally's place until it lands */
+  .rp-sync { font-size:12.5px; gap:4px; }
+  .rp-sync[data-state="unsaved"] { flex:0 1 auto; min-width:0; overflow:hidden; }
+  body[data-rp-sync="unsaved"] .rp-projectbar { max-width:50%; }
+  .rp-sync-t { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+  .rp-sync[data-state="saved"] .rp-sync-t, .rp-sync[data-state="saving"] .rp-sync-t, .rp-sync-x {
+    position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); clip-path:inset(50%); white-space:nowrap; }
+  body[data-rp-sync="unsaved"] .rp-statusbar #rp-tally { display:none; }
 }

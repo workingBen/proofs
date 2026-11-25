@@ -494,7 +494,8 @@ def render_review(sec, ctx):
                       "variants": [{"key": v["key"], "label": v["label"], "name": v.get("name", ""),
                                     "recommended": bool(v.get("recommended"))}
                                    for v in it.get("variants") or []],
-                      "selected": it.get("selected")})
+                      "selected": it.get("selected"),
+                      "before_font_sizes": it.get("before_font_sizes") or []})
     js = {"items": items, "decisions": {k: dec.get(k) for k in
                                         ("buttons", "pending", "mark_read", "comment_always", "works_as_designed")}}
     return out, js

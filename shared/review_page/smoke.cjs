@@ -9,6 +9,7 @@ const path = require("path");
 const { chromium } = require(process.argv[2]);
 const { launchChromium } = require("./launch.cjs");
 const { midWordBreaks } = require("./midword.cjs");
+const { designChecks } = require("./designchecks.cjs");
 const file = "file://" + path.resolve(process.argv[3]);
 
 (async () => {
@@ -147,6 +148,7 @@ const file = "file://" + path.resolve(process.argv[3]);
   const reviewItems = S.mode === "review" ? items("review").map(([, it]) => it) : [];
   const seenBreaks = new Set();
   out.mid_word = [];
+  out.design_checks = [];
   // How wide each mockup's box is at 1280, so a session sizes its mockups to the box (or sets
   // the item's stack_variants) before it builds, not after rounds of captures.
   out.mockup_widths = [];
@@ -180,6 +182,22 @@ const file = "file://" + path.resolve(process.argv[3]);
       out.mid_word.push({ item: it ? it.num : b.where.item, variant: b.where.variant, word: b.at, width: w });
       const where = `item ${it ? it.num : "?"}${it ? ` (${it.label})` : ""}${v ? `, ${v.label}` : ""}`;
       problems.push(`${where}: "${b.at}" breaks mid-word at ${w}px wide; widen the box, shrink the type or use fewer columns`);
+    }
+    // Contrast, tap targets, line length and edges on each mockup, by item and variant. An
+    // off-scale type size is a note in design_checks, never a problem line.
+    for (const it of reviewItems) {
+      const item = `.rp-item[data-id=${JSON.stringify(it.id)}]`;
+      // Only variants hold mockups; an item's own body is the page's text, not a design to judge.
+      for (const v of it.variants || []) {
+        const sel = `${item} .rp-variant[data-variant=${JSON.stringify(v.key)}] .rp-vbody`;
+        const d = await designChecks(page, sel, { width: w, beforeFontSizes: it.before_font_sizes || [] });
+        out.design_checks.push({ item: it.num, variant: v.key, width: w, ...d });
+        const where = `item ${it.num} (${it.label}), ${v.label}`;
+        if (d.contrast.length) problems.push(`${where}: ${d.contrast.length} text elements below AA contrast at ${w}px`);
+        if (d.smallTargets.length) problems.push(`${where}: ${d.smallTargets.length} tap targets under 44x44 at ${w}px`);
+        if (d.longLines.length) problems.push(`${where}: ${d.longLines.length} lines over 80 characters at ${w}px`);
+        if (d.edges.length) problems.push(`${where}: ${d.edges.length} left edges 1 to 6px out of line at ${w}px`);
+      }
     }
   }
   await browser.close();

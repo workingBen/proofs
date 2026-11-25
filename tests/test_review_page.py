@@ -1467,5 +1467,83 @@ class ReadTickScroll(unittest.TestCase):
                     gap = m["above"]["e2"] - m["above"]["bars"]
                     self.assertTrue(0 <= gap <= 12, m)
 
+FIXTURES = ROOT / "tests" / "fixtures" / "review_page"
+
+
+@unittest.skipUnless(NODE and playwright_dir(), "Playwright not found")
+class DesignChecks(unittest.TestCase):
+    """Every mockup in a review page is measured for contrast, tap targets, line length and edges."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        cls.res = cls.smoke(json.loads((FIXTURES / "design_checks.json").read_text()), cls.tmp.name)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    @staticmethod
+    def smoke(spec, tmp, name="s"):
+        src, out = Path(tmp) / (name + ".json"), Path(tmp) / (name + ".html")
+        src.write_text(json.dumps(spec))
+        r = subprocess.run([sys.executable, str(BUILD), str(src), "--out", str(out)], capture_output=True, text=True)
+        if r.returncode:
+            raise AssertionError(r.stdout + r.stderr)
+        return review_page.smoke(out)[1]
+
+    def checks(self, variant, width):
+        rows = [c for c in self.res["design_checks"] if c["variant"] == variant and c["width"] == width]
+        self.assertEqual(len(rows), 1, self.res["design_checks"])
+        return rows[0]
+
+    def design_problems(self, variant):
+        return [p for p in self.res["problems"] if p.startswith("item 1 (Hero), Variant %s:" % variant)]
+
+    def test_low_contrast_is_reported_with_its_ratio(self):
+        c = self.checks("B", 1280)
+        gray = [x for x in c["contrast"] if x["text"].startswith("Gray on white")]
+        self.assertEqual(len(gray), 1, c["contrast"])
+        self.assertAlmostEqual(gray[0]["ratio"], 2.85, places=1)
+        self.assertEqual(gray[0]["needed"], 4.5)
+        self.assertIn("item 1 (Hero), Variant B: 1 text elements below AA contrast at 1280px", self.res["problems"])
+
+    def test_small_target_at_390(self):
+        c = self.checks("B", 390)
+        self.assertEqual([(t["w"], t["h"]) for t in c["smallTargets"]], [(30, 30)])
+        self.assertTrue(any("tap targets under 44x44 at 390px" in p for p in self.design_problems("B")))
+
+    def test_long_line_at_1280(self):
+        c = self.checks("B", 1280)
+        self.assertEqual(len(c["longLines"]), 1, c)
+        self.assertGreaterEqual(c["longLines"][0]["chars"], 120)
+        self.assertTrue(any("over 80 characters at 1280px" in p for p in self.design_problems("B")))
+
+    def test_text_on_gradient_is_unmeasured_not_failed(self):
+        c = self.checks("C", 1280)
+        self.assertTrue(any(u["text"].startswith("Text on a gradient") for u in c["unmeasured"]), c)
+        self.assertEqual(c["contrast"], [])
+        self.assertEqual(self.design_problems("C"), [])
+
+    def test_clean_variant_has_no_design_problems(self):
+        for w in (1280, 390):
+            c = self.checks("A", w)
+            for k in ("contrast", "unmeasured", "smallTargets", "longLines", "edges"):
+                self.assertEqual(c[k], [], (w, k, c))
+        self.assertEqual(self.design_problems("A"), [])
+
+    def test_off_scale_size_is_a_note(self):
+        spec = {"title": "Scale", "project": {"name": "P", "session": "s"}, "decisions": "design-review",
+                "items": [{"label": "Hero", "reason_html": "<p>r</p>", "recommended": True,
+                           "before_font_sizes": [16, 20, 32],
+                           "variants": [{"html": '<div style="font:16px sans-serif"><h1 style="font-size:27px;margin:0">Big</h1>'
+                                                 '<p style="margin:0">Body</p></div>'}]}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            res = self.smoke(spec, tmp)
+        notes = [o for c in res["design_checks"] if c["width"] == 1280 for o in c["offScale"]]
+        self.assertEqual([(o["text"], o["size"]) for o in notes], [("Big", 27)], res["design_checks"])
+        self.assertEqual([p for p in res["problems"] if "scale" in p.lower()], [])
+
+
 if __name__ == "__main__":
     unittest.main()

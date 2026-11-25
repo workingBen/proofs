@@ -641,3 +641,89 @@ class AnswersWithoutCopy(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CommitAndPrGuidance(unittest.TestCase):
+    """Astro run 3, session C: a push failed and stalled, `git add -A .`, a one-line PR body."""
+
+    def text(self):
+        return (REPO / "reference" / "commit-and-pr.md").read_text()
+
+    def test_stage_by_name(self):
+        text = self.text()
+        self.assertIn("git add <path> <path>", text)
+        for bad in ("`git add -A`", "`git add .`", "`git commit -a`"):
+            self.assertIn(bad, text)
+
+    def test_a_failed_push_is_reported_plainly_not_stalled(self):
+        text = self.text()
+        for word in ("HTTP 400", "git fetch origin", "git -c http.postBuffer=524288000 push -u origin HEAD",
+                     "the exact command", "Do not open the pull request", "one retry"):
+            self.assertIn(word, text)
+
+    def test_a_pr_body_says_what_why_and_how_checked(self):
+        text = self.text()
+        for word in ("**What changed**", "**Why**", "**How it was checked**", "--body-file .proofs/pr-body.md"):
+            self.assertIn(word, text)
+        self.assertIn("never only file names", text)
+
+    def test_committing_skills_point_at_it(self):
+        for skill in ("design-review", "review-cycle", "pr-qa"):
+            with self.subTest(skill=skill):
+                self.assertIn("../../reference/commit-and-pr.md", (REPO / "skills" / skill / "SKILL.md").read_text())
+        self.assertNotIn("gh pr create --fill", (REPO / "skills" / "review-cycle" / "SKILL.md").read_text())
+
+    def test_readme_names_the_larger_buffer_push(self):
+        self.assertIn("http.postBuffer", (REPO / "README.md").read_text())
+
+
+class DesignReviewScopeAndCost(unittest.TestCase):
+    """Astro run 3, session B: unpicked copy changed, new narrow targets, a cost that doubled."""
+
+    def test_applying_picks_changes_only_what_was_picked(self):
+        text = section("design-review", "5.")
+        self.assertIn("Change only what was picked", text)
+        self.assertIn("proposed, not applied", text)
+        self.assertIn("Never change words the user did not pick", section("design-review", "3."))
+
+    def test_after_capture_is_compared_by_text(self):
+        text = section("design-review", "5.")
+        self.assertIn("--compare .proofs/capture/before/measures.json", text)
+        self.assertIn("new since the earlier capture", text)
+
+    def test_capture_items_need_no_mockup_and_no_measuring_page(self):
+        text = section("design-review", "4.")
+        self.assertIn("need no mockup", text)
+        self.assertIn("never build a page to measure", text)
+        self.assertIn("-part-", text)
+        self.assertIn("midWordAt", section("design-review", "2."))
+
+
+class ResultsFirst(unittest.TestCase):
+    """The maintainer's 1.6.10 principle: save tokens by cutting waste, never a check the result needs."""
+
+    SHORT = ("**Results first.** Nothing matters more than a result the user wants. Save tokens by cutting waste, "
+             "never by cutting a check, an option or a revise pass the result needs (full text: "
+             "`../../reference/house-rules.md`).")
+
+    def test_every_skill_says_results_first(self):
+        skills = sorted((REPO / "skills").glob("*/SKILL.md"))
+        self.assertEqual(len(skills), 12)
+        for path in skills:
+            with self.subTest(skill=path.parent.name):
+                self.assertIn(self.SHORT, path.read_text())
+
+    def test_house_rules_put_it_first(self):
+        text = (REPO / "reference" / "house-rules.md").read_text()
+        self.assertIn("Nothing matters more than a result the user wants", text)
+        self.assertLess(text.index("0. **Results first.**"), text.index("1. **Finish in this turn.**"))
+        self.assertIn("A cheap run whose result nobody wants is the most expensive kind", text)
+        for skill in HOUSE_RULE_SKILLS:
+            with self.subTest(skill=skill):
+                lines = (REPO / "skills" / skill / "SKILL.md").read_text().splitlines()
+                first = lines.index(next(l for l in lines if l.startswith("1. **Finish in this turn.**")))
+                self.assertEqual(lines[first - 1], "0. " + self.SHORT)
+
+    def test_readme_says_it(self):
+        self.assertIn("And every skill puts the result first: it saves tokens by cutting waste, never by cutting "
+                      "the checks that make the result right.", (REPO / "README.md").read_text())

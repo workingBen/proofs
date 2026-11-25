@@ -1,6 +1,6 @@
 ---
 name: visual-qa
-version: 1.4.8
+version: 1.4.9
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs *)
@@ -37,6 +37,7 @@ and colors (mockups reuse them), and anything already decided that must not be "
 
 **House rules.** Same as every proofs capture skill; full text in `../../reference/house-rules.md`.
 
+0. **Results first.** Nothing matters more than a result the user wants. Save tokens by cutting waste, never by cutting a check, an option or a revise pass the result needs (full text: `../../reference/house-rules.md`).
 1. **Finish in this turn.** Build, smoke-check and screenshot before you reply; the next turn re-reads the whole session and costs more each time. Write big files (HTML, spec JSON, scripts) with the Write tool and never print them back with `cat`, `head` or `Read`; the helpers print short summaries.
 2. **Stay in two folders.** Read only inside the project (the folder Claude Code started in) and the plugin folder. Do not read parent folders: their `CLAUDE.md` is already loaded for you. Write specs, scratch scripts, screenshots and pages only under `.proofs/` in the project, never the system temp folder, `$TMPDIR` or `~`. The exceptions are the Playwright install in `~/.cache/proofs-playwright` and pr-qa's `PROOFS_BASE_DIR` base folder, when it is set. Write the Playwright folder only with its one install line; never `ls` or Read it to see whether Playwright is there (it is outside the project, so the call is refused): the capture and `--smoke` report a missing install themselves, with exit 2 and the line to run.
 3. **One command per Bash call.** No pipes, redirects, `;`, `&&`, `cd`, `$(...)` or `VAR=` in front: Claude Code matches its allow rules against the whole command, and any of those makes it ask (or, in `claude -p`, refuse).
@@ -63,6 +64,7 @@ and colors (mockups reuse them), and anything already decided that must not be "
   Before the shots, each page is scrolled to the bottom in steps and back to the top, so sections that fade in on scroll and lazy images appear (`--no-scroll` skips it, for a page that must be shot as loaded). Each address is `base` and `path` joined with exactly one slash. A page that answers HTTP 400 or above, or renders an error page ("Not Found"), is a failed shot, not a finding: the capture lists it as FAILED, leaves it out of the evidence and exits 6; fix the `path` or the server and run it again. A malformed pages file stops with one line naming what is wrong (exit 1).
   Three viewports (1440, 1280, 390 CSS px; `--sizes 390,1280` picks some, and a plain width such as `1040` adds a desktop viewport just above a breakpoint), a first-screen and a full-page PNG each,
   named `<page>-<state>-<width>[-full].png`, plus `measures.json`, `summary.md` and a printed table.
+  A page taller than one part (4 widths, at most 1,600 px) is also cut into `-part-NN.png` shots at 1x, with their y ranges in `measures.json`: open the part a finding names, not a long page's full shot, which an image reader shrinks until nothing is legible. Mid-word breaks name their element, the heading above them, their y and their part; `--compare <earlier measures.json>` lists what is new since an earlier capture, by text, not by count.
   The 390 view is a true 390 px viewport, and the overflow is measured three ways. A page wider than the phone
   is a finding, not a failed capture: a phone lays it out wider and zooms out to fit, so the row reads, for example,
   `sideways scroll: 17px, zoomed`, and the other phone numbers are still taken. If Playwright is

@@ -1,6 +1,6 @@
 ---
 name: article-copy-edit
-version: 1.5.2
+version: 1.5.3
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -10,6 +10,8 @@ description: Use when the user hands you copy-edit feedback or proposed line edi
 # Article Copy-Edit Review Tool
 
 A human-in-the-loop process for applying copy-edit feedback to an article or page. Instead of applying edits blind, or narrating each one in chat, build an interactive review page the user reads and clicks through, then apply only what they accepted.
+
+**Results first.** Nothing matters more than a result the user wants. Save tokens by cutting waste, never by cutting a check, an option or a revise pass the result needs (full text: `../../reference/house-rules.md`).
 
 ## Why this exists
 

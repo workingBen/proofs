@@ -1,6 +1,6 @@
 ---
 name: photo-picker
-version: 1.3.2
+version: 1.3.3
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -10,6 +10,8 @@ description: Use when the user wants real photos found for an article or page an
 # Photo Picker Tool
 
 A human-in-the-loop process for sourcing and adding real photos to an article or page. Instead of guessing at one image per spot and dropping it in, or describing candidates in chat, build an interactive gallery the user browses and clicks through, then apply only what they picked. Sibling tool to `article-copy-edit` and `design-review`: same underlying loop, adapted for photo curation instead of text or layout.
+
+**Results first.** Nothing matters more than a result the user wants. Save tokens by cutting waste, never by cutting a check, an option or a revise pass the result needs (full text: `../../reference/house-rules.md`).
 
 ## Why this exists
 

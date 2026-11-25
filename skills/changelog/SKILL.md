@@ -1,12 +1,14 @@
 ---
 name: changelog
-version: 1.3.2
+version: 1.3.3
 description: Use when the user wants a signed-in changelog page for their app (or one per sub-app) backed by markdown files, and at the end of any session that shipped something a user would notice, to add a dated entry. Differs from todos; it records what shipped, not open work.
 ---
 
 # Changelog Skill
 
 Builds a signed-in-only changelog page (one per app or sub-app) backed by plain markdown files, shown as a vertical timeline with one section per calendar month. Also defines the ongoing habit of updating it. It works with any stack: this skill specifies the file format, the parsing and grouping rules, the page's behavior and the tests, and you write the code in whatever language and framework the project already uses.
+
+**Results first.** Nothing matters more than a result the user wants. Save tokens by cutting waste, never by cutting a check, an option or a revise pass the result needs (full text: `../../reference/house-rules.md`).
 
 ## When to use
 

@@ -95,7 +95,7 @@ None of them is a bare interpreter: `python3 -c`, `manage.py shell`, `bin/rails 
 
 The main risk: every install runs your project's own install scripts (`npm install` and `npm ci` run package scripts, and so do the named `npm run` and `npm test` lines, `composer install` runs Composer scripts, `pip install` can run a package's build code), so only turn this on for a project you trust. Two smaller ones: `gh pr checkout *` also accepts `--force`, which resets a local branch of that name, and the `.proofs/base/*` rules (`npm ci --prefix`, `bundle install --gemfile`, `cp .env`) and `open .proofs/pages/*` also accept a path with `..` in it. These rules hold no home path, so they can go in `.claude/settings.local.json` (the default) or, if the team wants them, the committed `.claude/settings.json`. Besides installs, tests, the type check and the base worktree, it only allows opening pages under `.proofs/pages` (`open`, `xdg-open`); it does not run dev servers. To get both this and the `--headless` rule in one go, give both flags (that output holds your home folder again, so keep it out of a committed file). For pr-qa in `claude -p`, use `--headless --project`: without the project block its git, install and checkout lines are refused.
 
-**Let the skills save and share work too (optional, never part of `--project`).** Add `--commit` to print the rules for `git add`, `git commit`, `git push -u origin HEAD` and `gh pr create`; it is its own flag because the push and the pull request reach GitHub. It holds no home path and combines with every other flag (`--project --commit`, `--headless --project --commit`). Its `git add *` and `git commit *` rules are broad: `git commit *` also allows `--no-verify` and `--amend`, and a stray `git add .` can stage secrets, which is why the block is opt-in.
+**Let the skills save and share work too (optional, never part of `--project`).** Add `--commit` to print the rules for `git add`, `git commit`, `git push -u origin HEAD` (and its larger-buffer form, `git -c http.postBuffer=524288000 push -u origin HEAD`, the retry for a push refused with HTTP 400 on a large pack) and `gh pr create`; it is its own flag because the push and the pull request reach GitHub. It holds no home path and combines with every other flag (`--project --commit`, `--headless --project --commit`). Its `git add *` and `git commit *` rules are broad: `git commit *` also allows `--no-verify` and `--amend`, and a stray `git add .` can stage secrets, which is why the block is opt-in.
 <!-- allow-proofs:end -->
 
 Screenshots shrink automatically when ImageMagick or libwebp (`cwebp`) is installed: they're converted to WebP as each page is built. Without either, pages still work, just heavier.
@@ -155,7 +155,7 @@ One hook, and it is off until you turn it on. At the start of each session (a `S
   <img src="assets/how-it-works-row-light.svg" alt="Four steps. 1: Claude shows you first: mockups, measurements and drafts, before anything changes. 2: Publishes a page. 3: You decide visually, with clear buttons on every item and room for a comment. 4: Paste it back, with one Copy button, and Claude does exactly what you chose." width="100%">
 </picture>
 
-Every skill below plugs into this loop.
+Every skill below plugs into this loop. And every skill puts the result first: it saves tokens by cutting waste, never by cutting the checks that make the result right.
 
 ### Why paste it back?
 

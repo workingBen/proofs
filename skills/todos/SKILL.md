@@ -1,6 +1,6 @@
 ---
 name: todos
-version: 1.3.0
+version: 1.3.1
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/skills/todos/scripts/todos_page.py *)
@@ -20,6 +20,8 @@ paste and turns it into a plan: what to archive outright, what to verify first, 
 what didn't match anything. The scripts parse, render and match; they never decide
 whether a claim holds up. That judgment belongs here, in this file, because it is
 the part a script must not be trusted to get right on its own.
+
+**Results first.** Nothing matters more than a result the user wants. Save tokens by cutting waste, never by cutting a check, an option or a revise pass the result needs (full text: `../../reference/house-rules.md`).
 
 Run each script exactly as written below, from the project root; Claude Code fills in
 `${CLAUDE_PLUGIN_ROOT}`, and the allow rule only matches the unquoted form. They need Python 3 and

@@ -255,6 +255,9 @@ class PhoneWidth(unittest.TestCase):
             m = self.result(out)["measures"]
             self.assertEqual(len(m["midWord"]), 1, m["midWord"])
             self.assertTrue(m["midWord"][0].startswith("authentic"), m["midWord"])
+            # A heading that breaks is its own element; "near" is a heading above it, never itself.
+            self.assertEqual(m["midWordAt"][0]["el"], "h3")
+            self.assertEqual(m["midWordAt"][0]["near"], "")
 
     def test_a_row_text_align_does_not_center_is_flagged(self):
         # Angular run 1: a footer column centered with text-align at 390, and its "Events"
@@ -407,6 +410,103 @@ class PhoneWidth(unittest.TestCase):
             _, out = self.capture(tmp, "midword-anywhere.html", "--sizes", "390")
             words = self.result(out)["measures"]["midWord"]
             self.assertEqual(len(words), 1, words)
+
+    def test_a_mid_word_break_says_where_it_is(self):
+        # Astro run 3 (B1): the capture named only "tem|plate", the 390 shot was too tall to read,
+        # and the session put the break in the hero headline; it was in the quick-start command.
+        with tempfile.TemporaryDirectory() as tmp:
+            r, out = self.capture(tmp, "tall-midword.html", "--sizes", "390")
+            m = self.result(out)["measures"]
+            self.assertTrue(all("|" in w for w in m["midWord"]), m["midWord"])
+            spot = m["midWordAt"][0]
+            self.assertIn("|", spot["at"])
+            self.assertIn("pre.cmd", spot["el"])
+            self.assertIn("#quick-start", spot["el"])
+            self.assertEqual(spot["near"], "Quick start")
+            self.assertGreater(spot["y"], 6000)
+            self.assertLess(spot["y"], 6200)
+            summary = (out / "summary.md").read_text()
+            self.assertIn("mid-word breaks:", summary)
+            self.assertIn("pre.cmd", summary)
+            self.assertIn("y %d" % spot["y"], summary)
+            self.assertIn(spot["part"], summary)
+            self.assertIn("pre.cmd", r.stdout)
+
+    def test_a_tall_page_is_cut_into_readable_parts(self):
+        # Astro run 3: a 15,677 px page at 2x made a 31,354 px PNG, which no image reader shows legibly.
+        with tempfile.TemporaryDirectory() as tmp:
+            r, out = self.capture(tmp, "tall-midword.html", "--sizes", "390,1280")
+            data = json.loads((out / "measures.json").read_text())
+            for res in data["results"]:
+                m = res["measures"]
+                parts = m["parts"]
+                self.assertGreaterEqual(len(parts), 2, res["viewport"])
+                self.assertEqual(parts[0]["top"], 0)
+                self.assertEqual(parts[-1]["bottom"], m["pageHeight"])
+                for a, b in zip(parts, parts[1:]):
+                    self.assertEqual(a["bottom"], b["top"])
+                for p in parts:
+                    png = (out / p["file"]).read_bytes()
+                    w, h = struct.unpack(">II", png[16:24])
+                    # One PNG pixel per CSS pixel, and no taller than four widths (or 1,600 px).
+                    self.assertEqual(w, m["viewport"]["w"])
+                    self.assertLessEqual(h, min(1600, 4 * w))
+                    self.assertEqual(h, p["bottom"] - p["top"])
+                # A full shot over 16,384 px at 2x is taken at 1x, and the overflow check still holds.
+                full = (out / f"{res['file']}-full.png").read_bytes()
+                fw, fh = struct.unpack(">II", full[16:24])
+                self.assertLessEqual(fh, 16384)
+                self.assertEqual(m["sideways"], 0, res["viewport"])
+                # The blank check reads the 1x shot at 1x: it covers the page below the first screen.
+                self.assertAlmostEqual(m["blank"]["regionPx"], m["pageHeight"] - m["viewport"]["h"], delta=2)
+            phone = [x for x in data["results"] if x["viewport"] == "390"][0]["measures"]
+            self.assertEqual(phone["fullScale"], 1)
+            # Parts are cut from the full shot, not shot again: a second, clipped screenshot
+            # re-lays out the page and drew AstroWind's sticky header over its hero.
+            res390 = [x for x in data["results"] if x["viewport"] == "390"][0]
+            _, _, full_rows, _ = decode_png((out / f"{res390['file']}-full.png").read_bytes())
+            second = phone["parts"][1]
+            _, _, part_rows, _ = decode_png((out / second["file"]).read_bytes())
+            self.assertEqual(bytes(part_rows[0]), bytes(full_rows[second["top"]]))
+            self.assertEqual(bytes(part_rows[-1]), bytes(full_rows[second["bottom"] - 1]))
+            spot = phone["midWordAt"][0]
+            part = [p for p in phone["parts"] if p["file"] == spot["part"]][0]
+            self.assertTrue(part["top"] <= spot["y"] < part["bottom"])
+            self.assertIn("-part-", r.stdout)
+
+    def test_a_short_page_has_no_parts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, out = self.capture(tmp, "midword.html", "--sizes", "1440,390")
+            for res in json.loads((out / "measures.json").read_text())["results"]:
+                self.assertEqual(res["measures"]["parts"], [])
+                self.assertEqual(res["measures"]["fullScale"], 2 if res["viewport"] == "390" else 1)
+
+    def test_compare_names_entries_that_are_new_since_an_earlier_capture(self):
+        # Astro run 3 (B2): the fix took small tap targets from 11 to 9, and 3 of the 9 were new.
+        with tempfile.TemporaryDirectory() as tmp:
+            before = Path(tmp) / "before"
+            cfg = Path(tmp) / "pages.json"
+            env = dict(os.environ, PROOFS_PLAYWRIGHT=playwright_dir())
+            for page, outdir, extra in (("taps-before.html", before, []),
+                                        ("taps-after.html", Path(tmp) / "after", ["--compare", str(before / "measures.json")])):
+                cfg.write_text(json.dumps({"base": self.base, "pages": [{"name": "t", "path": "/" + page}]}))
+                r = subprocess.run([NODE, str(CAPTURE), str(cfg), "--out", str(outdir), "--sizes", "390", *extra],
+                                   env=env, capture_output=True, text=True, timeout=180)
+                self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            m = self.result(Path(tmp) / "after")["measures"]
+            self.assertEqual([t["el"] for t in m["newSince"]["smallTaps"]], ["Made"])
+            self.assertEqual(m["newSince"]["midWord"], [])
+            self.assertIn("new since the earlier capture", r.stdout)
+            self.assertIn('small tap targets: "Made"', r.stdout)
+            self.assertNotIn('"Docs"', r.stdout.split("new since the earlier capture")[1])
+
+    def test_compare_says_when_there_is_nothing_to_compare_against(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, out = self.capture(tmp, "taps-before.html", "--sizes", "390")
+            earlier = Path(tmp) / "earlier.json"
+            earlier.write_text((out / "measures.json").read_text())
+            r, _ = self.capture(tmp, "taps-after.html", "--sizes", "1280", "--compare", str(earlier))
+            self.assertIn("no earlier capture of t default at 1280", r.stdout)
 
     def capture_fails(self, tmp, page, *extra):
         cfg = Path(tmp) / "pages.json"

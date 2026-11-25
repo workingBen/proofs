@@ -231,8 +231,14 @@ class AllowBlockTest(unittest.TestCase):
         self.assertIn("Bash(open .proofs/pages/*)", json.loads(r.stdout)["permissions"]["allow"])
 
     def test_commit_block_alone(self):
+        # Astro run 3 (C1): a push refused with HTTP 400 on a large pack. The larger-buffer push
+        # goes to the same remote and branch as the plain one, so it is allowed in that exact
+        # form; `git config` (which persists, and can set aliases or hooks) is not.
         self.assertEqual(allow_block.COMMIT_RULES, ["Bash(git add *)", "Bash(git commit *)",
-                                                    "Bash(git push -u origin HEAD)", "Bash(gh pr create *)"])
+                                                    "Bash(git push -u origin HEAD)",
+                                                    "Bash(git -c http.postBuffer=524288000 push -u origin HEAD)",
+                                                    "Bash(gh pr create *)"])
+        self.assertFalse(any("git config" in r for r in allow_block.COMMIT_RULES))
         r = self._cli("/opt/claude-home", None, "--commit")
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(json.loads(r.stdout), {"permissions": {"allow": allow_block.COMMIT_RULES}})

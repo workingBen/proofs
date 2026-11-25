@@ -1,6 +1,6 @@
 ---
 name: questions
-version: 1.3.4
+version: 1.3.5
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -11,6 +11,8 @@ description: Use when you need the user to answer or decide anything — one que
 
 Questions the user answers on a page instead of in chat: real controls, one pass,
 one copy button, one pasted block back.
+
+**Results first.** Nothing matters more than a result the user wants. Save tokens by cutting waste, never by cutting a check, an option or a revise pass the result needs (full text: `../../reference/house-rules.md`).
 
 **Core principle: the page is an input surface, not a document.** The most common
 failure is a nicely typeset read-only page that tells the user to answer in chat by

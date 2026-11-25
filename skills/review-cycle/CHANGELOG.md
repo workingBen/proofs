@@ -1,5 +1,6 @@
 # Changelog
 
+- **1.13.2** (2026-11-24): The per-item recipe stages files by name and opens the PR with `--body-file .proofs/pr-body.md` (what changed, why, how it was checked) instead of `--fill`, and a failed push is reported with the exact command, per the new `reference/commit-and-pr.md`. **Results first** (the maintainer's principle): nothing matters more than a result the user wants; save tokens by cutting waste, never by cutting a check, an option or a revise pass the result needs. Full text is rule 0 in `reference/house-rules.md`.
 - **1.13.1** (2026-11-24): Stage only what the item changed: a lockfile an install rewrote stays out of the commit, or the PR body says why it is in (Angular run 1 committed one unasked).
 - **1.13.0** (2026-11-22): The per-item push is now `git push -u origin HEAD`, which the opt-in `--commit` allow block permits; deleting the branch afterward still asks.
 - **1.12.0** (2026-11-19): The tracking page's docked bar starts with the proofs mark, a `review-cycle` pill, the project and the session, reusing the shared builder's markup and CSS, so it is never mistaken for another session's page.

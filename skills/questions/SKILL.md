@@ -1,6 +1,6 @@
 ---
 name: questions
-version: 1.3.2
+version: 1.3.3
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -127,14 +127,18 @@ same `Q` blocks arrive under `--- Questions ---` inside working-log's export.
 
 ## Workflow
 
-1. Write the spec and build the page to a stable file path. Publish it.
+1. Write the spec and build the page to a stable file path. Publish it with `capabilities: {"db": {}}`.
 2. Give the user the URL in chat with a one-line copy of what you are asking.
 3. **Stop at blocking questions.** Do work that doesn't depend on the answers; don't
    guess past one and build on the guess.
-4. When answers arrive: apply them, move those questions to `decided`, add whatever
+4. When answers arrive (read from the page's database, or pasted): apply them, move those questions to `decided`, add whatever
    new questions the answers raised, and **rebuild and republish the same file path**
    so the URL is unchanged.
 5. Never mint a second URL for the same work-stream. The user has that tab open.
+
+A question with `options: []` and a `notes_label` is a text-box question: what the reader types is the answer, and it exports as `-> <text>`.
+
+**Read answers from the page first.** A published page saves every answer in its own database when you publish it with `capabilities: {"db": {}}` (keep it on every republish; never pass `{}`). Before you ask for a paste, and whenever the user says they answered, read them: `ArtifactData` `list` of `proofs-answers` with `out_dir`, then `review_page.py --answers <page> --rows <out_dir>` prints the same text as the Copy export. The database comes first and a pasted export second; if they differ, the newer (`updated_at` against the export's stamp) wins, and say so. Anyone the page is shared with can write answers; pages are private by default. Details: "Answers without Copy" in `../../reference/review-page.md`.
 
 ## Common mistakes
 

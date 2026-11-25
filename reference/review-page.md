@@ -45,6 +45,9 @@ spec: it is how you rebuild the next round.
 - `localStorage` persistence on every change, keyed per page (`storage_key`, else
   derived from the project, session or stream, and title). Wrapped so a blocked
   storage never breaks the page.
+- On a published claude.ai artifact with the `db` capability, every answer is also
+  saved in the artifact's own database, so you can read it without a Copy and paste
+  (see "Answers without Copy" below). Without it the page works exactly as before.
 - Light and dark chrome from tokens on `:root` (questions mode: its single dark
   world). Every semantic color, including the amber revision box, has a dark pair.
 
@@ -152,7 +155,7 @@ and no questions, whose export says `results` instead of `answers`.
 
 `questions` and `qa` sections, or the flat `questions` and `qa` lists:
 
-- `questions`: `[{qid, round, ask, why_html, mockups_html, options: [{label, value, note_html, recommended}], notes_label}]`. `value` (the exported text) defaults to `label`; write the full option text.
+- `questions`: `[{qid, round, ask, why_html, mockups_html, options: [{label, value, note_html, recommended}], notes_label}]`. `value` (the exported text) defaults to `label`; write the full option text. A question with `options: []` shows only its text box: what the reader types is the answer (it counts in the tally, marks the card answered, and exports as `-> <text>`).
 - `qa`: `[{qaid, check, why_html, notes_label}]`, answered PASS / FAIL / COULDN'T TEST.
 
 The bar carries the tally ("N of M answered · QA x of y") and Clear (with a
@@ -198,6 +201,68 @@ Each entry gets a note field and a "Read this" tick (a ticked entry folds to one
 `exported:` (local time), then `M6  [read]  title` per entry with `answer:` per
 option group (`answer (q):` when there are several, `(unanswered)` when empty) and
 `note:` lines.
+
+## Answers without Copy: the page's database
+
+On a published claude.ai artifact, the page saves every answer, note and read tick in
+the artifact's own small database. You read them there yourself, so the reader does
+not have to copy and paste. Copy my replies still works exactly as before and stays
+the fallback.
+
+**Publish with the `db` capability.** On the first publish, pass
+`capabilities: {"db": {}}` to the `Artifact` tool. A republish to the same file path
+(or `url`) that leaves `capabilities` out keeps it; never pass `capabilities: {}`,
+which removes it. Nothing else is needed: no access rules and no `user` capability.
+A page built before Proofs 1.6.8 has no database code; rebuild it.
+
+**What the page saves.** One document per card in the collection `proofs-answers`,
+written about 0.8 s after the reader stops changing it (`DB_DEBOUNCE_MS`), and read
+back when the page opens, so a second device shows the same answers. Opening the page
+writes nothing. The document id is `<section id>.<item id>` (`s1.filter-placement`);
+characters other than letters, digits and `_ - . ~ : @ +` become `_`, plus a short hash.
+
+| Field | Meaning |
+|---|---|
+| `id`, `section` | the card's id (`qid`, `qaid`, entry id or review item id) and its section's id |
+| `kind` | `question`, `qa`, `log`, `review`, or `extra` (the "Anything else" box: document `_page.extra`) |
+| `answer` | question: the option's `value`, or `null`; qa: `PASS`, `FAIL`, `COULDN'T TEST` or `null`; log: `{group: option}`; review: the decision state (`accept`, `deny`, ...) or `null` |
+| `note` | the typed text: a note, a review comment, or, on a text-box-only question, the answer itself |
+| `read` | the read tick (log entries, review items) |
+| `variant`, `works_as_designed` | review items only: the picked variant key, and the deny checkbox |
+| `updated_at` | when the reader's browser wrote it (ISO 8601, UTC) |
+| `page_version`, `page` | which build of the page (the spec's `version`, else a hash of it) and its storage key |
+
+A cleared answer is written as a document with `answer: null` and an empty `note`,
+not deleted. Rows outlive republishes: a card kept on the next version keeps its
+answer, so reuse an id only for the same question. A card you drop stays in the
+database, but the page and `--answers` ignore it.
+
+**Read the answers.** Read the database first, and a pasted Copy export second:
+
+1. `ArtifactData` with `action: "list"`, `url: <the page's URL>`,
+   `collection: "proofs-answers"`, `out_dir: ".proofs/answers/<name>"` (each document
+   is saved as `<out_dir>/proofs-answers/<id>.json`). A page with more than 100 cards:
+   add `query: {"limit": 1000}`.
+2. `python3 <plugin root>/shared/review_page/review_page.py --answers .proofs/pages/<name>.html --rows .proofs/answers/<name>`
+   prints them as the same text the page's Copy button makes, from the page's own
+   engine, so you handle both the same way. Its `sent:` (or `exported:`) line is the
+   newest `updated_at`.
+3. An empty list means nobody has answered on the published page yet (or they are
+   on an older build): ask for the Copy export as before.
+
+**When both arrive and differ**, compare card by card: the newer wins (`updated_at`
+for a row, the export's `sent:` / `exported:` stamp for a paste), and say in chat which
+one you used and why.
+
+**When the page cannot save** (a local file, `wifi` mode, an older viewer, a signed-out
+viewer, or a viewer who may not write), it keeps working from `localStorage` and Copy
+alone, and never blocks or breaks Copy. The page's `<body>` carries
+`data-answers-db`: `on`, `off`, `unreachable` (no answer in 10 s) or `error`.
+
+**Privacy.** Anyone the page is shared with at Contributor level or above can write
+answers, and anyone who can open it can read them. Pages are private by default; share
+one only with the people who should answer it, and never ask for a password, key or
+other secret on one.
 
 ## Checking
 

@@ -615,5 +615,29 @@ class AstroRun2(unittest.TestCase):
         self.assertIn("| Sections without headings |", (REPO / "skills" / "visual-qa" / "SKILL.md").read_text())
 
 
+
+class AnswersWithoutCopy(unittest.TestCase):
+    """1.6.8: pages that take answers publish with the db capability, and sessions read
+    the answers from it before asking for a paste."""
+
+    def test_answer_skills_publish_with_db_and_read_it_first(self):
+        for skill in ("working-log", "questions", "qa-checklist"):
+            with self.subTest(skill=skill):
+                text = (REPO / "skills" / skill / "SKILL.md").read_text()
+                self.assertIn('capabilities: {"db": {}}', text)
+                self.assertIn("`ArtifactData` `list` of `proofs-answers`", text)
+                self.assertIn("review_page.py --answers", text)
+                self.assertIn("the newer (`updated_at`", text)
+                self.assertIn("Anyone the page is shared with can write answers; pages are private by default", text)
+
+    def test_reference_documents_the_rows_and_privacy(self):
+        text = " ".join((REPO / "reference" / "review-page.md").read_text().split())
+        for needle in ('collection: "proofs-answers"', "| `updated_at` |", "| `page_version`, `page` |",
+                       "--answers .proofs/pages/<name>.html --rows", "never pass `capabilities: {}`",
+                       "Pages are private by default"):
+            with self.subTest(needle=needle):
+                self.assertTrue(needle in text, needle)
+
+
 if __name__ == "__main__":
     unittest.main()

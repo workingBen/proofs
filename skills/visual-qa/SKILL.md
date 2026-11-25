@@ -1,6 +1,6 @@
 ---
 name: visual-qa
-version: 1.4.9
+version: 1.4.10
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs *)

@@ -805,3 +805,88 @@ class DesignerReferences(unittest.TestCase):
             for num, line in enumerate((REPO / "reference" / name).read_text().splitlines(), 1):
                 with self.subTest(file=name, line=num):
                     self.assertEqual(privacy_scan.categories(line, deny), [])
+
+
+class DesignerGuidance(unittest.TestCase):
+    """1.7.0: design-review reads an optional profile, builds a real range, keeps an inventory and runs a critic."""
+
+    def skill(self):
+        return " ".join((REPO / "skills" / "design-review" / "SKILL.md").read_text().split())
+
+    def step(self, heading):
+        return " ".join(section("design-review", heading).split())
+
+    def test_profile_is_read_when_present_and_never_required(self):
+        text = self.step("1.")
+        for needle in ("`docs/design-profile.md`", "`PROOFS_DESIGN_PROFILE`", "Never require it",
+                       "`../../reference/design-profile.md`", "two questions pages", "one line"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+
+    def test_range_is_three_roles_for_a_redesign_and_one_for_a_bug_sized_fix(self):
+        text = self.step("3.")
+        for needle in ("Careful", "Step up", "Bold", "`careful`", "`step-up`", "`bold`",
+                       "one option for a bug-sized fix", "\"Found by the capture\"",
+                       "layout or hierarchy", "near-copies"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+
+    def test_inventory_comes_from_the_capture(self):
+        text = self.step("3.")
+        for needle in ("`before_sections`", "`before_font_sizes`", "`measures.sections`", "`measures.fontSizes`",
+                       "`inventory`", "1280", "kept", "moved", "removed"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+
+    def test_one_option_proposal_is_wrapped_for_smoke(self):
+        self.assertIn('<div class="rp-mockup">', self.step("4."))
+
+    def test_smoke_notes_are_read_and_said(self):
+        text = self.step("4.")
+        for needle in ("`notes`", "`problems`", "contrast not measured", "by eye", "in chat"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+
+    def test_critic_pass(self):
+        text = self.step("4.")
+        for needle in ("`../../reference/design-rubric.md`", "separate helper", "fresh context", "Who judges",
+                       "`claude -p`", "`judged_by`", "`helper`", "`self`", "`scores`", "`before_scores`",
+                       "Current page", "revise it once or drop it", "Not scored", "Never recommend an unscored option"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+
+    def test_critic_comes_after_smoke_and_before_the_correction_pass_ends(self):
+        text = self.step("4.")
+        self.assertLess(text.index("**Verify before publishing"), text.index("**The critic"))
+        self.assertLess(text.index("**The critic"), text.index("**One build, then at most one correction pass.**"))
+
+    def test_results_first_keeps_the_critic_and_the_options(self):
+        text = self.step("4.")
+        self.assertIn("never by cutting an option, the critic or the revise pass", text)
+        self.assertIn("$5", text)
+
+    def test_keep_x_on_accept_with_comment(self):
+        text = self.step("5.")
+        accept = text.split("**`ACCEPT WITH COMMENT`**", 1)[1].split("**`DENY`**", 1)[0]
+        self.assertIn("keep", accept)
+        self.assertIn("ask", accept)
+
+    def test_existing_rules_survive(self):
+        text = self.skill()
+        for needle in ("**Never change words the user did not pick.**", "\"Found by the capture\"",
+                       "**Change only what was picked.**", "`../../reference/commit-and-pr.md`",
+                       "**One build, then at most one correction pass.**", "--compare .proofs/capture/before/measures.json"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+
+    def test_style_guide_points_at_design_review(self):
+        text = " ".join((REPO / "skills" / "style-guide" / "SKILL.md").read_text().split())
+        self.assertIn("design-profile.md", text)
+        self.assertIn("design-review", text.rsplit("## Where the page goes", 1)[0][-800:])
+
+    def test_readme_says_three_roles_and_a_critic(self):
+        readme = (REPO / "README.md").read_text()
+        part = readme.split("### design-review:", 1)[1].split("### ", 1)[0]
+        for needle in ("Careful", "Step up", "Bold", "scored"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, part)

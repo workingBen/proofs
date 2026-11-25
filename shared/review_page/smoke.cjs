@@ -210,9 +210,9 @@ const file = "file://" + path.resolve(process.argv[3]);
       }
       // Near-copies, measured once at 1280: each pair of options, then each option against the
       // page's own section (`before_sections`, when the item carries it).
-      // Only design reviews: a style guide's options differ by size and a photo picker's are pictures.
+      // The pair check is for design reviews only: a style guide's options differ by size and a photo picker's are pictures.
       const near = (a, an, b, bn, sa, sb) => {
-        if (!it.design_review) return;
+        if (b !== "before" && !it.design_review) return;
         const score = Math.round(similarity(sa, sb) * 100) / 100;
         if (score < NEAR_COPY) return;
         out.near_copies.push({ item: it.num, a, b, score });

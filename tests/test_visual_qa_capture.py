@@ -890,6 +890,8 @@ class SectionInventory(unittest.TestCase):
         self.assertEqual((image["width"], image["height"]), (120, 80))
         self.assertEqual([s["top"] for s in secs], sorted(s["top"] for s in secs))
         self.assertTrue(all(s["height"] > 0 for s in secs))
+        self.assertTrue(all(s["width"] > 0 and s["left"] >= 0 for s in secs), secs)
+        self.assertTrue(all(isinstance(s["left"], int) and isinstance(s["width"], int) for s in secs))
 
     def test_divs_directly_under_main_are_sections(self):
         # The `main > *` path: no height floor, so this is not the fallback.

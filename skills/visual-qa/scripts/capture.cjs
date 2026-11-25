@@ -522,7 +522,8 @@ function measure({ items, minText, minTap, edge, offCenterPx = 16, untitledMinHe
     }
     return { id: sec.id || '', tag: sec.tagName.toLowerCase(),
       label: headingText || sec.id || className || `section ${i + 1}`,
-      top: pageTop(sr), height: Math.round(sr.height), elements };
+      top: pageTop(sr), height: Math.round(sr.height),
+      left: Math.round(sr.left), width: Math.round(sr.width), elements };
   });
 
   // Distinct computed text sizes (px) of the visible elements that hold text of their own.

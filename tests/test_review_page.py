@@ -1603,6 +1603,15 @@ class NearCopy(unittest.TestCase):
         return {"id": "", "tag": "section", "label": "Hero", "top": 1000, "height": 400, "left": 0, "width": 1000,
                 "elements": els}
 
+    @staticmethod
+    def centered_before(**g):
+        """A before_sections with no left/width, its elements in a 600px column starting at x=200."""
+        kinds = {"h1": ("heading", "h1"), "p": ("text", "p"), "btn": ("button", "button")}
+        els = [{"kind": kinds[k][0], "text": k, "tag": kinds[k][1], "top": 1000 + round(4 * t),
+                "left": 200 + round(6 * l), "width": round(6 * w), "height": round(4 * h)}
+               for k, (l, t, w, h) in g.items()]
+        return {"id": "", "tag": "section", "label": "Hero", "top": 1000, "height": 400, "elements": els}
+
     def copies(self, res):
         return [(c["a"], c["b"]) for c in res["near_copies"]]
 
@@ -1641,6 +1650,18 @@ class NearCopy(unittest.TestCase):
     def test_one_variant_item_is_compared_with_the_page_too(self):
         res = self.run_smoke(self.spec([abs_box(**STACKED)], before_sections=self.before(**STACKED)))
         self.assertEqual(self.copies(res), [("A", "before")], res["near_copies"])
+
+    def test_centered_column_without_left_and_width_still_matches(self):
+        full = dict(h1=(0, 5, 100, 10), p=(0, 25, 100, 20), btn=(0, 60, 50, 12))
+        res = self.run_smoke(self.spec([abs_box(**full), abs_box(**TWO_COL)],
+                                       before_sections=self.centered_before(**full)))
+        self.assertEqual(self.copies(res), [("A", "before")], res["near_copies"])
+
+    def test_before_sections_are_compared_on_any_kind_of_page_but_pairs_are_not(self):
+        spec = self.spec([abs_box(**STACKED), abs_box(**STACKED)], before_sections=self.before(**STACKED))
+        spec["decisions"] = "style-guide"
+        res = self.run_smoke(spec)
+        self.assertEqual(self.copies(res), [("A", "before"), ("B", "before")], res["near_copies"])
 
     def test_options_on_other_kinds_of_page_are_not_flagged(self):
         spec = self.spec([abs_box(**STACKED), abs_box(**STACKED)])

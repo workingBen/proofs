@@ -7,8 +7,8 @@
 //   rectangle normalized to the box (0 to 1).
 // signatureFromSection(section) is the same for one `measures.sections[i]` from the capture
 //   (page px), normalized to the section's own box. A section's left and width are used when the
-//   capture gives them; otherwise the section is taken to start at the page's left edge and end
-//   at its widest element, which is the best a section with no width can do.
+//   capture gives them; otherwise the box is the content extent (leftmost element edge to
+//   rightmost), so a centered column still lines up with a mockup that fills its box.
 // similarity(a, b) is 0 to 1: for each element, the best overlap (IoU) with an element of the
 //   same kind on the other side, averaged over both sides' elements, times the smaller element
 //   count over the larger. Elements with no same-kind partner score 0, so a missing or extra
@@ -51,6 +51,7 @@ function measureSignature({ selector }) {
   // are not containers: a card link still lists its image).
   const holds = new Set(['heading', 'text', 'button', 'list', 'form', 'badge']);
   const br = box.getBoundingClientRect();
+  if (!(br.width > 0 && br.height > 0)) return [];
   const taken = new Set();
   const out = [];
   for (const el of box.querySelectorAll(elementSel)) {
@@ -74,9 +75,11 @@ async function layoutSignature(page, boxSelector) {
 
 function signatureFromSection(sec) {
   const els = (sec && sec.elements) || [];
-  const left = typeof sec.left === 'number' ? sec.left : 0;
-  const width = typeof sec.width === 'number' && sec.width > 0 ? sec.width
-    : Math.max(1, ...els.map((e) => e.left + e.width)) - left;
+  if (!els.length) return [];
+  const given = typeof sec.left === 'number' && typeof sec.width === 'number' && sec.width > 0;
+  const left = given ? sec.left : Math.min(...els.map((e) => e.left));
+  const width = given ? sec.width : Math.max(...els.map((e) => e.left + e.width)) - left;
+  if (!(width > 0)) return [];
   const height = sec.height > 0 ? sec.height : 1;
   return els.map((e) => ({ kind: e.kind, x: (e.left - left) / width, y: (e.top - sec.top) / height,
     w: e.width / width, h: e.height / height }));

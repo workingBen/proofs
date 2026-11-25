@@ -1603,6 +1603,24 @@ class DesignerFields(unittest.TestCase):
         self.assertIn("status", self.error([{"label": "Hero", "variants": [
             {"html": "x", "inventory": [{"element": "a", "status": "gone"}]}]}]))
 
+    def test_brand_row_carries_a_brand_tag(self):
+        inv = [{"element": "Acme logo", "status": "kept", "brand": True},
+               {"element": "Hero title", "status": "kept", "brand": False}]
+        html = self.page([{"label": "Hero", "variants": [{"html": "<p>a</p>", "inventory": inv}]}])
+        self.assertIn('<tr class="rp-inv-kept rp-inv-brand"><td>Acme logo <span class="rp-inv-brandtag">Brand</span>'
+                      '</td><td>kept</td>', html)
+        self.assertIn('<tr class="rp-inv-kept"><td>Hero title</td>', html)
+        self.assertEqual(html.count('<span class="rp-inv-brandtag">'), 1)
+        self.assertIn(".rp-inv-brandtag {", html)
+
+    def test_brand_must_be_a_boolean(self):
+        for bad in ("yes", 1, None):
+            with self.subTest(bad=bad):
+                msg = self.error([{"label": "Hero", "variants": [
+                    {"html": "x", "inventory": [{"element": "Logo", "status": "kept", "brand": bad}]}]}])
+                self.assertIn("brand", msg)
+                self.assertIn("true or false", msg)
+
     def test_inventory_missing_a_captured_element_counts_as_removed(self):
         before = {"id": "hero", "tag": "section", "label": "Hero", "top": 0, "left": 0, "width": 1000, "height": 400,
                   "elements": [{"kind": "heading", "text": "  Hero   title ", "tag": "h1", "top": 0, "left": 0,

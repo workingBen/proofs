@@ -58,9 +58,11 @@ Judge against the profile when there is one (its References, Rules and Audience;
 
 Judge from the option's inventory against the section's captured elements: every heading, block of body text, button, link, image, list, form and badge. The page shows a captured element with no inventory row as "removed — no reason given".
 
-- **1**: a captured element is missing with no reason, or something the owner might like (a photo, a testimonial, a badge, a price, a secondary link) is removed to make the layout easier; or words were rewritten that nobody picked; or copy was invented (a new headline, made-up numbers, placeholder quotes).
+- **1**: a captured element is missing with no reason, or something the owner might like (a photo, a testimonial, a badge, a price, a secondary link) is removed to make the layout easier; or words were rewritten that nobody picked; or copy was invented (a new headline, made-up numbers, placeholder quotes); or any brand element was touched (below).
 - **3**: every element is accounted for, but a removal's reason is weak ("cleaner", "simpler"), or a moved element lost its meaning (a disclaimer moved away from the claim it qualifies), or a small text change slipped in (casing, truncation) that nobody picked.
 - **5**: every captured element has a row. Removals are few, and each has a reason the reader can accept or reject in one read ("repeats the nav link above"). The words are the page's own, unchanged unless the reader picked a copy change; where shorter copy would help, the note says so and asks.
+
+**The brand.** The logo, wordmark, company name, product names, the brand colors that identify the site and its taglines must look exactly as they do on the current page: the site's own logo file, not a redrawn, recolored or simplified one, and not the name set in type in its place. The inventory marks each brand element's row `"brand": true`. **A brand element removed or changed scores `care` 1, and that fails the option whatever its other scores**: the owner's brand is the one thing on the page a designer must never decide for them, and sessions have swapped logos and names before. It is never a carve-out (unlike a near-copy kept with a Reason line). Only a request for a rebrand or a new logo changes this, and then only for what the request names.
 
 ## The measured checks
 
@@ -77,11 +79,11 @@ A redesign item has three options, each judged on the six criteria and on its ro
 
 - **Careful** fixes what was asked and keeps the structure. It must still fix what was asked: if the problem in the request is still visible in Careful, score the criterion it belongs to 2 or below. A Careful that `--smoke` flags as a near-copy of the current page passes only when that fix is visible (the measured checks, above).
 - **Step up** is a clearly better layout within the site's own language. It must be clearly better than Careful: at least one criterion higher and none lower. A Step up that scores the same as Careful is not a step up; revise it or drop it.
-- **Bold** is a different hierarchy or layout: a different lead, a different order, or a different arrangement of the main blocks, never only new colors or spacing. It must differ from the other two and from the current page, and `--smoke` flags it as a near-copy when it does not. It is never reckless: a brand break scores `fit` 2 or below, invented copy or changed words score `care` 2 or below, and both are caught by the bar. A Bold that needs shorter copy says so in its note and asks instead of rewriting.
+- **Bold** is a different hierarchy or layout: a different lead, a different order, or a different arrangement of the main blocks, never only new colors or spacing. It must differ from the other two and from the current page, and `--smoke` flags it as a near-copy when it does not. It is never reckless: Bold may change everything around it (layout, hierarchy, imagery, the palette outside the brand colors) but never the brand itself, which scores `care` 1 when touched (above); invented copy or changed words score `care` 2 or below; and both are caught by the bar. A Bold that needs shorter copy says so in its note and asks instead of rewriting.
 
 ## The bar
 
-**Any criterion at 2 or below, or any failed design check other than a near-copy kept with a Reason line, means revise it once or drop it, with the reason on the page.**
+**Any criterion at 2 or below, or any failed design check other than a near-copy kept with a Reason line, means revise it once or drop it, with the reason on the page.** A brand element removed or changed is `care` 1, so it is always below the bar.
 
 **An option must also beat the current page** (its `before_scores`) on the criterion the request targets: `action` for "the button gets lost", `grouping` for "this section is a jumble". For a vague request such as "make this nicer", it must beat it on `fold` or `hierarchy`. An option that only ties the current page there is below the bar, however good its other scores: it is the option that "barely changed anything".
 

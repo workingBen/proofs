@@ -515,6 +515,9 @@ def check_designer_fields(it):
                 if row.get("status") not in STATUSES:
                     raise SpecError("%s: inventory status %r must be kept, moved or removed"
                                     % (where, row.get("status")))
+                if "brand" in row and not isinstance(row["brand"], bool):
+                    raise SpecError("%s: inventory brand on %r must be true or false, got %r"
+                                    % (where, row["element"], row["brand"]))
         check_scores(where, o.get("scores"))
     if len(variants) >= 2 and (it.get("judged_by") or any(v.get("scores") for v in variants)):
         unscored = [v for v in variants if not v.get("scores")]
@@ -531,19 +534,24 @@ def _norm(text):
 
 def inventory_table(inv, before):
     """Compact inventory table. A captured element with no row reads as removed, no reason given."""
-    rows = [(str(r["element"]), r["status"], r.get("reason") or "", False) for r in inv or []]
+    # A row marked "brand" (a logo, wordmark, company or product name) carries a small Brand tag,
+    # so the reader sees at a glance that the option kept the brand, or did not.
+    rows = [(str(r["element"]), r["status"], r.get("reason") or "", False, r.get("brand") is True)
+            for r in inv or []]
     if before and inv is not None:
         have = {_norm(r[0]) for r in rows}
         for el in before.get("elements") or []:
             name = (el.get("text") or "").strip() or el.get("kind") or ""
             if name and _norm(name) not in have:
                 have.add(_norm(name))
-                rows.append((" ".join(name.split()), "removed", "", True))
+                rows.append((" ".join(name.split()), "removed", "", True, False))
     if not rows:
         return ""
-    body = "".join('<tr class="rp-inv-%s"><td>%s</td><td>%s</td><td>%s</td></tr>'
-                   % (st, esc(el), st + (" — no reason given" if missing else ""), esc(why))
-                   for el, st, why, missing in rows)
+    body = "".join('<tr class="rp-inv-%s%s"><td>%s%s</td><td>%s</td><td>%s</td></tr>'
+                   % (st, " rp-inv-brand" if brand else "", esc(el),
+                      ' <span class="rp-inv-brandtag">Brand</span>' if brand else "",
+                      st + (" — no reason given" if missing else ""), esc(why))
+                   for el, st, why, missing, brand in rows)
     return ('<div class="rp-inv rp-scroll"><table><thead><tr><th>Element</th><th>Status</th><th>Reason</th></tr></thead>'
             '<tbody>%s</tbody></table></div>' % body)
 

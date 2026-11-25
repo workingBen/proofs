@@ -916,3 +916,52 @@ class DesignerGuidance(unittest.TestCase):
         for needle in ("Careful", "Step up", "Bold", "scored"):
             with self.subTest(needle=needle):
                 self.assertIn(needle, part)
+
+
+class BrandKept(unittest.TestCase):
+    """Task 6b: the designer keeps a site's branding intact unless the user asks for a rebrand."""
+
+    def step(self, heading):
+        return " ".join(section("design-review", heading).split())
+
+    def rubric(self):
+        return " ".join((REPO / "reference" / "design-rubric.md").read_text().split())
+
+    def test_brand_elements_are_named_and_kept_exactly(self):
+        text = self.step("3.")
+        for needle in ("**Keep the brand exactly as it is.**", "logo", "wordmark", "company name", "product names",
+                       "brand colors", "tagline", "never redrawn, recolored, simplified or replaced by a text stand-in"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+
+    def test_every_role_keeps_the_brand_and_bold_changes_only_around_it(self):
+        text = self.step("3.")
+        self.assertIn("Careful, Step up and Bold all keep the brand", text)
+        self.assertIn("Bold may change everything around it", text)
+        self.assertIn("Bold may change everything around it", self.rubric())
+
+    def test_inventory_marks_brand_rows(self):
+        self.assertIn('`"brand": true`', self.step("3."))
+        doc = " ".join((REPO / "reference" / "review-page.md").read_text().split())
+        self.assertIn("`brand`", doc)
+        self.assertIn("Brand", doc)
+
+    def test_brand_loss_is_care_1_and_a_failure_not_a_carve_out(self):
+        text = self.rubric()
+        self.assertIn("a brand element removed or changed scores `care` 1", text.lower())
+        self.assertIn("fails the option whatever its other scores", text)
+        self.assertIn("never a carve-out", text)
+        self.assertNotIn("a brand break scores `fit` 2 or below", text)
+        bar = self.step("4.").split("**The bar.**", 1)[1]
+        self.assertIn("brand element", bar)
+        self.assertIn("never a carve-out", bar)
+
+    def test_logo_not_found_falls_back_to_the_capture_crop(self):
+        text = self.step("3.")
+        for needle in ("cannot be found in the project", "on the page and in chat", "crop", "never invent one"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+
+    def test_rebrand_request_is_the_only_exception(self):
+        self.assertIn("rebrand", self.step("3."))
+        self.assertIn("rebrand", self.rubric())

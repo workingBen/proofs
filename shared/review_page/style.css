@@ -89,6 +89,7 @@ picture.rp-pic { display:contents; }
 .rp-inv th, .rp-inv td { text-align:left; padding:4px 8px; border-bottom:1px solid var(--rp-rule); vertical-align:top; }
 .rp-inv th { font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--rp-faint); }
 .rp-inv tr.rp-inv-removed td { color:var(--rp-deny); }
+.rp-inv-brandtag { display:inline-block; margin-left:6px; padding:0 6px; border:1px solid currentColor; border-radius:999px; font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; vertical-align:1px; }
 .rp-scores { font-size:14px; color:var(--rp-soft); margin-top:8px; }
 .rp-scores b { color:var(--rp-ink, inherit); }
 .rp-before-scores { margin:0 0 8px; }

@@ -1524,6 +1524,22 @@ class DesignChecks(unittest.TestCase):
         self.assertTrue(any(u["text"].startswith("Text on a gradient") for u in c["unmeasured"]), c)
         self.assertEqual(c["contrast"], [])
         self.assertEqual(self.design_problems("C"), [])
+        self.assertIn("item 1 (Hero), Variant C: contrast not measured for 1 text elements "
+                      "(text over an image or gradient) at 1280px", self.res["notes"])
+
+    def test_text_over_an_image_is_unmeasured_not_failed(self):
+        c = self.checks("D", 1280)
+        self.assertEqual([u["text"] for u in c["unmeasured"]], ["Text over a picture"], c)
+        self.assertEqual(c["unmeasured"][0]["reason"], "contrast: not measured (text over an image or gradient)")
+        self.assertEqual(c["contrast"], [])
+        self.assertEqual(self.design_problems("D"), [])
+
+    def test_one_option_proposal_is_checked_and_the_pages_own_label_is_not(self):
+        rows = [c for c in self.res["design_checks"] if c["item"] == "2" and c["width"] == 1280]
+        self.assertEqual([r["variant"] for r in rows], ["proposed"], rows)
+        self.assertEqual([x["text"] for x in rows[0]["contrast"]], ["Proposed gray text"])
+        self.assertIn("item 2 (One option), Proposed: 1 text elements below AA contrast at 1280px", self.res["problems"])
+        self.assertFalse([p for p in self.res["problems"] if p.startswith("item 2") and "Original" in p])
 
     def test_clean_variant_has_no_design_problems(self):
         for w in (1280, 390):
@@ -1543,6 +1559,7 @@ class DesignChecks(unittest.TestCase):
         notes = [o for c in res["design_checks"] if c["width"] == 1280 for o in c["offScale"]]
         self.assertEqual([(o["text"], o["size"]) for o in notes], [("Big", 27)], res["design_checks"])
         self.assertEqual([p for p in res["problems"] if "scale" in p.lower()], [])
+        self.assertTrue([n for n in res["notes"] if "off the page's own scale" in n and "27px" in n], res["notes"])
 
 
 if __name__ == "__main__":

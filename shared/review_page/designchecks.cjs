@@ -17,7 +17,8 @@
 //   line length 80 characters: the upper bound of the usual 45-80 readable range.
 //   edges 1-6 px apart: 6 px or less reads as a mistake, more reads as a choice.
 //   off scale 1 px: a size more than 1 px from every size the page already uses.
-// Text over a background image or gradient cannot be measured: it goes in `unmeasured`.
+// Text over an image, video, canvas, SVG, background image or gradient cannot be measured: it
+// goes in `unmeasured`, and smoke says so in its `notes` so "not measured" never reads as "clean".
 
 // Runs in the page through page.evaluate, so it must stay self-contained.
 function measureBox({ selector, width, beforeFontSizes }) {
@@ -90,8 +91,22 @@ function measureBox({ selector, width, beforeFontSizes }) {
     }
     if (seen.has(el)) continue;
     seen.add(el);
-    const bg = backdrop(el);
-    if (!bg) { out.unmeasured.push({ text: text.slice(0, 40), reason: 'background image or gradient' }); continue; }
+    const reason = 'contrast: not measured (text over an image or gradient)';
+    // Anything painted under the text's first line that is not one of its ancestors: an image,
+    // video, canvas or SVG, or an overlay with a background image, makes a flat color wrong.
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    const rect = Array.from(range.getClientRects()).find((r) => r.width > 0 && r.height > 0);
+    let covered = false;
+    if (rect) {
+      el.scrollIntoView({ block: 'center', inline: 'nearest' });
+      const at = Array.from(range.getClientRects()).find((r) => r.width > 0 && r.height > 0);
+      covered = document.elementsFromPoint(at.left + at.width / 2, at.top + at.height / 2)
+        .some((u) => u !== el && !u.contains(el) && (/^(img|picture|video|canvas|svg)$/i.test(u.tagName)
+          || u.closest('svg') || getComputedStyle(u).backgroundImage !== 'none'));
+    }
+    const bg = covered ? null : backdrop(el);
+    if (!bg) { out.unmeasured.push({ text: text.slice(0, 40), reason }); continue; }
     const fg = parse(s.color);
     if (!fg) continue;
     const top = over(fg, bg);
@@ -125,6 +140,7 @@ function measureBox({ selector, width, beforeFontSizes }) {
       }
     }
   }
+  window.scrollTo(0, 0);
   return out;
 }
 

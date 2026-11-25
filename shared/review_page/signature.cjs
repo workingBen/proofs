@@ -14,11 +14,16 @@
 //   count over the larger. Elements with no same-kind partner score 0, so a missing or extra
 //   element lowers it twice (once as a miss, once in the count ratio).
 //
-// Threshold, with its reason: NEAR_COPY = 0.85. A recolor or a font swap of one layout scores
-//   about 1.0; a real rearrangement of even a few blocks (stack to two columns) falls under
-//   0.5. 0.85 leaves room for sub-pixel and wrapping drift while a changed row still clears it.
-//   It is a first value and a later trial may tune it.
-const NEAR_COPY = 0.85;
+// Threshold, with its reason: NEAR_COPY = 0.30 (first value 0.85, tuned in the two-app trial).
+//   Mean best-match IoU is harsh on a mockup that reproduces a layout at slightly different
+//   proportions, which every hand-built mockup does. Measured on real Astro and Shadcn/Vue
+//   heroes (1280 px capture against coded mockups): the same arrangement resized scored 0.33 to
+//   0.54 against the capture; one recolored with smaller buttons scored 0.81 to 0.83 against its
+//   twin; a left-aligned stack (same order, new alignment) scored 0.19 to 0.26; every genuinely
+//   different layout (text beside picture, picture beside text, a large lead over a picture/text
+//   pair) scored 0.00 to 0.17. 0.85 caught none of those near-copies; 0.30 sits in the gap
+//   between 0.26 and 0.33. The gap is narrow, so a flagged option is a prompt to look, not proof.
+const NEAR_COPY = 0.30;
 
 // The classifier below is a copy of the one in skills/visual-qa/scripts/capture.cjs (it runs in
 // the page, so it cannot be required). tests.test_review_page.NearCopy compares the two texts,

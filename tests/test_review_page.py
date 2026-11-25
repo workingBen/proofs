@@ -1748,6 +1748,9 @@ def abs_box(h1="", p="", btn="", color="#111"):
 
 STACKED = dict(h1=(5, 5, 60, 10), p=(5, 25, 60, 20), btn=(5, 60, 30, 12))
 TWO_COL = dict(h1=(55, 40, 40, 10), p=(55, 55, 40, 20), btn=(5, 5, 30, 12))
+# The same arrangement as STACKED with every block resized and nudged, as a reproduction of a
+# real page is (the two-app trial scored such mockups 0.33 to 0.54 against the capture).
+STACKED_RESIZED = dict(h1=(5, 5, 60, 16), p=(5, 30, 60, 25), btn=(5, 66, 26, 16))
 
 
 @unittest.skipUnless(NODE and playwright_dir(), "Playwright not found")
@@ -1794,6 +1797,16 @@ class NearCopy(unittest.TestCase):
         self.assertEqual(res["near_copies"][0]["item"], "1")
         self.assertTrue([p for p in res["problems"]
                          if p.startswith("item 1 (Hero): Variant A and Variant B are near-copies (")], res["problems"])
+
+    def test_same_arrangement_resized_is_flagged_below_the_old_threshold(self):
+        res = self.run_smoke(self.spec([abs_box(**STACKED), abs_box(**STACKED_RESIZED)]))
+        self.assertEqual(self.copies(res), [("A", "B")], res["near_copies"])
+        self.assertLess(res["near_copies"][0]["score"], 0.85)
+
+    def test_same_arrangement_resized_matches_the_page(self):
+        res = self.run_smoke(self.spec([abs_box(**STACKED_RESIZED), abs_box(**TWO_COL)],
+                                       before_sections=self.before(**STACKED)))
+        self.assertEqual(self.copies(res), [("A", "before")], res["near_copies"])
 
     def test_different_layouts_pass(self):
         res = self.run_smoke(self.spec([abs_box(**STACKED), abs_box(**TWO_COL)]))

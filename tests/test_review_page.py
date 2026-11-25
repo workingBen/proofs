@@ -1736,11 +1736,12 @@ class InventoryFit(unittest.TestCase):
 
 def abs_box(h1="", p="", btn="", color="#111"):
     """A 400px-tall mockup whose elements sit at fixed fractions of its box, so the near-copy
-    signature is known in advance. Each argument is a 'left,top,width,height' tuple in percent."""
+    signature is known in advance. Each argument is a 'left,top,width,height' tuple in percent.
+    Each block is painted, so the signature measures its box, not just its few words of text."""
     def at(tag, g, text, extra=""):
         l, t, w, h = g
-        return ('<%s style="position:absolute;margin:0;left:%s%%;top:%s%%;width:%s%%;height:%s%%;%s">%s</%s>'
-                % (tag, l, t, w, h, extra, text, tag))
+        return ('<%s style="position:absolute;margin:0;left:%s%%;top:%s%%;width:%s%%;height:%s%%;'
+                'background:#eef2f7;%s">%s</%s>' % (tag, l, t, w, h, extra, text, tag))
     inner = at("h1", h1, "Title", "font-size:20px;") + at("p", p, "Body text here", "font-size:16px;") \
         + at("button", btn, "Go", "font-size:16px;")
     return '<div style="position:relative;height:400px;background:#fff;color:%s">%s</div>' % (color, inner)
@@ -1798,10 +1799,10 @@ class NearCopy(unittest.TestCase):
         self.assertTrue([p for p in res["problems"]
                          if p.startswith("item 1 (Hero): Variant A and Variant B are near-copies (")], res["problems"])
 
-    def test_same_arrangement_resized_is_flagged_below_the_old_threshold(self):
+    def test_same_arrangement_resized_is_flagged(self):
         res = self.run_smoke(self.spec([abs_box(**STACKED), abs_box(**STACKED_RESIZED)]))
         self.assertEqual(self.copies(res), [("A", "B")], res["near_copies"])
-        self.assertLess(res["near_copies"][0]["score"], 0.85)
+        self.assertEqual([(s["a"], s["b"]) for s in res["layout_scores"]], [("A", "B")])
 
     def test_same_arrangement_resized_matches_the_page(self):
         res = self.run_smoke(self.spec([abs_box(**STACKED_RESIZED), abs_box(**TWO_COL)],
@@ -1865,6 +1866,210 @@ class NearCopy(unittest.TestCase):
         a = grab("skills/visual-qa/scripts/capture.cjs", "const elementSel", "// What an element")
         b = grab("shared/review_page/signature.cjs", "const elementSel", "// What an element")
         self.assertEqual(a, b)
+        a = grab("skills/visual-qa/scripts/capture.cjs", "// Layout boxes:", "// End of layout boxes.")
+        b = grab("shared/review_page/signature.cjs", "// Layout boxes:", "// End of layout boxes.")
+        self.assertEqual(a, b)
+
+    def test_layout_list_from_a_new_capture_is_the_before_signature(self):
+        # A section whose `layout` says the heading's text sits in the right half, while its block
+        # box (`elements`) spans the row: the layout wins, so a right-column option matches it.
+        right = '<div style="position:relative;height:400px"><h1 style="position:absolute;margin:0;left:55%;top:10%;font-size:20px">Title</h1></div>'
+        sec = self.before(h1=(0, 10, 100, 10))
+        sec["layout"] = [{"kind": "heading", "top": 1040, "left": 550, "width": 400, "height": 40}]
+        res = self.run_smoke(self.spec([right], before_sections=sec))
+        score = res["layout_scores"][0]["score"]
+        del sec["layout"]
+        old = self.run_smoke(self.spec([right], before_sections=sec))["layout_scores"][0]["score"]
+        self.assertGreater(score, old)
+
+
+# The near-copy labeled set (Task 7b). Realistic flow-layout mockups, not absolute boxes: the
+# metric has to hold on what a designer actually writes. Each case is one item with two options.
+LB_FONT = "font-family:Arial,Helvetica,sans-serif;color:%s;background:#fff"
+LB_IMG = ("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='450'%3E"
+          "%3Crect width='800' height='450' fill='%23dbeafe'/%3E%3C/svg%3E")
+LB_H1 = "Plan a calmer week with one simple list"
+LB_P = ("Bring your tasks, notes and reminders into one quiet place, so the next step is always clear "
+        "and nothing slips through the gaps between your apps.")
+
+
+def lb_buttons(s=1.0, justify="center", accent="#1d4ed8"):
+    btn = ('<a href="#" style="display:inline-block;padding:14px 24px;border-radius:8px;font-size:16px;'
+           'text-decoration:none;%s">%s</a>')
+    return ('<div style="display:flex;gap:%dpx;justify-content:%s;margin:0 0 %dpx">%s%s</div>'
+            % (round(16 * s), justify, round(32 * s),
+               btn % ("background:%s;color:#fff" % accent, "Start free"),
+               btn % ("border:2px solid %s;color:%s" % (accent, accent), "See how it works")))
+
+
+def lb_img(h=320, w="100%"):
+    return '<img alt="" src="%s" style="display:block;width:%s;height:%dpx;object-fit:cover">' % (LB_IMG, w, h)
+
+
+def lb_stacked(s=1.0, ink="#111827", accent="#1d4ed8", h1=44, pmax=620, buttons_last=False):
+    """A centered hero: heading, line, two buttons, picture. `s` scales every gap and padding."""
+    head = '<h1 style="font-size:%dpx;line-height:1.15;margin:0 0 %dpx">%s</h1>' % (h1, round(16 * s), LB_H1)
+    para = ('<p style="font-size:18px;line-height:1.5;max-width:%dpx;margin:0 auto %dpx">%s</p>'
+            % (pmax, round(24 * s), LB_P))
+    btns = lb_buttons(s, accent=accent)
+    body = head + para + (lb_img() + '<div style="height:%dpx"></div>' % round(24 * s) + btns
+                          if buttons_last else btns + lb_img())
+    return '<div style="%s;padding:%dpx;text-align:center">%s</div>' % (LB_FONT % ink, round(48 * s), body)
+
+
+def lb_split(image_first=False):
+    text = ('<div><h1 style="font-size:40px;line-height:1.15;margin:0 0 16px">%s</h1>'
+            '<p style="font-size:18px;line-height:1.5;margin:0 0 24px">%s</p>%s</div>'
+            % (LB_H1, LB_P, lb_buttons(justify="flex-start")))
+    cols = (lb_img(), text) if image_first else (text, lb_img())
+    return ('<div style="%s;padding:48px;display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center">'
+            '%s%s</div>' % (LB_FONT % "#111827", cols[0], cols[1]))
+
+
+def lb_text(column=False):
+    """Heading and paragraph, full width or in a 57% column on the right."""
+    inner = ('<h1 style="font-size:40px;line-height:1.15;margin:0 0 16px">%s</h1>'
+             '<p style="font-size:18px;line-height:1.5;margin:0">%s %s</p>' % (LB_H1, LB_P, LB_P))
+    if column:
+        inner = '<div style="margin-left:43%%">%s</div>' % inner
+    return '<div style="%s;padding:48px">%s</div>' % (LB_FONT % "#111827", inner)
+
+
+def lb_features(grid=False):
+    items = "".join('<div><h3 style="font-size:22px;margin:0 0 8px">Feature %s</h3>'
+                    '<p style="font-size:16px;line-height:1.5;margin:0 0 24px">%s</p></div>' % (n, LB_P)
+                    for n in ("one", "two", "three"))
+    wrap = ('<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:32px">%s</div>' if grid
+            else '<div>%s</div>') % items
+    return ('<div style="%s;padding:48px"><h2 style="font-size:32px;margin:0 0 24px">Everything in one place</h2>'
+            '%s</div>' % (LB_FONT % "#111827", wrap))
+
+
+def lb_card(picture=True):
+    """Text beside a placeholder picture (a painted div, no <img>), or the text alone."""
+    pic = '<div style="flex:0 0 40%;min-height:220px;background:#d1d5db;border-radius:8px"></div>' if picture else ""
+    return ('<div style="%s;padding:32px;display:flex;gap:24px;align-items:center">%s<div style="flex:1">'
+            '<h3 style="font-size:24px;margin:0 0 8px">Two columns</h3>'
+            '<p style="font-size:16px;line-height:1.5;margin:0">%s</p></div></div>'
+            % (LB_FONT % "#111827", pic, LB_P))
+
+
+# name: (option A, option B, a near-copy?)
+LABELED = {
+    "recolor_only": (lb_stacked(), lb_stacked(ink="#7c2d12", accent="#c2410c"), True),
+    "spacing_x1_1": (lb_stacked(), lb_stacked(s=1.1), True),
+    "spacing_x1_35": (lb_stacked(), lb_stacked(s=1.35), True),
+    "text_reflowed_slightly": (lb_stacked(), lb_stacked(pmax=560), True),
+    "bigger_heading_and_moved_buttons": (lb_stacked(), lb_stacked(h1=72, buttons_last=True), False),
+    "text_column_vs_full_width": (lb_text(), lb_text(column=True), False),
+    "mirrored_split": (lb_split(), lb_split(image_first=True), False),
+    "stacked_vs_split": (lb_stacked(), lb_split(), False),
+    "stacked_vs_grid": (lb_features(), lb_features(grid=True), False),
+    "placeholder_picture_vs_text_alone": (lb_card(), lb_card(picture=False), False),
+}
+# Each labeled score must clear the cut by this much, so the labels hold with room to spare.
+LABEL_MARGIN = 0.10
+
+
+def near_copy_cut():
+    text = (RP / "signature.cjs").read_text()
+    return float(re.search(r"const NEAR_COPY = ([0-9.]+);", text).group(1))
+
+
+@unittest.skipUnless(NODE and playwright_dir(), "Playwright not found")
+class NearCopyLabeled(unittest.TestCase):
+    """The labeled set: what must and must not read as a near-copy, each with margin, both orders."""
+
+    @classmethod
+    def setUpClass(cls):
+        items = [{"label": name, "reason_html": "<p>r</p>", "stack_variants": True,
+                  "variants": [{"html": a}, {"html": b}]} for name, (a, b, _) in LABELED.items()]
+        items[0]["recommended"] = True
+        spec = {"title": "Labeled", "project": {"name": "P", "session": "s"}, "decisions": "design-review",
+                "items": items}
+        with tempfile.TemporaryDirectory() as tmp:
+            cls.res = DesignChecks.smoke(spec, tmp)
+        cls.cut = near_copy_cut()
+
+    def score(self, name):
+        num = str(list(LABELED).index(name) + 1)
+        rows = [s for s in self.res.get("layout_scores", []) if s["item"] == num and s["b"] != "before"]
+        self.assertEqual(len(rows), 1, self.res.get("layout_scores"))
+        return rows[0]["score"]
+
+    def check(self, name):
+        flag = LABELED[name][2]
+        score = self.score(name)
+        flagged = [c for c in self.res["near_copies"] if c["item"] == str(list(LABELED).index(name) + 1)]
+        if flag:
+            self.assertGreaterEqual(score, self.cut + LABEL_MARGIN, f"{name}: {score} vs cut {self.cut}")
+            self.assertEqual(len(flagged), 1, self.res["near_copies"])
+        else:
+            self.assertLessEqual(score, self.cut - LABEL_MARGIN, f"{name}: {score} vs cut {self.cut}")
+            self.assertEqual(flagged, [], self.res["near_copies"])
+
+    def test_recolor_only_is_flagged(self):
+        self.check("recolor_only")
+
+    def test_spacing_only_x1_1_is_flagged(self):
+        self.check("spacing_x1_1")
+
+    def test_spacing_only_x1_35_is_flagged(self):
+        self.check("spacing_x1_35")
+
+    def test_slightly_reflowed_text_is_flagged(self):
+        self.check("text_reflowed_slightly")
+
+    def test_bigger_heading_and_moved_buttons_pass(self):
+        self.check("bigger_heading_and_moved_buttons")
+
+    def test_text_column_vs_full_width_passes(self):
+        self.check("text_column_vs_full_width")
+
+    def test_mirrored_split_passes(self):
+        self.check("mirrored_split")
+
+    def test_stacked_vs_split_passes(self):
+        self.check("stacked_vs_split")
+
+    def test_stacked_vs_grid_passes(self):
+        self.check("stacked_vs_grid")
+
+    def test_placeholder_picture_beside_text_vs_text_alone_passes(self):
+        self.check("placeholder_picture_vs_text_alone")
+
+
+@unittest.skipUnless(NODE, "node not found")
+class NearCopyMetric(unittest.TestCase):
+    """similarity() on hand-made signatures: symmetric, 1 for identical, and insensitive to spacing."""
+
+    @staticmethod
+    def sim(pairs):
+        js = ("const { similarity } = require(%s);\nconst pairs = %s;\n"
+              "console.log(JSON.stringify(pairs.map(([a, b]) => [similarity(a, b), similarity(b, a)])));"
+              % (json.dumps(str(RP / "signature.cjs")), json.dumps(pairs)))
+        r = subprocess.run(["node", "-e", js], capture_output=True, text=True)
+        if r.returncode:
+            raise AssertionError(r.stderr)
+        return json.loads(r.stdout)
+
+    def test_symmetric_and_identical_is_one(self):
+        e = lambda k, x, y, w, h: {"kind": k, "x": x, "y": y, "w": w, "h": h}
+        hero = [e("heading", 0.1, 0.05, 0.8, 0.14), e("text", 0.2, 0.21, 0.6, 0.08),
+                e("button", 0.38, 0.33, 0.11, 0.06), e("button", 0.51, 0.33, 0.11, 0.06),
+                e("image", 0.05, 0.43, 0.9, 0.52)]
+        spaced = [dict(x, y=x["y"] * 1.35) for x in hero]
+        mirrored = [e("image", 0, 0.1, 0.45, 0.6), e("heading", 0.55, 0.2, 0.45, 0.1), e("text", 0.55, 0.35, 0.45, 0.1)]
+        mirrored_b = [dict(x, x=1 - x["x"] - x["w"]) for x in mirrored]
+        (same, spacing, mirror) = self.sim([[hero, hero], [hero, spaced], [mirrored, mirrored_b]])
+        self.assertAlmostEqual(same[0], 1.0, places=6)
+        self.assertAlmostEqual(spacing[0], spacing[1], places=9)
+        self.assertAlmostEqual(mirror[0], mirror[1], places=9)
+        self.assertGreater(spacing[0], 0.95)
+        self.assertLess(mirror[0], 0.2)
+
+    def test_empty_signature_scores_zero(self):
+        self.assertEqual(self.sim([[[], []]]), [[0, 0]])
 
 
 if __name__ == "__main__":

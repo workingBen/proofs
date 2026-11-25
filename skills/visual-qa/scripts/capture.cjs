@@ -500,6 +500,55 @@ function measure({ items, minText, minTap, edge, offCenterPx = 16, untitledMinHe
   // What an element inside one of these is part of, not a separate row (links and images
   // are not containers: a card link still lists its image).
   const holds = new Set(['heading', 'text', 'button', 'list', 'form', 'badge']);
+  // Layout boxes: where an element shows, for the near-copy signature. Text with no painted
+  // shape of its own (no background, no border) is measured by its text (the union of its text
+  // nodes' line boxes), not its block box, which stretches to whatever holds it. A picture is any
+  // large element (at least minArea px) that is media (svg, video, canvas, iframe), has a CSS
+  // background image, or is painted (a background color or gradient) and holds no text and none
+  // of the elements above: a placeholder div. capture.cjs and signature.cjs share this text (tested).
+  const painted = (s) => s.backgroundImage !== 'none' || !/^(transparent|rgba\(0, 0, 0, 0\))$/.test(s.backgroundColor);
+  const shaped = (el) => {
+    const s = getComputedStyle(el);
+    return painted(s) || ['Top', 'Right', 'Bottom', 'Left'].some((side) =>
+      s[`border${side}Style`] !== 'none' && parseFloat(s[`border${side}Width`]) > 0);
+  };
+  const textRect = (el) => {
+    let l = Infinity, t = Infinity, r = -Infinity, b = -Infinity;
+    const tw = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    while (tw.nextNode()) {
+      const n = tw.currentNode;
+      if (!n.textContent.trim() || !n.parentElement || !visible(n.parentElement)) continue;
+      const range = document.createRange();
+      range.selectNodeContents(n);
+      for (const q of range.getClientRects()) {
+        if (!(q.width > 0 && q.height > 0)) continue;
+        l = Math.min(l, q.left); t = Math.min(t, q.top); r = Math.max(r, q.right); b = Math.max(b, q.bottom);
+      }
+    }
+    return l === Infinity ? null : { left: l, top: t, width: r - l, height: b - t };
+  };
+  const layoutRect = (el, kind) => (kind === 'image' || kind === 'form' || shaped(el)
+    ? el.getBoundingClientRect() : textRect(el) || el.getBoundingClientRect());
+  const pictureEls = (root, taken, minArea) => {
+    const found = [];
+    for (const el of root.querySelectorAll('*')) {
+      if (found.length >= 40) break;
+      if (el.matches(elementSel)) continue;
+      let inside = false;
+      for (let a = el.parentElement; a && a !== root; a = a.parentElement) {
+        if (taken.has(a) || found.includes(a)) { inside = true; break; }
+      }
+      if (inside) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width * r.height < minArea || !visible(el)) continue;
+      const s = getComputedStyle(el);
+      const media = /^(svg|video|canvas|iframe)$/.test(el.tagName.toLowerCase());
+      const empty = !(el.innerText || el.textContent || '').trim() && !el.querySelector(elementSel);
+      if (media || /url\(/.test(s.backgroundImage) || (painted(s) && empty)) found.push(el);
+    }
+    return found;
+  };
+  // End of layout boxes.
   const sections = sectionEls.slice(0, MAX_SECTIONS).map((sec, i) => {
     const sr = sec.getBoundingClientRect();
     const heading = sec.querySelector('h1,h2,h3,h4,h5,h6,[role=heading]');
@@ -507,6 +556,11 @@ function measure({ items, minText, minTap, edge, offCenterPx = 16, untitledMinHe
     const className = typeof sec.className === 'string' ? sec.className.trim().split(/\s+/)[0] : '';
     const taken = new Set();
     const elements = [];
+    // `layout` is the near-copy signature's view of the same elements (see "Layout boxes"
+    // above) plus the section's pictures, page px; `elements` keeps the block boxes.
+    const layout = [];
+    const place = (kind, r) => ({ kind, top: pageTop(r), left: Math.round(r.left),
+      width: Math.round(r.width), height: Math.round(r.height) });
     for (const el of sec.querySelectorAll(elementSel)) {
       if (elements.length >= MAX_ELEMENTS) break;
       if (!visible(el)) continue;
@@ -519,11 +573,16 @@ function measure({ items, minText, minTap, edge, offCenterPx = 16, untitledMinHe
       const text = kind === 'image' ? clip(el.getAttribute('alt')) : clip(el.innerText || el.value);
       elements.push({ kind, text, tag: el.tagName.toLowerCase(), top: pageTop(r),
         left: Math.round(r.left), width: Math.round(r.width), height: Math.round(r.height) });
+      layout.push(place(kind, layoutRect(el, kind)));
+    }
+    for (const el of pictureEls(sec, taken, 0.02 * sr.width * sr.height)) {
+      if (layout.length >= MAX_ELEMENTS) break;
+      layout.push(place('image', el.getBoundingClientRect()));
     }
     return { id: sec.id || '', tag: sec.tagName.toLowerCase(),
       label: headingText || sec.id || className || `section ${i + 1}`,
       top: pageTop(sr), height: Math.round(sr.height),
-      left: Math.round(sr.left), width: Math.round(sr.width), elements };
+      left: Math.round(sr.left), width: Math.round(sr.width), elements, layout };
   });
 
   // Distinct computed text sizes (px) of the visible elements that hold text of their own.

@@ -893,6 +893,21 @@ class SectionInventory(unittest.TestCase):
         self.assertTrue(all(s["width"] > 0 and s["left"] >= 0 for s in secs), secs)
         self.assertTrue(all(isinstance(s["left"], int) and isinstance(s["width"], int) for s in secs))
 
+    def test_sections_carry_a_layout_list_for_the_near_copy_check(self):
+        # Task 7b, additive: `elements` keeps block boxes; `layout` measures unpainted text by its
+        # text and adds painted placeholder divs and CSS background images as pictures.
+        sec = self.measures("inventory-layout.html")["sections"][0]
+        heading = [e for e in sec["elements"] if e["kind"] == "heading"][0]
+        lay = {e["kind"]: e for e in sec["layout"] if e["kind"] != "image"}
+        self.assertEqual(set(lay), {"heading", "link"})
+        self.assertLess(lay["heading"]["width"], heading["width"] / 2)
+        link = [e for e in sec["elements"] if e["kind"] == "link"][0]
+        self.assertEqual((lay["link"]["left"], lay["link"]["width"]), (link["left"], link["width"]))
+        pics = sorted((e["width"], e["height"]) for e in sec["layout"] if e["kind"] == "image")
+        self.assertEqual(pics, [(200, 300), (400, 300)])
+        for e in sec["layout"]:
+            self.assertEqual(set(e), {"kind", "top", "left", "width", "height"})
+
     def test_divs_directly_under_main_are_sections(self):
         # The `main > *` path: no height floor, so this is not the fallback.
         secs = self.measures("inventory-divs.html")["sections"]

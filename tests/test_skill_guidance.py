@@ -772,11 +772,13 @@ class DesignerReferences(unittest.TestCase):
     def test_rubric_scores_the_current_page_and_reads_near_copies_per_case(self):
         text = self.rubric()
         for needle in ("`before_scores`", "beat the current page", "`fold` or `hierarchy`",
-                       "Two options that are near-copies of each other always fail",
+                       "Two options that are near-copies of each other fail unless the author, having looked, records what differs",
+                       "never ignored silently", "one line in the item's Reason saying what genuinely differs",
                        "fails for Step up and Bold", "it is expected and not a failure",
                        "the current page's screenshots at 1280 and 390", "the style guide's path"):
             with self.subTest(needle=needle):
                 self.assertIn(needle, text)
+        self.assertNotIn("always fail", text)
 
     def test_profile_is_made_on_two_questions_pages_rules_second(self):
         text = self.profile()
@@ -827,7 +829,8 @@ class DesignerGuidance(unittest.TestCase):
         text = self.step("3.")
         for needle in ("Careful", "Step up", "Bold", "`careful`", "`step-up`", "`bold`",
                        "one option for a bug-sized fix", "\"Found by the capture\"",
-                       "layout or hierarchy", "near-copies"):
+                       "layout or hierarchy", "near-copies",
+                       "one line in the item's Reason saying what genuinely differs", "never ignore it silently"):
             with self.subTest(needle=needle):
                 self.assertIn(needle, text)
 

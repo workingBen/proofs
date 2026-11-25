@@ -152,6 +152,8 @@ const file = "file://" + path.resolve(process.argv[3]);
   out.design_checks = [];
   out.notes = [];
   out.near_copies = [];
+  // Every pair's score, flagged or not, so a session (and the tests) can see how far below the cut.
+  out.layout_scores = [];
   // How wide each mockup's box is at 1280, so a session sizes its mockups to the box (or sets
   // the item's stack_variants) before it builds, not after rounds of captures.
   out.mockup_widths = [];
@@ -214,6 +216,7 @@ const file = "file://" + path.resolve(process.argv[3]);
       const near = (a, an, b, bn, sa, sb) => {
         if (b !== "before" && !it.design_review) return;
         const score = Math.round(similarity(sa, sb) * 100) / 100;
+        out.layout_scores.push({ item: it.num, a, b, score });
         if (score < NEAR_COPY) return;
         out.near_copies.push({ item: it.num, a, b, score });
         problems.push(`item ${it.num} (${it.label}): ${an} and ${bn} are near-copies (${score.toFixed(2)})`);

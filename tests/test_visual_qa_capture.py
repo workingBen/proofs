@@ -895,7 +895,8 @@ class SectionInventory(unittest.TestCase):
 
     def test_sections_carry_a_layout_list_for_the_near_copy_check(self):
         # Task 7b, additive: `elements` keeps block boxes; `layout` measures unpainted text by its
-        # text and adds painted placeholder divs and CSS background images as pictures.
+        # text and adds painted placeholder divs and CSS background images as pictures; a painted
+        # layer mostly over an image (a glow, a fade) is part of that image.
         sec = self.measures("inventory-layout.html")["sections"][0]
         heading = [e for e in sec["elements"] if e["kind"] == "heading"][0]
         lay = {e["kind"]: e for e in sec["layout"] if e["kind"] != "image"}
@@ -904,7 +905,8 @@ class SectionInventory(unittest.TestCase):
         link = [e for e in sec["elements"] if e["kind"] == "link"][0]
         self.assertEqual((lay["link"]["left"], lay["link"]["width"]), (link["left"], link["width"]))
         pics = sorted((e["width"], e["height"]) for e in sec["layout"] if e["kind"] == "image")
-        self.assertEqual(pics, [(200, 300), (400, 300)])
+        # The gradient laid over the screenshot is part of that picture, not a second one.
+        self.assertEqual(pics, [(200, 300), (300, 300), (400, 300)])
         for e in sec["layout"]:
             self.assertEqual(set(e), {"kind", "top", "left", "width", "height"})
 

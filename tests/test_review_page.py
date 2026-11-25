@@ -2068,6 +2068,40 @@ class NearCopyMetric(unittest.TestCase):
         self.assertGreater(spacing[0], 0.95)
         self.assertLess(mirror[0], 0.2)
 
+    def test_full_bleed_section_with_centered_content_matches_a_mockup_that_fills_its_box(self):
+        # Astro trial, fresh capture: the page's hero sits in a 1024px container centered in a
+        # 1280px section (x 0.10 to 0.90); a mockup reproducing it fills its box (0.02 to 0.98).
+        e = lambda k, x, y, w, h: {"kind": k, "x": x, "y": y, "w": w, "h": h}
+        page = [e("text", 0.43, 0.13, 0.14, 0.02), e("heading", 0.14, 0.15, 0.73, 0.11),
+                e("text", 0.21, 0.27, 0.59, 0.07), e("link", 0.37, 0.35, 0.14, 0.04),
+                e("link", 0.52, 0.35, 0.12, 0.04), e("image", 0.10, 0.45, 0.80, 0.48)]
+        mock = [dict(x, x=0.5 + (x["x"] - 0.5) * 1.2, w=x["w"] * 1.2, y=x["y"] * 0.6) for x in page]
+        [(score, _)] = self.sim([[mock, page]])
+        self.assertGreater(score, 0.9)
+
+    def test_a_short_line_just_above_a_heading_reads_before_it(self):
+        # A 20px eyebrow 16px above a heading, in a tall section: two rows, not one.
+        e = lambda k, x, y, w, h: {"kind": k, "x": x, "y": y, "w": w, "h": h}
+        page = [e("text", 0.43, 0.130, 0.14, 0.017), e("heading", 0.14, 0.143, 0.73, 0.11)]
+        mock = [e("text", 0.43, 0.06, 0.14, 0.02), e("heading", 0.14, 0.10, 0.73, 0.12)]
+        [(score, _)] = self.sim([[mock, page]])
+        self.assertGreater(score, 0.9)
+
+    def test_a_narrower_box_does_not_read_as_a_size_change(self):
+        # Vue trial: type keeps its px size while the picture scales with the box, so the same hero
+        # in a 1046px box has text-to-picture shares about (1046/1280)^2 of the page's.
+        e = lambda k, x, y, w, h: {"kind": k, "x": x, "y": y, "w": w, "h": h}
+        page = [e("heading", 0.20, 0.13, 0.59, 0.09), e("text", 0.26, 0.23, 0.48, 0.03),
+                e("button", 0.34, 0.29, 0.15, 0.03), e("link", 0.51, 0.29, 0.15, 0.03),
+                e("image", 0.03, 0.37, 0.94, 0.54)]
+        k = 1280 / 1046
+        box = [dict(x, x=0.5 + (x["x"] - 0.5) * k, w=x["w"] * k) if x["kind"] != "image" else x for x in page]
+        js = ("const { similarityParts } = require(%s);\nconsole.log(JSON.stringify(similarityParts(%s, %s)));"
+              % (json.dumps(str(RP / "signature.cjs")), json.dumps(box), json.dumps(page)))
+        r = subprocess.run(["node", "-e", js], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertGreater(json.loads(r.stdout)["size"], 0.97)
+
     def test_empty_signature_scores_zero(self):
         self.assertEqual(self.sim([[[], []]]), [[0, 0]])
 

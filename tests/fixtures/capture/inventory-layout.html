@@ -5,10 +5,13 @@
 <title>Layout boxes</title>
 <style>
   body { margin: 0; font: 16px/1.5 Arial, Helvetica, sans-serif; }
-  section { width: 1000px; margin: 0 auto; padding: 40px; box-sizing: border-box; display: flex; gap: 40px; }
+  section { width: 1400px; margin: 0 auto; padding: 40px; box-sizing: border-box; display: flex; gap: 40px; }
   .picture { flex: 0 0 400px; height: 300px; background: #d1d5db; }
   .photo { flex: 0 0 200px; height: 300px; background: url("data:image/gif;base64,R0lGODlhAQABAIAAAN3d3QAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw=="); }
   h2 { margin: 0; font-size: 24px; }
+  .shot { position: relative; flex: 0 0 300px; height: 300px; }
+  .shot img { display: block; width: 300px; height: 300px; }
+  .glow { position: absolute; inset: 20px; background: linear-gradient(#fff0, #fff8); }
   .go { display: inline-block; padding: 12px 24px; background: #1d4ed8; color: #fff; }
 </style>
 </head>
@@ -17,6 +20,7 @@
   <section id="layout">
     <div class="picture"></div>
     <div class="photo"></div>
+    <div class="shot"><img alt="Screenshot" src="data:image/gif;base64,R0lGODlhAQABAIAAAN3d3QAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw=="><div class="glow"></div></div>
     <div style="flex: 1"><h2>Short</h2><a class="go" href="#">Go</a></div>
   </section>
 </main>

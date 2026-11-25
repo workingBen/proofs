@@ -505,7 +505,9 @@ function measure({ items, minText, minTap, edge, offCenterPx = 16, untitledMinHe
   // nodes' line boxes), not its block box, which stretches to whatever holds it. A picture is any
   // large element (at least minArea px) that is media (svg, video, canvas, iframe), has a CSS
   // background image, or is painted (a background color or gradient) and holds no text and none
-  // of the elements above: a placeholder div. capture.cjs and signature.cjs share this text (tested).
+  // of the elements above: a placeholder div. A candidate at least half covered by an image or a
+  // picture already found (a glow or a fade laid over a screenshot) is part of that picture.
+  // capture.cjs and signature.cjs share this text (tested).
   const painted = (s) => s.backgroundImage !== 'none' || !/^(transparent|rgba\(0, 0, 0, 0\))$/.test(s.backgroundColor);
   const shaped = (el) => {
     const s = getComputedStyle(el);
@@ -531,6 +533,9 @@ function measure({ items, minText, minTap, edge, offCenterPx = 16, untitledMinHe
     ? el.getBoundingClientRect() : textRect(el) || el.getBoundingClientRect());
   const pictureEls = (root, taken, minArea) => {
     const found = [];
+    const shots = [...root.querySelectorAll('img')].filter((i) => visible(i)).map((i) => i.getBoundingClientRect());
+    const covered = (r, q) => Math.max(0, Math.min(r.right, q.right) - Math.max(r.left, q.left))
+      * Math.max(0, Math.min(r.bottom, q.bottom) - Math.max(r.top, q.top)) / (r.width * r.height);
     for (const el of root.querySelectorAll('*')) {
       if (found.length >= 40) break;
       if (el.matches(elementSel)) continue;
@@ -544,7 +549,9 @@ function measure({ items, minText, minTap, edge, offCenterPx = 16, untitledMinHe
       const s = getComputedStyle(el);
       const media = /^(svg|video|canvas|iframe)$/.test(el.tagName.toLowerCase());
       const empty = !(el.innerText || el.textContent || '').trim() && !el.querySelector(elementSel);
-      if (media || /url\(/.test(s.backgroundImage) || (painted(s) && empty)) found.push(el);
+      if (!(media || /url\(/.test(s.backgroundImage) || (painted(s) && empty))) continue;
+      if ([...shots, ...found.map((f) => f.getBoundingClientRect())].some((q) => covered(r, q) >= 0.5)) continue;
+      found.push(el);
     }
     return found;
   };

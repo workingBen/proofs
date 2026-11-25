@@ -1644,6 +1644,95 @@ class DesignChecksScope(unittest.TestCase):
         self.assertFalse([n for n in self.sg["notes"] if "rp-mockup" in n], self.sg["notes"])
 
 
+CR_LINKS = ["Pricing &amp; trial", "Features", "Paths", "Works with AI helpers", "Dependable uptime"]
+CR_ROW = ("display:flex;gap:0 18px;font:14px sans-serif;color:#111;background:#fff;padding:0 14px;%s")
+CR_LINK = '<a href="#" style="flex:none;white-space:nowrap;padding:14px 0;color:#111">%s</a>'
+CR_VARIANTS = [
+    # A: the hillock nav (bench run hillock-new, options B and C): one row that scrolls sideways
+    # with its scrollbar hidden, so the last link it shows is cut mid-word at the phone's edge.
+    '<nav style="%s">%s</nav>' % (CR_ROW % "flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none",
+                                  "".join(CR_LINK % t for t in CR_LINKS)),
+    # B: the same links allowed to wrap: nothing is cut.
+    '<nav style="%s">%s</nav>' % (CR_ROW % "flex-wrap:wrap", "".join(CR_LINK % t for t in CR_LINKS)),
+    # C: a card carousel whose next card peeks in: a swipe affordance, a note and never a problem.
+    '<div style="display:flex;gap:12px;overflow-x:auto;font:16px sans-serif;color:#111;background:#fff">%s</div>'
+    % "".join('<div style="flex:none;width:80%%;padding:16px;border:1px solid #ccc"><h3 style="margin:0">Card %d</h3>'
+              '<p style="margin:0">A longer card body.</p></div>' % i for i in (1, 2, 3)),
+    # D: the cut row's links sit in a track wider than the scroller (nav > div > a): still the links.
+    '<nav style="%s"><div style="display:flex;gap:0 18px;flex:none">%s</div></nav>'
+    % (CR_ROW % "overflow-x:hidden", "".join(CR_LINK % t for t in CR_LINKS)),
+    # E: hillock option C in the review page's 292px box: the cut link is over half the row wide,
+    # but a one-line label is a link, never a carousel card.
+    '<nav style="%s">%s</nav>' % (CR_ROW % "overflow-x:auto;scrollbar-width:none",
+                                  "".join(CR_LINK % t for t in ["Pricing", "Paths", "Works with AI helpers and agents"])),
+]
+
+
+@unittest.skipUnless(NODE and playwright_dir(), "Playwright not found")
+class ClippedRows(unittest.TestCase):
+    """A sideways row cut at the phone's edge: the page never scrolls, so nothing else saw it."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        spec = {"title": "Rows", "project": {"name": "P", "session": "s"}, "decisions": "design-review",
+                "items": [{"label": "Nav", "reason_html": "<p>r</p>", "recommended": True, "stack_variants": True,
+                           "variants": [{"html": h} for h in CR_VARIANTS]}]}
+        cls.res = DesignChecks.smoke(spec, cls.tmp.name, "rows")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def row(self, variant, width):
+        rows = [c for c in self.res["design_checks"] if c["variant"] == variant and c["width"] == width]
+        self.assertEqual(len(rows), 1, self.res["design_checks"])
+        return rows[0]
+
+    def cut_problems(self, variant):
+        return [p for p in self.res["problems"] if p.startswith("item 1 (Nav), Variant %s:" % variant) and "cut" in p]
+
+    def test_a_cut_nav_row_at_390_is_a_problem(self):
+        c = self.row("A", 390)
+        self.assertEqual(len(c["clippedRows"]), 1, c)
+        cut = c["clippedRows"][0]
+        self.assertIn(cut["text"], [t.replace("&amp;", "&") for t in CR_LINKS])
+        self.assertTrue(cut["text"].startswith(cut["cut"]) and cut["cut"] != cut["text"], cut)
+        self.assertGreater(cut["px"], 0)
+        self.assertEqual(self.cut_problems("A"),
+                         ['item 1 (Nav), Variant A: 1 row cut at the right edge at 390px ("%s" cut)' % cut["cut"]])
+
+    def test_the_same_row_wrapping_is_clean(self):
+        self.assertEqual(self.row("B", 390)["clippedRows"], [])
+        self.assertEqual(self.cut_problems("B"), [])
+
+    def test_a_card_carousel_peek_is_a_note_only(self):
+        c = self.row("C", 390)
+        self.assertEqual(c["clippedRows"], [], c)
+        self.assertEqual(len(c["peekRows"]), 1, c)
+        self.assertEqual(self.cut_problems("C"), [])
+        self.assertTrue([n for n in self.res["notes"] if n.startswith("item 1 (Nav), Variant C:") and "peek" in n],
+                        self.res["notes"])
+
+    def test_links_inside_a_wide_track_are_still_cut_items(self):
+        c = self.row("D", 390)
+        self.assertEqual(len(c["clippedRows"]), 1, c)
+        self.assertEqual(c["peekRows"], [])
+        self.assertEqual(len(self.cut_problems("D")), 1, self.res["problems"])
+
+    def test_a_one_line_link_wider_than_half_the_row_is_still_cut(self):
+        c = self.row("E", 390)
+        self.assertEqual(c["peekRows"], [], c)
+        self.assertEqual([r["text"] for r in c["clippedRows"]], ["Works with AI helpers and agents"], c)
+        self.assertEqual(len(self.cut_problems("E")), 1, self.res["problems"])
+
+    def test_the_cut_row_at_1280_where_it_fits_is_clean(self):
+        for v in ("A", "D"):
+            c = self.row(v, 1280)
+            self.assertEqual((c["clippedRows"], c["peekRows"]), ([], []), c)
+        self.assertFalse([p for p in self.res["problems"] if "cut" in p and "1280px" in p], self.res["problems"])
+
+
 class DesignerFields(unittest.TestCase):
     """Option roles, the element inventory and the critic's scores on a design-review item."""
     SC = {"hierarchy": 4, "action": 5, "fold": 3, "grouping": 4, "fit": 4, "care": 5}

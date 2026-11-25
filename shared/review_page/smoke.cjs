@@ -216,6 +216,8 @@ const file = "file://" + path.resolve(process.argv[3]);
         if (d.smallTargets.length) problems.push(`${where}: ${d.smallTargets.length} tap targets under 44x44 at ${w}px`);
         if (d.longLines.length) problems.push(`${where}: ${d.longLines.length} lines over 80 characters at ${w}px`);
         if (d.edges.length) problems.push(`${where}: ${d.edges.length} left edges 1 to 6px out of line at ${w}px`);
+        if (d.clippedRows.length) problems.push(`${where}: ${d.clippedRows.length} row${d.clippedRows.length > 1 ? "s" : ""} cut at the right edge at ${w}px (${d.clippedRows.map((c) => `"${c.cut}" cut`).join("; ")})`);
+        if (d.peekRows.length) out.notes.push(`${where}: ${d.peekRows.length} carousel${d.peekRows.length > 1 ? "s" : ""} show a partly visible card at ${w}px (${d.peekRows.map((c) => `"${c.cut || c.text}"`).join("; ")}); a swipe peek, check it is meant`);
         if (d.unmeasured.length) {
           const why = [...new Set(d.unmeasured.map((u) => u.reason.replace(/^contrast: not measured \((.*)\)$/, "$1")))];
           out.notes.push(`${where}: contrast not measured for ${d.unmeasured.length} text elements (${why.join("; ")}) at ${w}px`);

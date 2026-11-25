@@ -5,10 +5,18 @@
 // designChecks(page, boxSelector, { width, beforeFontSizes }) resolves to
 //   { contrast: [{ text, ratio, needed }], unmeasured: [{ text, reason }],
 //     smallTargets: [{ text, w, h }], longLines: [{ text, chars }],
-//     edges: [{ a, b, px }], offScale: [{ text, size }] }
-// Small targets are listed only at 390 and long lines only at 1280 (the widths those rules
-// are about); the other lists are measured at whatever width the page is at. `offScale` is a
-// note for the reader, never a problem: it is empty when `beforeFontSizes` is empty.
+//     edges: [{ a, b, px }], offScale: [{ text, size }],
+//     clippedRows: [{ text, cut, px }], peekRows: [{ text, cut, px }] }
+// Small targets, clipped rows and peeks are listed only at 390 and long lines only at 1280 (the
+// widths those rules are about); the other lists are measured at whatever width the page is at.
+// `offScale` and `peekRows` are notes for the reader, never problems: `offScale` is empty when
+// `beforeFontSizes` is empty.
+// A clipped row is a sideways scroller (overflow-x auto, scroll, hidden or clip, content wider
+// than its box) whose item is only partly visible at its right edge, or the viewport's: the page
+// never scrolls sideways, so nothing else sees a nav link cut mid-word. `text` is the item's
+// whole label, `cut` the part a reader sees, `px` how far it runs past the edge. Measured with
+// the row scrolled to its start, as a reader first sees it. A wrapper wider than the scroller
+// (nav > ul > li) is looked through to its own items.
 //
 // Thresholds, each with its reason:
 //   contrast 4.5:1, or 3:1 for text of 24px+ (18.66px+ when bold): WCAG 2.x AA.
@@ -17,6 +25,14 @@
 //   line length 80 characters: the upper bound of the usual 45-80 readable range.
 //   edges 1-6 px apart: 6 px or less reads as a mistake, more reads as a choice.
 //   off scale 1 px: a size more than 1 px from every size the page already uses.
+//   clipped row 1 px: an item runs more than 1 px past the edge. An item wider than half the
+//     scroller that holds more than one line of text or a picture is a card, and a partly shown
+//     next card is a deliberate swipe peek (`peekRows`, a note): a phone carousel shows one card
+//     and a slice of the next, so its cards run past half the row. Width alone is not enough:
+//     in the review page's 292 px box at 390, the hillock nav's "Works with AI helpers" link was
+//     139 px of a 264 px row (53%), so a one-line label of any width counts as a link, tab,
+//     button or chip, and cut. Items without text (a decorative shape bleeding off a
+//     hidden-overflow box) are not counted.
 // Text over an image, video, canvas, SVG, background image or gradient cannot be measured: it
 // goes in `unmeasured`, and smoke says so in its `notes` so "not measured" never reads as "clean".
 // So does a color the browser cannot paint to a 1x1 canvas, and a translucent element over its
@@ -24,7 +40,8 @@
 
 // Runs in the page through page.evaluate, so it must stay self-contained.
 function measureBox({ selector, width, beforeFontSizes }) {
-  const out = { contrast: [], unmeasured: [], smallTargets: [], longLines: [], edges: [], offScale: [] };
+  const out = { contrast: [], unmeasured: [], smallTargets: [], longLines: [], edges: [], offScale: [],
+    clippedRows: [], peekRows: [] };
   const box = document.querySelector(selector);
   if (!box) return out;
   const shown = (el) => {
@@ -98,6 +115,62 @@ function measureBox({ selector, width, beforeFontSizes }) {
     for (let k = layers.length - 1; k >= 0; k--) under = over(layers[k], under);
     return { bg: under, fade };
   };
+
+  // Clipped rows, before the contrast pass below scrolls elements into view (and so scrollers).
+  if (width === 390) {
+    const vw = document.documentElement.clientWidth;
+    const CLIPS = /^(auto|scroll|hidden|clip)$/;
+    for (const row of [box, ...box.querySelectorAll('*')]) {
+      if (!CLIPS.test(getComputedStyle(row).overflowX) || row.scrollWidth <= row.clientWidth + 1 || !shown(row)) continue;
+      const saved = row.scrollLeft;
+      row.scrollLeft = 0;
+      try {
+        const rr = row.getBoundingClientRect();
+        // The visible right edge: the row's padding box, then every clipping ancestor, then the viewport.
+        let right = Math.min(rr.left + row.clientLeft + row.clientWidth, vw);
+        for (let a = row.parentElement; a; a = a.parentElement) {
+          if (a !== document.documentElement && a !== document.body && CLIPS.test(getComputedStyle(a).overflowX)) {
+            const ar = a.getBoundingClientRect();
+            right = Math.min(right, ar.left + a.clientLeft + a.clientWidth);
+          }
+        }
+        const visible = (k) => shown(k) && k.getBoundingClientRect().width > 0;
+        let kids = Array.from(row.children).filter(visible);
+        for (let depth = 0; depth < 4 && kids.length === 1 && kids[0].getBoundingClientRect().width > row.clientWidth + 1; depth++) {
+          kids = Array.from(kids[0].children).filter(visible);
+        }
+        for (const k of kids) {
+          const kr = k.getBoundingClientRect();
+          if (!(kr.left < right - 1 && kr.right > right + 1)) continue;
+          const text = label(k);
+          if (!(k.innerText || k.textContent || '').trim()) continue;
+          // The part of the label a reader sees: the characters that end inside the edge.
+          let seenText = '';
+          const tops = new Set();
+          const tw = document.createTreeWalker(k, NodeFilter.SHOW_TEXT);
+          while (tw.nextNode()) {
+            const n = tw.currentNode;
+            for (let i = 0; i < n.textContent.length; i++) {
+              const r = document.createRange();
+              r.setStart(n, i); r.setEnd(n, i + 1);
+              const b = r.getBoundingClientRect();
+              if (b.width === 0 && b.height === 0) continue;
+              if (b.width > 0) tops.add(Math.round(b.top / 3));
+              if (b.right <= right + 0.5) seenText += n.textContent[i];
+            }
+          }
+          const hit = { text, cut: seenText.trim().replace(/\s+/g, ' ').slice(0, 40), px: Math.round(kr.right - right) };
+          // A card is wider than half the row AND holds more than one line of text or a picture;
+          // a one-line label of any width is a link, tab, button or chip.
+          const card = kr.width > row.clientWidth * 0.5 && (tops.size > 1 || !!k.querySelector('img,picture,video,canvas,svg'));
+          (card ? out.peekRows : out.clippedRows).push(hit);
+          break;
+        }
+      } finally {
+        row.scrollLeft = saved;
+      }
+    }
+  }
 
   const seen = new Set();
   const sizes = new Set();

@@ -1656,6 +1656,40 @@ class DesignerFields(unittest.TestCase):
         self.assertNotIn("Checked by the designer", html)
         self.assertIn("judged_by", self.error([{"label": "Hero", "judged_by": "robot", "variants": v}]))
 
+    def test_judged_by_with_nothing_scored_recommending_is_a_spec_error(self):
+        msg = self.error([{"label": "Hero", "judged_by": "helper", "variants": [
+            {"html": "<p>a</p>"}, {"html": "<p>b</p>", "recommended": True}]}])
+        self.assertEqual(msg, "item 1: variant B is recommended but has no scores")
+
+    def test_judged_by_with_nothing_scored_says_not_scored_on_every_variant(self):
+        html = self.page([{"label": "Hero", "judged_by": "helper", "variants": [
+            {"html": "<p>a</p>"}, {"html": "<p>b</p>"}]}])
+        self.assertEqual(html.count('<div class="rp-scores rp-unscored">Not scored</div>'), 2)
+
+    def test_no_judged_by_and_nothing_scored_builds_as_before(self):
+        html = self.page([{"label": "Hero", "variants": [
+            {"html": "<p>a</p>"}, {"html": "<p>b</p>", "recommended": True}]}])
+        self.assertNotIn('<div class="rp-scores', html)
+
+
+@unittest.skipUnless(NODE and playwright_dir(), "Playwright not found")
+class InventoryFit(unittest.TestCase):
+    def test_long_inventory_rows_do_not_scroll_the_page_sideways(self):
+        long = "Promotional banner with a very long caption " * 3
+        inv = [{"element": long + str(i), "status": "removed" if i % 2 else "kept",
+                "reason": "a long reason that also runs on and on " * 2} for i in range(5)]
+        sc = {"hierarchy": 4, "action": 5, "fold": 3, "grouping": 4, "fit": 4, "care": 5}
+        spec = {"title": "Fit", "project": {"name": "P", "session": "s"}, "decisions": "design-review",
+                "items": [{"label": "Hero", "judged_by": "helper", "reason_html": "<p>r</p>", "recommended": True,
+                           "variants": [
+                               {"html": '<h1 style="margin:0">Alpha</h1><p>one</p>', "role": "careful",
+                                "scores": sc, "inventory": inv, "recommended": True},
+                               {"html": '<div style="display:flex;gap:30px"><b>Beta</b><i>two</i><u>x</u></div>',
+                                "role": "bold", "scores": sc, "inventory": inv}]}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            res = DesignChecks.smoke(spec, tmp)
+        self.assertEqual([p for p in res["problems"] if "sideways" in p], [], res["problems"])
+
 
 def abs_box(h1="", p="", btn="", color="#111"):
     """A 400px-tall mockup whose elements sit at fixed fractions of its box, so the near-copy

@@ -509,7 +509,7 @@ def check_designer_fields(it):
                     raise SpecError("%s: unknown score %r (use %s)" % (where, k, ", ".join(d for d, _ in SCORE_DIMS)))
                 if isinstance(val, bool) or not isinstance(val, int) or not 1 <= val <= 5:
                     raise SpecError("%s: score %s must be a whole number from 1 to 5, got %r" % (where, k, val))
-    if len(variants) >= 2 and any(v.get("scores") for v in variants):
+    if len(variants) >= 2 and (it.get("judged_by") or any(v.get("scores") for v in variants)):
         unscored = [v for v in variants if not v.get("scores")]
         picked = [v["key"] for v in unscored if v.get("recommended")]
         if it.get("selected") in [v["key"] for v in unscored]:
@@ -1060,7 +1060,7 @@ def review_item(it, dec, colors):
         h.append('<div class="rp-history">%s</div>' % it["history_html"])
     if it.get("body_html"):
         h.append('<div class="rp-body">%s</div>' % it["body_html"])
-    scored = any(v.get("scores") for v in variants)
+    scored = bool(it.get("judged_by")) or any(v.get("scores") for v in variants)
     if not variants:
         h.append(designer_extras(it, True, it.get("before_sections")))
     if variants:

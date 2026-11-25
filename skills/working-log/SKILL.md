@@ -1,6 +1,6 @@
 ---
 name: working-log
-version: 1.12.5
+version: 1.12.6
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -129,7 +129,7 @@ The spec's fields, in the order the page shows them:
 
 **A paste updates the page first, before any other work.** The same goes for answers you read from the page's database. When the user pastes an export (from this page or any page linked from it), republish the session page before you start on what it asks: mark each answered page's link `"state": "in-progress"`, move answered questions to Decided, and log what you are about to do. When a linked page is ready for the user again, flip its link back to `open` with its new status in the same republish. A page that still shows answered work as waiting on them reads as stale, and they stop trusting it.
 
-**Read answers from the page first.** A published page saves every answer in its own database when you publish it with `capabilities: {"db": {}}` (keep it on every republish; never pass `{}`). Before you ask for a paste, and whenever the user says they answered, read them: `ArtifactData` `list` of `proofs-answers` with `out_dir`, then `review_page.py --answers <page> --rows <out_dir>` prints the same text as the Copy export. The database comes first and a pasted export second; if they differ, the newer (`updated_at` against the export's stamp) wins, and say so. Anyone the page is shared with can write answers; pages are private by default. Details: "Answers without Copy" in `../../reference/review-page.md`.
+**Read answers from the page first.** A published page saves every answer in its own database when you publish it with `capabilities: {"db": {}}` (keep it on every republish; never pass `{}`). Before you ask for a paste, and whenever the user says they answered, read them: `ArtifactData` `list` of `proofs-answers` with `out_dir`, then `review_page.py --answers <page> --rows <out_dir>` prints the same text as the Copy export. The database comes first and a pasted export second; if they differ, the newer (`updated_at` against the export's stamp) wins, and say so. Anyone the page is shared with can write answers; pages are private by default. Details: "Answers without Copy" in `../../reference/review-page.md`. The page's bar says **Saved**, **Saving…** or **Not saved yet**; if the user says it shows Not saved yet, ask for the Copy export, which always has everything.
 
 **Say what a failure looks like.** When an entry asks the user to run something, give the success output *and* the most likely failure text. They often cannot read their own terminal — that is why this page exists.
 

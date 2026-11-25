@@ -48,6 +48,10 @@ spec: it is how you rebuild the next round.
 - On a published claude.ai artifact with the `db` capability, every answer is also
   saved in the artifact's own database, so you can read it without a Copy and paste
   (see "Answers without Copy" below). Without it the page works exactly as before.
+- A sync indicator in the sticky bar (the bottom bar on a review page): **Saved**,
+  **Saving…** or **Not saved yet**, a small icon plus the word, read out politely to
+  screen readers. It shows only once the page's database answers, so a local file or a
+  page published without `db` shows nothing and never a false "Saved".
 - Light and dark chrome from tokens on `:root` (questions mode: its single dark
   world). Every semantic color, including the amber revision box, has a dark pair.
 
@@ -216,17 +220,19 @@ which removes it. Nothing else is needed: no access rules and no `user` capabili
 A page built before Proofs 1.6.8 has no database code; rebuild it.
 
 **What the page saves.** One document per card in the collection `proofs-answers`,
-written about 0.8 s after the reader stops changing it (`DB_DEBOUNCE_MS`), and read
-back when the page opens, so a second device shows the same answers. Opening the page
-writes nothing. The document id is `<section id>.<item id>` (`s1.filter-placement`);
+read back when the page opens, so a second device shows the same answers. Opening the
+page writes nothing. Typing is saved about 0.8 s after the reader pauses
+(`DB_DEBOUNCE_MS`); a tap (an option, a decision, a variant, a read tick) is saved at
+once; and leaving a text box, switching apps or leaving the page (`blur`,
+`visibilitychange`, `pagehide`) sends whatever is still waiting. The document id is `<section id>.<item id>` (`s1.filter-placement`);
 characters other than letters, digits and `_ - . ~ : @ +` become `_`, plus a short hash.
 
 | Field | Meaning |
 |---|---|
 | `id`, `section` | the card's id (`qid`, `qaid`, entry id or review item id) and its section's id |
 | `kind` | `question`, `qa`, `log`, `review`, or `extra` (the "Anything else" box: document `_page.extra`) |
-| `answer` | question: the option's `value`, or `null`; qa: `PASS`, `FAIL`, `COULDN'T TEST` or `null`; log: `{group: option}`; review: the decision state (`accept`, `deny`, ...) or `null` |
-| `note` | the typed text: a note, a review comment, or, on a text-box-only question, the answer itself |
+| `answer` | question: the option's `value`, the typed text on a text-box-only question, or `null`; qa: `PASS`, `FAIL`, `COULDN'T TEST` or `null`; log: `{group: option}`; review: the decision state (`accept`, `deny`, ...) or `null` |
+| `note` | the typed text: a note or a review comment. A text-box-only question (`options: []`) stores what was typed in `answer` instead; rows written before 1.6.9 carry it in `note`, and the page and `--answers` still read them |
 | `read` | the read tick (log entries, review items) |
 | `variant`, `works_as_designed` | review items only: the picked variant key, and the deny checkbox |
 | `updated_at` | when the reader's browser wrote it (ISO 8601, UTC) |
@@ -254,10 +260,20 @@ database, but the page and `--answers` ignore it.
 for a row, the export's `sent:` / `exported:` stamp for a paste), and say in chat which
 one you used and why.
 
+**The sync indicator.** **Saved**: every change is in the store. **Saving…**: a write
+is out, or typing is waiting out the 0.8 s pause. **Not saved yet**: a change has not
+reached the store; the page keeps retrying with backoff (1 s, doubling, up to 30 s,
+and at once when the device comes back online), and Copy stays the way out. On a phone
+the bar stays one line: Saved and Saving… show the icon alone (the word is still read
+out), and Not saved takes the tally's place until it lands. A change the page never got
+to send (the tab closed mid-write) is kept in `localStorage`; on the next load the
+indicator says Not saved yet and the page pushes it, unless the stored row is newer.
+
 **When the page cannot save** (a local file, `wifi` mode, an older viewer, a signed-out
 viewer, or a viewer who may not write), it keeps working from `localStorage` and Copy
-alone, and never blocks or breaks Copy. The page's `<body>` carries
-`data-answers-db`: `on`, `off`, `unreachable` (no answer in 10 s) or `error`.
+alone, and never blocks or breaks Copy. A refused write stops the saving and leaves the
+indicator at Not saved yet. The page's `<body>` carries `data-answers-db`: `on`,
+`off`, `unreachable` (no answer in 10 s) or `error`.
 
 **Privacy.** Anyone the page is shared with at Contributor level or above can write
 answers, and anyone who can open it can read them. Pages are private by default; share
@@ -286,7 +302,7 @@ The install is an `npm install`, so it may ask permission once; that is expected
 The smoke check clicks a variant and every decision on the
 first item (or answers the first question and check, and ticks the first entry),
 types a comment, ticks read, confirms open questions sit directly under the sticky
-bar, copies, reloads to prove persistence,
+bar as the page opens, checks the sync indicator stays hidden with no database, copies, reloads to prove persistence,
 forces a clipboard failure to prove the fallback, checks every image loaded (shared images included, none left
 blank) and every `<picture>` has a PNG or JPEG `<img>` fallback, and
 checks for sideways scroll at 1280 and 390. On a review page it also flags any word a mockup

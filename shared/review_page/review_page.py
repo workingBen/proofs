@@ -31,6 +31,12 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ENGINE = HERE / "engine.js"
 ANSWERS = HERE / "answers.cjs"
+# The bar's sync indicator: hidden until the page's database answers (engine.js fills
+# the icon and the word), so a page that cannot save never shows "Saved".
+SYNC_HTML = ('<span class="rp-sync" data-sync hidden role="status" aria-live="polite">'
+             '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" '
+             'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></svg>'
+             '<span class="rp-sync-t"></span></span>')
 STYLE = HERE / "style.css"
 SMOKE = HERE / "smoke.cjs"
 
@@ -786,14 +792,15 @@ def page(spec):
         html_out.append('<div class="rp-topbars"><div class="rp-projectbar">%s<span class="rp-pb-x">%s · </span><b class="rp-session">%s</b><span class="rp-pb-x">%s</span></div>'
                         % (mark, esc(proj["name"]), esc(proj["session"]), repo))
         html_out.append('<div class="rp-statusbar"><span id="rp-tally"></span><span class="rp-marker">%s</span>'
-                        '<button type="button" class="rp-copy" data-copy>Copy<span class="rp-copy-x"> my replies</span></button></div></div>' % marker)
+                        '%s<button type="button" class="rp-copy" data-copy>Copy<span class="rp-copy-x"> my replies</span></button></div></div>'
+                        % (marker, SYNC_HTML))
     elif mode == "questions":
         html_out.append('<div class="bar">%s<div class="bar-title">%s</div><div class="tally" id="rp-tally">—</div>'
-                        '<button class="ghost" id="rp-clear" type="button">Clear</button>'
+                        '%s<button class="ghost" id="rp-clear" type="button">Clear</button>'
                         '<button class="copy" type="button" data-copy>%s</button></div>'
                         % (mark, (spec.get("bar_title_html") or esc(proj["name"])) + (
                             '<span class="rp-sess"> · <b class="rp-session">%s</b></span>' % esc(proj["session"])
-                            if proj.get("session") else ""), esc(spec.get("copy_label", "Copy my answers"))))
+                            if proj.get("session") else ""), SYNC_HTML, esc(spec.get("copy_label", "Copy my answers"))))
     html_out.append('<main class="rp-main" data-preview="light">')
     if mode == "review":
         # project · session, then the repo (dropped on phones, separator and all). Each
@@ -834,8 +841,8 @@ def page(spec):
     html_out.append("</main>")
     if mode == "review":
         html_out.append('<div class="rp-bar"><div class="rp-progress" aria-hidden="true"></div><span id="rp-tally"></span>'
-                        '<button type="button" class="rp-copy" data-copy>%s</button></div>'
-                        % esc(spec.get("copy_label", "Copy My Decisions")))
+                        '%s<button type="button" class="rp-copy" data-copy>%s</button></div>'
+                        % (SYNC_HTML, esc(spec.get("copy_label", "Copy My Decisions"))))
     html_out.append('<div class="rp-fallback" hidden role="dialog" aria-label="Copy the text"><div class="rp-fallback-in">'
                     '<p>Copying was blocked here, so nothing was copied. The text is selected: copy it with Cmd+C or Ctrl+C.</p>'
                     '<textarea readonly></textarea><button type="button" data-close>Close</button></div></div>')

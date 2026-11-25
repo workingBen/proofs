@@ -1,6 +1,6 @@
 ---
 name: qa-checklist
-version: 1.2.3
+version: 1.2.4
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -105,7 +105,7 @@ QA qa-photos | Do inspection photos appear at all — thumbnail and zoom
 On the session page the same `--- QA results ---` block arrives inside
 working-log's export, after the questions.
 
-**Read answers from the page first.** A published page saves every answer in its own database when you publish it with `capabilities: {"db": {}}` (keep it on every republish; never pass `{}`). Before you ask for a paste, and whenever the user says they ran the checks, read them: `ArtifactData` `list` of `proofs-answers` with `out_dir`, then `review_page.py --answers <page> --rows <out_dir>` prints the same text as the Copy export. The database comes first and a pasted export second; if they differ, the newer (`updated_at` against the export's stamp) wins, and say so. Anyone the page is shared with can write answers; pages are private by default. Details: "Answers without Copy" in `../../reference/review-page.md`.
+**Read answers from the page first.** A published page saves every answer in its own database when you publish it with `capabilities: {"db": {}}` (keep it on every republish; never pass `{}`). Before you ask for a paste, and whenever the user says they ran the checks, read them: `ArtifactData` `list` of `proofs-answers` with `out_dir`, then `review_page.py --answers <page> --rows <out_dir>` prints the same text as the Copy export. The database comes first and a pasted export second; if they differ, the newer (`updated_at` against the export's stamp) wins, and say so. Anyone the page is shared with can write answers; pages are private by default. Details: "Answers without Copy" in `../../reference/review-page.md`. The page's bar says **Saved**, **Saving…** or **Not saved yet**; if the user says it shows Not saved yet, ask for the Copy export, which always has everything.
 
 ## Verifying
 

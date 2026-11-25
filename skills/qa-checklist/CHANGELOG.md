@@ -1,5 +1,6 @@
 # Changelog
 
+- **1.2.4** (2026-11-24): The checklist's bar shows whether results are saved: Saved, Saving… or Not saved yet (only when published with the `db` capability). A tap on PASS, FAIL or COULDN'T TEST is saved at once, notes after a short pause, and leaving the page sends what is waiting. If the user reports Not saved yet, ask for the Copy export.
 - **1.2.3** (2026-11-24): Results reach Claude without Copy and paste: publish with `capabilities: {"db": {}}`, and read them from the page's database with `ArtifactData` and `review_page.py --answers` before asking for a paste (the newer of the two wins). Copy works as before.
 - **1.2.2** (2026-11-23): Gives the exact build line with `--out .proofs/pages/<name>.html`, the one folder the optional `open` allow rule covers, so the page can be opened. A spec's asset path that is not found next to the spec is now tried from the working directory, and the error names both paths.
 - **1.2.1** (2026-11-22): Says to run `--smoke` every time: if it reports Playwright missing, run the one-line install it prints (no browser download) and run it again; if it still cannot run, say on the page and in chat that the self-check did not run. It no longer reads as optional when Playwright is absent.

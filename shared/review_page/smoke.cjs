@@ -53,16 +53,9 @@ const file = "file://" + path.resolve(process.argv[3]);
     }
   } else if (S.mode === "questions" || S.mode === "session") {
     out.items = await page.locator("[data-qid], [data-qaid], [data-entry]").count();
-    const firstOpt = page.locator(".q input[type=radio]").first();
-    if (await firstOpt.count()) await firstOpt.check();
-    const firstQa = page.locator(".qa input[type=radio]").first();
-    if (await firstQa.count()) await firstQa.check();
-    // a reader writes the note, then ticks: a read entry folds its note box away
-    const note = page.locator("[data-note]").first();
-    if (await note.count()) await note.fill("smoke note");
-    const tick = page.locator("[data-tick]").first();
-    if (await tick.count()) await tick.check();
-    // Open questions first: the first thing in <main>, and visible without scrolling.
+    // Open questions first: the first thing in <main>, and visible without scrolling. Measured
+    // as the page opens: answering scrolls the page, which hid a 96px gap on long pages and
+    // reported it on short ones.
     if (items("questions").length) {
       const first = await page.evaluate(() => {
         const el = document.querySelector(".rp-main").firstElementChild;
@@ -73,6 +66,15 @@ const file = "file://" + path.resolve(process.argv[3]);
       if (!first.cls.includes("rp-kind-questions")) problems.push("open questions are not the first thing under the sticky bar");
       if (first.top - first.barBottom > 80) problems.push(`open questions start ${Math.round(first.top - first.barBottom)}px below the sticky bar`);
     }
+    const firstOpt = page.locator(".q input[type=radio]").first();
+    if (await firstOpt.count()) await firstOpt.check();
+    const firstQa = page.locator(".qa input[type=radio]").first();
+    if (await firstQa.count()) await firstQa.check();
+    // a reader writes the note, then ticks: a read entry folds its note box away
+    const note = page.locator("[data-note]").first();
+    if (await note.count()) await note.fill("smoke note");
+    const tick = page.locator("[data-tick]").first();
+    if (await tick.count()) await tick.check();
     if (S.mode === "session" && !(await page.title()).startsWith(S.session)) problems.push("<title> does not lead with the session name");
   } else {
     out.items = await page.locator("[data-entry]").count();
@@ -95,6 +97,10 @@ const file = "file://" + path.resolve(process.argv[3]);
     }
     if (!(await page.title()).startsWith(S.session)) problems.push("<title> does not lead with the session name");
   }
+
+  // No database here (a local file): the bar must not claim "Saved".
+  if (!(await page.locator("[data-sync]").count())) problems.push("the bar has no sync indicator");
+  else if (await page.locator("[data-sync]").isVisible()) problems.push("the sync indicator shows on a page with no database");
 
   await page.locator("[data-copy]").first().click();
   await page.waitForTimeout(100);

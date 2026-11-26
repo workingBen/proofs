@@ -83,13 +83,13 @@ A redesign item has three options, each judged on the six criteria and on its ro
 
 ## The bar
 
-**Any criterion at 2 or below, or any failed design check other than a near-copy kept with a Reason line, means revise it once or drop it, with the reason on the page.** A brand element removed or changed is `care` 1, so it is always below the bar.
+**Any criterion at 2 or below, or any failed design check other than a near-copy kept with a Reason line, means revise it (once per correction pass the `PROOFS_CORRECTION_PASSES` setting allows; with 0, record what the critic found in the item's `note_html`) or drop it, with the reason on the page.** A brand element removed or changed is `care` 1, so it is always below the bar.
 
 **An option must also beat the current page** (its `before_scores`) on the criterion the request targets: `action` for "the button gets lost", `grouping` for "this section is a jumble". For a vague request such as "make this nicer", it must beat it on `fold` or `hierarchy`. An option that only ties the current page there is below the bar, however good its other scores: it is the option that "barely changed anything".
 
-- **Revise once.** Fix what failed, rebuild, rerun `--smoke` and score again. Say what changed in the option's note, for example "Revised: the action was below the first screen at 390 (fold 2)."
-- **Drop** an option that still misses the bar after its one revision, or that cannot be fixed without becoming another option. Say so in the item's reason, for example "Dropped Bold: it needed a headline nobody wrote (care 2)." Never publish an option below the bar without saying so.
-- If dropping would leave an item with no option, keep the best one, mark the score that failed in its note, and say on the page that it did not clear the bar, except a brand failure (care 1): put the brand back first; an option that lost the brand is never published. Do not start another round; the one build, at most one correction pass rule still applies.
+- **Revise once per correction pass.** (With the `PROOFS_CORRECTION_PASSES` setting at 0 there is no revision: record what failed in `note_html` and keep or drop the option.) Fix what failed, rebuild, rerun `--smoke` and score again. Say what changed in the option's note, for example "Revised: the action was below the first screen at 390 (fold 2)."
+- **Drop** an option that still misses the bar after its last revision, or that cannot be fixed without becoming another option. Say so in the item's reason, for example "Dropped Bold: it needed a headline nobody wrote (care 2)." Never publish an option below the bar without saying so.
+- If dropping would leave an item with no option, keep the best one, mark the score that failed in its note, and say on the page that it did not clear the bar, except a brand failure (care 1): put the brand back first; an option that lost the brand is never published. Do not start another round; the one build, then at most the correction passes setting (`PROOFS_CORRECTION_PASSES`, default 1) rule still applies.
 - **Recommend** the option with the highest total that clears the bar; on a tie, the one that best answers the request. Never recommend an unscored option or one below the bar.
 
 Results first (`house-rules.md` rule 0): never skip the critic, the measured checks or the revise pass to save cost.

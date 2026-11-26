@@ -1,6 +1,6 @@
 ---
 name: visual-qa
-version: 1.4.10
+version: 1.4.11
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs *)
@@ -19,6 +19,8 @@ site). With no paths, audit every page the current branch touches.
 **REQUIRED SUB-SKILL:** the `design-review` skill, for step 5 (the review page and its
 export). It ships in the same plugin.
 
+Read the settings: `python3 ${CLAUDE_PLUGIN_ROOT}/shared/settings.py --print` (pre-approved). Use the values it shows wherever this file says *the port* (`PROOFS_PORT`), *the smallest text* (`PROOFS_MIN_TEXT`), *the smallest tap target* (`PROOFS_MIN_TAP`) and *the mockups per item* (`PROOFS_QA_MOCKUPS`). The command examples show the default port, 3311; use the setting's value in its place.
+
 ## Why the numbers matter
 
 An online store once shipped with every test green and every review approved, and the first person to
@@ -30,8 +32,8 @@ went from 1 to 8 list lines, 4 to 13 table rows, and 1 to 2 tile rows.
 
 From the project's notes (`CLAUDE.md`) and style guide, note: how to run the server,
 how to sign in, the audience (older readers raise the text floor), the site's own fonts
-and colors (mockups reuse them), and anything already decided that must not be "fixed". Set `minText` / `minTap` in
-`pages.json` if the project's targets differ from 16 px / 44 px.
+and colors (mockups reuse them), and anything already decided that must not be "fixed". The smallest text and smallest tap target settings (defaults 16 px and 44 px, raise-only) are the targets; set `minText` / `minTap` in
+`pages.json` only to match them.
 
 ## 1. Capture real pages, real data, real states
 
@@ -44,7 +46,7 @@ and colors (mockups reuse them), and anything already decided that must not be "
 4. **Use the helpers' own checks, not ad hoc tools.** Capture prints each shot's size and overflow; never run `file`, `magick`/`identify` or `sips`, and change your own mockups with Edit or Write, never `sed -i`.
 
 - **Print "Commands this review will run"** before the first Bash call: one short list with the exact forms (the install, for example `npm install`; the capture line below; the style build if the project compiles styles; the type check if the project has one, in the form the project uses: `npx tsc --noEmit`, or for Vue `npx vue-tsc --noEmit`, or its own `npm run type-check` or `npm run build`). Then run them without further narration. The README's optional project block can pre-approve them.
-- Run the branch under test on its own port (3311), never another session's server. Find the start command in the project's notes; install missing dependencies with the project's own command.
+- Run the branch under test on its own port (the port setting, default 3311; use the setting's value in its place), never another session's server. Find the start command in the project's notes; install missing dependencies with the project's own command.
 - Make the data look like production (realistic counts, long names, missing values), touching
   only the feature's own tables. **Note the starting state first and put it back after.**
 - Write `.proofs/visual-qa/pages.json` with the Write tool (start from the example pages file bundled in this
@@ -121,7 +123,7 @@ Follow the `design-review` skill's page mechanics, with these additions:
 - Set `"skill": "visual-qa"` so the header names this skill, and fill `project` with the session name as `design-review` does.
 - One item per problem (or per group of problems with one fix). BEFORE is the real screenshot,
   the user's own first if they sent one.
-- 1–2 coded mockups per item, built from the page's real fonts, colors and data, each drawn to
+- Up to the mockups-per-item setting (default 2) coded mockups per item, at least one, built from the page's real fonts, colors and data, each drawn to
   **prove** its target: a 1280×800 frame that visibly holds 8 list lines, a 390 frame with
   16 px text and 44 px buttons.
 - Put the failing number and the target in each item's Reason.

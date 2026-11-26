@@ -1,0 +1,3 @@
+# Changelog
+
+- **1.0.0** (2026-11-26): New skill. "Open Proofs settings" (or `/proofs:settings`) builds one page of every Proofs setting, with its current value, where it came from and real controls. The user changes values, taps Send to Claude, and Claude writes them with `shared/settings.py --apply` (a dry run first, stale or out-of-range rows skipped and listed) and republishes the page. It writes only `PROOFS_` keys and never touches permissions. The reference for every setting is `reference/settings.md`. Note for existing setups: `PROOFS_PR_REMINDER=true` (and `yes`, `on`) now means on; before this release only `1` turned the pr-qa reminder on.

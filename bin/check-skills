@@ -29,7 +29,7 @@ REFS = [re.compile(r"`" + NAME + r"`\s+[Ss]kill\b"),
 BUILTIN = {"help", "clear", "compact", "init", "review", "model", "config", "loop", "schedule",
            "simplify", "login", "logout", "status", "memory", "agents", "hooks", "mcp", "plugin", "plugins"}
 PAGE_SKILLS = {"design-review", "visual-qa", "pr-qa", "working-log", "questions", "qa-checklist", "article-copy-edit",
-               "style-guide", "photo-picker", "todos", "review-cycle"}
+               "style-guide", "photo-picker", "todos", "review-cycle", "settings"}
 PAGE_VALUES = ("artifact", "file", "wifi")
 PAGE_REF = "../../reference/where-the-page-goes.md"
 # A skill that reads ../../ paths says so, for anyone who copies one skill folder on its own.
@@ -40,6 +40,9 @@ READ_RULE = "Read(/${CLAUDE_PLUGIN_ROOT}/**)"
 NEVER_PREAPPROVED = {"shared/capture/with_server.py", "skills/todos/scripts/todos_apply.py",
                      "skills/todos/scripts/todos_adopt.py", "skills/pr-qa/scripts/install_session_hook.py",
                      "skills/pr-qa/scripts/pr_qa_collect.py"}
+# Its reads (--print, --json, --spec) are pre-approved by shared/allow_block.py; its writes keep
+# prompting, so a skill may call it but never lists it in allowed-tools.
+SETTINGS_SCRIPT = "shared/settings.py"
 # A script call: interpreter, optional flags, optional quote, then the script path.
 PLUGIN_CMD = re.compile(r"\b(python3|node)((?: -[\w-]+)*) ([\"']?)(\S+?\.(?:py|cjs|js|sh))\b")
 FAKE_ROOT = "/opt/claude/plugins/cache/proofs/proofs/9.9.9"
@@ -175,7 +178,7 @@ def check_plugin_calls(path, body, rules):
         m = re.fullmatch(r"Bash\((?:python3|node) " + re.escape(ROOT) + r"/([\w./-]+\.(?:py|cjs|js|sh)) \*\)", r)
         if not m or ".." in m.group(1):
             errs.append("allowed-tools rule %s is not allowed: only Bash(<python3|node> %s/<one script> *), %s and Skill(proofs:<name>)" % (r, ROOT, READ_RULE))
-        elif m.group(1) in NEVER_PREAPPROVED or any(n in r for n in NEVER_PREAPPROVED):
+        elif m.group(1) in NEVER_PREAPPROVED or any(n in r for n in NEVER_PREAPPROVED) or m.group(1) == SETTINGS_SCRIPT:
             errs.append("allowed-tools rule %s must keep prompting (never pre-approve it)" % r)
     if rules and READ_RULE not in rules:
         errs.append("allowed-tools is missing %s" % READ_RULE)
@@ -194,6 +197,8 @@ def check_plugin_calls(path, body, rules):
                     msg = "path %s does not exist" % target
                 elif rel in NEVER_PREAPPROVED:
                     continue
+                elif rel == SETTINGS_SCRIPT:
+                    continue  # reads are pre-approved by shared/allow_block.py; --set, --apply and --spec --out keep prompting
                 else:
                     cmd = ("%s%s %s" % (interp, flags, target)).replace(ROOT, FAKE_ROOT)
                     if any(rule_matches(r, cmd) for r in covering):

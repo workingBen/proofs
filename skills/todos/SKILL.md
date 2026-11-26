@@ -1,6 +1,6 @@
 ---
 name: todos
-version: 1.3.1
+version: 1.3.2
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/skills/todos/scripts/todos_page.py *)
@@ -8,6 +8,8 @@ description: Use when the user wants to see and work their open to-do list ("sho
 ---
 
 # Todos
+
+Read the settings: `python3 ${CLAUDE_PLUGIN_ROOT}/shared/settings.py --print` (pre-approved). Use the values it shows wherever this file says *the to-do file* (`PROOFS_TODO_FILE`) and *the to-do archive folder* (`PROOFS_TODO_ARCHIVE_DIR`). `TODO.md` and `docs/todo-archive/` below are their defaults; use the settings' values in their place.
 
 ## What this is
 

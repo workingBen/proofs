@@ -406,17 +406,24 @@ def _background(target, *args):
     return t
 
 
+def _settings():
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    import settings
+    return settings
+
+
 def _parse(argv):
     p = argparse.ArgumentParser(prog="with_server.py",
                                 description="Start a dev server, run one capture command, always stop the server.",
                                 epilog="exit codes: the capture's own code once the server answers; 3 the server never "
                                        "answered below 500 within --timeout; 4 the server exited before answering; "
                                        "5 another run still held the pidfile's lock after --timeout; 127 the capture "
-                                       "could not be run; 128 + signal number when stopped by a signal; 2 bad usage")
+                                       "could not be run; 128 + signal number when stopped by a signal; 2 bad usage or a settings file that cannot be read")
     p.add_argument("--start", required=True, help="shell command that starts the server, in the foreground")
     p.add_argument("--url", required=True, help="URL that answers once the server is up")
     p.add_argument("--cwd", help="folder to start the server in (default: the current folder)")
-    p.add_argument("--timeout", type=float, default=120.0, help="seconds to wait for the server (default 120)")
+    p.add_argument("--timeout", type=float, default=None,
+                   help="seconds to wait for the server (default: the PROOFS_SERVER_TIMEOUT setting, 120)")
     p.add_argument("--grace", type=float, default=5.0, help="seconds between SIGTERM and SIGKILL (default 5)")
     p.add_argument("--log", default=os.path.join(".proofs", "server.log"), help="server output (default .proofs/server.log)")
     p.add_argument("--pidfile", default=os.path.join(".proofs", "server.pid"), help="default .proofs/server.pid")
@@ -429,6 +436,12 @@ def _parse(argv):
         p.error("give the capture command after --")
     base = os.path.abspath(args.cwd or os.getcwd())
     args.cwd = base
+    if args.timeout is None:
+        settings = _settings()
+        try:
+            args.timeout = float(settings.get("PROOFS_SERVER_TIMEOUT", cwd=base))
+        except settings.SettingsFileError as e:  # one line naming the file, not a traceback
+            p.exit(2, "with_server.py: %s\n" % e)
     args.log = os.path.join(base, os.path.expanduser(args.log))
     args.pidfile = os.path.join(base, os.path.expanduser(args.pidfile))
     return args, capture

@@ -84,6 +84,8 @@ const VIEWPORTS = [
   { label: '390', width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 2 },
 ];
 
+const settings = require(path.join(__dirname, '..', '..', '..', 'shared', 'settings.cjs'));
+
 // Any other whole-number width in this range is a desktop viewport too, for a shot just
 // above a CSS breakpoint the change adds (pr-qa: lg: at 1024 gets 1040).
 const EXTRA_MIN = 400, EXTRA_MAX = 2560;
@@ -97,6 +99,23 @@ function pickViewports(sizes) {
     .sort((a, b) => b - a).map((w) => ({ label: String(w), width: w, height: 900 }));
   const phone = named.filter((v) => v.isMobile);
   return [...named.filter((v) => !v.isMobile), ...extra, ...phone];
+}
+
+// The text and tap targets the capture measures against: pages.json's minText / minTap, else the
+// PROOFS_MIN_TEXT / PROOFS_MIN_TAP settings, and never below the floors 16 and 44.
+function resolveTargets(cfg) {
+  const floor = (key, fixed) => Math.max(fixed, Number(settings.get(key)) || fixed);
+  return {
+    minText: Math.max(16, cfg.minText || floor('PROOFS_MIN_TEXT', 16)),
+    minTap: Math.max(44, cfg.minTap || floor('PROOFS_MIN_TAP', 44)),
+  };
+}
+
+// The viewports to shoot: --sizes (or all three) plus the PROOFS_EXTRA_WIDTHS setting.
+function resolveViewports(sizes) {
+  const extra = settings.get('PROOFS_EXTRA_WIDTHS').map(String);
+  if (!extra.length) return sizes ? pickViewports(sizes) : VIEWPORTS;
+  return pickViewports([...(sizes || VIEWPORTS.map((v) => v.label)), ...extra]);
 }
 
 // Base and path with exactly one slash between them, whatever either looks like. A path that
@@ -987,7 +1006,7 @@ async function main() {
   }
   const prefix = evidence ? `${evidence}-` : '';
   const sizes = opt('--sizes') ? opt('--sizes').split(',').map((x) => x.trim()) : null;
-  const viewports = sizes ? pickViewports(sizes) : VIEWPORTS;
+  const viewports = resolveViewports(sizes);
   if (!viewports.length) {
     console.error(`--sizes ${sizes.join(',')} matches none of ${VIEWPORTS.map((v) => v.label).join(', ')}, `
       + `or a desktop width from ${EXTRA_MIN} to ${EXTRA_MAX}`);
@@ -1014,7 +1033,7 @@ async function main() {
       }
     } catch (_) { /* no git, not a repo, read-only: nothing to do */ }
   }
-  const minText = cfg.minText || 16, minTap = cfg.minTap || 44;
+  const { minText, minTap } = resolveTargets(cfg);
   const setup = cfg.setup ? require(path.resolve(path.dirname(cfgPath), cfg.setup)) : null;
 
   const { chromium } = loadPlaywright();
@@ -1264,7 +1283,12 @@ async function main() {
 }
 
 if (require.main === module) {
-  main().catch((e) => { console.error(e && e.stack ? e.stack : String(e)); process.exit(1); });
+  main().catch((e) => {
+    // A settings file that cannot be read: one line naming the file, not a stack.
+    if (e instanceof settings.SettingsFileError) console.error(`capture: ${e.message}`);
+    else console.error(e && e.stack ? e.stack : String(e));
+    process.exit(1);
+  });
 }
 
-module.exports = { joinUrl, readPagesFile, PagesFileError };
+module.exports = { joinUrl, readPagesFile, PagesFileError, resolveTargets, resolveViewports };

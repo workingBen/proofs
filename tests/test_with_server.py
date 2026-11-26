@@ -3,6 +3,8 @@
 Every test starts real processes, so every test also proves they are gone afterwards.
 POSIX only, like the helper.
 """
+import contextlib
+import json
 import os
 import shlex
 import signal
@@ -14,12 +16,33 @@ import threading
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO = Path(__file__).resolve().parent.parent
 HELPER = str(REPO / "shared" / "capture" / "with_server.py")
 PY = shlex.quote(sys.executable)
 sys.path.insert(0, str(REPO / "shared" / "capture"))
 import with_server  # noqa: E402
+
+@contextlib.contextmanager
+def project_with(values):
+    """A temp project whose .claude/settings.json sets `values`, entered as the working folder,
+    with an empty home and no PROOFS_ variables, so only the file speaks."""
+    with tempfile.TemporaryDirectory() as tmp:
+        proj, home = Path(tmp).resolve() / "proj", Path(tmp).resolve() / "home"
+        (proj / ".claude").mkdir(parents=True)
+        home.mkdir()
+        (proj / ".claude" / "settings.json").write_text(json.dumps({"env": values}))
+        keep = {k: v for k, v in os.environ.items() if not k.startswith("PROOFS_")}
+        keep.update(HOME=str(home), CLAUDE_CONFIG_DIR=str(home / ".claude"))
+        old = os.getcwd()
+        os.chdir(proj)
+        try:
+            with mock.patch.dict(os.environ, keep, clear=True):
+                yield proj
+        finally:
+            os.chdir(old)
+
 
 SERVER_500 = '''
 import http.server, sys
@@ -586,6 +609,26 @@ class WithServerTest(unittest.TestCase):
         r = subprocess.run([sys.executable, HELPER, "--start", "true", "--url", self.url], capture_output=True, text=True,
                            cwd=self.dir, timeout=10)
         self.assertEqual(r.returncode, 2)
+
+
+class TimeoutSetting(unittest.TestCase):
+    """--timeout defaults to PROOFS_SERVER_TIMEOUT; an explicit --timeout still wins."""
+
+    def parsed(self, *extra):
+        args, _ = with_server._parse(["--start", "x", "--url", "http://127.0.0.1:1/", *extra, "--", "true"])
+        return args.timeout
+
+    def test_the_default_is_the_table_default_with_nothing_set(self):
+        with project_with({}):
+            self.assertEqual(self.parsed(), 120)
+
+    def test_a_project_setting_changes_the_default(self):
+        with project_with({"PROOFS_SERVER_TIMEOUT": "45"}):
+            self.assertEqual(self.parsed(), 45)
+
+    def test_an_explicit_flag_wins_over_the_setting(self):
+        with project_with({"PROOFS_SERVER_TIMEOUT": "45"}):
+            self.assertEqual(self.parsed("--timeout", "30"), 30)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 ---
 name: review-cycle
-version: 1.13.2
+version: 1.13.3
 description: Use when the user opens a review session ("starting a review cycle", "let's do a review pass") and feeds a stream of bug reports and requests, often from a phone, to be triaged and handled without questions; fixes ship, design calls go to design-review, big features become to-dos. Not for a single one-off request.
 ---
 
@@ -12,6 +12,8 @@ A queue-processing workflow for a live review session: the user reports issues o
 
 **Test first.** If the superpowers plugin is installed, use `superpowers:test-driven-development` for each item's implementation; otherwise write the failing test first yourself, watch it fail, then make it pass.
 **Debugging.** If the superpowers plugin is installed, use `superpowers:systematic-debugging` when a test failure's cause isn't immediately obvious; otherwise debug systematically: reproduce, form one hypothesis, test it, repeat.
+
+Read the settings: `python3 ${CLAUDE_PLUGIN_ROOT}/shared/settings.py --print` (pre-approved). Use the values it shows wherever this file says *the checkpoint count* (`PROOFS_CHECKPOINT_ITEMS`).
 
 ## When to Use
 
@@ -130,7 +132,7 @@ The user hands over a mixed stream on purpose: a typo, a broken button, "this pa
 
 ## Checkpoints — Handoff and Clear Between Features
 
-Checkpoint at the next item boundary (never mid-item) once a major item has finished and the next is unrelated, five items have shipped since the last checkpoint, context is half spent, or the next item is visibly large. **When one fires, and first thing after any clear, read `reference/checkpoints.md`** (in this skill's folder) and follow it: verify, route, write the handoff, keep going.
+Checkpoint at the next item boundary (never mid-item) once a major item has finished and the next is unrelated, the checkpoint setting's number of items (default 5) have shipped since the last checkpoint, context is half spent, or the next item is visibly large. **When one fires, and first thing after any clear, read `reference/checkpoints.md`** (in this skill's folder) and follow it: verify, route, write the handoff, keep going.
 
 ## The Tracking Page — one artifact, published at intake, updated per item
 

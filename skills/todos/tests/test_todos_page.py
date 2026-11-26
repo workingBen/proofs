@@ -493,5 +493,50 @@ class TestBuild(unittest.TestCase):
             self.assertIn('data-step="%s"' % stable_id("A thing."), html)
 
 
+class TitleLengthSetting(unittest.TestCase):
+    """Titles are clipped at the PROOFS_TODO_TITLE setting, not a number copied into the script."""
+
+    LONG = "word " * 40  # 200 characters
+
+    def render_with(self, values):
+        import contextlib, json as _json, tempfile as _tmp
+        from pathlib import Path
+        from unittest import mock
+        data = dict(DATA, items=[dict(DATA["items"][0], title=self.LONG.strip())])
+        with _tmp.TemporaryDirectory() as tmp:
+            proj, home = Path(tmp).resolve() / "proj", Path(tmp).resolve() / "home"
+            (proj / ".claude").mkdir(parents=True)
+            home.mkdir()
+            (proj / ".claude" / "settings.json").write_text(_json.dumps({"env": values}))
+            keep = {k: v for k, v in os.environ.items() if not k.startswith("PROOFS_")}
+            keep.update(HOME=str(home), CLAUDE_CONFIG_DIR=str(home / ".claude"))
+            old = os.getcwd()
+            os.chdir(proj)
+            try:
+                with mock.patch.dict(os.environ, keep, clear=True):
+                    return render(data, "P", "o/r")
+            finally:
+                os.chdir(old)
+
+    def shown(self, html):
+        import re
+        return re.search(r"<b>1\. (.*?)</b>", html).group(1)
+
+    def test_the_default_clip_is_the_table_default(self):
+        self.assertEqual(len(self.shown(self.render_with({}))), 96)
+
+    def test_the_title_is_cut_at_the_set_length(self):
+        html = self.render_with({"PROOFS_TODO_TITLE": "60"})
+        self.assertEqual(len(self.shown(html)), 60)
+        self.assertTrue(self.shown(html).endswith("..."))
+        self.assertIn("text.length>60", html)  # the script's own fallback clip agrees
+
+    def test_the_number_is_not_copied_into_the_source(self):
+        import re
+        src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts", "todos_page.py"),
+                   encoding="utf-8").read()
+        self.assertIsNone(re.search(r"\b96\b", src))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

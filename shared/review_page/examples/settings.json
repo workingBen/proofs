@@ -1,0 +1,10 @@
+{
+  "mode": "settings",
+  "title": "Proofs settings",
+  "project": {"name": "Acme app", "repo": "acme/app"},
+  "settings": [
+    {"key": "PROOFS_SPELLING", "value": "american", "source": "project"},
+    {"key": "PROOFS_COST_CAP_USD", "value": 8, "source": "user"},
+    {"key": "PROOFS_EXTRA_WIDTHS", "value": [], "source": "default"}
+  ]
+}

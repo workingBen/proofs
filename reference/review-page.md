@@ -64,7 +64,7 @@ Common fields:
 
 | Field | Meaning |
 |---|---|
-| `mode` | `review` (default), `questions`, `session` or `log` |
+| `mode` | `review` (default), `questions`, `session`, `log` or `settings` |
 | `title` | the page `<title>`; review pages export `[title]` as the first line |
 | `header` | override the export's first line (keep it bracketed) |
 | `heading`, `intro_html`, `after_html` | top heading, intro, and anything below the items (recap, settled, parked) |
@@ -72,7 +72,8 @@ Common fields:
 | `vars` | CSS variables set on `:root`, to retune the chrome's light values. Dark values go in `css` under `@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {…} }` and `:root[data-theme="dark"]`; give every color you change a dark pair, and a filled box its own text color (as `--rp-amber-ink` does), or it goes unreadable in dark mode |
 | `head_html` | extra `<head>` markup |
 | `assets` | `{"name": "path/to/file.png"}`: the builder reads the files, so their bytes never pass through your context. Use one as `{{asset:name}}` (in an attribute, or in `css` as `url({{asset:name}})`) or as `var(--asset-name)`; each is embedded **once** however often it is used. PNG and JPEG become WebP when `magick` or `cwebp` is installed: the smaller of lossy (at `image_quality`) and lossless, or the original if that is smaller still (without either tool they are kept, and the build says so). Older Safari (before iOS 14) cannot show WebP, so a converted image also carries a **fallback**: the smallest of a JPEG at `image_quality`, a PNG shrunk to `image_max_width`, or the original (a PNG with transparency never becomes a JPEG; without `magick` the fallback is the original). An `<img src="{{asset:name}}">` becomes `<picture class="rp-pic"><source type="image/webp" srcset="…"><img src="fallback" …></picture>`, keeping every attribute on the `<img>` (`picture.rp-pic` is `display:contents`, but style the `<img>` by class, not with a `>` child selector). CSS uses (`url(…)`, `var(--asset-name)`) get the fallback, since CSS has no per-format fallback that older Safari reads. One HTML use is inlined and needs no JavaScript; repeated uses are filled in at load from one JSON map (`#rp-assets`) |
-| `image_quality`, `image_max_width` | WebP quality (1–100, default 70) and the widest a screenshot may be, in pixels (default 1600): applied only when the shrunk file is actually smaller, and never upscales. Env vars `PROOFS_IMAGE_QUALITY` and `PROOFS_IMAGE_MAX_WIDTH` win over the spec |
+| `image_quality`, `image_max_width` | WebP quality (1–100) and the widest a screenshot may be, in pixels (the defaults, 70 and 1600, are the `PROOFS_IMAGE_QUALITY` and `PROOFS_IMAGE_MAX_WIDTH` settings): applied only when the shrunk file is actually smaller, and never upscales. The settings `PROOFS_IMAGE_QUALITY` and `PROOFS_IMAGE_MAX_WIDTH` (a settings file or the environment) win over the spec |
+| `send_wait_ms` | Milliseconds the page waits after Send to Claude before saying "Not picked up yet". Default: the `PROOFS_SEND_WAIT_MIN` setting (5 minutes) |
 | `storage_key` | the `localStorage` key, if the default is not stable enough |
 | `project` | `{name, session, repo}` for the header, on every mode; take the session name the way the `working-log` skill does. Questions pages also use `stream`, `round`, `artifact` |
 | `skill` | the skill named in the header's pill. Defaults: session and log pages `working-log`; questions pages `qa-checklist` when they hold only checks, else `questions`; review pages from the decisions preset (`design-review`, `copy-edit` → `article-copy-edit`, `style-guide`, `photo-picker`), and no pill for a custom set with no preset. `""` shows the wordmark alone |
@@ -217,6 +218,28 @@ Each entry gets a note field and a "Read this" tick (a ticked entry folds to one
 option group (`answer (q):` when there are several, `(unanswered)` when empty) and
 `note:` lines.
 
+### `settings` mode
+
+The settings page. Make the spec with `python3 <plugin root>/shared/settings.py --spec`
+rather than by hand: it prints `{mode, title, project: {name}, files, settings, send_wait_ms}`,
+where each `settings` row is the table row from `shared/settings.json` plus `value`,
+`source` and `note` as `--print` shows them. The builder takes only `value`, `source` and
+`note` from a spec row: the rules always come from the table, a value the table would
+refuse is a spec error, and a key the spec leaves out shows its default. Built with no
+`--out`, it goes to `.proofs/pages/<spec name>.html`.
+
+The page: a sticky save bar ("2 changes not saved yet", one `Label old → new` per change,
+Copy and Send to Claude), a sidebar of the five groups with a search box that filters
+across all of them, and one group's pane (main settings, then "Advanced"). A typed value
+is checked in the page against the same table rows, with `settings.py`'s own reasons
+("Smallest text can only go up from 16 px."); a refused value is never saved or
+exported. Each change is one database row of kind `setting`:
+`{id: KEY, section: "settings", kind: "setting", answer: "<new value>", from: "<value the
+page showed>", scope, note: ""}`, both values as `settings.py --set` writes them (lists
+joined with commas, on and off as 1 and 0). The export is `PROOFS SETTINGS — my changes`,
+`project:`, `exported:`, then one `SET KEY=VALUE (scope; was OLD)` line per change, or
+`(no changes)`. `examples/settings.json` is a working spec.
+
 ## Answers without Copy: the page's database
 
 On a published claude.ai artifact, the page saves every answer, note and read tick in
@@ -335,7 +358,7 @@ by itself.
 the reply in the thread. So the confirmation is a republish. After a send the page
 keeps `{sentAt, fromVersion}` in `localStorage` (under `<storage key>:sent`). On the
 next load, a page whose version differs says, in green, "Claude picked up your answers
-(sent 9:01 PM, now v14)" and forgets the send; the same version more than 5 minutes
+(sent 9:01 PM, now v14)" and forgets the send; the same version longer than the Send wait setting (`PROOFS_SEND_WAIT_MIN`, default 5 minutes)
 later says "Not picked up yet. The session may be busy or closed; Copy still works."
 
 ### Sent to Claude: what the session does
@@ -366,7 +389,7 @@ and every shared image has something to fill it from, a log or session page's ti
 with the session, open questions are the first thing in the page's main column, and a
 session page's sections are in order. It exits 1 and says why when anything fails.
 
-The build also prints how many screenshots became WebP and how much smaller they got, and how big their fallbacks are, and **warns (without failing) when the page passes 3 MB**, naming the largest assets. Large pages load slowly on a phone and can hit a viewer's size limit; lower `image_quality`, set `image_max_width`, or split the review.
+The build also prints how many screenshots became WebP and how much smaller they got, and how big their fallbacks are, and **warns (without failing) when the page passes 3 MB** (the `PROOFS_PAGE_WARN_MB` setting), naming the largest assets. Large pages load slowly on a phone and can hit a viewer's size limit; lower `image_quality`, set `image_max_width`, or split the review.
 
 `--smoke` needs Playwright (`--playwright DIR`, `PROOFS_PLAYWRIGHT`,
 `~/.cache/proofs-playwright`, or one resolvable from the current folder). It uses the

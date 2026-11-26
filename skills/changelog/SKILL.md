@@ -1,6 +1,6 @@
 ---
 name: changelog
-version: 1.3.3
+version: 1.3.4
 description: Use when the user wants a signed-in changelog page for their app (or one per sub-app) backed by markdown files, and at the end of any session that shipped something a user would notice, to add a dated entry. Differs from todos; it records what shipped, not open work.
 ---
 
@@ -11,6 +11,8 @@ Builds a signed-in-only changelog page (one per app or sub-app) backed by plain 
 **Results first.** Nothing matters more than a result the user wants. Save tokens by cutting waste, never by cutting a check, an option or a revise pass the result needs (full text: `../../reference/house-rules.md`).
 
 **Needs the whole plugin.** This skill reads shared files at `../../reference/` and `../../shared/`, relative to its folder. If they are missing, the skill was copied on its own: install the whole plugin (`/plugin install proofs@proofs`) rather than recreating them.
+
+Read the settings: `python3 ${CLAUDE_PLUGIN_ROOT}/shared/settings.py --print` (pre-approved). Use the values it shows wherever this file says *the changelog folder* (`PROOFS_CHANGELOG_DIR`). `docs/changelog/` below is that setting's default; use the setting's value in its place.
 
 ## When to use
 

@@ -1,13 +1,36 @@
 #!/usr/bin/env python3
 """Which pages a PR's screenshots cover, and what happens when nothing maps."""
+import contextlib
 import json
 import os
 import sys
 import unittest
+from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"))
 
 import tempfile
+
+
+@contextlib.contextmanager
+def project_with(values):
+    """A temp project whose .claude/settings.json sets `values`, entered as the working folder,
+    with an empty home and no PROOFS_ variables, so only the file speaks."""
+    with tempfile.TemporaryDirectory() as tmp:
+        proj, home = Path(tmp).resolve() / "proj", Path(tmp).resolve() / "home"
+        (proj / ".claude").mkdir(parents=True)
+        home.mkdir()
+        (proj / ".claude" / "settings.json").write_text(json.dumps({"env": values}))
+        keep = {k: v for k, v in os.environ.items() if not k.startswith("PROOFS_")}
+        keep.update(HOME=str(home), CLAUDE_CONFIG_DIR=str(home / ".claude"))
+        old = os.getcwd()
+        os.chdir(proj)
+        try:
+            with mock.patch.dict(os.environ, keep, clear=True):
+                yield proj
+        finally:
+            os.chdir(old)
 
 from pr_qa_plan import fill, is_visual, load_map, plan, read_map
 
@@ -107,6 +130,28 @@ class MapFileTest(unittest.TestCase):
                 json.dump({"pages": PAGES, "visual_prefixes": ["docs/news/"]}, handle)
             self.assertEqual(load_map(path), PAGES)
             self.assertEqual(read_map(path)["visual_prefixes"], ["docs/news/"])
+
+
+class SettingsTest(unittest.TestCase):
+    def test_the_visual_paths_come_from_the_setting(self):
+        with project_with({}):
+            self.assertFalse(is_visual("web/page.tsx"))
+        with project_with({"PROOFS_QA_PATHS": "web/,app/"}):
+            self.assertTrue(is_visual("web/page.tsx"))
+            self.assertTrue(is_visual("app/x.rb"))
+            self.assertFalse(is_visual("src/x.js"))
+
+    def test_a_map_visual_prefixes_list_still_wins(self):
+        with project_with({"PROOFS_QA_PATHS": "web/"}):
+            got = plan(["web/a.tsx", "docs/x.md"], {}, [], ["docs/"])
+        self.assertEqual(got["non_visual_changes"], ["web/a.tsx"])
+
+    def test_the_default_map_name_comes_from_the_setting(self):
+        from pr_qa_plan import default_map
+        with project_with({}):
+            self.assertEqual(default_map(), "pr_qa_pages.json")
+        with project_with({"PROOFS_QA_MAP": "qa/map.json"}):
+            self.assertEqual(default_map(), "qa/map.json")
 
 
 if __name__ == "__main__":

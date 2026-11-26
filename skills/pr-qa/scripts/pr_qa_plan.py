@@ -32,18 +32,25 @@ import os
 import re
 import sys
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "shared"))
+import settings  # shared/settings.py: the Proofs settings table and resolver
+
 HERE = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_MAP = "pr_qa_pages.json"
 
 # Only these directories can change what a page LOOKS like. A PR touching
 # nothing but tests or docs has nothing to photograph, and saying so beats
 # producing a pair of identical screenshots that imply a change was inspected.
-# A map can replace this list with its own "visual_prefixes".
-VISUAL_PREFIXES = ("app/", "src/", "lib/", "public/", "config/routes.rb")
+# The directories that can change what a page looks like are the PROOFS_QA_PATHS setting.
+# A map can replace them with its own "visual_prefixes".
 
 
-def read_map(path=DEFAULT_MAP):
+def default_map():
+    return settings.get("PROOFS_QA_MAP")
+
+
+def read_map(path=None):
     """The whole map file, or an exit with a plain message if it is missing."""
+    path = path or default_map()
     try:
         with open(path, encoding="utf-8") as handle:
             return json.load(handle)
@@ -53,12 +60,13 @@ def read_map(path=DEFAULT_MAP):
         sys.exit("==> page map %s is not valid JSON: %s" % (path, err))
 
 
-def load_map(path=DEFAULT_MAP):
+def load_map(path=None):
+    path = path or default_map()
     return read_map(path).get("pages", [])
 
 
 def is_visual(path, prefixes=None):
-    return any(path == p or path.startswith(p) for p in (prefixes or VISUAL_PREFIXES))
+    return any(path == p or path.startswith(p) for p in (prefixes or settings.get("PROOFS_QA_PATHS")))
 
 
 def matches(path, patterns):
@@ -109,7 +117,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--changed-file", help="file of changed paths, one per line; default stdin")
     parser.add_argument("--ids", help="JSON file of placeholder values to fill into the map's URLs")
-    parser.add_argument("--map", default=DEFAULT_MAP)
+    parser.add_argument("--map", default=None, help="page map (default: the PROOFS_QA_MAP setting)")
     args = parser.parse_args(argv)
 
     if args.changed_file:

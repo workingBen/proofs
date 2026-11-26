@@ -12,9 +12,9 @@ import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "shared"))
 from todos_parse import parse, GROUPS
-
-MAX_TITLE = 96
+import settings  # shared/settings.py: the PROOFS_TODO_TITLE setting
 
 # The theme and the tick/note/export machinery are COPIED from a hand-authored
 # working-log page rather than shared, deliberately. That page is written by
@@ -236,7 +236,7 @@ CSS = r"""  :root {
 #     log. Both pages can render items with the same t1/t2/... ids; sharing a
 #     localStorage key would cross-contaminate their tick state.
 #   - build()'s per-item export line prefers a full, untruncated data-title
-#     attribute over scraping the (possibly 96-char-clipped) label text --
+#     attribute over scraping the (possibly clipped) label text --
 #     see _item_row below. Task 6 matches an exported line back to a real
 #     item by its title, and a display clip must never be what travels in
 #     the paste.
@@ -313,7 +313,7 @@ SCRIPT = r"""(function(){
         if(sec!==lastSec){lines.push('','  '+sec);lastSec=sec;}
         // The FULL title, not the (possibly truncated for display) label
         // text -- an exported line is matched back to a real item by its
-        // title, and a 96-char display clip must never be what travels in
+        // title, and a display clip must never be what travels in
         // the paste.
         var text=box.dataset.title||'';
         if(!text){
@@ -324,7 +324,7 @@ SCRIPT = r"""(function(){
             });
           }
           text=text.replace(/\s+/g,' ').trim();
-          if(text.length>96)text=text.slice(0,93)+'...';
+          if(text.length>__MAX_TITLE__)text=text.slice(0,__MAX_TITLE__-3)+'...';
         }
         lines.push('    ['+(box.checked?'x':' ')+'] '+text);
         var sn=state.__stepnotes[box.dataset.step];
@@ -415,8 +415,9 @@ def esc(text):
 
 def _item_row(item):
     title = item["title"]
-    if len(title) > MAX_TITLE:
-        title = title[:MAX_TITLE - 3] + "..."
+    limit = settings.get("PROOFS_TODO_TITLE")
+    if len(title) > limit:
+        title = title[:limit - 3] + "..."
     # Untruncated "N. Title", carried on the checkbox as data-title so the
     # export can quote the item in full regardless of the display clip above.
     full_title = "%d. %s" % (item["n"], item["title"])
@@ -515,7 +516,7 @@ def render(data, project, repo, session=None):
             '<div class="steps">%s</div></div>'
             % (esc(group), len(rows), "".join(rows)))
     return PAGE % {
-        "css": CSS, "script": SCRIPT, "project": esc(project), "repo": esc(repo),
+        "css": CSS, "script": SCRIPT.replace("__MAX_TITLE__", str(settings.get("PROOFS_TODO_TITLE"))), "project": esc(project), "repo": esc(repo),
         "session": '\n    <span class="session">%s</span>' % esc(session) if session else "",
         "count": count, "stepinit": "0 / %d done" % len(items), "banner": _banner(unparsed),
         "groups": "".join(groups_html) or "<p>Nothing open.</p>",

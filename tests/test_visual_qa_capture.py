@@ -1040,5 +1040,53 @@ class LogoCrop(unittest.TestCase):
         self.assertAlmostEqual(logo["png_width"], 240, delta=2)  # the phone shoots at 2x
 
 
+PROBE = r"""
+const cap = require(process.argv[2]);
+const out = {
+  targets: cap.resolveTargets(JSON.parse(process.argv[3])),
+  widths: cap.resolveViewports(process.argv[4] ? process.argv[4].split(',') : null).map((v) => v.label),
+};
+process.stdout.write(JSON.stringify(out));
+"""
+
+
+@unittest.skipUnless(NODE, "node not found")
+class SettingsRead(unittest.TestCase):
+    """The capture's target floors and extra widths come from the settings files."""
+
+    def probe(self, values, cfg, sizes=""):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp).resolve()
+            proj, home = tmp / "proj", tmp / "home"
+            (proj / ".claude").mkdir(parents=True)
+            home.mkdir()
+            (proj / ".claude" / "settings.json").write_text(json.dumps({"env": values}))
+            (tmp / "probe.cjs").write_text(PROBE)
+            env = {k: v for k, v in os.environ.items() if not k.startswith("PROOFS_")}
+            env.update(HOME=str(home), CLAUDE_CONFIG_DIR=str(home / ".claude"))
+            r = subprocess.run([NODE, str(tmp / "probe.cjs"), str(CAPTURE), json.dumps(cfg), sizes],
+                               cwd=proj, env=env, capture_output=True, text=True, timeout=60)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            return json.loads(r.stdout)
+
+    def test_the_defaults_are_16_and_44(self):
+        self.assertEqual(self.probe({}, {})["targets"], {"minText": 16, "minTap": 44})
+
+    def test_the_setting_sets_the_default_min_text_and_tap(self):
+        got = self.probe({"PROOFS_MIN_TEXT": "18", "PROOFS_MIN_TAP": "48"}, {})
+        self.assertEqual(got["targets"], {"minText": 18, "minTap": 48})
+
+    def test_pages_json_wins_over_the_setting_but_never_below_the_floors(self):
+        values = {"PROOFS_MIN_TEXT": "18", "PROOFS_MIN_TAP": "48"}
+        self.assertEqual(self.probe(values, {"minText": 20, "minTap": 52})["targets"], {"minText": 20, "minTap": 52})
+        self.assertEqual(self.probe(values, {"minText": 12, "minTap": 30})["targets"], {"minText": 16, "minTap": 44})
+        self.assertEqual(self.probe({}, {"minText": 12, "minTap": 30})["targets"], {"minText": 16, "minTap": 44})
+
+    def test_extra_widths_are_added_to_the_sizes(self):
+        got = self.probe({"PROOFS_EXTRA_WIDTHS": "1024"}, {}, "390,1280")
+        self.assertEqual(got["widths"], ["1280", "1024", "390"])
+        self.assertEqual(self.probe({}, {}, "390,1280")["widths"], ["1280", "390"])
+
+
 if __name__ == "__main__":
     unittest.main()

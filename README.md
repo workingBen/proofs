@@ -53,6 +53,9 @@ Example of the output; run the command above to get yours. `/YOUR/HOME` stands f
       "Skill(proofs:*)",
       "Bash(node /YOUR/HOME/.claude/plugins/cache/proofs/proofs/*/skills/visual-qa/scripts/capture.cjs *)",
       "Bash(python3 /YOUR/HOME/.claude/plugins/cache/proofs/proofs/*/shared/review_page/review_page.py *)",
+      "Bash(python3 /YOUR/HOME/.claude/plugins/cache/proofs/proofs/*/shared/settings.py --json)",
+      "Bash(python3 /YOUR/HOME/.claude/plugins/cache/proofs/proofs/*/shared/settings.py --print)",
+      "Bash(python3 /YOUR/HOME/.claude/plugins/cache/proofs/proofs/*/shared/settings.py --spec)",
       "Bash(python3 /YOUR/HOME/.claude/plugins/cache/proofs/proofs/*/skills/pr-qa/scripts/pr_qa_findings.py *)",
       "Bash(python3 /YOUR/HOME/.claude/plugins/cache/proofs/proofs/*/skills/pr-qa/scripts/pr_qa_page.py *)",
       "Bash(python3 /YOUR/HOME/.claude/plugins/cache/proofs/proofs/*/skills/pr-qa/scripts/pr_qa_plan.py *)",
@@ -145,6 +148,14 @@ One hook, and it is off until you turn it on. At the start of each session (a `S
 - **Off by default.** It does nothing unless `PROOFS_PR_REMINDER=1` is set for the project.
 - **Never blocks a session.** No token, no network, GitHub down: it exits quietly and the session starts as usual. Its one GitHub call gives up after 5 seconds.
 - **Turn it on** from your project's root folder (the script edits the `.claude/settings.json` of the folder you run it in): `python3 <the proofs plugin folder>/skills/pr-qa/scripts/install_session_hook.py`. Or add `"PROOFS_PR_REMINDER": "1"` to the `"env"` block of that file yourself. It reads GitHub access from `GITHUB_TOKEN`, then `gh auth token`.
+
+## Settings
+
+Every Proofs setting (the port, the spend cap, where pages go, the text and tap floors and the rest) lives in one table, `shared/settings.json`, and in the `env` block of a Claude Code settings file. To change them on a page with real controls, say **"open Proofs settings"** or run `/proofs:settings`. Change what you want, tap **Send to Claude**, and Claude saves each value to the right file with a dry run first. It writes only `PROOFS_` keys and never touches permissions.
+
+- **Without the page:** `python3 <the proofs plugin folder>/shared/settings.py --print` shows every setting and where its value came from; `--set KEY=VALUE` changes one.
+- **Every key, its default and range:** [`reference/settings.md`](reference/settings.md).
+- **Checks stay fixed.** The text and tap floors can only go up, and no setting turns a check off.
 
 ## How every skill works
 

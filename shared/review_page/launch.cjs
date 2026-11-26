@@ -1,5 +1,5 @@
 // Launch Playwright's Chromium for the --smoke check without downloading a browser.
-// Order: PROOFS_BROWSER_CHANNEL if set (one launch); else the bundled browser, and
+// Order: PROOFS_BROWSER_CHANNEL if set and not "auto" (one launch); else the bundled browser, and
 // when that is not installed, the installed Google Chrome (channel "chrome").
 // Every launch carries the flag that stops Chrome on macOS from copying its whole
 // app bundle into the temp folder.
@@ -10,7 +10,7 @@ const HOW_TO =
 
 async function launchChromium(chromium, env) {
   const channel = env && env.PROOFS_BROWSER_CHANNEL;
-  if (channel) return chromium.launch({ channel, args: CHROME_ARGS });
+  if (channel && channel.trim() && channel.trim() !== "auto") return chromium.launch({ channel: channel.trim(), args: CHROME_ARGS });
   try {
     return await chromium.launch({ args: CHROME_ARGS });
   } catch (first) {

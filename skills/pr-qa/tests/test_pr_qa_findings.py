@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """The mechanical findings, including the one a regression check catches."""
+import contextlib
 import os
 import sys
 import unittest
+from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"))
 
@@ -11,6 +14,27 @@ import tempfile
 from io import StringIO
 from contextlib import redirect_stdout
 
+
+@contextlib.contextmanager
+def project_with(values):
+    """A temp project whose .claude/settings.json sets `values`, entered as the working folder,
+    with an empty home and no PROOFS_ variables, so only the file speaks."""
+    with tempfile.TemporaryDirectory() as tmp:
+        proj, home = Path(tmp).resolve() / "proj", Path(tmp).resolve() / "home"
+        (proj / ".claude").mkdir(parents=True)
+        home.mkdir()
+        (proj / ".claude" / "settings.json").write_text(json.dumps({"env": values}))
+        keep = {k: v for k, v in os.environ.items() if not k.startswith("PROOFS_")}
+        keep.update(HOME=str(home), CLAUDE_CONFIG_DIR=str(home / ".claude"))
+        old = os.getcwd()
+        os.chdir(proj)
+        try:
+            with mock.patch.dict(os.environ, keep, clear=True):
+                yield proj
+        finally:
+            os.chdir(old)
+
+from pr_qa_plan import fill, is_visual, load_map, plan, read_map
 from pr_qa_findings import compare, summarize, measured, unmeasured_routes, main, already_on_main
 
 
@@ -441,6 +465,26 @@ class AlreadyOnMainTest(unittest.TestCase):
             self.assertEqual(result["verdict"], "clean")
             self.assertEqual(len(result["already_on_main"]), 1)
             self.assertIn("1 already on main", buf.getvalue())
+
+
+class TapFloorSettingTest(unittest.TestCase):
+    SMALL = [{"tag": "button", "text": "Clear", "width": 31, "height": 20}]
+
+    def detail(self):
+        found = compare([shot("before")], [shot(small=self.SMALL)])
+        return found[0]["detail"]
+
+    def test_the_tap_floor_in_the_finding_is_the_setting(self):
+        with project_with({}):
+            self.assertIn("Under the 44px", self.detail())
+        with project_with({"PROOFS_MIN_TAP": "48"}):
+            self.assertIn("Under the 48px", self.detail())
+
+    def test_the_floor_is_not_copied_into_the_source(self):
+        import re
+        src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts", "pr_qa_findings.py"),
+                   encoding="utf-8").read()
+        self.assertIsNone(re.search(r"\b44\b", src))
 
 
 if __name__ == "__main__":

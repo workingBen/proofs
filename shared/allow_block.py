@@ -186,6 +186,11 @@ COMMIT_RULES = [
     "Bash(git -c http.postBuffer=524288000 push -u origin HEAD)",
     "Bash(gh pr create *)",
 ]
+# Read-only views of the Proofs settings (shared/settings.py). --set, --unset and --apply are not
+# here: they write a settings file, so the owner sees each write. (--spec --out writes a page spec
+# file, so only the bare --spec is pre-approved.)
+SETTINGS_SCRIPT = "shared/settings.py"
+SETTINGS_FLAGS = ("--json", "--print", "--spec")
 # Starts a dev server from an arbitrary command, so it is opt-in (--headless), never default.
 HEADLESS_SCRIPT = ("python3", "shared/capture/with_server.py")
 
@@ -230,7 +235,8 @@ def rules(home, config_dir, headless=False):
         read = "Read(~/.claude/%s/**)" % CACHE
     def bash_rule(interp, path):
         return "Bash(%s %s/%s/proofs/*/%s *)" % (interp, base, CACHE, path)
-    bash = sorted(bash_rule(interp, path) for interp, path in scripts())
+    bash = sorted([bash_rule(interp, path) for interp, path in scripts()]
+                  + ["Bash(python3 %s/%s/proofs/*/%s %s)" % (base, CACHE, SETTINGS_SCRIPT, f) for f in SETTINGS_FLAGS])
     extra = [bash_rule(*HEADLESS_SCRIPT)] if headless else []
     return [read, SKILL_RULE] + bash + extra
 
@@ -271,7 +277,8 @@ def local_roots(home, config_dir):
 def folder_rules(root, headless=False):
     """Read and Bash rules for a plugin run from a local folder (no version folder)."""
     root = root.rstrip("/")
-    bash = sorted("Bash(%s %s/%s *)" % (interp, root, path) for interp, path in scripts())
+    bash = sorted(["Bash(%s %s/%s *)" % (interp, root, path) for interp, path in scripts()]
+                  + ["Bash(python3 %s/%s %s)" % (root, SETTINGS_SCRIPT, f) for f in SETTINGS_FLAGS])
     extra = ["Bash(%s %s/%s *)" % (HEADLESS_SCRIPT[0], root, HEADLESS_SCRIPT[1])] if headless else []
     return ["Read(/%s/**)" % root] + bash + extra
 

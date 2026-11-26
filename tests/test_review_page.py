@@ -4,6 +4,7 @@ The export tests run the page's own engine under plain node (no DOM), so they ne
 node but not a browser. The click-through test needs Playwright: set
 PROOFS_PLAYWRIGHT to an installed playwright package folder, or it is skipped.
 """
+import contextlib
 import json
 import os
 import re
@@ -13,6 +14,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 RP = ROOT / "shared" / "review_page"
@@ -44,6 +46,29 @@ def build(name, tmp):
     if r.returncode:
         raise AssertionError(r.stdout + r.stderr)
     return out
+
+
+@contextlib.contextmanager
+def project_with(values):
+    """A temp project whose .claude/settings.json sets `values`, entered as the working folder,
+    with an empty home and no PROOFS_ variables, so only the file speaks."""
+    with tempfile.TemporaryDirectory() as tmp:
+        proj, home = Path(tmp).resolve() / "proj", Path(tmp).resolve() / "home"
+        (proj / ".claude").mkdir(parents=True)
+        home.mkdir()
+        (proj / ".claude" / "settings.json").write_text(json.dumps({"env": values}))
+        keep = {k: v for k, v in os.environ.items() if not k.startswith("PROOFS_")}
+        keep.update(HOME=str(home), CLAUDE_CONFIG_DIR=str(home / ".claude"))
+        old = os.getcwd()
+        os.chdir(proj)
+        try:
+            with mock.patch.dict(os.environ, keep, clear=True):
+                yield proj
+        finally:
+            os.chdir(old)
+
+
+IMAGE_DEFAULTS = {r["key"]: r["default"] for r in json.loads((Path(__file__).resolve().parent.parent / "shared" / "settings.json").read_text())}
 
 
 class StackVariants(unittest.TestCase):
@@ -917,15 +942,16 @@ class Assets(unittest.TestCase):
             self.assertNotIn(ext, review_page.CONVERTIBLE)
 
     def test_settings_precedence_env_then_spec_then_default(self):
-        d = review_page.image_settings({}, env={})
-        self.assertEqual((d["quality"], d["max_width"]), (review_page.DEFAULT_IMAGE_QUALITY, review_page.DEFAULT_IMAGE_MAX_WIDTH))
-        s = review_page.image_settings({"image_quality": 60, "image_max_width": 900}, env={})
-        self.assertEqual((s["quality"], s["max_width"]), (60, 900))
-        e = review_page.image_settings({"image_quality": 60}, env={"PROOFS_IMAGE_QUALITY": "40", "PROOFS_IMAGE_MAX_WIDTH": "640"})
-        self.assertEqual((e["quality"], e["max_width"]), (40, 640))
-        for bad in ({"image_quality": 0}, {"image_quality": "high"}, {"image_max_width": 5}):
-            with self.assertRaises(review_page.SpecError):
-                review_page.image_settings(bad, env={})
+        with project_with({}):
+            d = review_page.image_settings({}, env=dict(os.environ))
+            self.assertEqual((d["quality"], d["max_width"]), (IMAGE_DEFAULTS["PROOFS_IMAGE_QUALITY"], IMAGE_DEFAULTS["PROOFS_IMAGE_MAX_WIDTH"]))
+            s = review_page.image_settings({"image_quality": 60, "image_max_width": 900}, env=dict(os.environ))
+            self.assertEqual((s["quality"], s["max_width"]), (60, 900))
+            e = review_page.image_settings({"image_quality": 60}, env=dict(os.environ, PROOFS_IMAGE_QUALITY="40", PROOFS_IMAGE_MAX_WIDTH="640"))
+            self.assertEqual((e["quality"], e["max_width"]), (40, 640))
+            for bad in ({"image_quality": 0}, {"image_quality": "high"}, {"image_max_width": 5}):
+                with self.assertRaises(review_page.SpecError):
+                    review_page.image_settings(bad, env=dict(os.environ))
 
     def test_width_is_read_from_png_and_jpeg_headers(self):
         self.assertEqual(review_page.image_width(self.tmp / "shot.png"), 400)
@@ -943,7 +969,7 @@ class Assets(unittest.TestCase):
     def test_png_becomes_smaller_webp(self):
         text, out = self.built('<img alt="a" src="{{asset:shot}}">')
         self.assertIn("data:image/webp;base64,", text)
-        self.assertIn("lossy at quality %d and lossless" % review_page.DEFAULT_IMAGE_QUALITY, out)
+        self.assertIn("lossy at quality %d and lossless" % review_page.image_settings({})["quality"], out)
         self.assertIn("fallback for older Safari", out)
 
     @unittest.skipUnless(MAGICK, "ImageMagick is not installed")
@@ -1021,6 +1047,34 @@ launchChromium(chromium, env).then(
   (e) => console.log(JSON.stringify({ ok: false, message: e.message, calls })));
 """
 FLAG = "--disable-features=MacAppCodeSignClone"
+
+
+class SettingsRead(unittest.TestCase):
+    """The builder reads its numbers and switches from the settings files, not copied constants."""
+
+    def test_image_quality_and_width_come_from_the_project_file(self):
+        with project_with({"PROOFS_IMAGE_QUALITY": "55", "PROOFS_IMAGE_MAX_WIDTH": "900"}):
+            got = review_page.image_settings({})
+            self.assertEqual((got["quality"], got["max_width"]), (55, 900))
+
+    def test_the_size_warning_fires_at_the_set_number_of_megabytes(self):
+        spec = {"_assets": {"a": "x" * 10}}
+        text = "z" * int(1.5 * 1024 * 1024)
+        with project_with({}):
+            self.assertIsNone(review_page.size_warning(text, spec))  # default 3 MB
+        with project_with({"PROOFS_PAGE_WARN_MB": "1"}):
+            line = review_page.size_warning(text, spec)
+            self.assertIn("over 1 MB", line)
+
+    def test_spelling_check_follows_the_setting(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            page = Path(tmp) / "p.html"
+            spec = {"mode": "log", "session": "s"}
+            page.write_text('<script type="application/json" id="rp-spec">%s</script><p>the old behaviour</p>' % json.dumps(spec))
+            with project_with({}):
+                self.assertEqual([w for w in review_page.warnings(page) if "british" in w], [])
+            with project_with({"PROOFS_SPELLING": "american"}):
+                self.assertEqual(len([w for w in review_page.warnings(page) if "british" in w]), 1)
 
 
 @unittest.skipUnless(NODE, "node not found")

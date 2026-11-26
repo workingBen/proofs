@@ -1,5 +1,6 @@
 # Changelog
 
+- **1.8.5** (2026-11-26): Reads its numbers and paths from the Proofs settings (`settings.py --print`) instead of fixed values; the defaults are unchanged.
 - **1.8.4** (2026-11-24): When the guide is done, the skill tells the user that design-review uses it, together with an optional `docs/design-profile.md`.
 - **1.8.3** (2026-11-24): **Results first** (the maintainer's principle): nothing matters more than a result the user wants; save tokens by cutting waste, never by cutting a check, an option or a revise pass the result needs. Full text is rule 0 in `reference/house-rules.md`.
 - **1.8.2** (2026-11-23): Gives the exact build line with `--out .proofs/pages/<name>.html`, the one folder the optional `open` allow rule covers, so the page can be opened. A spec's asset path that is not found next to the spec is now tried from the working directory, and the error names both paths.

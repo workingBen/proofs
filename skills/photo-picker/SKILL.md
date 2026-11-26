@@ -1,6 +1,6 @@
 ---
 name: photo-picker
-version: 1.3.3
+version: 1.3.4
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -12,6 +12,8 @@ description: Use when the user wants real photos found for an article or page an
 A human-in-the-loop process for sourcing and adding real photos to an article or page. Instead of guessing at one image per spot and dropping it in, or describing candidates in chat, build an interactive gallery the user browses and clicks through, then apply only what they picked. Sibling tool to `article-copy-edit` and `design-review`: same underlying loop, adapted for photo curation instead of text or layout.
 
 **Results first.** Nothing matters more than a result the user wants. Save tokens by cutting waste, never by cutting a check, an option or a revise pass the result needs (full text: `../../reference/house-rules.md`).
+
+Read the settings: `python3 ${CLAUDE_PLUGIN_ROOT}/shared/settings.py --print` (pre-approved). Use the values it shows wherever this file says *the candidate count*.
 
 ## Why this exists
 
@@ -34,7 +36,7 @@ A slot is one spot in the content that needs a photo: a section, a topic, a mood
 - Use free-license stock sources (Pexels, Unsplash) for general photography; Open Library's cover API (`https://covers.openlibrary.org/b/olid/{OLID}-L.jpg`) or a publisher's own official cover CDN for book covers; the project's own image folder for reuse candidates.
 - **Download and visually inspect every candidate with the Read tool before presenting it as an option.** A URL that returns 200 is not proof the image is right. Confirm it's actually the right subject, right book edition, right orientation, not a broken or placeholder image, by looking at it.
 - Always disclose source and reuse-vs-new status per candidate (e.g., "already on site, reused from the pricing page" vs. "new, via Pexels").
-- 1-3 candidates per slot is normal; a slot can have just one if nothing else is a real contender. Don't pad for the sake of options.
+- Up to the candidates-per-spot setting (default 3) candidates per slot is normal; a slot can have just one if nothing else is a real contender. Don't pad for the sake of options.
 
 ### 3. Build the review page with the shared builder
 

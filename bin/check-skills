@@ -194,6 +194,8 @@ def check_plugin_calls(path, body, rules):
                     msg = "path %s does not exist" % target
                 elif rel in NEVER_PREAPPROVED:
                     continue
+                elif rel == "shared/settings.py" and re.match(r" --(print|json)\b", line[line.index(target) + len(target):]):
+                    continue  # the read-only views are pre-approved by shared/allow_block.py, not by a skill's rules
                 else:
                     cmd = ("%s%s %s" % (interp, flags, target)).replace(ROOT, FAKE_ROOT)
                     if any(rule_matches(r, cmd) for r in covering):

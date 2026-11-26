@@ -2,7 +2,7 @@
 
 Shared by every proofs skill that builds a page. Read it before you publish or save one.
 
-The project chooses with `PROOFS_PAGES`, set in the project's `.claude/settings.json` "env" block (or a line in CLAUDE.md: "proofs pages: file"). Values:
+The project chooses with `PROOFS_PAGES`, set in the project's `.claude/settings.json` "env" block. Values:
 
 - `artifact`: publish as a private claude.ai artifact (a link that opens on phone and computer). This is the default when publishing is available. A page that takes answers (questions, checks, a session page) is published with `capabilities: {"db": {}, "comments": {}}`, so its answers are saved where you can read them with `ArtifactData`, and its Send to Claude button can wake the session; see "Answers without Copy" and "Send to Claude" in `review-page.md`.
 - `file`: save the page as an HTML file (default folder `.proofs/pages/`, which the helpers keep out of git for you) and open it in the browser. This is the default when artifacts are not available. Open it with one Bash call, exactly `open .proofs/pages/<name>.html` (`xdg-open` on Linux; `start` on Windows); the `--project` allow block pre-approves that form. If it is refused (for example in `claude -p`), do not retry: print the path and the command for the user. Reuse the same file path for later rounds so the page updates in place instead of piling up.

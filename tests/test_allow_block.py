@@ -110,6 +110,8 @@ class AllowBlockTest(unittest.TestCase):
                     continue
                 if target[len(ROOT) + 1:] in check_skills.NEVER_PREAPPROVED:
                     continue
+                if target.endswith("/shared/settings.py"):
+                    continue  # only its --print and --json views are pre-approved; its own test covers them
                 cmd = ("%s%s %s --out page.html" % (interp, flags, target)).replace(ROOT, FAKE_VERSION_ROOT)
                 seen += 1
                 self.assertTrue(any(check_skills.rule_matches(r, cmd) for r in rules), cmd)

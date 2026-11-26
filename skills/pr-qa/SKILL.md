@@ -1,6 +1,6 @@
 ---
 name: pr-qa
-version: 1.9.8
+version: 1.9.9
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/skills/pr-qa/scripts/pr_qa_page.py *)
@@ -11,6 +11,8 @@ description: Use when open pull requests, especially ones an AI agent made unatt
 ---
 
 # PR QA
+
+Read the settings: `python3 ${CLAUDE_PLUGIN_ROOT}/shared/settings.py --print` (pre-approved). Use the values it shows wherever this file says *the port*, *the before-shot port*, *the base folder* and *the visual paths*. The command examples show the default ports, 3311 and 3411; use the setting's value in its place.
 
 ## Overview
 
@@ -37,7 +39,7 @@ is that file's business, not this skill's; follow it.
 
 - Draft PRs from an unattended agent run are waiting and someone has to decide.
 - The user asks to "QA", "check", or "verify" a PR before merging.
-- A change is visual and the user wants to see it, not read about it.
+- A change is visual and the user wants to see it, not read about it. A PR counts as visual when it touches one of the visual paths setting's folders or files (defaults `app/`, `src/`, `lib/`, `public/`, `config/routes.rb`).
 - You are about to recommend merging something you have not run.
 
 **Do not use for:** reviewing code you are writing yourself (that is
@@ -134,8 +136,8 @@ no token, no network, or no open PR, so it can never keep a session from startin
    migrate anything.
 
    **First pick the base worktree path, `<base-dir>`:**
-   `$PROOFS_BASE_DIR/<repo folder name>-pr-qa-base` if the `PROOFS_BASE_DIR`
-   setting is set, else `.proofs/base` (repo folder name = basename of
+   `$PROOFS_BASE_DIR/<repo folder name>-pr-qa-base` if the base folder setting
+   (`PROOFS_BASE_DIR`) is set, else `.proofs/base` (repo folder name = basename of
    `git rev-parse --show-toplevel`). Some setups block `git worktree add` inside
    code folders except one sanctioned folder; for them, set `PROOFS_BASE_DIR` to
    that folder, as an absolute path (no `~`, no relative path), in the `env` block

@@ -72,7 +72,7 @@ Common fields:
 | `vars` | CSS variables set on `:root`, to retune the chrome's light values. Dark values go in `css` under `@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {…} }` and `:root[data-theme="dark"]`; give every color you change a dark pair, and a filled box its own text color (as `--rp-amber-ink` does), or it goes unreadable in dark mode |
 | `head_html` | extra `<head>` markup |
 | `assets` | `{"name": "path/to/file.png"}`: the builder reads the files, so their bytes never pass through your context. Use one as `{{asset:name}}` (in an attribute, or in `css` as `url({{asset:name}})`) or as `var(--asset-name)`; each is embedded **once** however often it is used. PNG and JPEG become WebP when `magick` or `cwebp` is installed: the smaller of lossy (at `image_quality`) and lossless, or the original if that is smaller still (without either tool they are kept, and the build says so). Older Safari (before iOS 14) cannot show WebP, so a converted image also carries a **fallback**: the smallest of a JPEG at `image_quality`, a PNG shrunk to `image_max_width`, or the original (a PNG with transparency never becomes a JPEG; without `magick` the fallback is the original). An `<img src="{{asset:name}}">` becomes `<picture class="rp-pic"><source type="image/webp" srcset="…"><img src="fallback" …></picture>`, keeping every attribute on the `<img>` (`picture.rp-pic` is `display:contents`, but style the `<img>` by class, not with a `>` child selector). CSS uses (`url(…)`, `var(--asset-name)`) get the fallback, since CSS has no per-format fallback that older Safari reads. One HTML use is inlined and needs no JavaScript; repeated uses are filled in at load from one JSON map (`#rp-assets`) |
-| `image_quality`, `image_max_width` | WebP quality (1–100, default 70) and the widest a screenshot may be, in pixels (default 1600): applied only when the shrunk file is actually smaller, and never upscales. The settings `PROOFS_IMAGE_QUALITY` and `PROOFS_IMAGE_MAX_WIDTH` (a settings file or the environment) win over the spec |
+| `image_quality`, `image_max_width` | WebP quality (1–100) and the widest a screenshot may be, in pixels (the defaults, 70 and 1600, are the `PROOFS_IMAGE_QUALITY` and `PROOFS_IMAGE_MAX_WIDTH` settings): applied only when the shrunk file is actually smaller, and never upscales. The settings `PROOFS_IMAGE_QUALITY` and `PROOFS_IMAGE_MAX_WIDTH` (a settings file or the environment) win over the spec |
 | `send_wait_ms` | Milliseconds the page waits after Send to Claude before saying "Not picked up yet". Default: the `PROOFS_SEND_WAIT_MIN` setting (5 minutes) |
 | `storage_key` | the `localStorage` key, if the default is not stable enough |
 | `project` | `{name, session, repo}` for the header, on every mode; take the session name the way the `working-log` skill does. Questions pages also use `stream`, `round`, `artifact` |
@@ -336,7 +336,7 @@ by itself.
 the reply in the thread. So the confirmation is a republish. After a send the page
 keeps `{sentAt, fromVersion}` in `localStorage` (under `<storage key>:sent`). On the
 next load, a page whose version differs says, in green, "Claude picked up your answers
-(sent 9:01 PM, now v14)" and forgets the send; the same version more than 5 minutes
+(sent 9:01 PM, now v14)" and forgets the send; the same version longer than the Send wait setting (`PROOFS_SEND_WAIT_MIN`, default 5 minutes)
 later says "Not picked up yet. The session may be busy or closed; Copy still works."
 
 ### Sent to Claude: what the session does

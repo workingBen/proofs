@@ -900,7 +900,7 @@ class DesignerGuidance(unittest.TestCase):
     def test_critic_comes_after_smoke_and_before_the_correction_pass_ends(self):
         text = self.step("4.")
         self.assertLess(text.index("**Verify before publishing"), text.index("**The critic"))
-        self.assertLess(text.index("**The critic"), text.index("**One build, then at most one correction pass.**"))
+        self.assertLess(text.index("**The critic"), text.index("**One build, then at most the correction passes setting"))
 
     def test_first_build_is_a_critic_build(self):
         text = self.step("4.")
@@ -919,7 +919,7 @@ class DesignerGuidance(unittest.TestCase):
     def test_results_first_keeps_the_critic_and_the_options(self):
         text = self.step("4.")
         self.assertIn("never by cutting an option, the critic or the revise pass", text)
-        self.assertIn("$5", text)
+        self.assertIn("spend cap setting (default $5", text)
 
     def test_keep_x_on_accept_with_comment(self):
         text = self.step("5.")
@@ -931,7 +931,7 @@ class DesignerGuidance(unittest.TestCase):
         text = self.skill()
         for needle in ("**Never change words the user did not pick.**", "\"Found by the capture\"",
                        "**Change only what was picked.**", "`../../reference/commit-and-pr.md`",
-                       "**One build, then at most one correction pass.**", "--compare .proofs/capture/before/measures.json"):
+                       "**One build, then at most the correction passes setting", "--compare .proofs/capture/before/measures.json"):
             with self.subTest(needle=needle):
                 self.assertIn(needle, text)
 
@@ -1070,3 +1070,61 @@ class FinalReviewGuidance(unittest.TestCase):
         for needle in ("`<page>-logo-<width>.png`", "`sections`", "`fontSizes`", "`logo`"):
             with self.subTest(needle=needle):
                 self.assertIn(needle, text)
+
+
+class SkillsReadSettings(unittest.TestCase):
+    READ = "python3 ${CLAUDE_PLUGIN_ROOT}/shared/settings.py --print"
+    SKILL_WORDS = {
+        "design-review": ("the port", "the spend cap", "the option count", "the critic", "the correction passes", "the design profile path"),
+        "visual-qa": ("the port", "the smallest text", "the smallest tap target", "the mockups per item"),
+        "pr-qa": ("the port", "the before-shot port", "the base folder", "the visual paths"),
+        "photo-picker": ("the candidate count",),
+        "review-cycle": ("the checkpoint count",),
+        "changelog": ("the changelog folder",),
+        "todos": ("the to-do file", "the to-do archive folder"),
+        "style-guide": ("the style guide file", "the design profile path"),
+    }
+
+    def text(self, rel):
+        return " ".join((REPO / rel).read_text().split())
+
+    def test_every_skill_using_a_setting_reads_settings_first(self):
+        for skill, words in self.SKILL_WORDS.items():
+            with self.subTest(skill=skill):
+                text = self.text(f"skills/{skill}/SKILL.md")
+                self.assertIn("Read the settings: `" + self.READ + "`", text)
+                self.assertIn("(pre-approved)", text)
+                for word in words:
+                    self.assertIn("*" + word + "*", text)
+                # it comes before the first numbered or lettered step
+                self.assertLess(text.index(self.READ), text.index("## ", text.index(self.READ)))
+
+    def test_cap_is_one_setting_stated_in_house_rules(self):
+        rules = self.text("reference/house-rules.md")
+        self.assertIn("PROOFS_COST_CAP_USD", rules)
+        self.assertIn("estimate", rules)
+        for path in sorted((REPO / "skills").glob("*/SKILL.md")):
+            for m in re.finditer(r"\$\d+", path.read_text()):
+                with self.subTest(skill=path.parent.name):
+                    around = path.read_text()[max(0, m.start() - 12):m.end() + 2]
+                    self.assertIn("default " + m.group(0), around)
+
+    def test_where_the_page_goes_has_no_claude_md_fallback(self):
+        for path in guidance_files():
+            with self.subTest(path=path.name):
+                self.assertNotIn("proofs pages: file", path.read_text())
+
+    def test_design_review_option_count_and_passes_read_settings(self):
+        text = self.text("skills/design-review/SKILL.md")
+        self.assertIn("option count setting (default 3)", text)
+        self.assertIn("with 2, use Careful and Step up", text)
+        self.assertIn("correction passes setting (default 1; 0 means none)", text)
+        self.assertIn("critic setting (default `helper`)", text)
+        self.assertIn("use the setting's value in its place", text)
+        self.assertNotIn("at most one correction pass.**", text)
+
+    def test_other_literals_name_their_setting(self):
+        self.assertIn("candidates-per-spot setting (default 3)", self.text("skills/photo-picker/SKILL.md"))
+        self.assertIn("checkpoint setting's number of items (default 5)", self.text("skills/review-cycle/SKILL.md"))
+        self.assertIn("mockups-per-item setting (default 2)", self.text("skills/visual-qa/SKILL.md"))
+        self.assertIn("`PROOFS_SEND_WAIT_MIN`", self.text("reference/review-page.md"))

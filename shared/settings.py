@@ -5,7 +5,8 @@
     python3 <plugin root>/shared/settings.py --json
     python3 <plugin root>/shared/settings.py --set KEY=VALUE [--scope user|project|local]
     python3 <plugin root>/shared/settings.py --unset KEY [--scope user|project|local]
-    python3 <plugin root>/shared/settings.py --spec
+    python3 <plugin root>/shared/settings.py --spec [--out PATH]
+    python3 <plugin root>/shared/settings.py --apply ROWS_DIR [--dry-run]
 
 --print shows every setting, its effective value and where the value came from; --json
 prints the same as {KEY: {"value", "source", "default", "note"}}. --set and --unset write the
@@ -14,6 +15,13 @@ PROOFS_), and keep every other key in the file as it is. --spec prints a review-
 spec of the effective settings (mode "settings": the settings page). Without --scope a
 setting goes where the table says: user is ~/.claude/settings.json (or $CLAUDE_CONFIG_DIR/settings.json),
 project is .claude/settings.json (committed), local is .claude/settings.local.json.
+
+--apply writes the changes the settings page saved: ROWS_DIR is the folder ArtifactData `list`
+wrote with out_dir (or its proofs-answers folder). Each row of kind "setting" with an answer is
+validated and written with --set's rules, at the row's scope. A row whose `from` is no longer
+the current value (the setting changed since the page was built), whose value fails validation
+or whose key is unknown is skipped and listed. A row with a null answer (an undone change) is
+ignored. --dry-run prints what would happen and writes nothing.
 
 Exit codes: 0 ok, 2 invalid value, unknown key or bad usage, 3 a settings file that cannot be
 read (nothing is written to it).
@@ -335,6 +343,71 @@ def page_spec(*, cwd=None, env=None, home=None):
     }
 
 
+# ---------------------------------------------------------------- applying saved rows
+
+def _row_files(path):
+    path = Path(path)
+    if path.is_dir():
+        return [f for n in sorted(os.listdir(path)) for f in _row_files(path / n)]
+    return [path] if path.suffix == ".json" else []
+
+
+def _unwrap(value):
+    """The row bodies in a parsed rows file: the body itself, {"data": body}, or a list or
+    {"documents": [...]} of them (the same shapes shared/review_page/answers.cjs reads)."""
+    if isinstance(value, list):
+        return [b for v in value for b in _unwrap(v)]
+    if not isinstance(value, dict):
+        return []
+    for k in ("documents", "docs"):
+        if isinstance(value.get(k), list):
+            return _unwrap(value[k])
+    if isinstance(value.get("data"), dict) and value["data"].get("kind"):
+        return [value["data"]]
+    return [value] if value.get("kind") else []
+
+
+def saved_rows(path):
+    """The kind "setting" rows with an answer from a rows folder or file, in file order.
+    A null answer is an undone change and is left out."""
+    if not Path(path).exists():
+        raise SettingError("%s does not exist." % path)
+    out = []
+    for f in _row_files(path):
+        try:
+            bodies = _unwrap(json.loads(f.read_text(encoding="utf-8")))
+        except (OSError, ValueError) as e:
+            raise SettingsFileError("Cannot read %s: %s." % (f, e))
+        out += [b for b in bodies if b.get("kind") == "setting" and b.get("answer") is not None]
+    return out
+
+
+def apply_rows(path, dry_run=False, *, cwd=None, env=None, home=None):
+    """Apply the saved rows. Returns (lines, skipped): the report lines and how many rows were skipped."""
+    lines, skipped = [], 0
+    for r in saved_rows(path):
+        key = str(r.get("id") or r.get("key") or "")
+        try:
+            row = _row(key)
+            raw = str(r["answer"])
+            validate(key, raw)
+            scope = _scope(row, r.get("scope"))
+            current = effective(cwd=cwd, env=env, home=home)[key]["value"]
+            now = _canonical(row, current)
+            shown = r.get("from")
+            if shown is not None and str(shown) != now:
+                raise SettingError("the page showed %s but it is now %s; open the page again." % (shown, now))
+            target = settings_path(scope, cwd=cwd, env=env, home=home)
+            new = _canonical(row, validate(key, raw))
+            if not dry_run:
+                set_value(key, raw, scope, cwd=cwd, env=env, home=home)
+            lines.append("%s %s %s \u2192 %s (%s %s)" % ("WOULD APPLY" if dry_run else "APPLIED", key, now, new, scope, target))
+        except SettingError as e:
+            skipped += 1
+            lines.append("SKIPPED %s: %s" % (key or "(no key)", e))
+    return lines, skipped
+
+
 # ---------------------------------------------------------------- CLI
 
 def _show(value):
@@ -371,15 +444,35 @@ def main(argv):
     mode.add_argument("--set", metavar="KEY=VALUE")
     mode.add_argument("--unset", metavar="KEY")
     mode.add_argument("--spec", action="store_true", help="a builder spec for the settings page")
+    mode.add_argument("--apply", metavar="ROWS_DIR", help="write the changes the settings page saved")
     parser.add_argument("--scope", choices=SCOPES)
+    parser.add_argument("--out", metavar="PATH", help="with --spec: write the spec to PATH instead of printing it")
+    parser.add_argument("--dry-run", action="store_true", help="with --apply: report, write nothing")
     args = parser.parse_args(argv[1:])  # argparse exits 2 on bad usage
     if args.scope and not (args.set or args.unset):
         parser.error("--scope goes with --set or --unset")
+    if args.out and not args.spec:
+        parser.error("--out goes with --spec")
+    if args.dry_run and not args.apply:
+        parser.error("--dry-run goes with --apply")
+    if args.scope and args.apply:
+        parser.error("--apply uses each row's own scope")
     try:
+        if args.apply:
+            lines, skipped = apply_rows(args.apply, args.dry_run)
+            for line in lines:
+                print(line)
+            return 1 if skipped else 0
         if args.as_json:
             print(json.dumps(effective(), indent=2, ensure_ascii=False))
         elif args.spec:
-            print(json.dumps(page_spec(), indent=2, ensure_ascii=False))
+            text = json.dumps(page_spec(), indent=2, ensure_ascii=False)
+            if args.out:
+                Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+                Path(args.out).write_text(text + "\n", encoding="utf-8")
+                print("settings page spec saved to %s" % args.out)
+            else:
+                print(text)
         elif args.show:
             _print_table()
         elif args.set is not None:

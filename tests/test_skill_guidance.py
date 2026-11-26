@@ -739,7 +739,7 @@ class ResultsFirst(unittest.TestCase):
 
     def test_every_skill_says_results_first(self):
         skills = sorted((REPO / "skills").glob("*/SKILL.md"))
-        self.assertEqual(len(skills), 12)
+        self.assertEqual(len(skills), 13)
         for path in skills:
             with self.subTest(skill=path.parent.name):
                 self.assertIn(self.SHORT, path.read_text())

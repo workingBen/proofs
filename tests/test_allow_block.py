@@ -111,7 +111,7 @@ class AllowBlockTest(unittest.TestCase):
                 if target[len(ROOT) + 1:] in check_skills.NEVER_PREAPPROVED:
                     continue
                 if target.endswith("/shared/settings.py"):
-                    continue  # only its --print and --json views are pre-approved; its own test covers them
+                    continue  # only its --print, --json and --spec views are pre-approved; its own test covers them
                 cmd = ("%s%s %s --out page.html" % (interp, flags, target)).replace(ROOT, FAKE_VERSION_ROOT)
                 seen += 1
                 self.assertTrue(any(check_skills.rule_matches(r, cmd) for r in rules), cmd)
@@ -127,12 +127,13 @@ class AllowBlockTest(unittest.TestCase):
     def test_settings_views_are_preapproved_but_writes_still_ask(self):
         rules = allow_block.rules("/opt/claude-home", None)
         base = "python3 %s/shared/settings.py" % FAKE_VERSION_ROOT
-        for flag in ("--print", "--json"):
+        for flag in ("--print", "--json", "--spec"):
             self.assertTrue(any(check_skills.rule_matches(r, "%s %s" % (base, flag)) for r in rules), flag)
         for cmd in ("%s --set PROOFS_PORT=3099" % base, "%s --unset PROOFS_PORT" % base,
-                    "%s --print --set PROOFS_PORT=3099" % base, base, "%s --scope user" % base):
+                    "%s --print --set PROOFS_PORT=3099" % base, base, "%s --scope user" % base,
+                    "%s --apply /tmp/rows" % base, "%s --spec --out x.json" % base):
             self.assertFalse(any(check_skills.rule_matches(r, cmd) for r in rules), cmd)
-        self.assertEqual(len([r for r in rules if "settings.py" in r]), 2)
+        self.assertEqual(len([r for r in rules if "settings.py" in r]), 3)
 
     def test_settings_views_follow_claude_config_dir_and_local_folders(self):
         rules = allow_block.rules("/opt/claude-home", "/opt/cfg")
@@ -140,7 +141,8 @@ class AllowBlockTest(unittest.TestCase):
         folder = allow_block.folder_rules("/src/proofs")
         self.assertIn("Bash(python3 /src/proofs/shared/settings.py --print)", folder)
         self.assertIn("Bash(python3 /src/proofs/shared/settings.py --json)", folder)
-        self.assertFalse(any("--set" in r or "--unset" in r for r in rules + folder))
+        self.assertFalse(any("--set" in r or "--unset" in r or "--apply" in r or "--out" in r for r in rules + folder))
+        self.assertIn("Bash(python3 /src/proofs/shared/settings.py --spec)", folder)
 
     def test_headless_adds_exactly_the_capture_helper(self):
         plain = allow_block.rules("/opt/claude-home", None)

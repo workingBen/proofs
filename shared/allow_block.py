@@ -186,10 +186,11 @@ COMMIT_RULES = [
     "Bash(git -c http.postBuffer=524288000 push -u origin HEAD)",
     "Bash(gh pr create *)",
 ]
-# Read-only views of the Proofs settings (shared/settings.py). --set and --unset are not here:
-# they write a settings file, so the owner sees each write.
+# Read-only views of the Proofs settings (shared/settings.py). --set, --unset and --apply are not
+# here: they write a settings file, so the owner sees each write. (--spec --out writes a page spec
+# file, so only the bare --spec is pre-approved.)
 SETTINGS_SCRIPT = "shared/settings.py"
-SETTINGS_FLAGS = ("--json", "--print")
+SETTINGS_FLAGS = ("--json", "--print", "--spec")
 # Starts a dev server from an arbitrary command, so it is opt-in (--headless), never default.
 HEADLESS_SCRIPT = ("python3", "shared/capture/with_server.py")
 

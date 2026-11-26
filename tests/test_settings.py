@@ -362,5 +362,111 @@ class WriteTest(Base):
         self.assertEqual(self.project_file().read_bytes(), before)
 
 
+class ApplyTest(Base):
+    """--apply: the rows the settings page saved, written into the settings files."""
+
+    def rows_dir(self, *rows):
+        d = self.home.parent / "rows"
+        (d / "proofs-answers").mkdir(parents=True, exist_ok=True)
+        for r in rows:
+            body = {"id": r["id"], "data": dict({"section": "settings", "kind": "setting", "scope": "project",
+                                                 "note": "", "updated_at": "2026-11-26T12:00:00Z"}, **r),
+                    "version": 1}
+            (d / "proofs-answers" / ("%s.json" % r["id"])).write_text(json.dumps(body))
+        return d
+
+    def test_apply_applies_and_reports(self):
+        rows = self.rows_dir(
+            {"id": "PROOFS_PORT", "answer": "3099", "from": "3311", "scope": "project"},
+            {"id": "PROOFS_PAGES", "answer": "file", "from": "artifact", "scope": "user"})
+        r = self.run_cli("--apply", str(rows))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("APPLIED PROOFS_PORT 3311 \u2192 3099 (project %s)" % self.project_file(), r.stdout)
+        self.assertIn("APPLIED PROOFS_PAGES artifact \u2192 file (user ", r.stdout)
+        self.assertEqual(json.loads(self.project_file().read_text())["env"], {"PROOFS_PORT": "3099"})
+        self.assertEqual(json.loads((self.home / ".claude" / "settings.json").read_text())["env"],
+                         {"PROOFS_PAGES": "file"})
+
+    def test_apply_skips_stale_from_and_invalid(self):
+        self.write(self.project_file(), {"env": {"PROOFS_PORT": "4000"}})
+        rows = self.rows_dir(
+            {"id": "PROOFS_PORT", "answer": "3099", "from": "3311", "scope": "project"},
+            {"id": "PROOFS_MIN_TEXT", "answer": "14", "from": "16", "scope": "project"},
+            {"id": "PROOFS_BASE_PORT", "answer": "3500", "from": "3411", "scope": "project"})
+        r = self.run_cli("--apply", str(rows))
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("SKIPPED PROOFS_PORT:", r.stdout)
+        self.assertIn("4000", r.stdout)
+        self.assertIn("SKIPPED PROOFS_MIN_TEXT:", r.stdout)
+        self.assertIn("can only go up", r.stdout)
+        self.assertIn("APPLIED PROOFS_BASE_PORT 3411 \u2192 3500", r.stdout)
+        env = json.loads(self.project_file().read_text())["env"]
+        self.assertEqual(env, {"PROOFS_PORT": "4000", "PROOFS_BASE_PORT": "3500"})
+
+    def test_apply_ignores_undone_rows_and_other_kinds(self):
+        rows = self.rows_dir({"id": "PROOFS_PORT", "answer": None, "from": "3311"},
+                             {"id": "some-question", "kind": "pick", "answer": "A"})
+        r = self.run_cli("--apply", str(rows))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertNotIn("SKIPPED", r.stdout)
+        self.assertNotIn("APPLIED", r.stdout)
+        self.assertFalse(self.project_file().exists())
+
+    def test_apply_unknown_key_is_skipped(self):
+        rows = self.rows_dir({"id": "PROOFS_NOPE", "answer": "1", "from": "0"})
+        r = self.run_cli("--apply", str(rows))
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("SKIPPED PROOFS_NOPE:", r.stdout)
+
+    def test_apply_dry_run_writes_nothing(self):
+        rows = self.rows_dir({"id": "PROOFS_PORT", "answer": "3099", "from": "3311"},
+                             {"id": "PROOFS_BASE_PORT", "answer": "x", "from": "3411"})
+        r = self.run_cli("--apply", str(rows), "--dry-run")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("WOULD APPLY PROOFS_PORT 3311 \u2192 3099", r.stdout)
+        self.assertIn("SKIPPED PROOFS_BASE_PORT:", r.stdout)
+        self.assertNotIn("APPLIED", r.stdout)
+        self.assertFalse(self.project_file().exists())
+
+    def test_apply_reads_the_rows_folder_itself_or_its_parent(self):
+        rows = self.rows_dir({"id": "PROOFS_PORT", "answer": "3099", "from": "3311"})
+        r = self.run_cli("--apply", str(rows / "proofs-answers"))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("APPLIED PROOFS_PORT", r.stdout)
+
+    def test_spec_out_writes_the_spec_to_a_file(self):
+        target = self.project / ".proofs" / "settings" / "spec.json"
+        r = self.run_cli("--spec", "--out", str(target))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(json.loads(target.read_text())["mode"], "settings")
+        self.assertEqual(self.run_cli("--print", "--out", str(target)).returncode, 2)
+
+    def test_dry_run_needs_apply_and_missing_folder_exits_2(self):
+        self.assertEqual(self.run_cli("--print", "--dry-run").returncode, 2)
+        self.assertEqual(self.run_cli("--apply", "/no/such/folder").returncode, 2)
+
+
+class ReferenceTest(unittest.TestCase):
+    def test_settings_skill_passes_check_skills(self):
+        self.assertTrue((REPO / "skills" / "settings" / "SKILL.md").exists())
+        r = subprocess.run([sys.executable, str(REPO / "bin" / "check-skills")], cwd=str(REPO),
+                           capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_settings_skill_never_preapproves_a_write(self):
+        text = (REPO / "skills" / "settings" / "SKILL.md").read_text(encoding="utf-8")
+        head = text.split("\n---\n", 1)[0]
+        self.assertIn("name: settings", head)
+        for flag in ("--set", "--unset", "--apply"):
+            self.assertNotIn(flag, head)
+
+    def test_reference_lists_every_key(self):
+        text = (REPO / "reference" / "settings.md").read_text(encoding="utf-8")
+        for key in EXPECTED_KEYS:
+            self.assertIn("`%s`" % key, text, key)
+        for row in settings.load_table():
+            self.assertIn("`%s`" % row["key"], text)
+
+
 if __name__ == "__main__":
     unittest.main()

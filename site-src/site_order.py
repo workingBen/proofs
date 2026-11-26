@@ -8,4 +8,4 @@ ORDER = [s for _, g in GROUPS for s in g]
 
 # Skills that ship in the plugin but have no site page yet: their pages wait on
 # the owner's copy review. Remove a name here when its page is added to GROUPS.
-NOT_YET_ON_SITE = set()
+NOT_YET_ON_SITE = {"settings"}

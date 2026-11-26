@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """The open-PR session-start hook, as a starting session sees it."""
+import contextlib
 import json
 import os
 import subprocess
@@ -8,6 +9,8 @@ import tempfile
 import unittest
 import urllib.error
 from datetime import datetime, timezone
+from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"))
 
@@ -39,6 +42,28 @@ def opener_for(body="[]", error=None, captured=None):
             raise error
         return FakeResponse(body)
     return opener
+
+
+@contextlib.contextmanager
+def project_with(values):
+    """A temp project whose .claude/settings.json sets `values`, entered as the working folder,
+    with an empty home and no PROOFS_ variables, so only the file speaks."""
+    with tempfile.TemporaryDirectory() as tmp:
+        proj, home = Path(tmp).resolve() / "proj", Path(tmp).resolve() / "home"
+        (proj / ".claude").mkdir(parents=True)
+        home.mkdir()
+        (proj / ".claude" / "settings.json").write_text(json.dumps({"env": values}))
+        keep = {k: v for k, v in os.environ.items() if not k.startswith("PROOFS_")}
+        keep.update(HOME=str(home), CLAUDE_CONFIG_DIR=str(home / ".claude"))
+        old = os.getcwd()
+        os.chdir(proj)
+        try:
+            with mock.patch.dict(os.environ, keep, clear=True):
+                yield proj
+        finally:
+            os.chdir(old)
+
+from pr_qa_plan import fill, is_visual, load_map, plan, read_map
 
 
 def pr(number, ref, created, title="A change", draft=False):
@@ -246,6 +271,41 @@ class NeverBlocksTheSessionTest(unittest.TestCase):
         code, printed = self._main_with(bad)
         self.assertEqual(code, 0)
         self.assertEqual(printed, "")
+
+
+class SettingsTest(unittest.TestCase):
+    def test_extra_agent_prefixes_get_the_label(self):
+        row = pr(3, "claude/fix", "2026-08-04T08:43:00Z")
+        with project_with({}):
+            self.assertNotIn("AI fix", summarize([row], NOW))
+        with project_with({"PROOFS_AGENT_BRANCH_PREFIX": "agent/,claude/"}):
+            self.assertIn("AI fix", summarize([row], NOW))
+            self.assertIn("AI fix", summarize([pr(4, "agent/x", "2026-08-04T08:43:00Z")], NOW))
+            self.assertNotIn("AI fix", summarize([pr(5, "main-fix", "2026-08-04T08:43:00Z")], NOW))
+
+    def test_the_network_wait_is_the_setting(self):
+        seen = []
+
+        def opener(req, timeout=None):
+            seen.append(timeout)
+            return FakeResponse("[]")
+        with project_with({}):
+            fetch_open_prs("o/r", "t", opener)
+        with project_with({"PROOFS_PR_REMINDER_TIMEOUT": "12"}):
+            fetch_open_prs("o/r", "t", opener)
+        self.assertEqual(seen, [5, 12])
+
+    def test_the_reminder_is_on_when_the_project_file_says_so(self):
+        import io
+        import open_prs_session_start as hook
+        for values, expect_call in (({}, False), ({"PROOFS_PR_REMINDER": "1"}, True)):
+            with project_with(values), \
+                    mock.patch.object(hook, "repo_slug", return_value="o/r"), \
+                    mock.patch.object(hook, "read_token", return_value="t"), \
+                    mock.patch.object(hook, "fetch_open_prs", return_value=[]) as fetch, \
+                    mock.patch("sys.stdout", io.StringIO()):
+                hook.main()
+            self.assertEqual(fetch.called, expect_call, values)
 
 
 if __name__ == "__main__":

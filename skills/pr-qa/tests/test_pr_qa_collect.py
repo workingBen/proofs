@@ -5,6 +5,7 @@ an injected `fetch`.
 
 Run:  python3 -m unittest discover skills/pr-qa/tests
 """
+import contextlib
 import io
 import json
 import os
@@ -13,6 +14,7 @@ import tempfile
 import unittest
 import urllib.error
 import zipfile
+from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"))
@@ -20,6 +22,27 @@ from pr_qa_collect import (
     open_prs, qa_artifact_for, unpack, skeleton, ABSENT_REASONS, main,
 )
 
+
+@contextlib.contextmanager
+def project_with(values):
+    """A temp project whose .claude/settings.json sets `values`, entered as the working folder,
+    with an empty home and no PROOFS_ variables, so only the file speaks."""
+    with tempfile.TemporaryDirectory() as tmp:
+        proj, home = Path(tmp).resolve() / "proj", Path(tmp).resolve() / "home"
+        (proj / ".claude").mkdir(parents=True)
+        home.mkdir()
+        (proj / ".claude" / "settings.json").write_text(json.dumps({"env": values}))
+        keep = {k: v for k, v in os.environ.items() if not k.startswith("PROOFS_")}
+        keep.update(HOME=str(home), CLAUDE_CONFIG_DIR=str(home / ".claude"))
+        old = os.getcwd()
+        os.chdir(proj)
+        try:
+            with mock.patch.dict(os.environ, keep, clear=True):
+                yield proj
+        finally:
+            os.chdir(old)
+
+from pr_qa_plan import fill, is_visual, load_map, plan, read_map
 
 def pull_url(number):
     return "https://github.com/x/y/pull/%d" % number
@@ -329,6 +352,26 @@ class TokenErrorTest(unittest.TestCase):
             argv = ["--repo", "x/y", "--out", tmp, "--token", "t"]
             with self.assertRaises(urllib.error.HTTPError):
                 main(argv, fetch=fetch_500)
+
+
+class WorkflowSettingTest(unittest.TestCase):
+    def runs_url(self, **kw):
+        seen = []
+        def fetch(url, token=None, binary=False):
+            seen.append(url)
+            return {"workflow_runs": []}
+        qa_artifact_for("x/y", "b", "t", fetch=fetch, **kw)
+        return seen[0]
+
+    def test_the_default_workflow_comes_from_the_setting(self):
+        with project_with({}):
+            self.assertIn("/actions/workflows/pr-qa.yml/runs", self.runs_url())
+        with project_with({"PROOFS_QA_WORKFLOW": "qa-shots.yml"}):
+            self.assertIn("/actions/workflows/qa-shots.yml/runs", self.runs_url())
+
+    def test_an_explicit_workflow_wins(self):
+        with project_with({"PROOFS_QA_WORKFLOW": "qa-shots.yml"}):
+            self.assertIn("/actions/workflows/other.yml/runs", self.runs_url(workflow="other.yml"))
 
 
 if __name__ == "__main__":

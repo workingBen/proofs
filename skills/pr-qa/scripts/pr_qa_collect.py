@@ -22,13 +22,16 @@ import json
 import os
 import re
 import subprocess
+import sys
 import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "shared"))
+import settings  # shared/settings.py: the Proofs settings table and resolver
+
 API = "https://api.github.com"
-WORKFLOW = "pr-qa.yml"   # default; override with --workflow
 ARTIFACT_NAME = "pr-qa"
 
 ABSENT_REASONS = {
@@ -86,7 +89,7 @@ def open_prs(repo, token, fetch=http):
             for pr in raw]
 
 
-def qa_artifact_for(repo, branch, token, fetch=http, workflow=WORKFLOW):
+def qa_artifact_for(repo, branch, token, fetch=http, workflow=None):
     """The newest run of the QA workflow for `branch`, and its pr-qa artifact if it has one.
 
     Scoped to the workflow's own runs, filtered by branch server-side. Querying
@@ -96,6 +99,7 @@ def qa_artifact_for(repo, branch, token, fetch=http, workflow=WORKFLOW):
     meant a QA run old enough to have scrolled out of it reported "did not come
     from the pipeline", which was false.
     """
+    workflow = workflow or settings.get("PROOFS_QA_WORKFLOW")
     encoded_branch = urllib.parse.quote(branch, safe="")
     runs = fetch(f"{API}/repos/{repo}/actions/workflows/{workflow}/runs"
                  f"?branch={encoded_branch}&per_page=1",
@@ -159,8 +163,8 @@ def main(argv=None, fetch=http):
     parser.add_argument("--repo", help="owner/name; default: read from the origin remote")
     parser.add_argument("--out", required=True)
     parser.add_argument("--token", help="default: $GITHUB_TOKEN, then `gh auth token`")
-    parser.add_argument("--workflow", default=WORKFLOW,
-                        help="workflow file whose runs carry the pr-qa artifact")
+    parser.add_argument("--workflow", default=None,
+                        help="workflow file whose runs carry the pr-qa artifact (default: the PROOFS_QA_WORKFLOW setting)")
     args = parser.parse_args(argv)
     args.token = args.token or find_token()
     if not args.token:

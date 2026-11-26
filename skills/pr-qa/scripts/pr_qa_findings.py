@@ -29,10 +29,12 @@ import json
 import os
 import sys
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "shared"))
+import settings  # shared/settings.py: the Proofs settings table and resolver
+
 # Below this, a difference is noise -- sub-pixel rounding and scrollbar
 # arithmetic, not a layout that broke.
 OVERFLOW_NOISE_PX = 2
-MIN_TAP_TARGET = 44
 
 # The keys a shot carries when the capture step actually measured the layout.
 # A shot with none of them (just label, size, path, file) proves nothing, and a
@@ -154,7 +156,7 @@ def compare(before, after):
         if fresh:
             findings.append(finding(
                 "warning", f"{where}: new small tap targets",
-                f"Under the {MIN_TAP_TARGET}px that reads as reliably tappable: "
+                f"Under the {settings.get('PROOFS_MIN_TAP')}px that reads as reliably tappable: "
                 f"{name_items([target_label(t) for t in fresh])}.",
                 dict({"targets": fresh[:4]}, **({"rise": True} if targets_rose else {}))))
 

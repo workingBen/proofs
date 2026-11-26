@@ -279,7 +279,7 @@
      Send to Claude posts a comment with the comments capability's sendToClaude, which
      wakes that session. The text is a short pointer to the saved rows, not the export:
      sendToClaude refuses more than 4 KiB, and the database holds everything. */
-  var SEND_MAX_BYTES = 4000, SEND_STALE_MS = 5 * 60 * 1000, SEND_FORGET_MS = 24 * 60 * 60 * 1000;
+  var SEND_MAX_BYTES = 4000, SEND_STALE_DEFAULT_MS = 5 * 60 * 1000, SEND_FORGET_MS = 24 * 60 * 60 * 1000;
   var SENT_MSG = "Sent. This page updates when Claude has read your answers (usually under a minute). " +
                  "The reply is also in the comments.";
   function cpBytes(c) { return c < 0x80 ? 1 : c < 0x800 ? 2 : c < 0x10000 ? 3 : 4; }
@@ -321,7 +321,10 @@
   // What the bar says on load after a send ({sentAt, fromVersion} kept in localStorage).
   // The page cannot read the comment thread, so a newer version of the page is the proof
   // that Claude read the answers: Claude's first act on a send is to republish.
+  // The wait comes from the page's own spec (send_wait_ms, built from the PROOFS_SEND_WAIT_MIN setting).
+  function staleMs(S) { return (S && S.send_wait_ms) || SEND_STALE_DEFAULT_MS; }
   function pickupNote(sent, S, now) {
+    var SEND_STALE_MS = staleMs(S);
     if (!sent || !sent.sentAt) return null;
     var at = new Date(sent.sentAt), age = (+now) - at.getTime();
     if (isNaN(age)) return null;
@@ -887,7 +890,7 @@
       snd.busy = false;
       sendBtn.disabled = false;
       sendSay(SENT_MSG, "ok");
-      watchStale(SEND_STALE_MS);
+      watchStale(staleMs(S));
     }, function (e) {
       var code = (e && e.code) || "error";
       snd.busy = false;

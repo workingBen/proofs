@@ -28,6 +28,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import settings as proofs_settings  # noqa: E402
+
 HERE = Path(__file__).resolve().parent
 ENGINE = HERE / "engine.js"
 ANSWERS = HERE / "answers.cjs"
@@ -160,31 +163,32 @@ def data_uri(path, data=None, mime=None):
 # converted screenshot also carries a fallback (a JPEG, a shrunk PNG or the
 # original, whichever is smallest) and an <img> becomes
 # <picture><source type="image/webp" ...><img src="fallback"></picture>.
-# The spec keys image_quality / image_max_width and the env vars
-# PROOFS_IMAGE_QUALITY / PROOFS_IMAGE_MAX_WIDTH override these (env first, then
-# spec, then these). The width limit is used only when the shrunk file is smaller.
-DEFAULT_IMAGE_QUALITY = 70
-DEFAULT_IMAGE_MAX_WIDTH = 1600
+# The PROOFS_IMAGE_QUALITY / PROOFS_IMAGE_MAX_WIDTH settings (shared/settings.json: the
+# settings files, then the environment) come first, then the spec keys image_quality /
+# image_max_width, then the settings' defaults. The width limit is used only when the
+# shrunk file is smaller.
 CONVERTIBLE = {".png", ".jpg", ".jpeg"}
-WARN_PAGE_BYTES = 3 * 1024 * 1024
 BLANK_GIF = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="
 
 
 def image_settings(spec, env=None):
     env = os.environ if env is None else env
-    def pick(env_key, spec_key, default, lo, hi):
-        raw = env.get(env_key) or spec.get(spec_key)
-        if raw in (None, ""):
-            return default
+    eff = proofs_settings.effective(env=env)
+    def pick(key, spec_key):
+        entry = eff[key]
+        raw = spec.get(spec_key)
+        if entry["source"] != "default" or raw in (None, ""):
+            return entry["value"]
+        row = proofs_settings._row(key)
         try:
             v = int(raw)
         except (TypeError, ValueError):
             raise SpecError("%s must be a whole number, got %r" % (spec_key, raw))
-        if not lo <= v <= hi:
-            raise SpecError("%s must be between %d and %d, got %d" % (spec_key, lo, hi, v))
+        if not row["min"] <= v <= row["max"]:
+            raise SpecError("%s must be between %d and %d, got %d" % (spec_key, row["min"], row["max"], v))
         return v
-    return {"quality": pick("PROOFS_IMAGE_QUALITY", "image_quality", DEFAULT_IMAGE_QUALITY, 1, 100),
-            "max_width": pick("PROOFS_IMAGE_MAX_WIDTH", "image_max_width", DEFAULT_IMAGE_MAX_WIDTH, 16, 20000)}
+    return {"quality": pick("PROOFS_IMAGE_QUALITY", "image_quality"),
+            "max_width": pick("PROOFS_IMAGE_MAX_WIDTH", "image_max_width")}
 
 
 def image_tool():
@@ -940,6 +944,9 @@ def page(spec):
     # tell which build of the page an answer was given on.
     js["page_version"] = spec.get("version") or hashlib.sha1(
         json.dumps(js, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:10]
+    # How long the page waits for Claude's republish before saying "Not picked up yet": the
+    # PROOFS_SEND_WAIT_MIN setting, in ms, unless the spec states send_wait_ms itself.
+    js["send_wait_ms"] = spec.get("send_wait_ms") or proofs_settings.get("PROOFS_SEND_WAIT_MIN") * 60000
     # The version the reader sees ("now v14" after Claude republishes); page_version may be a hash.
     js["version"] = spec.get("version") or ""
     js["key"] = spec.get("storage_key") or "proofs:%s:%s" % (mode, slug("%s %s %s" % (
@@ -1099,15 +1106,16 @@ ASSET_FILL = """(function () {
 
 
 def size_warning(text, spec):
-    """A warning line when the page is over WARN_PAGE_BYTES, naming the largest assets."""
+    """A warning line when the page is over the PROOFS_PAGE_WARN_MB setting, naming the largest assets."""
+    warn_bytes = proofs_settings.get("PROOFS_PAGE_WARN_MB") * 1024 * 1024
     total = len(text.encode())
-    if total <= WARN_PAGE_BYTES:
+    if total <= warn_bytes:
         return None
     size = lambda v: len(v) if isinstance(v, str) else sum(len(x or "") for x in v.values())
     big = sorted(spec["_assets"].items(), key=lambda kv: -size(kv[1]))[:3]
     names = ", ".join("%s (%d KB)" % (k, size(v) // 1024) for k, v in big)
     return ("warning: the page is %.1f MB, over %d MB. Largest assets: %s. Lower image_quality "
-            "or set image_max_width, or split the review." % (total / 1048576, WARN_PAGE_BYTES // 1048576, names or "none"))
+            "or set image_max_width, or split the review." % (total / 1048576, warn_bytes // 1048576, names or "none"))
 
 
 def image_line(spec):
@@ -1419,7 +1427,7 @@ def warnings(path):
         out.append("%d <img> show WebP with no fallback, so older Safari shows a broken image "
                    "(use a PNG or JPEG asset and the builder adds one)" % len(bare))
     out.extend(font_warnings(text))
-    if os.environ.get("PROOFS_SPELLING") == "american":
+    if proofs_settings.get("PROOFS_SPELLING") == "american":
         out.extend(page_spelling_warnings(text))
     return out
 

@@ -8,7 +8,7 @@ hook and says how many PRs are open and how old the oldest is, so an
 unreviewed one cannot go quiet.
 
 It ships with the plugin (hooks/hooks.json) but is off by default: it does
-nothing unless PROOFS_PR_REMINDER=1. Turn it on for a project with
+nothing unless PROOFS_PR_REMINDER is on (1). Turn it on for a project with
 `python3 scripts/install_session_hook.py`.
 
 The token comes from $GITHUB_TOKEN, then `gh auth token`.
@@ -27,19 +27,20 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 
-# The session is waiting on this. Five seconds is plenty for one API call and
-# short enough that an unreachable GitHub costs less than a blink.
-HTTP_TIMEOUT = 5
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "shared"))
+import settings  # shared/settings.py: the Proofs settings table and resolver
 
-# Branch prefix that marks a PR an AI agent opened; such PRs get a label.
-AGENT_PREFIX = "agent/"
+# The session is waiting on the network, so the wait is a setting (PROOFS_PR_REMINDER_TIMEOUT,
+# five seconds by default: plenty for one API call, and an unreachable GitHub costs less than a
+# blink). The branch prefixes that mark a PR an AI agent opened, which get a label, are the
+# PROOFS_AGENT_BRANCH_PREFIX setting.
 
 def repo_slug(run=subprocess.run):
     """owner/name from origin's URL, for both SSH and HTTPS remotes."""
     try:
         out = run(
             ["git", "config", "--get", "remote.origin.url"],
-            capture_output=True, text=True, timeout=HTTP_TIMEOUT,
+            capture_output=True, text=True, timeout=settings.get("PROOFS_PR_REMINDER_TIMEOUT"),
         )
     except (OSError, subprocess.SubprocessError):
         return None
@@ -68,7 +69,7 @@ def fetch_open_prs(slug, token, opener=urllib.request.urlopen):
     )
     req.add_header("Authorization", f"Bearer {token}")
     req.add_header("Accept", "application/vnd.github+json")
-    with opener(req, timeout=HTTP_TIMEOUT) as response:
+    with opener(req, timeout=settings.get("PROOFS_PR_REMINDER_TIMEOUT")) as response:
         data = json.loads(response.read().decode("utf-8"))
     return data if isinstance(data, list) else []
 
@@ -101,10 +102,11 @@ def summarize(prs, now):
         f"in this repo, oldest first:",
         "",
     ]
+    prefixes = settings.get("PROOFS_AGENT_BRANCH_PREFIX")
     for pr in rows:
         head = (pr.get("head") or {}).get("ref") or "?"
         marks = []
-        if head.startswith(AGENT_PREFIX):
+        if head.startswith(tuple(prefixes)):
             marks.append("AI fix")
         if pr.get("draft"):
             marks.append("draft — cannot be merged until marked ready")
@@ -122,7 +124,7 @@ def summarize(prs, now):
 
 
 def main():
-    if os.environ.get("PROOFS_PR_REMINDER") != "1":
+    if not settings.get("PROOFS_PR_REMINDER"):
         return 0
     slug = repo_slug()
     token = read_token()

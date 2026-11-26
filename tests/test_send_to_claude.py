@@ -11,6 +11,7 @@ the next version says "Claude picked up your answers".
 the button itself; these tests read what it found.
 """
 import json
+import os
 import re
 import subprocess
 import sys
@@ -81,6 +82,54 @@ class SendText(unittest.TestCase):
         self.assertEqual(self.res["stale"]["text"],
                          "Not picked up yet. The session may be busy or closed; Copy still works.")
         self.assertIsNone(self.res["nothing"])
+
+
+WAIT_PROBE = r"""
+const fs = require("fs");
+const html = fs.readFileSync(process.argv[2], "utf8");
+const spec = JSON.parse(html.match(/<script type="application\/json" id="rp-spec">([\s\S]*?)<\/script>/)[1]);
+const code = html.match(/<script>\n([\s\S]*?)\n<\/script>/)[1];
+const m = { exports: {} };
+new Function("module", code)(m);
+const sentAt = new Date(Date.UTC(2026, 10, 24, 21, 0)).toISOString();
+const at = (min) => m.exports.pickupNote({ sentAt, fromVersion: spec.page_version }, spec, Date.UTC(2026, 10, 24, 21, min));
+process.stdout.write(JSON.stringify({ wait: spec.send_wait_ms, at6: at(6).text, at11: at(11).text }));
+"""
+
+
+@unittest.skipUnless(NODE, "node is not installed")
+class SendWaitSetting(unittest.TestCase):
+    """The wait before "Not picked up yet" is the PROOFS_SEND_WAIT_MIN setting, baked into the page."""
+
+    def probe(self, values, spec=TEXT_Q):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp).resolve()
+            proj, home = tmp / "proj", tmp / "home"
+            (proj / ".claude").mkdir(parents=True)
+            home.mkdir()
+            (proj / ".claude" / "settings.json").write_text(json.dumps({"env": values}))
+            src, out = proj / "p.json", proj / "p.html"
+            src.write_text(json.dumps(spec))
+            env = {k: v for k, v in os.environ.items() if not k.startswith("PROOFS_")}
+            env.update(HOME=str(home), CLAUDE_CONFIG_DIR=str(home / ".claude"))
+            r = subprocess.run([sys.executable, str(BUILD), str(src), "--out", str(out)], cwd=proj, env=env,
+                               capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            (tmp / "d.cjs").write_text(WAIT_PROBE)
+            r = subprocess.run([NODE, str(tmp / "d.cjs"), str(out)], capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            return json.loads(r.stdout)
+
+    def test_the_default_wait_is_five_minutes(self):
+        got = self.probe({})
+        self.assertEqual(got["wait"], 5 * 60000)
+        self.assertTrue(got["at6"].startswith("Not picked up yet"))
+
+    def test_a_ten_minute_setting_waits_ten_minutes_before_saying_not_picked_up(self):
+        got = self.probe({"PROOFS_SEND_WAIT_MIN": "10"})
+        self.assertEqual(got["wait"], 10 * 60000)
+        self.assertIn("This page updates when Claude has read your answers", got["at6"])
+        self.assertTrue(got["at11"].startswith("Not picked up yet"))
 
 
 class BuilderNote(unittest.TestCase):

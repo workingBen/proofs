@@ -23,6 +23,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from test_answers_db import BUILD, TEXT_Q, build_example, build_spec, review_page  # noqa: E402
 from test_review_page import NODE, playwright_dir  # noqa: E402
 
+RP = Path(__file__).resolve().parent.parent / "shared" / "review_page"
+
 PURE = r"""
 const fs = require("fs");
 const html = fs.readFileSync(process.argv[2], "utf8");
@@ -152,6 +154,106 @@ class BuilderNote(unittest.TestCase):
                 self.assertEqual(len(re.findall(r'<div[^>]*data-send-msg', html)), 1, name)
 
 
+NONE_MSG = "Answer something first: Send sends your saved answers."
+
+NOTHING_DRIVER = r"""
+const { chromium } = require(process.argv[2]);
+const { launchChromium } = require(process.argv[3]);
+const file = "file://" + process.argv[4];
+function install() {
+  window.__rows = {};
+  const db = { collection: () => ({
+    get: async () => ({ docs: [] }),
+    doc: (id) => ({ set: async (d) => { window.__rows[id] = d; }, delete: async () => { delete window.__rows[id]; } }),
+  }) };
+  const comments = { canSendToClaude: async () => "available", anchorFor: async () => ({}),
+                     sendToClaude: async () => ({}) };
+  window.claude = { use: (n) => new Promise((r) => setTimeout(() => r(n === "db" ? db : n === "comments" ? comments : null), 20)) };
+}
+(async () => {
+  const browser = await launchChromium(chromium, process.env);
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.addInitScript(install);
+  await page.goto(file);
+  await page.waitForTimeout(300);
+  const btn = page.locator("[data-send]");
+  const st = async () => ({ hidden: await btn.isHidden(), disabled: await btn.isDisabled(),
+    msg: await page.locator("[data-send-msg]").evaluate((el) => (el.hidden ? "" : el.textContent)),
+    sync: await page.evaluate(() => document.body.getAttribute("data-rp-sync")) });
+  const out = { errors };
+  out.start = await st();
+  if (await page.locator('.q[data-qid="pick"]').count()) {
+    await page.locator('.q[data-qid="pick"] input[value="B"]').check();
+    await page.waitForTimeout(400);
+    out.answered = await st();
+    // The page's own Clear button (it asks first), which ends with an immediate save.
+    page.on("dialog", (d) => d.accept());
+    await page.locator("#rp-clear").click();
+    await page.waitForTimeout(400);
+    out.cleared = await st();
+  }
+  if (await page.locator("[data-extra]").count()) {
+    await page.locator("[data-extra]").fill("one more thing");
+    await page.waitForTimeout(1400);
+    out.extra_only = await st();
+    await page.locator("[data-extra]").fill("");
+    await page.waitForTimeout(1400);
+    out.extra_cleared = await st();
+  }
+  await browser.close();
+  console.log(JSON.stringify(out));
+})().catch((e) => { console.log(JSON.stringify({ crash: String(e && e.stack || e) })); process.exit(1); });
+"""
+
+
+@unittest.skipUnless(NODE and playwright_dir(), "Playwright not found")
+class SendStaysOffUntilAnswered(unittest.TestCase):
+    """Send tapped with nothing answered woke the session for nothing (2026-11-26)."""
+
+    @staticmethod
+    def drive(make_page):
+        with tempfile.TemporaryDirectory() as tmp:
+            page = make_page(tmp)
+            script = Path(tmp) / "d.cjs"
+            script.write_text(NOTHING_DRIVER)
+            r = subprocess.run([NODE, str(script), playwright_dir(), str(RP / "launch.cjs"), str(page)],
+                               capture_output=True, text=True, timeout=180)
+            res = json.loads(r.stdout.strip().splitlines()[-1])
+        assert "crash" not in res, res
+        assert res["errors"] == [], res
+        return res
+
+    @classmethod
+    def setUpClass(cls):
+        cls.res = cls.drive(lambda tmp: build_spec(TEXT_Q, tmp))
+        cls.log = cls.drive(lambda tmp: build_example("log", tmp))  # has the "Anything else" box
+
+    def test_send_off_with_nothing_answered(self):
+        s = self.res["start"]
+        self.assertFalse(s["hidden"])
+        self.assertTrue(s["disabled"])
+        self.assertEqual(s["msg"], NONE_MSG)
+
+    def test_send_turns_on_after_first_answer_saved(self):
+        a = self.res["answered"]
+        self.assertFalse(a["disabled"])
+        self.assertEqual(a["msg"], "")
+        self.assertEqual(a["sync"], "saved")
+
+    def test_clearing_the_last_answer_turns_it_off_again(self):
+        c = self.res["cleared"]
+        self.assertTrue(c["disabled"])
+        self.assertEqual(c["msg"], NONE_MSG)
+
+    def test_anything_else_alone_counts(self):
+        self.assertTrue(self.log["start"]["disabled"])
+        self.assertEqual(self.log["start"]["msg"], NONE_MSG)
+        self.assertFalse(self.log["extra_only"]["disabled"])
+        self.assertTrue(self.log["extra_cleared"]["disabled"])
+
+
 @unittest.skipUnless(NODE and playwright_dir(), "Playwright not found")
 class SmokeDrivesTheButton(unittest.TestCase):
     """--smoke stubs the comments capability and drives Send to Claude on every page kind."""
@@ -167,6 +269,8 @@ class SmokeDrivesTheButton(unittest.TestCase):
                     self.assertTrue(s["absent_hidden"])  # no runtime: no button at all
                     self.assertTrue(s["no_session"]["disabled"])
                     self.assertEqual(s["no_session"]["msg"], "This page's Claude session isn't listening; use Copy")
+                    self.assertTrue(s["nothing_answered"]["disabled"])  # a listening session is not enough
+                    self.assertEqual(s["nothing_answered"]["msg"], NONE_MSG)
                     self.assertFalse(s["available"]["disabled"])     # re-checked when the page is shown again
                     self.assertEqual(s["sent_while_saving"], 0)      # held until Saved
                     self.assertEqual(s["sync_at_send"], "saved")

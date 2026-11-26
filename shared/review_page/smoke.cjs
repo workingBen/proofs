@@ -67,8 +67,9 @@ async function sendToClaude(browser, problems) {
     document.dispatchEvent(new Event("visibilitychange"));
   });
   await page.waitForTimeout(100);
-  r.available = await state();
-  if (r.available.disabled) problems.push("Send to Claude stayed disabled after the session became available");
+  // A session is listening but nothing is answered yet: still off, with the one-line reason.
+  r.nothing_answered = await state();
+  if (!r.nothing_answered.disabled) problems.push("Send to Claude is on with nothing answered");
   // Answer something while the store holds the write: the send must wait for Saved.
   await page.evaluate(() => { window.__dbMode = "hold"; });
   const radio = page.locator("input[type=radio]").first();
@@ -81,6 +82,9 @@ async function sendToClaude(browser, problems) {
     answeredId = await page.locator("[data-tick]").first().getAttribute("data-tick");
     await page.locator("[data-tick]").first().check();
   }
+  await page.waitForTimeout(100);
+  r.available = await state();
+  if (r.available.disabled) problems.push("Send to Claude stayed disabled after the session became available and something was answered");
   await btn.click();
   await page.waitForTimeout(400);
   r.sent_while_saving = await page.evaluate(() => window.__sent.length);

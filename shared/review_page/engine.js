@@ -299,12 +299,18 @@
   // sendToClaude refuses control characters other than newlines and tabs.
   function plainText(s) { return String(s || "").replace(/\r\n?/g, "\n").replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, ""); }
   var ANSWER_KINDS = ["review", "questions", "qa", "log"];
+  // The ids of every card that holds an answer (the "Anything else" box is not a card).
+  function answeredIds(S, st) {
+    var docs = answerDocs(S, st || {}), ids = [];
+    Object.keys(docs).forEach(function (k) { if (docs[k].kind !== "extra") ids.push(docs[k].id); });
+    return ids;
+  }
+  function answeredCount(S, st) { return answeredIds(S, st).length; }
   function sendText(S, st) {
     st = st || {};
     var total = 0;
     S.sections.forEach(function (sec) { if (ANSWER_KINDS.indexOf(sec.kind) >= 0) total += sec.items.length; });
-    var docs = answerDocs(S, st), ids = [];
-    Object.keys(docs).forEach(function (k) { if (docs[k].kind !== "extra") ids.push(docs[k].id); });
+    var ids = answeredIds(S, st);
     var name = S.session || S.stream || S.project || "Proofs";
     var ver = S.version || S.page_version;
     var what = ids.length ? "answered " + clipBytes(ids.join(", "), 1500) : "nothing answered yet";
@@ -340,7 +346,7 @@
   }
 
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { exportText: exportText, answerDocs: answerDocs, applyAnswerDocs: applyAnswerDocs,
+    module.exports = { exportText: exportText, answeredCount: answeredCount, answerDocs: answerDocs, applyAnswerDocs: applyAnswerDocs,
                        docIdFor: docIdFor, DB_COLLECTION: DB_COLLECTION, sendText: sendText, pickupNote: pickupNote };
   }
   if (typeof document === "undefined") return;
@@ -363,8 +369,8 @@
     });
     lastDocs = cur;
   }
-  function save() { noteEdits(); store(); dbSchedule(); }
-  function saveNow() { noteEdits(); store(); dbFlushNow(); }
+  function save() { noteEdits(); store(); dbSchedule(); sendCheck(); }
+  function saveNow() { noteEdits(); store(); dbFlushNow(); sendCheck(); }
   function all(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
   function one(sel, root) { return (root || document).querySelector(sel); }
   function rootOf(sec) { return one('[data-section="' + sec.id + '"]'); }
@@ -790,6 +796,7 @@
       lastDocs = answerDocs(S, st);
       store();
       refreshAll();
+      sendCheck();
       dbState("on");
       dbFlush();
     }, function () { clearTimeout(timer); dbState("off"); });
@@ -820,7 +827,8 @@
      resolves, and nothing ever retries by itself. */
   var SEND_WAIT_MS = 5000, SEND_KEY = S.key + ":sent";
   var SEND_WHY = { no_session: "This page's Claude session isn't listening; use Copy",
-                   writers_only: "Only editors can send; use Copy", off: "Not available here; use Copy" };
+                   writers_only: "Only editors can send; use Copy", off: "Not available here; use Copy",
+                   none: "Answer something first: Send sends your saved answers." };
   var SEND_ERR = {
     consent_required: "Not sent. Allow commenting when asked, then tap again.",
     claude_unavailable: "Nothing was sent; use Copy.",
@@ -836,18 +844,21 @@
     sendMsg.hidden = !text;
     sendMsg.setAttribute("data-tone", tone || "");
   }
+  // Nothing to send until a card holds an answer or the "Anything else" box holds text.
+  function sendNothing() { return !answeredCount(S, st) && !trimmed(plainText(st.extra)); }
   function sendCheck() {
-    if (!snd.comments || !sendBtn || snd.busy || snd.held) return;
+    if (!snd || !snd.comments || !sendBtn || snd.busy || snd.held) return;
     Promise.resolve().then(function () { return snd.comments.canSendToClaude(); })
       .then(null, function () { return "off"; })
       .then(function (can) {
         if (snd.busy || snd.held) return;
         sendBtn.hidden = false;
-        sendBtn.disabled = can !== "available";
+        var why = can !== "available" ? (SEND_WHY[can] || SEND_WHY.off) : sendNothing() ? SEND_WHY.none : "";
+        sendBtn.disabled = !!why;
         var tone = sendMsg ? sendMsg.getAttribute("data-tone") || "" : "";
         // A reason replaces only a reason (or nothing): it never hides what a send said.
-        if (can === "available") { if (tone === "why") sendSay(""); }
-        else if (!tone || tone === "why") sendSay(SEND_WHY[can] || SEND_WHY.off, "why");
+        if (!why) { if (tone === "why") sendSay(""); }
+        else if (!tone || tone === "why") sendSay(why, "why");
       });
   }
   function waitSaved(ms) {

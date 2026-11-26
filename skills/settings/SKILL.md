@@ -43,14 +43,26 @@ A **Send to Claude** tap wakes this session. The page saves each change as a row
 
 1. List `proofs-answers` with `ArtifactData` `list` and `out_dir`.
 2. Dry run: `python3 ${CLAUDE_PLUGIN_ROOT}/shared/settings.py --apply <out_dir> --dry-run`. Read what would apply and what would be skipped.
-3. Apply: `python3 ${CLAUDE_PLUGIN_ROOT}/shared/settings.py --apply <out_dir>`.
+3. Apply: `python3 ${CLAUDE_PLUGIN_ROOT}/shared/settings.py --apply <out_dir>`. **Exit 1 (from the dry run or the apply) is not a stop.** It means at least one row was skipped: the other rows still apply, so run the apply anyway, then report each `SKIPPED` line in chat and on the page (as a short note above the settings when you rebuild), and republish as usual.
 4. **Republish first, before anything else.** Run `--spec --out` again, rebuild, and republish to the same file path. The page version changes, and the page says "Claude picked up your answers". That is the user's confirmation. The page cannot read your chat.
 5. Show every `APPLIED` and `SKIPPED` line in chat.
 6. Never post a second reply in the thread. Resolve the thread with `ArtifactComments`.
 
-A row is skipped when its value is out of range, its key is unknown, or the setting
-changed since the page was built. The line says which. A skipped row is not an error to
-fix by hand: tell the user, and they can change it again on the fresh page.
+A row is skipped when its value is out of range, its key is unknown, it carries no shown
+value (`from`), or the setting changed since the page was built. The line says which. A
+skipped row is not an error to fix by hand: tell the user, and they can change it again on
+the fresh page.
+
+**`SKIPPED KEY: still overridden by <source> file (<path>)`** means the value was written,
+but a narrower file (or, for a reset, another file) still sets that key, so nothing changed.
+Tell the user in plain words: "Your change to <label> was saved to <scope> settings, but
+<path> also sets it, and that file wins. Remove it there, or change it at that level." Do
+not edit that file yourself unless the user asks; then use `settings.py --unset KEY --scope
+<source>`.
+
+Resetting the browser or Playwright folder to `auto`, or the pr-qa base folder to its
+default, removes the key from the file (the line says "removed from"), because those
+values mean "not set".
 
 A change the user undid on the page is ignored.
 

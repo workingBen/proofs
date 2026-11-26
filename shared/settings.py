@@ -18,10 +18,15 @@ project is .claude/settings.json (committed), local is .claude/settings.local.js
 
 --apply writes the changes the settings page saved: ROWS_DIR is the folder ArtifactData `list`
 wrote with out_dir (or its proofs-answers folder). Each row of kind "setting" with an answer is
-validated and written with --set's rules, at the row's scope. A row whose `from` is no longer
-the current value (the setting changed since the page was built), whose value fails validation
-or whose key is unknown is skipped and listed. A row with a null answer (an undone change) is
-ignored. --dry-run prints what would happen and writes nothing.
+validated and written with --set's rules, at the row's scope. A row with no `from`, or whose
+`from` is no longer the current value (the setting changed since the page was built), whose
+value fails validation or whose key is unknown is skipped and listed. So is a row a narrower
+settings file still overrides after the write ("still overridden by project file (...)"). A
+row with a null answer (an undone change) is ignored. --dry-run prints what would happen and
+writes nothing.
+
+`auto` for an auto setting, and the default of the pr-qa base folder, mean "not set": --set
+and --apply remove the key instead of writing that value.
 
 Exit codes: 0 ok, 2 invalid value, unknown key or bad usage, 3 a settings file that cannot be
 read (nothing is written to it).
@@ -37,6 +42,7 @@ From another script:  import settings; settings.get("PROOFS_PORT")  (typed: an i
 import argparse
 import json
 import os
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -55,6 +61,10 @@ GROUP_TITLES = {
 RESTART_NOTE = "restart Claude Code to pass the new value to hooks"
 BOOL_TRUE = ("1", "true", "yes", "on")
 BOOL_FALSE = ("0", "false", "no", "off")
+# Refused in every value: these end up in commands Claude runs. The page and settings.cjs use
+# the same character range.
+CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
+DRIVE = re.compile(r"^[A-Za-z]:[\\/]")
 
 
 class SettingError(Exception):
@@ -105,8 +115,25 @@ def _split(raw):
     return [p.strip() for p in str(raw).split(",") if p.strip()]
 
 
+def _path(row, text):
+    """path_kind "project": a path inside the project (no absolute path, no .. segment).
+    path_kind "absolute": an absolute path, or the default (which means "not set")."""
+    kind = row.get("path_kind")
+    if kind == "project":
+        if text.startswith(("/", "\\", "~")) or DRIVE.match(text):
+            raise SettingError("%s must be a path inside the project, not an absolute one." % row["label"])
+        if ".." in re.split(r"[\\/]", text):
+            raise SettingError("%s cannot use .. to leave the project." % row["label"])
+    elif kind == "absolute" and text != row["default"] and not text.startswith("/"):
+        raise SettingError("%s must be an absolute folder path (starting with /), or %s."
+                           % (row["label"], row["default"]))
+    return text
+
+
 def _parse(row, raw):
     kind = row["type"]
+    if raw is not None and CONTROL_CHARS.search(str(raw)):
+        raise SettingError("%s cannot contain control characters such as a line break." % row["label"])
     text = "" if raw is None else str(raw).strip()
     if kind == "int":
         return _int(row, text)
@@ -131,12 +158,20 @@ def _parse(row, raw):
     # text, path, auto: any non-empty string
     if not text:
         raise SettingError("%s cannot be empty." % row["label"])
-    return text
+    return _path(row, text)
 
 
 def validate(key, raw):
     """The typed value for raw, or SettingError with the message the page and CLI show."""
     return _parse(_row(key), raw)
+
+
+def _means_unset(row, value):
+    """True for a value that is the same as leaving the setting out: `auto` for an auto setting
+    (a literal "auto" would reach the browser launch as a channel name) and the default of an
+    absolute-path setting (pr-qa reads any value it is given as an absolute path)."""
+    return ((row["type"] == "auto" and value == "auto")
+            or (row.get("path_kind") == "absolute" and value == row["default"]))
 
 
 def _canonical(row, value):
@@ -258,8 +293,9 @@ def _indent_of(text):
 def _write_env(path, mutate):
     """Apply mutate(env_dict) to the file's env block and write it back, keeping every other key.
     Returns True when the file was written. Raises SettingsFileError and leaves the file alone
-    when it cannot be parsed."""
-    path = Path(path)
+    when it cannot be parsed. A symlinked file (a dotfiles checkout) is written through: the
+    link stays a link and its target gets the new text."""
+    path = Path(path).resolve()
     data = _read_file(path)
     original_text = path.read_text(encoding="utf-8") if data is not None else ""
     indent = _indent_of(original_text) if data is not None else 2
@@ -297,13 +333,24 @@ def _scope(row, scope):
 
 def set_value(key, raw, scope=None, *, cwd=None, env=None, home=None):
     """Validate raw and write it to the scope's settings file (default: the table's scope).
-    Returns the file's path."""
+    A value that means "not set" (`auto`, or the default of the pr-qa base folder) removes the
+    key instead, so the file never holds it. Returns the file's path."""
     row = _row(key)
     value = _parse(row, raw)
     path = settings_path(_scope(row, scope), cwd=cwd, env=env, home=home)
+    if _means_unset(row, value):
+        if Path(path).exists():
+            _write_env(path, lambda block: block.pop(key, None))
+        return path
     stored = _canonical(row, value)
     _write_env(path, lambda block: block.__setitem__(key, stored))
     return path
+
+
+def removes_key(key, raw):
+    """True when set_value(key, raw) removes the key rather than writing raw."""
+    row = _row(key)
+    return _means_unset(row, _parse(row, raw))
 
 
 def unset(key, scope=None, *, cwd=None, env=None, home=None):
@@ -382,26 +429,63 @@ def saved_rows(path):
     return out
 
 
+def _override(key, scope, new, *, cwd, env, home):
+    """For --dry-run: (source, path) of the file that would still decide key after writing new
+    to scope, when it holds another valid value; else None. That is a narrower file, or, for a
+    value that removes the key, the next file down too. The environment is never counted:
+    files beat it."""
+    row = _row(key)
+    removing = _means_unset(row, _parse(row, new))
+    others = [s for s in SOURCES if s != scope] if removing else SOURCES[:SOURCES.index(scope)]
+    if _project_root(cwd, home) is None:
+        others = [s for s in others if s == "user"]
+    for src in others:
+        path = settings_path(src, cwd=cwd, env=env, home=home)
+        raw = _file_env(path).get(key)
+        if raw is None or (isinstance(raw, str) and raw == "" and row["type"] != "list"):
+            continue
+        try:
+            held = _canonical(row, _parse(row, raw))
+        except SettingError:
+            continue  # an invalid value is skipped by the resolver too
+        return None if held == new else (src, path)
+    return None
+
+
 def apply_rows(path, dry_run=False, *, cwd=None, env=None, home=None):
-    """Apply the saved rows. Returns (lines, skipped): the report lines and how many rows were skipped."""
+    """Apply the saved rows. Returns (lines, skipped): the report lines and how many rows were skipped.
+    A row is skipped when it has no `from` (the value the page showed), when `from` is no longer
+    the current value, when its value or key is refused, and when a narrower settings file
+    still overrides the key after the write (the write happened but changes nothing)."""
     lines, skipped = [], 0
     for r in saved_rows(path):
         key = str(r.get("id") or r.get("key") or "")
         try:
             row = _row(key)
             raw = str(r["answer"])
-            validate(key, raw)
+            new_value = validate(key, raw)
             scope = _scope(row, r.get("scope"))
             current = effective(cwd=cwd, env=env, home=home)[key]["value"]
             now = _canonical(row, current)
             shown = r.get("from")
-            if shown is not None and str(shown) != now:
+            if shown is None:
+                raise SettingError("no shown value; reopen the page.")
+            if str(shown) != now:
                 raise SettingError("the page showed %s but it is now %s; open the page again." % (shown, now))
             target = settings_path(scope, cwd=cwd, env=env, home=home)
-            new = _canonical(row, validate(key, raw))
-            if not dry_run:
+            new = _canonical(row, new_value)
+            if dry_run:
+                hit = _override(key, scope, new, cwd=cwd, env=env, home=home)
+            else:
                 set_value(key, raw, scope, cwd=cwd, env=env, home=home)
-            lines.append("%s %s %s \u2192 %s (%s %s)" % ("WOULD APPLY" if dry_run else "APPLIED", key, now, new, scope, target))
+                after = effective(cwd=cwd, env=env, home=home)[key]
+                hit = None
+                if after["source"] in SOURCES and _canonical(row, after["value"]) != new:
+                    hit = (after["source"], settings_path(after["source"], cwd=cwd, env=env, home=home))
+            if hit:
+                raise SettingError("still overridden by %s file (%s)" % hit)
+            where = ("removed from %s %s" if _means_unset(row, new_value) else "%s %s") % (scope, target)
+            lines.append("%s %s %s \u2192 %s (%s)" % ("WOULD APPLY" if dry_run else "APPLIED", key, now, new, where))
         except SettingError as e:
             skipped += 1
             lines.append("SKIPPED %s: %s" % (key or "(no key)", e))
@@ -479,8 +563,12 @@ def main(argv):
             if "=" not in args.set:
                 raise SettingError("Use --set KEY=VALUE.")
             key, raw = args.set.split("=", 1)
-            path = set_value(key.strip(), raw, args.scope)
-            print("%s saved to %s" % (key.strip(), path))
+            key = key.strip()
+            path = set_value(key, raw, args.scope)
+            if removes_key(key, raw):
+                print("%s reset to %s (removed from %s)" % (key, raw.strip(), path))
+            else:
+                print("%s saved to %s" % (key, path))
         else:
             path = unset(args.unset.strip(), args.scope)
             print("%s removed from %s" % (args.unset.strip(), path))

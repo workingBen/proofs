@@ -30,6 +30,20 @@ from datetime import datetime, timezone
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "shared"))
 import settings  # shared/settings.py: the Proofs settings table and resolver
 
+_warned = []
+
+
+def setting(key):
+    """The setting's value, or the table's default when a settings file cannot be read: the
+    hook must never block a session, so it says so once on stderr and goes on with defaults."""
+    try:
+        return settings.get(key)
+    except settings.SettingsFileError as e:
+        if not _warned:
+            _warned.append(True)
+            print("proofs PR reminder: %s Using the defaults for now." % e, file=sys.stderr)
+        return settings._row(key)["default"]
+
 # The session is waiting on the network, so the wait is a setting (PROOFS_PR_REMINDER_TIMEOUT,
 # five seconds by default: plenty for one API call, and an unreachable GitHub costs less than a
 # blink). The branch prefixes that mark a PR an AI agent opened, which get a label, are the
@@ -40,7 +54,7 @@ def repo_slug(run=subprocess.run):
     try:
         out = run(
             ["git", "config", "--get", "remote.origin.url"],
-            capture_output=True, text=True, timeout=settings.get("PROOFS_PR_REMINDER_TIMEOUT"),
+            capture_output=True, text=True, timeout=setting("PROOFS_PR_REMINDER_TIMEOUT"),
         )
     except (OSError, subprocess.SubprocessError):
         return None
@@ -69,7 +83,7 @@ def fetch_open_prs(slug, token, opener=urllib.request.urlopen):
     )
     req.add_header("Authorization", f"Bearer {token}")
     req.add_header("Accept", "application/vnd.github+json")
-    with opener(req, timeout=settings.get("PROOFS_PR_REMINDER_TIMEOUT")) as response:
+    with opener(req, timeout=setting("PROOFS_PR_REMINDER_TIMEOUT")) as response:
         data = json.loads(response.read().decode("utf-8"))
     return data if isinstance(data, list) else []
 
@@ -102,7 +116,7 @@ def summarize(prs, now):
         f"in this repo, oldest first:",
         "",
     ]
-    prefixes = settings.get("PROOFS_AGENT_BRANCH_PREFIX")
+    prefixes = setting("PROOFS_AGENT_BRANCH_PREFIX")
     for pr in rows:
         head = (pr.get("head") or {}).get("ref") or "?"
         marks = []
@@ -124,7 +138,7 @@ def summarize(prs, now):
 
 
 def main():
-    if not settings.get("PROOFS_PR_REMINDER"):
+    if not setting("PROOFS_PR_REMINDER"):
         return 0
     slug = repo_slug()
     token = read_token()

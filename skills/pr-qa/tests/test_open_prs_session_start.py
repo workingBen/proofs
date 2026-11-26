@@ -273,6 +273,44 @@ class NeverBlocksTheSessionTest(unittest.TestCase):
         self.assertEqual(printed, "")
 
 
+class BrokenSettingsFileTest(unittest.TestCase):
+    """A malformed settings file: defaults, one stderr line naming the file, exit 0."""
+
+    def test_falls_back_to_defaults_with_one_line_and_exit_0(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp).resolve() / "home"
+            project = Path(tmp).resolve() / "project"
+            (home / ".claude").mkdir(parents=True)
+            (project / ".git").mkdir(parents=True)
+            broken = home / ".claude" / "settings.json"
+            broken.write_text("{not json", encoding="utf-8")
+            env = {k: v for k, v in os.environ.items()
+                   if not k.startswith("PROOFS_") and k not in ("CLAUDE_CONFIG_DIR", "GITHUB_TOKEN", "GH_TOKEN")}
+            env["HOME"] = str(home)
+            script = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                  os.pardir, "scripts", "open_prs_session_start.py")
+            r = subprocess.run([sys.executable, script], capture_output=True, text=True,
+                               timeout=30, env=env, cwd=str(project))
+        self.assertEqual(r.returncode, 0)
+        self.assertEqual(r.stdout, "")
+        self.assertNotIn("Traceback", r.stderr)
+        self.assertEqual(len(r.stderr.strip().splitlines()), 1, r.stderr)
+        self.assertIn(str(broken), r.stderr)
+        self.assertIn("defaults", r.stderr)
+
+    def test_summarize_still_works_on_defaults(self):
+        import open_prs_session_start as hook
+        import settings
+        with mock.patch.object(settings, "get", side_effect=settings.SettingsFileError("x is not valid JSON")), \
+                mock.patch("sys.stderr", new_callable=lambda: __import__("io").StringIO()) as err:
+            hook._warned.clear()
+            text = summarize([pr(1, "agent/x", "2026-08-04T08:43:00Z")], NOW)
+            text2 = summarize([pr(2, "agent/y", "2026-08-04T08:43:00Z")], NOW)
+        self.assertIn("AI fix", text)
+        self.assertIn("AI fix", text2)
+        self.assertEqual(len(err.getvalue().strip().splitlines()), 1)
+
+
 class SettingsTest(unittest.TestCase):
     def test_extra_agent_prefixes_get_the_label(self):
         row = pr(3, "claude/fix", "2026-08-04T08:43:00Z")

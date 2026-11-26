@@ -446,6 +446,191 @@ class ApplyTest(Base):
         self.assertEqual(self.run_cli("--apply", "/no/such/folder").returncode, 2)
 
 
+class FinalReviewTest(Base):
+    """The fixes from the final whole-branch review."""
+
+    rows_dir = ApplyTest.rows_dir
+
+    # 1. A write a narrower file still overrides is not reported as applied.
+    def test_apply_reports_a_change_a_narrower_file_still_overrides(self):
+        self.write(self.project_file(), {"env": {"PROOFS_PAGES": "file"}})
+        rows = self.rows_dir({"id": "PROOFS_PAGES", "answer": "wifi", "from": "file", "scope": "user"})
+        r = self.run_cli("--apply", str(rows))
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn("SKIPPED PROOFS_PAGES: still overridden by project file (%s)" % self.project_file(), r.stdout)
+        self.assertNotIn("APPLIED", r.stdout)
+        self.assertEqual(settings.get("PROOFS_PAGES", **self.kw()), "file")
+
+    def test_dry_run_reports_the_override_too_and_writes_nothing(self):
+        self.write(self.local_file(), {"env": {"PROOFS_PORT": "5000"}})
+        rows = self.rows_dir({"id": "PROOFS_PORT", "answer": "3099", "from": "5000", "scope": "project"})
+        r = self.run_cli("--apply", str(rows), "--dry-run")
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn("SKIPPED PROOFS_PORT: still overridden by local file (%s)" % self.local_file(), r.stdout)
+        self.assertFalse(self.project_file().exists())
+
+    def test_an_override_holding_the_same_value_is_applied(self):
+        self.write(self.project_file(), {"env": {"PROOFS_PAGES": "wifi"}})
+        self.write(self.user_file(), {"env": {"PROOFS_PAGES": "file"}})
+        rows = self.rows_dir({"id": "PROOFS_PAGES", "answer": "wifi", "from": "wifi", "scope": "user"})
+        r = self.run_cli("--apply", str(rows))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("APPLIED PROOFS_PAGES", r.stdout)
+
+    # 2. Resetting an `auto` setting, or the pr-qa base folder, removes the key.
+    def test_set_auto_removes_the_key(self):
+        self.write(self.local_file(), {"permissions": {"allow": []},
+                                       "env": {"PROOFS_BROWSER_CHANNEL": "chrome", "PROOFS_PORT": "4000"}})
+        settings.set_value("PROOFS_BROWSER_CHANNEL", "auto", **self.kw())
+        data = json.loads(self.local_file().read_text())
+        self.assertEqual(data["env"], {"PROOFS_PORT": "4000"})
+        self.assertEqual(data["permissions"], {"allow": []})
+        self.assertEqual(settings.get("PROOFS_BROWSER_CHANNEL", **self.kw()), "auto")
+
+    def test_set_auto_on_a_missing_file_writes_nothing(self):
+        settings.set_value("PROOFS_PLAYWRIGHT", "auto", **self.kw())
+        self.assertFalse(self.local_file().exists())
+
+    def test_cli_set_auto_says_it_removed_the_key(self):
+        self.write(self.local_file(), {"env": {"PROOFS_BROWSER_CHANNEL": "chrome"}})
+        r = self.run_cli("--set", "PROOFS_BROWSER_CHANNEL=auto")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("PROOFS_BROWSER_CHANNEL reset to auto (removed from %s)" % self.local_file(), r.stdout)
+
+    def test_base_dir_default_removes_the_key_and_others_must_be_absolute(self):
+        self.write(self.local_file(), {"env": {"PROOFS_BASE_DIR": "/srv/base"}})
+        settings.set_value("PROOFS_BASE_DIR", ".proofs/base", **self.kw())
+        self.assertEqual(json.loads(self.local_file().read_text())["env"], {})
+        self.assertEqual(settings.validate("PROOFS_BASE_DIR", "/tmp/qa"), "/tmp/qa")
+        for bad in ("relative/base", "~/base", "base"):
+            with self.subTest(bad=bad), self.assertRaises(settings.SettingError) as cm:
+                settings.validate("PROOFS_BASE_DIR", bad)
+            self.assertEqual(str(cm.exception),
+                             "pr-qa base folder must be an absolute folder path (starting with /), or .proofs/base.")
+
+    def test_apply_reset_of_auto_reports_removed(self):
+        self.write(self.local_file(), {"env": {"PROOFS_BROWSER_CHANNEL": "chrome"}})
+        rows = self.rows_dir({"id": "PROOFS_BROWSER_CHANNEL", "answer": "auto", "from": "chrome", "scope": "local"})
+        r = self.run_cli("--apply", str(rows))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("APPLIED PROOFS_BROWSER_CHANNEL chrome \u2192 auto (removed from local %s)" % self.local_file(),
+                      r.stdout)
+        self.assertEqual(json.loads(self.local_file().read_text())["env"], {})
+
+    def test_reset_that_leaves_a_broader_file_in_charge_is_reported(self):
+        self.write(self.user_file(), {"env": {"PROOFS_BROWSER_CHANNEL": "chrome"}})
+        self.write(self.local_file(), {"env": {"PROOFS_BROWSER_CHANNEL": "msedge"}})
+        rows = self.rows_dir({"id": "PROOFS_BROWSER_CHANNEL", "answer": "auto", "from": "msedge", "scope": "local"})
+        for extra in (["--dry-run"], []):
+            r = self.run_cli("--apply", str(rows), *extra)
+            self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+            self.assertIn("SKIPPED PROOFS_BROWSER_CHANNEL: still overridden by user file (%s)" % self.user_file(),
+                          r.stdout)
+
+    # 3. A symlinked settings file is written through, not replaced.
+    def test_set_writes_through_a_symlinked_settings_file(self):
+        dotfiles = self.home / "dotfiles"
+        dotfiles.mkdir()
+        target = dotfiles / "claude-settings.json"
+        target.write_text(json.dumps({"model": "x"}, indent=2) + "\n")
+        os.chmod(target, 0o600)
+        link = self.user_file()
+        link.symlink_to(target)
+        settings.set_value("PROOFS_PAGES", "file", **self.kw())
+        self.assertTrue(link.is_symlink())
+        self.assertEqual(json.loads(target.read_text()), {"model": "x", "env": {"PROOFS_PAGES": "file"}})
+        self.assertEqual(target.stat().st_mode & 0o777, 0o600)
+        settings.unset("PROOFS_PAGES", **self.kw())
+        self.assertTrue(link.is_symlink())
+        self.assertEqual(json.loads(target.read_text())["env"], {})
+
+    # 4. A row with no `from` is skipped.
+    def test_apply_skips_a_row_with_no_from(self):
+        rows = self.rows_dir({"id": "PROOFS_PORT", "answer": "3099"})
+        r = self.run_cli("--apply", str(rows))
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("SKIPPED PROOFS_PORT: no shown value; reopen the page.", r.stdout)
+        self.assertFalse(self.project_file().exists())
+
+    # 5. One spend cap for every skill.
+    def test_cost_cap_wording(self):
+        row = settings._row("PROOFS_COST_CAP_USD")
+        self.assertEqual(row["label"], "Spend cap per run")
+        self.assertEqual(row["help"], "An estimate Claude plans around, not a hard stop. Every skill stays under it.")
+
+    # 6. Control characters, `..` and absolute paths.
+    def test_control_characters_are_refused_in_every_value(self):
+        for row in settings.load_table():
+            for bad in ("x\ny", "x\ty", "x\x00", "5\n", "\x1b[31m"):
+                with self.subTest(key=row["key"], bad=bad), self.assertRaises(settings.SettingError) as cm:
+                    settings.validate(row["key"], bad)
+                self.assertEqual(str(cm.exception),
+                                 "%s cannot contain control characters such as a line break." % row["label"])
+
+    def test_project_paths_stay_inside_the_project(self):
+        keys = ("PROOFS_TODO_FILE", "PROOFS_TODO_ARCHIVE_DIR", "PROOFS_CHANGELOG_DIR", "PROOFS_STYLE_GUIDE",
+                "PROOFS_DESIGN_PROFILE", "PROOFS_QA_MAP", "PROOFS_QA_WORKFLOW")
+        for key in keys:
+            label = settings._row(key)["label"]
+            self.assertEqual(settings.validate(key, "notes/a-b.md"), "notes/a-b.md")
+            self.assertEqual(settings.validate(key, "x..y.md"), "x..y.md")
+            for bad in ("/etc/passwd", "~/x", "\\x", "C:\\x"):
+                with self.subTest(key=key, bad=bad), self.assertRaises(settings.SettingError) as cm:
+                    settings.validate(key, bad)
+                self.assertEqual(str(cm.exception), "%s must be a path inside the project, not an absolute one." % label)
+            for bad in ("../x", "docs/../../x", "a/..", ".."):
+                with self.subTest(key=key, bad=bad), self.assertRaises(settings.SettingError) as cm:
+                    settings.validate(key, bad)
+                self.assertEqual(str(cm.exception), "%s cannot use .. to leave the project." % label)
+
+    def test_a_control_character_in_a_file_is_ignored_with_a_note(self):
+        self.write(self.project_file(), {"env": {"PROOFS_TODO_FILE": "TODO.md\nrm -rf x"}})
+        e = settings.effective(**self.kw())["PROOFS_TODO_FILE"]
+        self.assertEqual((e["value"], e["source"]), ("TODO.md", "default"))
+        self.assertIn("control characters", e["note"])
+
+
+class BrokenFileMessageTest(Base):
+    """Item 8: the page builder and the capture stop with one line naming the file, not a traceback."""
+
+    def setUp(self):
+        super().setUp()
+        self.broken = self.user_file()
+        self.broken.write_text("{not json")
+        self.env = {k: v for k, v in os.environ.items() if not k.startswith("PROOFS_") and k != "CLAUDE_CONFIG_DIR"}
+        self.env["HOME"] = str(self.home)
+
+    def check(self, r):
+        self.assertNotEqual(r.returncode, 0)
+        self.assertNotIn("Traceback", r.stderr)
+        self.assertNotIn("    at ", r.stderr)  # a node stack
+        self.assertEqual(len(r.stderr.strip().splitlines()), 1, r.stderr)
+        self.assertIn(str(self.broken), r.stderr)
+
+    def test_page_builder(self):
+        spec = self.project / "q.json"
+        spec.write_text(json.dumps({"mode": "questions", "title": "T", "project": {"name": "P", "stream": "s"},
+                                    "questions": [{"qid": "p", "ask": "Pick", "options": [{"label": "A"}, {"label": "B"}]}]}))
+        r = subprocess.run([sys.executable, str(REPO / "shared" / "review_page" / "review_page.py"), str(spec),
+                            "--out", str(self.project / "q.html"), "--no-check"],
+                           cwd=str(self.project), env=self.env, capture_output=True, text=True, timeout=120)
+        self.check(r)
+
+    def test_with_server(self):
+        r = subprocess.run([sys.executable, str(REPO / "shared" / "capture" / "with_server.py"), "--start", "true",
+                            "--url", "http://127.0.0.1:9/", "--", "true"],
+                           cwd=str(self.project), env=self.env, capture_output=True, text=True, timeout=120)
+        self.check(r)
+
+    @unittest.skipUnless(__import__("shutil").which("node"), "node is not installed")
+    def test_capture(self):
+        pages = self.project / "pages.json"
+        pages.write_text(json.dumps({"base": "http://127.0.0.1:9", "pages": [{"name": "home", "path": "/"}]}))
+        r = subprocess.run(["node", str(REPO / "skills" / "visual-qa" / "scripts" / "capture.cjs"), str(pages)],
+                           cwd=str(self.project), env=self.env, capture_output=True, text=True, timeout=120)
+        self.check(r)
+
+
 class ReferenceTest(unittest.TestCase):
     def test_settings_skill_passes_check_skills(self):
         self.assertTrue((REPO / "skills" / "settings" / "SKILL.md").exists())

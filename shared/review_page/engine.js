@@ -42,7 +42,7 @@
 
   /* ------------------------------------------------- settings: the checks settings.py makes
      The same rules as validate() in shared/settings.py, read from the table rows embedded
-     in the page (min, max, raise_only, choices, item_type, default) and the on/off words
+     in the page (min, max, raise_only, choices, item_type, path_kind, default) and the on/off words
      (S.bool_true, S.bool_false): no number is copied here, so the page refuses exactly what
      `settings.py --set` refuses, with the same reason. */
   function setCanon(v) {
@@ -60,7 +60,19 @@
     if (n < row.min || n > row.max) throw new SetRefused(label + " must be a whole number from " + row.min + " to " + row.max + setUnit(row) + ".");
     return n;
   }
+  function setPath(row, text) {
+    if (row.path_kind === "project") {
+      if (/^[\/\\~]/.test(text) || /^[A-Za-z]:[\\\/]/.test(text)) throw new SetRefused(row.label + " must be a path inside the project, not an absolute one.");
+      if (text.split(/[\\\/]/).indexOf("..") >= 0) throw new SetRefused(row.label + " cannot use .. to leave the project.");
+    } else if (row.path_kind === "absolute" && text !== row["default"] && text.charAt(0) !== "/") {
+      throw new SetRefused(row.label + " must be an absolute folder path (starting with /), or " + row["default"] + ".");
+    }
+    return text;
+  }
   function setParse(S, row, raw) {
+    if (raw !== null && raw !== undefined && /[\x00-\x1f\x7f]/.test(String(raw))) {
+      throw new SetRefused(row.label + " cannot contain control characters such as a line break.");
+    }
     var text = raw === null || raw === undefined ? "" : String(raw).trim();
     if (row.type === "int") return setInt(row, text);
     if (row.type === "choice") {
@@ -80,7 +92,7 @@
       return items;
     }
     if (!text) throw new SetRefused(row.label + " cannot be empty.");
-    return text;
+    return setPath(row, text);
   }
   // {ok, value, canon} for a value settings.py takes (canon is how it writes it), else {ok: false, error}.
   function settingCheck(S, row, raw) {

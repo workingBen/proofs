@@ -9,8 +9,9 @@
 // files are the `env` block of .claude/settings.local.json, .claude/settings.json and
 // ~/.claude/settings.json ($CLAUDE_CONFIG_DIR/settings.json). A value that fails validation
 // is skipped for the next source, as in settings.py. A settings file that cannot be read
-// throws an Error, as settings.py raises SettingsFileError. Reading only: writing goes
-// through settings.py --set.
+// throws a SettingsFileError with a one-line message naming the file, as settings.py does.
+// validate(key, raw) refuses exactly what settings.py's validate() refuses, with the same
+// message. Reading only: writing goes through settings.py --set.
 "use strict";
 const fs = require("fs");
 const os = require("os");
@@ -22,6 +23,9 @@ const BOOL_TRUE = ["1", "true", "yes", "on"];
 const BOOL_FALSE = ["0", "false", "no", "off"];
 
 class SettingError extends Error {}
+class SettingsFileError extends SettingError {}
+// Refused in every value, as in settings.py: these end up in commands Claude runs.
+const CONTROL_CHARS = /[\x00-\x1f\x7f]/;
 
 function loadTable() {
   return JSON.parse(fs.readFileSync(TABLE_PATH, "utf8"));
@@ -33,18 +37,34 @@ function row(key) {
   return r;
 }
 
+const unit = (r) => (r.unit ? ` ${r.unit}` : "");
+
 function parseInt10(r, text, what) {
   const label = what || r.label;
-  if (!/^[+-]?\d+$/.test(text)) throw new SettingError(`${label} must be a whole number from ${r.min} to ${r.max}.`);
+  if (!/^[+-]?[0-9]+$/.test(text)) throw new SettingError(`${label} must be a whole number from ${r.min} to ${r.max}.`);
   const n = parseInt(text, 10);
-  if (r.raise_only && n < r.default) throw new SettingError(`${r.label} can only go up from ${r.default}.`);
-  if (n < r.min || n > r.max) throw new SettingError(`${label} must be a whole number from ${r.min} to ${r.max}.`);
+  if (r.raise_only && n < r.default) throw new SettingError(`${r.label} can only go up from ${r.default}${unit(r)}.`);
+  if (n < r.min || n > r.max) throw new SettingError(`${label} must be a whole number from ${r.min} to ${r.max}${unit(r)}.`);
   return n;
+}
+
+// path_kind "project": inside the project; "absolute": an absolute path or the default.
+function checkPath(r, text) {
+  if (r.path_kind === "project") {
+    if (/^[/\\~]/.test(text) || /^[A-Za-z]:[\\/]/.test(text)) throw new SettingError(`${r.label} must be a path inside the project, not an absolute one.`);
+    if (text.split(/[\\/]/).includes("..")) throw new SettingError(`${r.label} cannot use .. to leave the project.`);
+  } else if (r.path_kind === "absolute" && text !== r.default && !text.startsWith("/")) {
+    throw new SettingError(`${r.label} must be an absolute folder path (starting with /), or ${r.default}.`);
+  }
+  return text;
 }
 
 const split = (raw) => String(raw).split(",").map((p) => p.trim()).filter(Boolean);
 
 function parse(r, raw) {
+  if (raw !== null && raw !== undefined && CONTROL_CHARS.test(String(raw))) {
+    throw new SettingError(`${r.label} cannot contain control characters such as a line break.`);
+  }
   const text = raw === null || raw === undefined ? "" : String(raw).trim();
   switch (r.type) {
     case "int": return parseInt10(r, text);
@@ -65,7 +85,7 @@ function parse(r, raw) {
     }
     default:
       if (!text) throw new SettingError(`${r.label} cannot be empty.`);
-      return text;
+      return checkPath(r, text);
   }
 }
 
@@ -103,15 +123,15 @@ function readEnvBlock(file) {
   let text;
   try { text = fs.readFileSync(file, "utf8"); } catch (e) {
     if (e.code === "ENOENT") return {};
-    throw new Error(`Cannot read ${file}: ${e.message}.`);
+    throw new SettingsFileError(`Cannot read ${file}: ${e.message}.`);
   }
   let data;
   try { data = text.trim() ? JSON.parse(text) : {}; } catch (e) {
-    throw new Error(`${file} is not valid JSON (${e.message}). Fix it by hand.`);
+    throw new SettingsFileError(`${file} is not valid JSON (${String(e.message).split("\n")[0]}). Fix it by hand.`);
   }
-  if (data === null || typeof data !== "object" || Array.isArray(data)) throw new Error(`${file} must hold a JSON object.`);
+  if (data === null || typeof data !== "object" || Array.isArray(data)) throw new SettingsFileError(`${file} must hold a JSON object.`);
   if ("env" in data && (data.env === null || typeof data.env !== "object" || Array.isArray(data.env))) {
-    throw new Error(`The "env" entry in ${file} must be an object.`);
+    throw new SettingsFileError(`The "env" entry in ${file} must be an object.`);
   }
   return data.env || {};
 }
@@ -134,4 +154,9 @@ function get(key, { cwd, env, home } = {}) {
   return r.default;
 }
 
-module.exports = { get, loadTable, SettingError };
+// The typed value for raw, or a SettingError with the message settings.py's validate() gives.
+function validate(key, raw) {
+  return parse(row(key), raw);
+}
+
+module.exports = { get, validate, loadTable, SettingError, SettingsFileError };

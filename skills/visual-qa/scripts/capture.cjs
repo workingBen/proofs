@@ -1283,7 +1283,12 @@ async function main() {
 }
 
 if (require.main === module) {
-  main().catch((e) => { console.error(e && e.stack ? e.stack : String(e)); process.exit(1); });
+  main().catch((e) => {
+    // A settings file that cannot be read: one line naming the file, not a stack.
+    if (e instanceof settings.SettingsFileError) console.error(`capture: ${e.message}`);
+    else console.error(e && e.stack ? e.stack : String(e));
+    process.exit(1);
+  });
 }
 
 module.exports = { joinUrl, readPagesFile, PagesFileError, resolveTargets, resolveViewports };

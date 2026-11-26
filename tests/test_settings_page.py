@@ -89,6 +89,10 @@ def engine(page, args):
         return json.loads(r.stdout)
 
 
+# Control characters, `..`, absolute paths and the reset values (final review, items 2 and 6).
+EDGE_TRIES = ["x\ny", "5\n", "a\tb", "\x00", "\x1b[1m", "\x7f", "../x", "docs/../../x", "a/..", "..", "x..y.md",
+              "/etc/passwd", "/tmp/qa", "~/x", "\\x", "C:\\x", "c:/x", ".proofs/base", "relative/base"]
+
 class SpecFromSettings(unittest.TestCase):
     """settings.py --spec in an isolated project: the page is built from what the files say."""
 
@@ -207,7 +211,7 @@ class Page(unittest.TestCase):
         tries = ["", " ", "abc", "0", "1", "2", "3", "5", "14", "16", "18", "44", "43", "99999", "3099", "-1",
                  "+5", "+-5", " 7 ", "7.5", "1e3", "on", "off", "yes", "No", "TRUE", "american", "self", "helper",
                  "file", "wifi", "artifact", "auto", "chrome", "docs/x.md", "agent/,bot/", ",", "400,2560", "399",
-                 "1600, 2000", "1600,abc", "app/", "２", "٣"]
+                 "1600, 2000", "1600,abc", "app/", "２", "٣"] + EDGE_TRIES
         res = engine(self.page, {"checks": {k: tries for k in KEYS}})
         for key in KEYS:
             row = next(r for r in TABLE if r["key"] == key)

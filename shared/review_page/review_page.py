@@ -1748,4 +1748,8 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except proofs_settings.SettingsFileError as e:  # one line naming the file, not a traceback
+        print("review_page: %s" % e, file=sys.stderr)
+        sys.exit(3)

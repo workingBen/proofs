@@ -19,7 +19,7 @@ site). With no paths, audit every page the current branch touches.
 **REQUIRED SUB-SKILL:** the `design-review` skill, for step 5 (the review page and its
 export). It ships in the same plugin.
 
-Read the settings: `python3 ${CLAUDE_PLUGIN_ROOT}/shared/settings.py --print` (pre-approved). Use the values it shows wherever this file says *the port*, *the smallest text*, *the smallest tap target* and *the mockups per item*. The command examples show the default port, 3311; use the setting's value in its place.
+Read the settings: `python3 ${CLAUDE_PLUGIN_ROOT}/shared/settings.py --print` (pre-approved). Use the values it shows wherever this file says *the port* (`PROOFS_PORT`), *the smallest text* (`PROOFS_MIN_TEXT`), *the smallest tap target* (`PROOFS_MIN_TAP`) and *the mockups per item* (`PROOFS_QA_MOCKUPS`). The command examples show the default port, 3311; use the setting's value in its place.
 
 ## Why the numbers matter
 

@@ -12,7 +12,7 @@ A checkpoint is three things in order: **route everything durable to its real ho
 Checkpoint at the **next item boundary** after any one of these becomes true. Never mid-item. A session that dispatches its per-item work to subagents from the start will rarely reach these at all, and that is the point.
 
 - **A major item just finished and the next queued item is unrelated.** *Major*: it needed its own branch and PR, or a subagent, or touched more than a handful of files, or took several rounds of tests to land. *Unrelated*: starting the next item means opening a different set of files, with no shared model, controller, view or feature area with the one just finished. **Both must hold.** A major item followed by three more tweaks to the same view is not a checkpoint point; the context you are carrying is the context the next item needs.
-- **Five items have shipped since the last checkpoint**, related or not. A count is here rather than left to judgment because a long session never recognized a boundary it was willing to stop at.
+- **The checkpoint setting's number of items (`PROOFS_CHECKPOINT_ITEMS`, default 5) have shipped since the last checkpoint**, related or not. A count is here rather than left to judgment because a long session never recognized a boundary it was willing to stop at.
 - **Context is more than half spent**, or a compaction or summarization warning has appeared. Being summarized by something you did not author *is* the failure mode: get ahead of it rather than waiting for a second signal.
 - **The next item is visibly large**: something you can already see will take several PRs. Start it in a fresh context rather than on top of twenty finished ones.
 
@@ -80,7 +80,7 @@ First act in the new context, before touching any item: read the newest checkpoi
 | Rationalization | Reality |
 |---|---|
 | "Clearing would lose context I need" | The context you're afraid to lose is exactly what the checkpoint writes down. What a clear actually loses is item 1's diffs and test output, which you are paying for on every turn. |
-| "I'll checkpoint when the context actually gets tight" | A long session can stop with no warning it could act on. Checkpoint on the trigger (major + unrelated, five items, half spent), not on a feeling. |
+| "I'll checkpoint when the context actually gets tight" | A long session can stop with no warning it could act on. Checkpoint on the trigger (major + unrelated, the checkpoint count of items, half spent), not on a feeling. |
 | Stopping at a checkpoint to wait for the user to clear the conversation | A paused loop is worse than a long context: the queue stops moving and the user has to restart it. Announce the checkpoint in one line and start the next item in the same turn. |
 | Doing each item's reads, diffs and test output inline, then blaming the context | That is the accumulation the clear was invented to cure. Put the item in a subagent and keep the conclusion; the context never grows in the first place. |
 | Writing the open decision, flagged item or gotcha into the handoff and nowhere else | A handoff is a pointer, never a store. File it in the project's to-do list, archive, field guide or decisions file first, then link it. |

@@ -12,7 +12,7 @@ Builds a signed-in-only changelog page (one per app or sub-app) backed by plain 
 
 **Needs the whole plugin.** This skill reads shared files at `../../reference/` and `../../shared/`, relative to its folder. If they are missing, the skill was copied on its own: install the whole plugin (`/plugin install proofs@proofs`) rather than recreating them.
 
-Read the settings: `python3 ${CLAUDE_PLUGIN_ROOT}/shared/settings.py --print` (pre-approved). Use the values it shows wherever this file says *the changelog folder*. `docs/changelog/` below is that setting's default; use the setting's value in its place.
+Read the settings: `python3 ${CLAUDE_PLUGIN_ROOT}/shared/settings.py --print` (pre-approved). Use the values it shows wherever this file says *the changelog folder* (`PROOFS_CHANGELOG_DIR`). `docs/changelog/` below is that setting's default; use the setting's value in its place.
 
 ## When to use
 

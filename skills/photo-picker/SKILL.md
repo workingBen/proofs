@@ -13,7 +13,7 @@ A human-in-the-loop process for sourcing and adding real photos to an article or
 
 **Results first.** Nothing matters more than a result the user wants. Save tokens by cutting waste, never by cutting a check, an option or a revise pass the result needs (full text: `../../reference/house-rules.md`).
 
-Read the settings: `python3 ${CLAUDE_PLUGIN_ROOT}/shared/settings.py --print` (pre-approved). Use the values it shows wherever this file says *the candidate count*.
+Read the settings: `python3 ${CLAUDE_PLUGIN_ROOT}/shared/settings.py --print` (pre-approved). Use the values it shows wherever this file says *the candidate count* (`PROOFS_PHOTO_CANDIDATES`).
 
 ## Why this exists
 

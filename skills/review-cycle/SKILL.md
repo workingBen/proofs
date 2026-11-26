@@ -13,7 +13,7 @@ A queue-processing workflow for a live review session: the user reports issues o
 **Test first.** If the superpowers plugin is installed, use `superpowers:test-driven-development` for each item's implementation; otherwise write the failing test first yourself, watch it fail, then make it pass.
 **Debugging.** If the superpowers plugin is installed, use `superpowers:systematic-debugging` when a test failure's cause isn't immediately obvious; otherwise debug systematically: reproduce, form one hypothesis, test it, repeat.
 
-Read the settings: `python3 ${CLAUDE_PLUGIN_ROOT}/shared/settings.py --print` (pre-approved). Use the values it shows wherever this file says *the checkpoint count*.
+Read the settings: `python3 ${CLAUDE_PLUGIN_ROOT}/shared/settings.py --print` (pre-approved). Use the values it shows wherever this file says *the checkpoint count* (`PROOFS_CHECKPOINT_ITEMS`).
 
 ## When to Use
 

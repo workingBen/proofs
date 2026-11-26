@@ -789,7 +789,7 @@ class DesignerReferences(unittest.TestCase):
         text = self.rubric()
         self.assertIn("2 or below", text)
         self.assertIn("any failed design check", text)
-        self.assertIn("revise it once or drop it", text)
+        self.assertIn("revise it (once per correction pass", text)
         self.assertIn("reason on the page", text)
         # Ruling 20: a near-copy kept with a Reason line is not a failed check, in every place
         # the bar is stated, and a one-option fix still names what changed.
@@ -893,7 +893,7 @@ class DesignerGuidance(unittest.TestCase):
         text = self.step("4.")
         for needle in ("`../../reference/design-rubric.md`", "separate helper", "fresh context", "Who judges",
                        "`claude -p`", "`judged_by`", "`helper`", "`self`", "`scores`", "`before_scores`",
-                       "Current page", "revise it once or drop it", "Not scored", "Never recommend an unscored option"):
+                       "Current page", "revise it (once per correction pass", "Not scored", "Never recommend an unscored option"):
             with self.subTest(needle=needle):
                 self.assertIn(needle, text)
 
@@ -1122,6 +1122,32 @@ class SkillsReadSettings(unittest.TestCase):
         self.assertIn("critic setting (default `helper`)", text)
         self.assertIn("use the setting's value in its place", text)
         self.assertNotIn("at most one correction pass.**", text)
+
+    def test_correction_passes_setting_drives_the_whole_paragraph(self):
+        for rel in ("skills/design-review/SKILL.md", "reference/design-rubric.md"):
+            text = self.text(rel)
+            with self.subTest(rel=rel):
+                self.assertNotIn("one correction pass", text)
+                self.assertNotIn("revise it once or drop it", text)
+                self.assertNotIn("revised once or dropped", text)
+        text = self.text("skills/design-review/SKILL.md")
+        self.assertIn("With 0, skip the pass", text)
+        self.assertIn("`note_html`", text.split("With 0, skip the pass", 1)[1][:400])
+        self.assertIn("With 2,** a second fix, rebuild and rescore cycle", text)
+
+    def test_settings_line_names_each_key_and_pr_qa_ports_follow_settings(self):
+        for skill, words in self.SKILL_WORDS.items():
+            line = [l for l in (REPO / "skills" / skill / "SKILL.md").read_text().splitlines() if l.startswith("Read the settings:")][0]
+            with self.subTest(skill=skill):
+                self.assertEqual(len(re.findall(r"\*[^*]+\* \(`PROOFS_[A-Z_]+`\)", line)), len(words), line)
+        pr = self.text("skills/pr-qa/SKILL.md")
+        self.assertNotIn("the ports with free high ones", pr)
+        self.assertIn("after shots use the port setting (`PROOFS_PORT`, default 3311), before shots the before-shot port setting (`PROOFS_BASE_PORT`, default 3411)", pr)
+
+    def test_checkpoints_reference_uses_the_setting(self):
+        text = self.text("skills/review-cycle/reference/checkpoints.md")
+        self.assertIn("PROOFS_CHECKPOINT_ITEMS", text)
+        self.assertNotIn("Five items", text)
 
     def test_other_literals_name_their_setting(self):
         self.assertIn("candidates-per-spot setting (default 3)", self.text("skills/photo-picker/SKILL.md"))

@@ -13,7 +13,7 @@ A human-in-the-loop process for auditing and codifying design consistency across
 
 **Results first.** Nothing matters more than a result the user wants. Save tokens by cutting waste, never by cutting a check, an option or a revise pass the result needs (full text: `../../reference/house-rules.md`).
 
-Read the settings: `python3 ${CLAUDE_PLUGIN_ROOT}/shared/settings.py --print` (pre-approved). Use the values it shows wherever this file says *the style guide file* and *the design profile path*. `docs/style-guide.html` below is the style guide setting's default; use the setting's value in its place.
+Read the settings: `python3 ${CLAUDE_PLUGIN_ROOT}/shared/settings.py --print` (pre-approved). Use the values it shows wherever this file says *the style guide file* (`PROOFS_STYLE_GUIDE`) and *the design profile path* (`PROOFS_DESIGN_PROFILE`). `docs/style-guide.html` below is the style guide setting's default; use the setting's value in its place.
 
 ## Why this exists
 
@@ -125,7 +125,7 @@ Check that the project's own instructions file (`CLAUDE.md` or the equivalent) a
 
 Identical pattern to the sibling tools: scope the new Artifact to only the still-open items (every item without a final decision, not just the explicitly revised ones), carry the prior round's proposal forward on each card labeled "Round N," rebuild and republish to the same URL, and re-verify before every republish. If a prior round's already-decided item is worth keeping visible for context (for example, it's near a new item covering related ground), show it de-emphasized in `after_html` or a `history_html` rather than omitting it or presenting it as open again. It's there for continuity, not re-review.
 
-When the guide is done, tell the user that design-review uses it for its mockups' tokens and its critic's `fit` score, together with an optional design profile (the design profile path setting, default `docs/design-profile.md`) (the owner's references, rules and audience; neither file is ever required).
+When the guide is done, tell the user that design-review uses it for its mockups' tokens and its critic's `fit` score, together with an optional design profile (the design profile path setting, default `docs/design-profile.md`: the owner's references, rules and audience; neither file is ever required).
 
 ## Where the page goes
 

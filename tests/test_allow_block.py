@@ -93,7 +93,8 @@ class AllowBlockTest(unittest.TestCase):
         self.assertTrue(bash)
         for r in bash:
             self.assertIn("/plugins/cache/proofs/proofs/*/", r)
-            self.assertEqual(r.count("*"), 2, r)
+            # a script rule ends in " *" for its arguments; an exact-command rule has only the version *
+            self.assertEqual(r.count("*"), 2 if r.endswith(" *)") else 1, r)
 
     def test_bash_rules_are_sorted(self):
         bash = [r for r in allow_block.rules("/opt/claude-home", None) if r.startswith("Bash(")]
@@ -120,6 +121,24 @@ class AllowBlockTest(unittest.TestCase):
                     "python3 /opt/claude-home/evil.py",
                     "python3 -c print(1)"):
             self.assertFalse(any(check_skills.rule_matches(r, cmd) for r in rules), cmd)
+
+    def test_settings_views_are_preapproved_but_writes_still_ask(self):
+        rules = allow_block.rules("/opt/claude-home", None)
+        base = "python3 %s/shared/settings.py" % FAKE_VERSION_ROOT
+        for flag in ("--print", "--json"):
+            self.assertTrue(any(check_skills.rule_matches(r, "%s %s" % (base, flag)) for r in rules), flag)
+        for cmd in ("%s --set PROOFS_PORT=3099" % base, "%s --unset PROOFS_PORT" % base,
+                    "%s --print --set PROOFS_PORT=3099" % base, base, "%s --scope user" % base):
+            self.assertFalse(any(check_skills.rule_matches(r, cmd) for r in rules), cmd)
+        self.assertEqual(len([r for r in rules if "settings.py" in r]), 2)
+
+    def test_settings_views_follow_claude_config_dir_and_local_folders(self):
+        rules = allow_block.rules("/opt/claude-home", "/opt/cfg")
+        self.assertIn("Bash(python3 /opt/cfg/plugins/cache/proofs/proofs/*/shared/settings.py --print)", rules)
+        folder = allow_block.folder_rules("/src/proofs")
+        self.assertIn("Bash(python3 /src/proofs/shared/settings.py --print)", folder)
+        self.assertIn("Bash(python3 /src/proofs/shared/settings.py --json)", folder)
+        self.assertFalse(any("--set" in r or "--unset" in r for r in rules + folder))
 
     def test_headless_adds_exactly_the_capture_helper(self):
         plain = allow_block.rules("/opt/claude-home", None)

@@ -53,6 +53,8 @@ Example of the output; run the command above to get yours. `/YOUR/HOME` stands f
       "Skill(proofs:*)",
       "Bash(node /YOUR/HOME/.claude/plugins/cache/proofs/proofs/*/skills/visual-qa/scripts/capture.cjs *)",
       "Bash(python3 /YOUR/HOME/.claude/plugins/cache/proofs/proofs/*/shared/review_page/review_page.py *)",
+      "Bash(python3 /YOUR/HOME/.claude/plugins/cache/proofs/proofs/*/shared/settings.py --json)",
+      "Bash(python3 /YOUR/HOME/.claude/plugins/cache/proofs/proofs/*/shared/settings.py --print)",
       "Bash(python3 /YOUR/HOME/.claude/plugins/cache/proofs/proofs/*/skills/pr-qa/scripts/pr_qa_findings.py *)",
       "Bash(python3 /YOUR/HOME/.claude/plugins/cache/proofs/proofs/*/skills/pr-qa/scripts/pr_qa_page.py *)",
       "Bash(python3 /YOUR/HOME/.claude/plugins/cache/proofs/proofs/*/skills/pr-qa/scripts/pr_qa_plan.py *)",

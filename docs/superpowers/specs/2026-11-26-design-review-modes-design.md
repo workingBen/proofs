@@ -116,10 +116,23 @@ running app during the before capture, not a hand-coded mockup:
   same approach as this repo's `bin/page-snapshot`). Images and fonts go
   through the builder's `assets`, so each is embedded once.
 - It sits in the review page **isolated in both directions**: the review
-  chrome's CSS can't restyle it, and its CSS can't restyle the chrome. The
-  mechanism is the builder's call (shadow DOM is the expected fit, because the
-  page script can reach it to toggle layers and `--smoke` can measure inside
-  it). It has to work inside a published artifact and in a `file://` page.
+  chrome's CSS can't restyle it, and its CSS can't restyle the chrome.
+- **Each frame shows the page's real layout at its own width** (my call,
+  from the builder check). The 390 frame shows the site's phone layout even on
+  a 1280 screen, and the 1280 frame shows the desktop layout even on an iPhone
+  (scaled down to fit). Shadow DOM can't do this, because the snapshot's media
+  queries would answer to the browser window, not the frame. So each frame is
+  an **iframe** (`srcdoc`) at its real width, scaled with a CSS transform to
+  fit the column. The page script toggles layers inside it, and `--smoke`
+  measures inside it. The builder's first task is a spike proving that a
+  `srcdoc` iframe renders, toggles and is measurable in a published artifact
+  and in a `file://` page. If the artifact sandbox blocks it, the fallback is
+  rewriting the snapshot's media queries into container queries. Either way
+  the requirement stands.
+- Charts drawn by JavaScript or in `<canvas>` don't survive script removal.
+  The snapshot draws each `<canvas>` into an image and keeps SVG as it is.
+  (Host Headroom's dashboard is server-rendered HTML with one small script and
+  no canvas or SVG, so the first test page doesn't depend on this.)
 - **Fidelity check:** `--smoke` screenshots the base with every layer off at
   1280 and 390 and compares it with the before capture. A base that doesn't
   match is a problem line, and the review isn't published on it. The measure
@@ -161,6 +174,14 @@ Refine.
 needs. More than 8 is a sign the page wants a Redesign.
 
 ### 4. The Refine review page
+
+**One Refine item per page** (my call, from the builder check): one base, one
+flat numbered list of changes, one combined preview and one `Combined:` line,
+even when several sections are in scope. Each change names its section in
+its card (`location`). Answers are saved per change, like any review item.
+"Found by the capture" stays its own section after the changes, numbered
+on from the last change, exactly as today. Its accepted fixes are not part
+of the preview.
 
 From the top:
 
@@ -239,10 +260,23 @@ asks the density question on the first questions page, next to Audience.
 
 Only changes marked YES are built into the real templates and CSS, translated
 the way design-review applies a picked variant today (real classes, the
-site's tokens, no pasted snapshot markup). REVISE goes to a follow-up round
-scoped to those changes, on the same base. Everything in step 5 of the skill
+site's tokens, no pasted snapshot markup). Everything in step 5 of the skill
 (build, type check, capture with `--compare`, every breakpoint) applies
 unchanged.
+
+**The built page must match the preview** (my call, from the builder check;
+it's the "preview that lies" anti-goal made checkable). After building, the
+skill captures the real page at 1280 and 390 and compares it with the base
+with the YES layers on, using the same measure as the fidelity check. A
+mismatch is a failure: fix the build and capture again before saying the
+picks are built, and say in chat what differed. A difference the reader can
+see but the measure can't explain is reported, never hidden.
+
+**A round with both YES and REVISE** (my call): the YES changes are built
+now, because the reader saw them together in the preview and approved them.
+The follow-up round on the REVISE changes takes a **fresh snapshot** of the
+page with those built, so its base, crops and preview show the real page as
+it now is.
 
 ### 8. Redesign mode
 
@@ -267,18 +301,21 @@ Unchanged, apart from three things:
 
 ## How we'll know it works
 
-1. **Rerun the Host Headroom dashboard request in Refine.** Ben compares the
+1. **Rerun the Host Headroom dashboard request in Refine.** The dashboard is
+   a static HTML page the tool writes (`host-headroom --html OUT`), served
+   from a folder for the capture. Ben compares the
    original with the combined result of his own picks, using the toggle, and
    rates it Less, Equal or More. Pass: More, with no change he accepted that
    he later wants back out.
 2. **One page from the designer bench** (piw-handoff/bench) in Refine, rated
    the same way, so the result isn't one page's luck.
-3. **A redesign request on a broken bench page** still gets Redesign, to show
-   the mode choice works both ways.
+3. **Mode choice both ways:** an "improve this" request on a bench page gets
+   Refine, and a "redesign this" request on the same page gets Redesign.
+   (The bench pages aren't broken, so "say redesign" is the case to test.)
 
 ## Left to the builder
 
-- How the base is isolated (shadow DOM expected), how the snapshot is taken
+- How the snapshot is taken
   (inside the capture, or as a sibling script), and how its fidelity is
   measured, with thresholds and reasons in the PR.
 - How crops are rendered (Playwright on the built review page is the obvious
@@ -288,3 +325,15 @@ Unchanged, apart from three things:
   and the `refine` preset, as long as `reference/review-page.md` documents
   them.
 - How the desktop frame scales on a phone.
+
+## Calls I made (from the builder check), for Ben to check
+
+1. Each preview frame shows the real layout at its own width, so frames are
+   iframes, with container queries as the fallback (section 2).
+2. One Refine item per page, with "Found by the capture" after it, as today
+   (section 4).
+3. The built page is measured against the preview, and a mismatch is a
+   failure (section 7).
+4. YES changes are built even when other changes go to REVISE. The next round
+   starts from a fresh snapshot (section 7).
+5. Canvas charts become images in the snapshot (section 2).

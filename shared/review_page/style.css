@@ -3,7 +3,7 @@
    through the spec's "css", styles the mockups without restyling the chrome. */
 :root {
   --rp-bg:#f7f6f3; --rp-card:#ffffff; --rp-sunk:#efede8; --rp-ink:#1c1b19; --rp-soft:#5b5852; --rp-faint:#8a867e;
-  --rp-rule:#dcd8d0; --rp-accent:#2563eb; --rp-accent-ink:#ffffff; --rp-brand:#c2410c; --rp-sess:#6d28d9;
+  --rp-rule:#dcd8d0; --rp-accent:#2563eb; --rp-accent-ink:#ffffff; --rp-send:#6d28d9; --rp-on-send:#ffffff; --rp-brand:#c2410c; --rp-sess:#6d28d9;
   --rp-deny:#b42318; --rp-accept:#067647; --rp-comment:#1d4ed8; --rp-revise:#b54708; --rp-later:#0e7490;
   --rp-amber-bg:#fef3c7; --rp-amber-ink:#5a3a03; --rp-rec:#067647; --rp-notrec:#b42318; --rp-link:#1d4ed8;
   --rp-sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; --rp-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
@@ -11,14 +11,14 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --rp-bg:#141413; --rp-card:#1d1c1a; --rp-sunk:#262522; --rp-ink:#eeece8; --rp-soft:#b5b1a9; --rp-faint:#8a867e;
-    --rp-rule:#3a3834; --rp-accent:#7aa2ff; --rp-accent-ink:#0b1020; --rp-brand:#f08a54; --rp-sess:#c4a7ff;
+    --rp-rule:#3a3834; --rp-accent:#7aa2ff; --rp-accent-ink:#0b1020; --rp-send:#7c3aed; --rp-on-send:#ffffff; --rp-brand:#f08a54; --rp-sess:#c4a7ff;
     --rp-deny:#f97066; --rp-accept:#47cd89; --rp-comment:#84adff; --rp-revise:#fdb022; --rp-later:#22ccee;
     --rp-amber-bg:#3d2a05; --rp-amber-ink:#fde68a; --rp-rec:#47cd89; --rp-notrec:#f97066; --rp-link:#8ab4ff;
   }
 }
 :root[data-theme="dark"] {
   --rp-bg:#141413; --rp-card:#1d1c1a; --rp-sunk:#262522; --rp-ink:#eeece8; --rp-soft:#b5b1a9; --rp-faint:#8a867e;
-  --rp-rule:#3a3834; --rp-accent:#7aa2ff; --rp-accent-ink:#0b1020; --rp-brand:#f08a54; --rp-sess:#c4a7ff;
+  --rp-rule:#3a3834; --rp-accent:#7aa2ff; --rp-accent-ink:#0b1020; --rp-send:#7c3aed; --rp-on-send:#ffffff; --rp-brand:#f08a54; --rp-sess:#c4a7ff;
   --rp-deny:#f97066; --rp-accept:#47cd89; --rp-comment:#84adff; --rp-revise:#fdb022; --rp-later:#22ccee;
   --rp-amber-bg:#3d2a05; --rp-amber-ink:#fde68a; --rp-rec:#47cd89; --rp-notrec:#f97066; --rp-link:#8ab4ff;
 }
@@ -155,6 +155,24 @@ picture.rp-pic { display:contents; }
   padding:10px 20px; border-radius:999px; font-weight:650; opacity:0; pointer-events:none; transition:opacity .18s; z-index:90; }
 .rp-flash.on { opacity:1; }
 @media (prefers-reduced-motion: reduce) { .rp-flash { transition:none; } }
+/* Send to Claude, beside Copy: its own fill and its own text token, so the label stays
+   white on violet in both themes (the first test page had dark-gray text on periwinkle) */
+.rp-send { font:inherit; font-size:15.5px; font-weight:700; padding:10px 18px; border-radius:9px; border:0; cursor:pointer;
+  background:var(--rp-send); color:var(--rp-on-send); }
+.rp-send[hidden], .rp-send-msg[hidden] { display:none; }
+.rp-send:disabled { opacity:.45; cursor:default; }
+.rp-send:focus-visible { outline:3px solid var(--rp-send); outline-offset:2px; }
+.rp-statusbar .rp-send { padding:6px 14px; font-size:14.5px; }
+.rp-mode-questions button.rp-send { font-family:var(--rp-sans); font-size:14px; font-weight:650; padding:9px 16px; border-radius:8px; }
+/* the line under the bar: why Send is off, what a send did, whether Claude picked it up */
+.rp-send-msg { flex:1 0 100%; font-family:var(--rp-sans); font-size:14px; font-weight:600; line-height:1.4; color:var(--rp-soft); }
+.rp-send-msg[data-tone="ok"] { color:var(--rp-accept); }
+.rp-send-msg[data-tone="warn"] { color:var(--rp-revise); }
+.rp-send-msg[data-tone="bad"] { color:var(--rp-deny); }
+.rp-topbars > .rp-send-msg { background:var(--rp-sunk); padding:0 28px 8px; border-bottom:1px solid var(--rp-rule); margin-top:-1px; }
+.rp-mode-questions .bar .rp-send-msg { color:var(--ink-soft); }
+.rp-mode-questions .bar .rp-send-msg[data-tone="ok"] { color:var(--good); }
+.rp-mode-questions .bar .rp-send-msg[data-tone="warn"], .rp-mode-questions .bar .rp-send-msg[data-tone="bad"] { color:var(--warn); }
 /* the sync indicator in the bar: Saved, Saving… or Not saved yet (hidden with no database) */
 .rp-sync { display:inline-flex; align-items:center; gap:5px; flex:none; white-space:nowrap; font-size:13.5px; font-weight:600;
   color:var(--rp-soft); }
@@ -390,6 +408,14 @@ body.rp-mode-questions, :root[data-theme] body.rp-mode-questions {
   .rp-statusbar { flex:1 1 0; min-width:0; flex-wrap:nowrap; padding:6px 16px 6px 10px; border-bottom:0; }
   .rp-statusbar #rp-tally { flex:1 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:14px; }
   .rp-statusbar .rp-copy { flex:none; min-height:44px; padding:8px 14px; }
+  .rp-send-x { display:none; }
+  .rp-statusbar .rp-send { flex:none; min-height:44px; padding:8px 12px; }
+  .rp-bar .rp-send { min-height:44px; padding:8px 14px; }
+  .rp-topbars { flex-wrap:wrap; }
+  /* a fourth control in the one-line bar: the session name gives up the room */
+  .rp-topbars:has(.rp-send:not([hidden])) .rp-projectbar { max-width:36%; }
+  .rp-topbars:has(.rp-send:not([hidden])) .rp-projectbar .rp-brand { display:none; }
+  .rp-topbars > .rp-send-msg { padding:0 16px 8px; margin-top:0; border-bottom:0; }
   /* the sync indicator keeps the one-line bar: Saved and Saving… show the icon alone (the
      word is still read out), and Not saved takes the tally's place until it lands */
   .rp-sync { font-size:12.5px; gap:4px; }

@@ -625,7 +625,8 @@ class AnswersWithoutCopy(unittest.TestCase):
         for skill in ("working-log", "questions", "qa-checklist"):
             with self.subTest(skill=skill):
                 text = (REPO / "skills" / skill / "SKILL.md").read_text()
-                self.assertIn('capabilities: {"db": {}}', text)
+                self.assertIn('capabilities: {"db": {}, "comments": {}}', text)
+                self.assertNotIn('capabilities: {"db": {}}', text)
                 self.assertIn("`ArtifactData` `list` of `proofs-answers`", text)
                 self.assertIn("review_page.py --answers", text)
                 self.assertIn("the newer (`updated_at`", text)
@@ -638,6 +639,35 @@ class AnswersWithoutCopy(unittest.TestCase):
                        "Pages are private by default"):
             with self.subTest(needle=needle):
                 self.assertTrue(needle in text, needle)
+
+
+class SendToClaudeGuidance(unittest.TestCase):
+    """1.8.0: a send wakes the session; its first act is a republish, never a second reply."""
+
+    def test_answer_skills_say_what_the_session_does_on_a_send(self):
+        for skill in ("working-log", "questions", "qa-checklist"):
+            with self.subTest(skill=skill):
+                text = " ".join((REPO / "skills" / skill / "SKILL.md").read_text().split())
+                for needle in ("## Sent to Claude: what the session does", "`artifact-auto-react`",
+                               "Republish the page first, before any other work.", "Never post a second reply",
+                               "resolve the thread with `ArtifactComments`", "After `/clear`, a closed terminal or a new session",
+                               "Editors only", "posted by the harness"):
+                    self.assertIn(needle, text)
+
+    def test_a_send_updates_the_page_first(self):
+        text = (REPO / "skills" / "working-log" / "SKILL.md").read_text()
+        self.assertIn("**A paste or a send updates the page first, before any other work.**", text)
+
+    def test_reference_documents_states_and_limits(self):
+        text = " ".join((REPO / "reference" / "review-page.md").read_text().split())
+        for needle in ("## Send to Claude", "This page's Claude session isn't listening; use Copy",
+                       "Only editors can send; use Copy", "Not available here; use Copy",
+                       "Allow commenting when asked, then tap again", "Nothing was sent; use Copy.",
+                       "Claude picked up your answers", "Not picked up yet. The session may be busy or closed; Copy still works.",
+                       "### Sent to Claude: what the session does", "Never post a second reply",
+                       'capabilities: {"db": {}, "comments": {}}', "must name `db` too"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
 
 
 if __name__ == "__main__":

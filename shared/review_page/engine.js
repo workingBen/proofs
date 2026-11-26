@@ -274,9 +274,71 @@
     return b;
   }
 
+  /* ------------------------------------------------- Send to Claude, the pure parts
+     A db write starts no turn, so the session that published the page waits for a paste.
+     Send to Claude posts a comment with the comments capability's sendToClaude, which
+     wakes that session. The text is a short pointer to the saved rows, not the export:
+     sendToClaude refuses more than 4 KiB, and the database holds everything. */
+  var SEND_MAX_BYTES = 4000, SEND_STALE_MS = 5 * 60 * 1000, SEND_FORGET_MS = 24 * 60 * 60 * 1000;
+  var SENT_MSG = "Sent. This page updates when Claude has read your answers (usually under a minute). " +
+                 "The reply is also in the comments.";
+  function cpBytes(c) { return c < 0x80 ? 1 : c < 0x800 ? 2 : c < 0x10000 ? 3 : 4; }
+  // At most max bytes of UTF-8, cut on a whole character, with "…" when cut.
+  function clipBytes(s, max) {
+    var n = 0, out = "", chars = Array.from(s);
+    for (var i = 0; i < chars.length; i++) {
+      var b = cpBytes(chars[i].codePointAt(0));
+      if (n + b > max - 3) {
+        var rest = chars.slice(i).reduce(function (t, ch) { return t + cpBytes(ch.codePointAt(0)); }, 0);
+        return n + rest <= max ? s : out + "…";
+      }
+      n += b; out += chars[i];
+    }
+    return out;
+  }
+  // sendToClaude refuses control characters other than newlines and tabs.
+  function plainText(s) { return String(s || "").replace(/\r\n?/g, "\n").replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, ""); }
+  var ANSWER_KINDS = ["review", "questions", "qa", "log"];
+  function sendText(S, st) {
+    st = st || {};
+    var total = 0;
+    S.sections.forEach(function (sec) { if (ANSWER_KINDS.indexOf(sec.kind) >= 0) total += sec.items.length; });
+    var docs = answerDocs(S, st), ids = [];
+    Object.keys(docs).forEach(function (k) { if (docs[k].kind !== "extra") ids.push(docs[k].id); });
+    var name = S.session || S.stream || S.project || "Proofs";
+    var ver = S.version || S.page_version;
+    var what = ids.length ? "answered " + clipBytes(ids.join(", "), 1500) : "nothing answered yet";
+    var text = plainText(name + " page " + ver + ": " + what + " (" + ids.length + " of " + total + ")." +
+                         " Read proofs-answers on this artifact.");
+    var extra = trimmed(plainText(st.extra));
+    if (extra) text += "\n\nAnything else: " + extra;
+    return clipBytes(text, SEND_MAX_BYTES);
+  }
+  function clock(d) {
+    try { return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); }
+    catch (e) { return pad(d.getHours()) + ":" + pad(d.getMinutes()); }
+  }
+  // What the bar says on load after a send ({sentAt, fromVersion} kept in localStorage).
+  // The page cannot read the comment thread, so a newer version of the page is the proof
+  // that Claude read the answers: Claude's first act on a send is to republish.
+  function pickupNote(sent, S, now) {
+    if (!sent || !sent.sentAt) return null;
+    var at = new Date(sent.sentAt), age = (+now) - at.getTime();
+    if (isNaN(age)) return null;
+    if (sent.fromVersion !== S.page_version) {
+      return { tone: "ok", clear: true,
+               text: "Claude picked up your answers (sent " + clock(at) + (S.version ? ", now " + S.version : "") + ")" };
+    }
+    if (age > SEND_FORGET_MS) return { tone: "", text: "", clear: true };
+    if (age > SEND_STALE_MS) {
+      return { tone: "warn", clear: false, text: "Not picked up yet. The session may be busy or closed; Copy still works." };
+    }
+    return { tone: "ok", clear: false, text: SENT_MSG, wait: SEND_STALE_MS - age };
+  }
+
   if (typeof module !== "undefined" && module.exports) {
     module.exports = { exportText: exportText, answerDocs: answerDocs, applyAnswerDocs: applyAnswerDocs,
-                       docIdFor: docIdFor, DB_COLLECTION: DB_COLLECTION };
+                       docIdFor: docIdFor, DB_COLLECTION: DB_COLLECTION, sendText: sendText, pickupNote: pickupNote };
   }
   if (typeof document === "undefined") return;
 
@@ -747,6 +809,123 @@
     if (e.target && /^(TEXTAREA|INPUT)$/.test(e.target.tagName) && dbs.timer) dbFlushNow();
   });
   window.addEventListener("online", function () { if (Object.keys(dbs.failed).length) dbFlushNow(); });
+
+  /* ------------------------------------------------- Send to Claude, on the page
+     Shown only once window.claude.use("comments") answers; enabled only while
+     canSendToClaude() says "available", re-checked whenever the page is shown again. A
+     tap saves first (waits for Saved), then sends. "Sent" shows only after sendToClaude
+     resolves, and nothing ever retries by itself. */
+  var SEND_WAIT_MS = 5000, SEND_KEY = S.key + ":sent";
+  var SEND_WHY = { no_session: "This page's Claude session isn't listening; use Copy",
+                   writers_only: "Only editors can send; use Copy", off: "Not available here; use Copy" };
+  var SEND_ERR = {
+    consent_required: "Not sent. Allow commenting when asked, then tap again.",
+    claude_unavailable: "Nothing was sent; use Copy.",
+    rate_limited: "Not sent: too many sends just now. Wait a minute, then tap again.",
+    not_saved: "Nothing was sent: your answers are not saved on the page yet. Use Copy."
+  };
+  var SEND_FINAL = ["forbidden", "not_granted", "capability_disabled", "capability_removed"];
+  var sendBtn = one("[data-send]"), sendMsg = one("[data-send-msg]");
+  var snd = { comments: null, busy: false, held: false, staleTimer: null };
+  function sendSay(text, tone) {
+    if (!sendMsg) return;
+    sendMsg.textContent = text || "";
+    sendMsg.hidden = !text;
+    sendMsg.setAttribute("data-tone", tone || "");
+  }
+  function sendCheck() {
+    if (!snd.comments || !sendBtn || snd.busy || snd.held) return;
+    Promise.resolve().then(function () { return snd.comments.canSendToClaude(); })
+      .then(null, function () { return "off"; })
+      .then(function (can) {
+        if (snd.busy || snd.held) return;
+        sendBtn.hidden = false;
+        sendBtn.disabled = can !== "available";
+        var tone = sendMsg ? sendMsg.getAttribute("data-tone") || "" : "";
+        // A reason replaces only a reason (or nothing): it never hides what a send said.
+        if (can === "available") { if (tone === "why") sendSay(""); }
+        else if (!tone || tone === "why") sendSay(SEND_WHY[can] || SEND_WHY.off, "why");
+      });
+  }
+  function waitSaved(ms) {
+    var t0 = Date.now();
+    return new Promise(function (res) {
+      (function poll() {
+        var s = syncState();
+        if (s === "saved") return res(true);
+        if (!s || dbs.off || Date.now() - t0 > ms) return res(false);
+        setTimeout(poll, 100);
+      })();
+    });
+  }
+  function watchStale(wait) {
+    clearTimeout(snd.staleTimer);
+    snd.staleTimer = setTimeout(function () {
+      var n = pickupNote(readSent(), S, Date.now());
+      if (n && n.tone === "warn") sendSay(n.text, n.tone);
+    }, Math.max(0, wait) + 50);
+  }
+  function readSent() {
+    try { return JSON.parse(localStorage.getItem(SEND_KEY) || "null"); } catch (e) { return null; }
+  }
+  if (sendBtn) sendBtn.addEventListener("click", function () {
+    if (snd.busy || !snd.comments) return;
+    snd.busy = true;
+    sendBtn.disabled = true;
+    sendSay("Saving your answers first…", "busy");
+    // The anchor is taken at the tap; the send waits for the saves to land.
+    var anchor = Promise.resolve().then(function () { return snd.comments.anchorFor(sendBtn); });
+    anchor.then(null, function () {});
+    saveNow();
+    waitSaved(SEND_WAIT_MS).then(function (ok) {
+      if (!ok) throw { code: "not_saved" };
+      sendSay("Sending…", "busy");
+      return anchor.then(function (a) { return snd.comments.sendToClaude({ anchor: a, text: sendText(S, st) }); });
+    }).then(function () {
+      try { localStorage.setItem(SEND_KEY, JSON.stringify({ sentAt: new Date().toISOString(), fromVersion: S.page_version })); }
+      catch (e) { /* private window: the page still says Sent */ }
+      snd.busy = false;
+      sendBtn.disabled = false;
+      sendSay(SENT_MSG, "ok");
+      watchStale(SEND_STALE_MS);
+    }, function (e) {
+      var code = (e && e.code) || "error";
+      snd.busy = false;
+      sendSay(SEND_ERR[code] || (SEND_FINAL.indexOf(code) >= 0 ? "Not sent: this view can't send to Claude. Use Copy."
+                                                                  : "Not sent (" + code + "). Tap again, or use Copy."), "bad");
+      if (SEND_FINAL.indexOf(code) >= 0) { snd.held = true; return; }
+      if (code === "rate_limited") {
+        snd.held = true;
+        setTimeout(function () { snd.held = false; sendBtn.disabled = false; sendCheck(); }, 60000);
+        return;
+      }
+      sendBtn.disabled = false;
+      sendCheck();
+    });
+  });
+  (function sendOnLoad() {
+    var n = pickupNote(readSent(), S, Date.now());
+    if (n) {
+      if (n.text) sendSay(n.text, n.tone);
+      if (n.clear) { try { localStorage.removeItem(SEND_KEY); } catch (e) { /* ignore */ } }
+      if (n.wait) watchStale(n.wait);
+    }
+  })();
+  function sendConnect() {
+    var c = window.claude;
+    if (!sendBtn || !c || typeof c.use !== "function") return false;
+    Promise.resolve().then(function () { return c.use("comments"); }).then(function (cm) {
+      // null: this view cannot comment (a page published without comments, an older
+      // viewer). The button stays hidden and Copy is the way, as before.
+      if (!cm || typeof cm.canSendToClaude !== "function") return;
+      snd.comments = cm;
+      sendCheck();
+    }, function () {});
+    return true;
+  }
+  if (!sendConnect()) window.addEventListener("load", sendConnect, { once: true });
+  document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") sendCheck(); });
+  window.addEventListener("focus", sendCheck);
 
   /* ------------------------------------------------- page-level controls */
   all("[data-filter]").forEach(function (b) {

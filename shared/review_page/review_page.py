@@ -37,6 +37,16 @@ SYNC_HTML = ('<span class="rp-sync" data-sync hidden role="status" aria-live="po
              '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" '
              'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></svg>'
              '<span class="rp-sync-t"></span></span>')
+# Send to Claude, beside Copy in every bar: hidden until the page's comments capability
+# answers (engine.js), so a local file or a page published without it shows Copy alone.
+# The short label drops " to Claude" on a phone. The message line under the bar says why
+# the button is off, what a send did, and whether the session picked it up.
+SEND_HTML = ('<button type="button" class="rp-send" data-send hidden disabled>'
+             'Send<span class="rp-send-x"> to Claude</span></button>')
+SEND_MSG_HTML = '<div class="rp-send-msg" data-send-msg role="status" aria-live="polite" hidden></div>'
+# What to publish a page with: saved answers need db, Send to Claude needs comments. A
+# non-empty capabilities object replaces the stored set, so always pass both.
+CAPABILITIES = {"db": {}, "comments": {}}
 STYLE = HERE / "style.css"
 SMOKE = HERE / "smoke.cjs"
 
@@ -930,6 +940,8 @@ def page(spec):
     # tell which build of the page an answer was given on.
     js["page_version"] = spec.get("version") or hashlib.sha1(
         json.dumps(js, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:10]
+    # The version the reader sees ("now v14" after Claude republishes); page_version may be a hash.
+    js["version"] = spec.get("version") or ""
     js["key"] = spec.get("storage_key") or "proofs:%s:%s" % (mode, slug("%s %s %s" % (
         proj.get("name", ""), proj.get("session", proj.get("stream", "")), spec["title"])))
     mark = brand(skill_name(spec, js["sections"]))
@@ -950,15 +962,16 @@ def page(spec):
         html_out.append('<div class="rp-topbars"><div class="rp-projectbar">%s<span class="rp-pb-x">%s · </span><b class="rp-session">%s</b><span class="rp-pb-x">%s</span></div>'
                         % (mark, esc(proj["name"]), esc(proj["session"]), repo))
         html_out.append('<div class="rp-statusbar"><span id="rp-tally"></span><span class="rp-marker">%s</span>'
-                        '%s<button type="button" class="rp-copy" data-copy>Copy<span class="rp-copy-x"> my replies</span></button></div></div>'
-                        % (marker, SYNC_HTML))
+                        '%s<button type="button" class="rp-copy" data-copy>Copy<span class="rp-copy-x"> my replies</span></button>%s</div>%s</div>'
+                        % (marker, SYNC_HTML, SEND_HTML, SEND_MSG_HTML))
     elif mode == "questions":
         html_out.append('<div class="bar">%s<div class="bar-title">%s</div><div class="tally" id="rp-tally">—</div>'
                         '%s<button class="ghost" id="rp-clear" type="button">Clear</button>'
-                        '<button class="copy" type="button" data-copy>%s</button></div>'
+                        '<button class="copy" type="button" data-copy>%s</button>%s%s</div>'
                         % (mark, (spec.get("bar_title_html") or esc(proj["name"])) + (
                             '<span class="rp-sess"> · <b class="rp-session">%s</b></span>' % esc(proj["session"])
-                            if proj.get("session") else ""), SYNC_HTML, esc(spec.get("copy_label", "Copy my answers"))))
+                            if proj.get("session") else ""), SYNC_HTML, esc(spec.get("copy_label", "Copy my answers")),
+                           SEND_HTML, SEND_MSG_HTML))
     html_out.append('<main class="rp-main" data-preview="light">')
     if mode == "review":
         # project · session, then the repo (dropped on phones, separator and all). Each
@@ -998,9 +1011,9 @@ def page(spec):
                         '<button type="button" class="rp-copy" data-copy>Copy my replies</button></section>')
     html_out.append("</main>")
     if mode == "review":
-        html_out.append('<div class="rp-bar"><div class="rp-progress" aria-hidden="true"></div><span id="rp-tally"></span>'
-                        '%s<button type="button" class="rp-copy" data-copy>%s</button></div>'
-                        % (SYNC_HTML, esc(spec.get("copy_label", "Copy My Decisions"))))
+        html_out.append('<div class="rp-bar">%s<div class="rp-progress" aria-hidden="true"></div><span id="rp-tally"></span>'
+                        '%s<button type="button" class="rp-copy" data-copy>%s</button>%s</div>'
+                        % (SEND_MSG_HTML, SYNC_HTML, esc(spec.get("copy_label", "Copy My Decisions")), SEND_HTML))
     html_out.append('<div class="rp-fallback" hidden role="dialog" aria-label="Copy the text"><div class="rp-fallback-in">'
                     '<p>Copying was blocked here, so nothing was copied. The text is selected: copy it with Cmd+C or Ctrl+C.</p>'
                     '<textarea readonly></textarea><button type="button" data-close>Close</button></div></div>')
@@ -1515,6 +1528,8 @@ def main(argv=None):
         except Exception:
             pass
     print("wrote %s (%d KB)" % (a.out, len(text.encode()) // 1024))
+    print("publish with capabilities: %s (saved answers need db, Send to Claude needs comments; "
+          "a republish that leaves capabilities out keeps them)" % json.dumps(CAPABILITIES))
     for line in (image_line(spec), size_warning(text, spec)):
         if line:
             print(line)

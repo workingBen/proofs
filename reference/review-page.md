@@ -52,6 +52,9 @@ spec: it is how you rebuild the next round.
   **Saving…** or **Not saved yet**, a small icon plus the word, read out politely to
   screen readers. It shows only once the page's database answers, so a local file or a
   page published without `db` shows nothing and never a false "Saved".
+- A **Send to Claude** button beside Copy, which wakes the session that published the
+  page (see "Send to Claude" below). It shows only once the page's `comments`
+  capability answers, so a local file or a page published without it shows Copy alone.
 - Light and dark chrome from tokens on `:root` (questions mode: its single dark
   world). Every semantic color, including the amber revision box, has a dark pair.
 
@@ -221,11 +224,14 @@ the artifact's own small database. You read them there yourself, so the reader d
 not have to copy and paste. Copy my replies still works exactly as before and stays
 the fallback.
 
-**Publish with the `db` capability.** On the first publish, pass
-`capabilities: {"db": {}}` to the `Artifact` tool. A republish to the same file path
-(or `url`) that leaves `capabilities` out keeps it; never pass `capabilities: {}`,
-which removes it. Nothing else is needed: no access rules and no `user` capability.
-A page built before Proofs 1.6.8 has no database code; rebuild it.
+**Publish with the `db` and `comments` capabilities.** On the first publish, pass
+`capabilities: {"db": {}, "comments": {}}` to the `Artifact` tool (the build prints
+this line). A republish to the same file path (or `url`) that leaves `capabilities`
+out keeps them; never pass `capabilities: {}`, which removes them. A non-empty object
+replaces the stored set, so the first publish that adds `comments` to an older page
+must name `db` too. Nothing else is needed: no access rules and no `user` capability.
+A page built before Proofs 1.6.8 has no database code, and one built before 1.8.0 has
+no Send to Claude button; rebuild it.
 
 **What the page saves.** One document per card in the collection `proofs-answers`,
 read back when the page opens, so a second device shows the same answers. Opening the
@@ -287,6 +293,69 @@ indicator at Not saved yet. The page's `<body>` carries `data-answers-db`: `on`,
 answers, and anyone who can open it can read them. Pages are private by default; share
 one only with the people who should answer it, and never ask for a password, key or
 other secret on one.
+
+## Send to Claude
+
+A database write starts no turn, so answers saved on the page used to sit unread until
+the reader pasted the Copy export anyway. **Send to Claude**, beside Copy in the bar,
+posts a short comment with the `comments` capability's `sendToClaude`, which wakes the
+session that published the page. Copy stays the fallback.
+
+**When it is on.** The button is enabled only while `canSendToClaude()` answers
+`available`, checked when the page opens and again whenever it is shown (switching
+back to the tab or app). Otherwise it stays visible but off, with one line under the
+bar saying why:
+
+| `canSendToClaude()` | The line |
+|---|---|
+| `no_session` | This page's Claude session isn't listening; use Copy |
+| `writers_only` | Only editors can send; use Copy |
+| `off`, anything else | Not available here; use Copy |
+
+**What a tap does.** It saves first: pending answers are sent to the database at once
+and the send waits (up to 5 s) for the bar to say **Saved**. If they do not land, it
+sends nothing and says "Nothing was sent: your answers are not saved on the page yet.
+Use Copy." Then it calls `sendToClaude({anchor, text})`, anchored on the button, where
+`text` (under 4 KiB) is a pointer to the rows, not the export:
+`<session> page <version>: answered <ids> (<n> of <total>). Read proofs-answers on this artifact.`,
+plus `Anything else: <the box>` when it is filled (cut to fit; the database holds
+everything). **Sent** shows only after the promise resolves, and nothing ever retries
+by itself.
+
+| Result | The line | The button |
+|---|---|---|
+| sent | Sent. This page updates when Claude has read your answers (usually under a minute). The reply is also in the comments. | on |
+| `consent_required` | Not sent. Allow commenting when asked, then tap again. | on |
+| `claude_unavailable` | Nothing was sent; use Copy. | rechecked |
+| `rate_limited` | Not sent: too many sends just now. Wait a minute, then tap again. | off for a minute |
+| `forbidden`, `not_granted`, `capability_*` | Not sent: this view can't send to Claude. Use Copy. | off |
+| anything else | Not sent (`code`). Tap again, or use Copy. | on |
+
+**Closing the loop.** The `comments` capability is write-only: the page cannot read
+the reply in the thread. So the confirmation is a republish. After a send the page
+keeps `{sentAt, fromVersion}` in `localStorage` (under `<storage key>:sent`). On the
+next load, a page whose version differs says, in green, "Claude picked up your answers
+(sent 9:01 PM, now v14)" and forgets the send; the same version more than 5 minutes
+later says "Not picked up yet. The session may be busy or closed; Copy still works."
+
+### Sent to Claude: what the session does
+
+The send arrives as a `<task-notification>` of type `artifact-auto-react` naming the
+artifact and the thread, after the harness has already posted an automatic reply.
+
+1. **Republish the page first, before any other work.** Read the rows (`ArtifactData`
+   `list` of `proofs-answers`, then `review_page.py --answers`), apply them exactly as a
+   paste (answered questions to Decided, a log entry "Got your answers"), and republish
+   to the same file path. Open views reload by themselves; that is what the reader sees.
+2. **Never post a second reply** in the thread.
+3. Do the work, then resolve the thread with `ArtifactComments`.
+
+**Limits.** It works only while the publishing session is open and its watch on the
+page is armed (every publish arms it). After `/clear`, a closed terminal or a new
+session, the button reports `no_session` and Copy is the way; a new session re-arms it
+by watching the URL the user gives it. Editors only: a reviewer the page is shared with
+uses Copy. The automatic reply is posted by the harness, not by the page or the
+session.
 
 ## Checking
 

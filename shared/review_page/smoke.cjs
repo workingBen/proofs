@@ -13,6 +13,129 @@ const { designChecks } = require("./designchecks.cjs");
 const { layoutSignature, signatureFromSection, similarity, NEAR_COPY } = require("./signature.cjs");
 const file = "file://" + path.resolve(process.argv[3]);
 
+// The claude.ai runtime, stubbed: a db that stores in memory (window.__dbMode "hold" keeps
+// each write out until window.__release()), and a comments capability whose
+// canSendToClaude answers window.__can and whose sendToClaude records what it got and
+// rejects with window.__sendErr when that is set. The page cannot reach claude.ai here.
+function installRuntime(cfg) {
+  window.__sent = [];
+  window.__held = [];
+  window.__dbMode = "ok";
+  window.__can = cfg.can;
+  window.__sendErr = null;
+  window.__release = () => { const h = window.__held; window.__held = []; h.forEach((f) => f()); };
+  const db = { collection: () => ({
+    get: async () => ({ docs: [] }),
+    doc: () => ({ set: () => window.__dbMode === "hold" ? new Promise((r) => window.__held.push(r)) : Promise.resolve() }),
+  }) };
+  const comments = {
+    canSendToClaude: async () => window.__can,
+    anchorFor: async () => ({ path: "stub", x: 0, y: 0 }),
+    sendToClaude: async (t) => {
+      window.__sent.push({ text: t.text, anchor: !!t.anchor, sync: document.body.getAttribute("data-rp-sync") });
+      if (window.__sendErr) throw { code: window.__sendErr, message: "stub" };
+      return { threadId: "t1", commentId: "c1" };
+    },
+  };
+  window.claude = { use: (n) => new Promise((r) => setTimeout(() => r(n === "db" ? db : n === "comments" ? comments : null), 20)) };
+}
+
+// Drive Send to Claude: hidden with no runtime, disabled with the reason when no session
+// listens, enabled once one does, waits for Saved, a short text, the error lines, and the
+// pickup line on the next load.
+async function sendToClaude(browser, problems) {
+  const r = {};
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await ctx.newPage();
+  page.on("pageerror", (e) => problems.push("page error (send to claude): " + e.message));
+  const btn = page.locator("[data-send]");
+  const msg = () => page.locator("[data-send-msg]").evaluate((el) => (el.hidden ? "" : el.textContent));
+  const state = async () => ({ hidden: await btn.isHidden(), disabled: await btn.isDisabled(), msg: await msg() });
+  await page.goto(file);
+  await page.waitForTimeout(150);
+  r.absent_hidden = await btn.isHidden();
+  if (!r.absent_hidden) problems.push("Send to Claude shows on a page with no runtime");
+  await page.addInitScript(installRuntime, { can: "no_session" });
+  await page.reload();
+  await page.waitForTimeout(250);
+  r.no_session = await state();
+  if (r.no_session.hidden || !r.no_session.disabled) problems.push("Send to Claude is not shown disabled when no session listens");
+  // The session comes back while the page sits in the background: shown again, re-checked.
+  await page.evaluate(() => {
+    window.__can = "available";
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await page.waitForTimeout(100);
+  r.available = await state();
+  if (r.available.disabled) problems.push("Send to Claude stayed disabled after the session became available");
+  // Answer something while the store holds the write: the send must wait for Saved.
+  await page.evaluate(() => { window.__dbMode = "hold"; });
+  const radio = page.locator("input[type=radio]").first();
+  let answeredId = "";
+  if (await radio.count()) { answeredId = String(await radio.getAttribute("name")).split("::")[0]; await radio.check(); }
+  else if (await page.locator(".rp-btn").count()) {
+    answeredId = await page.locator(".rp-btn").first().evaluate((b) => b.closest(".rp-item").dataset.id);
+    await page.locator(".rp-btn").first().click();
+  } else if (await page.locator("[data-tick]").count()) {
+    answeredId = await page.locator("[data-tick]").first().getAttribute("data-tick");
+    await page.locator("[data-tick]").first().check();
+  }
+  await btn.click();
+  await page.waitForTimeout(400);
+  r.sent_while_saving = await page.evaluate(() => window.__sent.length);
+  if (r.sent_while_saving) problems.push("Send to Claude sent before the answers were saved");
+  await page.evaluate(() => { window.__dbMode = "ok"; window.__release(); });
+  await page.waitForTimeout(400);
+  const sent = await page.evaluate(() => window.__sent);
+  const S = await page.evaluate(() => JSON.parse(document.getElementById("rp-spec").textContent));
+  const last = sent[sent.length - 1] || {};
+  r.sync_at_send = last.sync || "";
+  r.text = last.text || "";
+  r.text_bytes = Buffer.byteLength(r.text, "utf8");
+  r.text_has_answered_id = !!answeredId && new RegExp("answered [^(]*\\b" + answeredId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).test(r.text);
+  if (answeredId && !r.text_has_answered_id) problems.push(`Send to Claude text does not name the answered card ${answeredId}`);
+  r.sent_msg = await msg();
+  if (sent.length !== 1) problems.push(`Send to Claude called sendToClaude ${sent.length} times for one tap`);
+  if (r.text_bytes >= 4096) problems.push("Send to Claude text is over 4 KiB");
+  if (!r.text.includes(S.version || S.page_version)) problems.push("Send to Claude text does not name the page version");
+  if (!r.sent_msg.startsWith("Sent.")) problems.push('Send to Claude did not say "Sent" after the send resolved');
+  // Errors: consent keeps the button; claude_unavailable says nothing was sent.
+  await page.evaluate(() => { window.__sendErr = "consent_required"; });
+  await btn.click();
+  await page.waitForTimeout(300);
+  r.consent = await state();
+  if (r.consent.disabled) problems.push("Send to Claude stayed disabled after consent_required");
+  await page.evaluate(() => { window.__sendErr = "claude_unavailable"; });
+  await btn.click();
+  await page.waitForTimeout(300);
+  r.unavailable_msg = await msg();
+  // The next load: a newer version means Claude picked it up; the same one, long after, does not.
+  await page.evaluate(() => {
+    const S = JSON.parse(document.getElementById("rp-spec").textContent);
+    localStorage.setItem(S.key + ":sent", JSON.stringify({ sentAt: new Date(Date.now() - 60000).toISOString(), fromVersion: "older" }));
+  });
+  await page.reload();
+  await page.waitForTimeout(250);
+  r.picked_up = await msg();
+  if (!r.picked_up.startsWith("Claude picked up your answers")) problems.push("no pickup line after Claude republished");
+  await page.evaluate(() => {
+    const S = JSON.parse(document.getElementById("rp-spec").textContent);
+    localStorage.setItem(S.key + ":sent", JSON.stringify({ sentAt: new Date(Date.now() - 6 * 60000).toISOString(), fromVersion: S.page_version }));
+  });
+  await page.reload();
+  await page.waitForTimeout(250);
+  r.not_picked_up = await msg();
+  if (!r.not_picked_up.startsWith("Not picked up yet")) problems.push('no "Not picked up yet" line five minutes after a send');
+  for (const w of [1280, 390]) {
+    await page.setViewportSize({ width: w, height: 900 });
+    const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    if (over > 0) problems.push(`with Send to Claude shown, the page scrolls sideways by ${over}px at ${w}px wide`);
+  }
+  await ctx.close();
+  return r;
+}
+
 (async () => {
   const problems = [];
   const browser = await launchChromium(chromium, process.env);
@@ -252,6 +375,7 @@ const file = "file://" + path.resolve(process.argv[3]);
       }
     }
   }
+  out.send_to_claude = await sendToClaude(browser, problems);
   await browser.close();
   out.problems = problems;
   console.log(JSON.stringify(out));

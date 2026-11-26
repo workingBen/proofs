@@ -1,6 +1,6 @@
 ---
 name: qa-checklist
-version: 1.2.5
+version: 1.3.0
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -107,13 +107,23 @@ QA qa-photos | Do inspection photos appear at all — thumbnail and zoom
 On the session page the same `--- QA results ---` block arrives inside
 working-log's export, after the questions.
 
-**Read answers from the page first.** A published page saves every answer in its own database when you publish it with `capabilities: {"db": {}}` (keep it on every republish; never pass `{}`). Before you ask for a paste, and whenever the user says they ran the checks, read them: `ArtifactData` `list` of `proofs-answers` with `out_dir`, then `review_page.py --answers <page> --rows <out_dir>` prints the same text as the Copy export. The database comes first and a pasted export second; if they differ, the newer (`updated_at` against the export's stamp) wins, and say so. Anyone the page is shared with can write answers; pages are private by default. Details: "Answers without Copy" in `../../reference/review-page.md`. The page's bar says **Saved**, **Saving…** or **Not saved yet**; if the user says it shows Not saved yet, ask for the Copy export, which always has everything.
+**Read answers from the page first.** A published page saves every answer in its own database when you publish it with `capabilities: {"db": {}, "comments": {}}` (a republish that leaves `capabilities` out keeps both; the first publish of an older page must name both, and never pass `{}`). Before you ask for a paste, and whenever the user says they ran the checks, read them: `ArtifactData` `list` of `proofs-answers` with `out_dir`, then `review_page.py --answers <page> --rows <out_dir>` prints the same text as the Copy export. The database comes first and a pasted export second; if they differ, the newer (`updated_at` against the export's stamp) wins, and say so. Anyone the page is shared with can write answers; pages are private by default. Details: "Answers without Copy" in `../../reference/review-page.md`. The page's bar says **Saved**, **Saving…** or **Not saved yet**; if the user says it shows Not saved yet, ask for the Copy export, which always has everything.
+
+## Sent to Claude: what the session does
+
+The page's bar has **Send to Claude** beside Copy (the page must be published with `capabilities: {"db": {}, "comments": {}}`). A tap saves the answers, then posts a short comment ("<session> page vN: answered q1, q2 (2 of 3). Read proofs-answers on this artifact.") that wakes this session. It arrives as a `<task-notification>` of type `artifact-auto-react` naming the artifact and the thread, after the harness has already posted an automatic reply there.
+
+1. **Republish the page first, before any other work.** Read `proofs-answers` with `ArtifactData` `list` and `review_page.py --answers`, apply them exactly as you would a paste (answered questions move to Decided, a log entry "Got your answers"), and republish to the same file path. That republish is the user's confirmation: open views reload by themselves and the bar says "Claude picked up your answers". The page cannot read the comment thread, so a reply there alone looks like nothing happened.
+2. **Never post a second reply** in the thread: the harness already replied.
+3. Do the work the answers ask for, then resolve the thread with `ArtifactComments`.
+
+**Limits.** It works only while the session that published the page is open and its watch on the page is armed (every publish arms it). After `/clear`, a closed terminal or a new session, the button says the session isn't listening and Copy is the way; a new session re-arms it by watching the URL the user gives it. Editors only: a reviewer the page is shared with uses Copy. The automatic reply is posted by the harness, not by the page or the session.
 
 ## Verifying
 
 The build runs its own check.
 Run `--smoke`. If it reports Playwright missing, run the one-line install it prints (it uses your installed Google Chrome and downloads no browser), then run `--smoke` again; if it still cannot run, say on the page and in chat that the self-check did not run.
-Then look at one screenshot at a desktop and a phone width. Publish with `capabilities: {"db": {}}`, and republish to the same file path so
+Then look at one screenshot at a desktop and a phone width. Publish with `capabilities: {"db": {}, "comments": {}}`, and republish to the same file path so
 the URL never changes.
 
 ## Where the page goes

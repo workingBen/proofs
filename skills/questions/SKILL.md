@@ -1,6 +1,6 @@
 ---
 name: questions
-version: 1.3.5
+version: 1.4.0
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -129,18 +129,28 @@ same `Q` blocks arrive under `--- Questions ---` inside working-log's export.
 
 ## Workflow
 
-1. Write the spec and build the page to a stable file path. Publish it with `capabilities: {"db": {}}`.
+1. Write the spec and build the page to a stable file path. Publish it with `capabilities: {"db": {}, "comments": {}}`.
 2. Give the user the URL in chat with a one-line copy of what you are asking.
 3. **Stop at blocking questions.** Do work that doesn't depend on the answers; don't
    guess past one and build on the guess.
-4. When answers arrive (read from the page's database, or pasted): apply them, move those questions to `decided`, add whatever
+4. When answers arrive (read from the page's database, pasted, or announced by a **Send to Claude** that woke you): apply them, move those questions to `decided`, add whatever
    new questions the answers raised, and **rebuild and republish the same file path**
-   so the URL is unchanged.
+   so the URL is unchanged. Do this before any other work the answers ask for.
 5. Never mint a second URL for the same work-stream. The user has that tab open.
 
 A question with `options: []` and a `notes_label` is a text-box question: what the reader types is the answer, and it exports as `-> <text>`.
 
-**Read answers from the page first.** A published page saves every answer in its own database when you publish it with `capabilities: {"db": {}}` (keep it on every republish; never pass `{}`). Before you ask for a paste, and whenever the user says they answered, read them: `ArtifactData` `list` of `proofs-answers` with `out_dir`, then `review_page.py --answers <page> --rows <out_dir>` prints the same text as the Copy export. The database comes first and a pasted export second; if they differ, the newer (`updated_at` against the export's stamp) wins, and say so. Anyone the page is shared with can write answers; pages are private by default. Details: "Answers without Copy" in `../../reference/review-page.md`. The page's bar says **Saved**, **Saving…** or **Not saved yet**; if the user says it shows Not saved yet, ask for the Copy export, which always has everything.
+**Read answers from the page first.** A published page saves every answer in its own database when you publish it with `capabilities: {"db": {}, "comments": {}}` (a republish that leaves `capabilities` out keeps both; the first publish of an older page must name both, and never pass `{}`). Before you ask for a paste, and whenever the user says they answered, read them: `ArtifactData` `list` of `proofs-answers` with `out_dir`, then `review_page.py --answers <page> --rows <out_dir>` prints the same text as the Copy export. The database comes first and a pasted export second; if they differ, the newer (`updated_at` against the export's stamp) wins, and say so. Anyone the page is shared with can write answers; pages are private by default. Details: "Answers without Copy" in `../../reference/review-page.md`. The page's bar says **Saved**, **Saving…** or **Not saved yet**; if the user says it shows Not saved yet, ask for the Copy export, which always has everything.
+
+## Sent to Claude: what the session does
+
+The page's bar has **Send to Claude** beside Copy (the page must be published with `capabilities: {"db": {}, "comments": {}}`). A tap saves the answers, then posts a short comment ("<session> page vN: answered q1, q2 (2 of 3). Read proofs-answers on this artifact.") that wakes this session. It arrives as a `<task-notification>` of type `artifact-auto-react` naming the artifact and the thread, after the harness has already posted an automatic reply there.
+
+1. **Republish the page first, before any other work.** Read `proofs-answers` with `ArtifactData` `list` and `review_page.py --answers`, apply them exactly as you would a paste (answered questions move to Decided, a log entry "Got your answers"), and republish to the same file path. That republish is the user's confirmation: open views reload by themselves and the bar says "Claude picked up your answers". The page cannot read the comment thread, so a reply there alone looks like nothing happened.
+2. **Never post a second reply** in the thread: the harness already replied.
+3. Do the work the answers ask for, then resolve the thread with `ArtifactComments`.
+
+**Limits.** It works only while the session that published the page is open and its watch on the page is armed (every publish arms it). After `/clear`, a closed terminal or a new session, the button says the session isn't listening and Copy is the way; a new session re-arms it by watching the URL the user gives it. Editors only: a reviewer the page is shared with uses Copy. The automatic reply is posted by the harness, not by the page or the session.
 
 ## Common mistakes
 

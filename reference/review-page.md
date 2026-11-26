@@ -64,7 +64,7 @@ Common fields:
 
 | Field | Meaning |
 |---|---|
-| `mode` | `review` (default), `questions`, `session` or `log` |
+| `mode` | `review` (default), `questions`, `session`, `log` or `settings` |
 | `title` | the page `<title>`; review pages export `[title]` as the first line |
 | `header` | override the export's first line (keep it bracketed) |
 | `heading`, `intro_html`, `after_html` | top heading, intro, and anything below the items (recap, settled, parked) |
@@ -217,6 +217,28 @@ Each entry gets a note field and a "Read this" tick (a ticked entry folds to one
 `exported:` (local time), then `M6  [read]  title` per entry with `answer:` per
 option group (`answer (q):` when there are several, `(unanswered)` when empty) and
 `note:` lines.
+
+### `settings` mode
+
+The settings page. Make the spec with `python3 <plugin root>/shared/settings.py --spec`
+rather than by hand: it prints `{mode, title, project: {name}, files, settings, send_wait_ms}`,
+where each `settings` row is the table row from `shared/settings.json` plus `value`,
+`source` and `note` as `--print` shows them. The builder takes only `value`, `source` and
+`note` from a spec row: the rules always come from the table, a value the table would
+refuse is a spec error, and a key the spec leaves out shows its default. Built with no
+`--out`, it goes to `.proofs/pages/<spec name>.html`.
+
+The page: a sticky save bar ("2 changes not saved yet", one `Label old → new` per change,
+Copy and Send to Claude), a sidebar of the five groups with a search box that filters
+across all of them, and one group's pane (main settings, then "Advanced"). A typed value
+is checked in the page against the same table rows, with `settings.py`'s own reasons
+("Smallest text can only go up from 16 px."); a refused value is never saved or
+exported. Each change is one database row of kind `setting`:
+`{id: KEY, section: "settings", kind: "setting", answer: "<new value>", from: "<value the
+page showed>", scope, note: ""}`, both values as `settings.py --set` writes them (lists
+joined with commas, on and off as 1 and 0). The export is `PROOFS SETTINGS — my changes`,
+`project:`, `exported:`, then one `SET KEY=VALUE (scope; was OLD)` line per change, or
+`(no changes)`. `examples/settings.json` is a working spec.
 
 ## Answers without Copy: the page's database
 

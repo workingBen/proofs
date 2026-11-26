@@ -5,12 +5,14 @@
     python3 <plugin root>/shared/settings.py --json
     python3 <plugin root>/shared/settings.py --set KEY=VALUE [--scope user|project|local]
     python3 <plugin root>/shared/settings.py --unset KEY [--scope user|project|local]
+    python3 <plugin root>/shared/settings.py --spec
 
 --print shows every setting, its effective value and where the value came from; --json
 prints the same as {KEY: {"value", "source", "default", "note"}}. --set and --unset write the
 `env` block of a Claude Code settings file, only for keys in settings.json (all start with
-PROOFS_), and keep every other key in the file as it is. Without --scope a setting goes where
-the table says: user is ~/.claude/settings.json (or $CLAUDE_CONFIG_DIR/settings.json),
+PROOFS_), and keep every other key in the file as it is. --spec prints a review-page builder
+spec of the effective settings (mode "settings": the settings page). Without --scope a
+setting goes where the table says: user is ~/.claude/settings.json (or $CLAUDE_CONFIG_DIR/settings.json),
 project is .claude/settings.json (committed), local is .claude/settings.local.json.
 
 Exit codes: 0 ok, 2 invalid value, unknown key or bad usage, 3 a settings file that cannot be
@@ -76,7 +78,10 @@ def _int(row, raw, what=None):
     text = str(raw).strip()
     label = what or row["label"]
     try:
-        if text.lstrip("+-") != text.lstrip("+-").strip() or not text.lstrip("+-").isdigit():
+        # ASCII digits only (str.isdigit also takes "²" and "٣"), so the settings page's own
+        # check, built from this same table, refuses exactly what this one refuses.
+        if (not text.isascii() or text.lstrip("+-") != text.lstrip("+-").strip()
+                or not text.lstrip("+-").isdigit()):
             raise ValueError
         n = int(text)
     except ValueError:
@@ -302,6 +307,34 @@ def unset(key, scope=None, *, cwd=None, env=None, home=None):
     return path
 
 
+# ---------------------------------------------------------------- the settings page
+
+def _display_path(path, home):
+    path, base = Path(path), _home(home).resolve()
+    try:
+        return "~/" + str(path.resolve().relative_to(base))
+    except ValueError:
+        return str(path)
+
+
+def page_spec(*, cwd=None, env=None, home=None):
+    """A review-page builder spec (mode "settings") of every setting: its table row plus the
+    effective value, where it came from and any note. Build it with
+    shared/review_page/review_page.py to get the settings page."""
+    environ = _env(env)
+    eff = effective(cwd=cwd, env=environ, home=home)
+    root = _project_root(cwd, home) or Path(cwd or os.getcwd()).resolve()
+    rows = [dict(row, value=eff[row["key"]]["value"], source=eff[row["key"]]["source"], note=eff[row["key"]]["note"])
+            for row in load_table()]
+    return {
+        "mode": "settings", "title": "Proofs settings", "project": {"name": root.name},
+        "files": {"user": _display_path(_user_file(environ, home), home),
+                  "project": ".claude/settings.json", "local": ".claude/settings.local.json"},
+        "settings": rows,
+        "send_wait_ms": eff["PROOFS_SEND_WAIT_MIN"]["value"] * 60000,
+    }
+
+
 # ---------------------------------------------------------------- CLI
 
 def _show(value):
@@ -337,6 +370,7 @@ def main(argv):
     mode.add_argument("--json", dest="as_json", action="store_true", help="the same, as JSON")
     mode.add_argument("--set", metavar="KEY=VALUE")
     mode.add_argument("--unset", metavar="KEY")
+    mode.add_argument("--spec", action="store_true", help="a builder spec for the settings page")
     parser.add_argument("--scope", choices=SCOPES)
     args = parser.parse_args(argv[1:])  # argparse exits 2 on bad usage
     if args.scope and not (args.set or args.unset):
@@ -344,6 +378,8 @@ def main(argv):
     try:
         if args.as_json:
             print(json.dumps(effective(), indent=2, ensure_ascii=False))
+        elif args.spec:
+            print(json.dumps(page_spec(), indent=2, ensure_ascii=False))
         elif args.show:
             _print_table()
         elif args.set is not None:

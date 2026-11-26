@@ -1,9 +1,9 @@
 /* Review page engine (proofs, shared/review_page). Built into every page by
    review_page.py; do not hand-edit a built page's copy.
 
-   A page is a frame (S.mode: review, questions, log or session: its chrome,
+   A page is a frame (S.mode: review, questions, log, session or settings: its chrome,
    tally and export header) around a list of sections (S.sections), each with a
-   kind: review, questions, qa, log, or the read-only links and decided. Each kind renders its own items, keeps its own state under
+   kind: review, questions, qa, log, settings, or the read-only links and decided. Each kind renders its own items, keeps its own state under
    st.sec[<section id>], and contributes its own block to the export, so one
    page can mix kinds. The export functions are pure so the tests can run them
    under plain node. */
@@ -39,6 +39,79 @@
     st.sec = st.sec || {};
     return (st.sec[sec.id] = st.sec[sec.id] || {});
   }
+
+  /* ------------------------------------------------- settings: the checks settings.py makes
+     The same rules as validate() in shared/settings.py, read from the table rows embedded
+     in the page (min, max, raise_only, choices, item_type, default) and the on/off words
+     (S.bool_true, S.bool_false): no number is copied here, so the page refuses exactly what
+     `settings.py --set` refuses, with the same reason. */
+  function setCanon(v) {
+    if (v === true || v === false) return v ? "1" : "0";
+    if (Array.isArray(v)) return v.map(String).join(",");
+    return String(v);
+  }
+  function setUnit(row) { return row.unit ? " " + row.unit : ""; }
+  function SetRefused(msg) { this.message = msg; }
+  function setInt(row, raw, what) {
+    var text = String(raw).trim(), label = what || row.label;
+    if (!/^[+-]?[0-9]+$/.test(text)) throw new SetRefused(label + " must be a whole number from " + row.min + " to " + row.max + ".");
+    var n = parseInt(text, 10);
+    if (row.raise_only && n < row["default"]) throw new SetRefused(row.label + " can only go up from " + row["default"] + setUnit(row) + ".");
+    if (n < row.min || n > row.max) throw new SetRefused(label + " must be a whole number from " + row.min + " to " + row.max + setUnit(row) + ".");
+    return n;
+  }
+  function setParse(S, row, raw) {
+    var text = raw === null || raw === undefined ? "" : String(raw).trim();
+    if (row.type === "int") return setInt(row, text);
+    if (row.type === "choice") {
+      if (row.choices.indexOf(text) < 0) throw new SetRefused(row.label + " must be one of: " + row.choices.join(", ") + ".");
+      return row.choices.every(function (c) { return /^[0-9]+$/.test(c); }) ? parseInt(text, 10) : text;
+    }
+    if (row.type === "bool") {
+      var low = text.toLowerCase();
+      if ((S.bool_true || []).indexOf(low) >= 0) return true;
+      if ((S.bool_false || []).indexOf(low) >= 0) return false;
+      throw new SetRefused(row.label + " must be on or off (1 or 0).");
+    }
+    if (row.type === "list") {
+      var items = text.split(",").map(function (p) { return p.trim(); }).filter(Boolean);
+      if (row.item_type === "int") return items.map(function (i) { return setInt(row, i, row.label + " (each width)"); });
+      if (!items.length && (row["default"] || []).length) throw new SetRefused(row.label + " needs at least one entry, separated by commas.");
+      return items;
+    }
+    if (!text) throw new SetRefused(row.label + " cannot be empty.");
+    return text;
+  }
+  // {ok, value, canon} for a value settings.py takes (canon is how it writes it), else {ok: false, error}.
+  function settingCheck(S, row, raw) {
+    try {
+      var v = setParse(S, row, raw);
+      return { ok: true, value: v, canon: setCanon(v) };
+    } catch (e) {
+      if (e instanceof SetRefused) return { ok: false, error: e.message };
+      throw e;
+    }
+  }
+  // What the reader has done to one setting: nothing, a refused value, the value it already
+  // has, or a change (a valid value other than `from`, the value the page was built with).
+  function setPending(S, row, ss) {
+    var raw = ((ss || {}).ans || {})[row.id];
+    if (raw === undefined || raw === null) return { state: "none" };
+    var c = settingCheck(S, row, raw);
+    if (!c.ok) return { state: "error", error: c.error };
+    return c.canon === row.from ? { state: "same" } : { state: "change", value: c.value, canon: c.canon };
+  }
+  function setShown(row, v, unit) {
+    var t;
+    if (v === true || v === false) t = v ? "On" : "Off";
+    else if (Array.isArray(v)) t = v.join(", ") || "none";
+    else if (row.type === "choice") t = (row.choice_labels || {})[String(v)] || String(v);
+    else t = String(v);
+    if (unit === false || !row.unit || (Array.isArray(v) && !v.length)) return t;
+    // "$ est." reads as "$5 est.", not "5 $ est."
+    return row.unit.indexOf("$ ") === 0 ? "$" + t + " " + row.unit.slice(2) : t + " " + row.unit;
+  }
+  function setValueOf(S, row, canon) { return settingCheck(S, row, canon).value; }
 
   /* ------------------------------------------------- export, per section kind */
   function reviewLine(sec, item, rec) {
@@ -110,6 +183,15 @@
       });
       return lines;
     },
+    // One line per change: SET KEY=VALUE (scope; was OLD), VALUE as settings.py --set takes it.
+    settings: function (sec, ss, S) {
+      var lines = [];
+      sec.items.forEach(function (it) {
+        var p = setPending(S, it, ss);
+        if (p.state === "change") lines.push("SET " + it.id + "=" + p.canon + " (" + it.scope + "; was " + (it.from === "" ? "none" : it.from) + ")");
+      });
+      return lines;
+    },
     links: function () { return []; },
     decided: function () { return []; }
   };
@@ -117,7 +199,7 @@
   function blocks(S, st) {
     var out = [];
     S.sections.forEach(function (sec) {
-      out.push.apply(out, BLOCK[sec.kind](sec, ((st.sec || {})[sec.id]) || {}));
+      out.push.apply(out, BLOCK[sec.kind](sec, ((st.sec || {})[sec.id]) || {}, S));
     });
     return out;
   }
@@ -150,7 +232,7 @@
       lines.push("exported: " + localStamp(now));
       var HEAD = { questions: "--- Questions ---", log: "--- Log ---" };
       S.sections.forEach(function (sec) {
-        var b = BLOCK[sec.kind](sec, ((st.sec || {})[sec.id]) || {});
+        var b = BLOCK[sec.kind](sec, ((st.sec || {})[sec.id]) || {}, S);
         if (!b.length) return;
         lines.push("");
         if (HEAD[sec.kind]) lines.push(HEAD[sec.kind], "");
@@ -159,6 +241,13 @@
       var extra = trimmed(st.extra);
       if (extra) lines.push("", "anything else:", extra);
       return lines.join("\n").replace(/\n{3,}/g, "\n\n").replace(/\n+$/, "") + "\n";
+    },
+    settings: function (S, st, now) {
+      var lines = ["PROOFS SETTINGS — my changes", "project: " + S.project];
+      if (S.repo) lines.push("repo: " + S.repo);
+      lines.push("exported: " + localStamp(now), "");
+      var b = blocks(S, st);
+      return lines.concat(b.length ? b : ["(no changes)"]).join("\n") + "\n";
     }
   };
 
@@ -198,6 +287,7 @@
     function put(sec, id, kind, fields) {
       var b = { id: id, section: sec ? sec.id : "", kind: kind, answer: null, note: "", read: false };
       Object.keys(fields).forEach(function (k) { b[k] = fields[k]; });
+      if (kind === "setting") delete b.read;
       if (hasContent(b)) out[sec ? docIdFor(sec.id, id) : "_page.extra"] = b;
     }
     S.sections.forEach(function (sec) {
@@ -216,6 +306,10 @@
           var groups = {};
           (it.groups || []).forEach(function (g) { if (ans[it.id + "::" + g]) groups[g] = ans[it.id + "::" + g]; });
           put(sec, it.id, "log", { answer: groups, note: notes[it.id] || "", read: !!read[it.id] });
+        } else if (sec.kind === "settings") {
+          // A change only: a refused value, or the value it already has, is no answer.
+          var p = setPending(S, it, ss);
+          put(sec, it.id, "setting", { answer: p.state === "change" ? p.canon : null, from: it.from, scope: it.scope, note: "" });
         }
       });
     });
@@ -257,6 +351,9 @@
         });
         ss.notes[d.id] = d.note || "";
         ss.read[d.id] = !!d.read;
+      } else if (sec.kind === "settings") {
+        ss.ans = ss.ans || {};
+        if (typeof d.answer === "string") ss.ans[d.id] = d.answer; else delete ss.ans[d.id];
       }
     });
     return st;
@@ -298,7 +395,7 @@
   }
   // sendToClaude refuses control characters other than newlines and tabs.
   function plainText(s) { return String(s || "").replace(/\r\n?/g, "\n").replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, ""); }
-  var ANSWER_KINDS = ["review", "questions", "qa", "log"];
+  var ANSWER_KINDS = ["review", "questions", "qa", "log", "settings"];
   // The ids of every card that holds an answer (the "Anything else" box is not a card).
   function answeredIds(S, st) {
     var docs = answerDocs(S, st || {}), ids = [];
@@ -347,7 +444,8 @@
 
   if (typeof module !== "undefined" && module.exports) {
     module.exports = { exportText: exportText, answeredCount: answeredCount, answerDocs: answerDocs, applyAnswerDocs: applyAnswerDocs,
-                       docIdFor: docIdFor, DB_COLLECTION: DB_COLLECTION, sendText: sendText, pickupNote: pickupNote };
+                       docIdFor: docIdFor, DB_COLLECTION: DB_COLLECTION, sendText: sendText, pickupNote: pickupNote,
+                       settingCheck: settingCheck };
   }
   if (typeof document === "undefined") return;
 
@@ -468,6 +566,32 @@
       one("#rp-tally").innerHTML = parts.join(" · ") || "nothing waiting on you";
     }
   };
+  TALLY.settings = function () {
+    var sec = ofKind("settings")[0];
+    if (!sec) return;
+    var ss = secState(st, sec), changes = [], per = {};
+    sec.items.forEach(function (it) {
+      var p = setPending(S, it, ss), g = per[it.group] = per[it.group] || { pending: 0, changed: 0 };
+      if (p.state === "change") {
+        g.pending++;
+        changes.push(it.label + " " + setShown(it, setValueOf(S, it, it.from), false) + " → " + setShown(it, p.value));
+      } else if (it.from !== setCanon(it["default"])) g.changed++;
+    });
+    var n = changes.length;
+    one("[data-set-count]").textContent = n ? n + (n === 1 ? " change" : " changes") + " not saved yet" : "No changes yet";
+    var list = one("[data-set-list]");
+    if (!list.dataset.none) list.dataset.none = list.textContent;
+    list.textContent = n ? changes.join(" · ") : list.dataset.none;
+    all("[data-set-nav]").forEach(function (a) {
+      var g = per[a.dataset.setNav] || { pending: 0, changed: 0 }, dot = one("[data-set-dot]", a);
+      a.classList.toggle("rp-set-has-dot", !!(g.pending || g.changed));
+      dot.classList.toggle("rp-set-dot-p", !!g.pending);
+      if (g.pending) dot.setAttribute("aria-label", g.pending + " not saved");
+      else if (g.changed) dot.setAttribute("aria-label", g.changed + " changed");
+      else dot.removeAttribute("aria-label");
+      dot.setAttribute("role", g.pending || g.changed ? "img" : "presentation");
+    });
+  };
   function readTally() {
     var n = 0, total = 0;
     ofKind("log").forEach(function (sec) {
@@ -529,6 +653,7 @@
     },
     questions: answerable,
     qa: answerable,
+    settings: settingsSetup,
     links: function () {},
     decided: function () {},
     log: function (sec, root, ss) {
@@ -633,6 +758,131 @@
     restore(); paint();
   }
 
+  // The settings page: one row per setting, one group's pane at a time, a search across all.
+  function settingsSetup(sec, root, ss) {
+    ss.ans = ss.ans || {};
+    var byKey = {}, opened = {}, groups = sec.groups || [];
+    sec.items.forEach(function (it) { byKey[it.id] = it; });
+    var search = one("[data-set-search]", root), none = one("[data-set-none]", root);
+    function rowEl(k) { return one('[data-set-row="' + k + '"]', root); }
+    function boxText(it) { return Array.isArray(it.value) ? it.value.join(", ") : setCanon(it.value); }
+    function current(it) {
+      var p = setPending(S, it, ss);
+      return p.state === "change" ? p.value : setValueOf(S, it, it.from);
+    }
+    function link(text, attr) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "rp-set-link"; b.setAttribute(attr, ""); b.textContent = text;
+      return b;
+    }
+    function paintRow(k) {
+      var it = byKey[k], el = rowEl(k), p = setPending(S, it, ss);
+      el.classList.toggle("rp-set-row-p", p.state === "change");
+      el.classList.toggle("rp-set-row-bad", p.state === "error");
+      var err = one("[data-set-err]", el);
+      err.hidden = p.state !== "error";
+      err.textContent = p.state === "error" ? p.error : "";
+      var box = one("[data-set-in]", el);
+      if (box) { if (p.state === "error") box.setAttribute("aria-invalid", "true"); else box.removeAttribute("aria-invalid"); }
+      var mark = one("[data-set-mark]", el);
+      mark.textContent = "";
+      mark.className = "rp-set-mark" + (p.state === "change" ? " rp-set-mark-p" : "");
+      if (p.state === "change") {
+        mark.appendChild(document.createTextNode("Not saved · was " + setShown(it, setValueOf(S, it, it.from)) + " · "));
+        mark.appendChild(link("Undo", "data-set-undo"));
+      } else if (it.from !== setCanon(it["default"])) {
+        mark.appendChild(document.createTextNode("Changed · default " + setShown(it, it["default"]) + " · "));
+        mark.appendChild(link("Reset", "data-set-reset"));
+      }
+      mark.hidden = !mark.childNodes.length;
+      var v = current(it);
+      all("[data-set-choice]", el).forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.setChoice === setCanon(v))); });
+      var tog = one("[data-set-tog]", el);
+      if (tog) { tog.setAttribute("aria-checked", String(v === true)); one("[data-set-tog-l]", tog).textContent = v ? "On" : "Off"; }
+      var auto = one("[data-set-auto]", el);
+      if (auto) {
+        var typed = opened[k] || ss.ans[k] !== undefined || it.from !== "auto";
+        auto.hidden = typed;
+        box.hidden = !typed;
+      }
+    }
+    function syncBox(k) {
+      var box = one("[data-set-in]", rowEl(k)), it = byKey[k];
+      if (!box) return;
+      var want = ss.ans[k] !== undefined ? String(ss.ans[k]) : boxText(it);
+      if (box.value !== want) box.value = want;
+    }
+    function hay(it) {
+      var labels = it.choice_labels ? Object.keys(it.choice_labels).map(function (c) { return it.choice_labels[c]; }) : [];
+      return [it.id, it.label, it.help].concat(labels).join(" ").toLowerCase();
+    }
+    function activeGroup() {
+      return groups.some(function (g) { return g[0] === ss.group; }) ? ss.group : (groups[0] || [""])[0];
+    }
+    function paintGroups() {
+      var q = trimmed(search ? search.value : "").toLowerCase(), active = activeGroup(), any = false;
+      groups.forEach(function (g) {
+        var pane = one('[data-set-group="' + g[0] + '"]', root), shown = 0, adv = 0, total = 0;
+        all("[data-set-row]", pane).forEach(function (el) {
+          var it = byKey[el.dataset.setRow], hit = !q || hay(it).indexOf(q) >= 0;
+          total++;
+          el.hidden = !hit;
+          if (hit) { shown++; if (it.advanced) adv++; }
+        });
+        var h = one("[data-set-adv-h]", pane);
+        if (h) h.hidden = !adv;
+        pane.hidden = q ? !shown : g[0] !== active;
+        any = any || !!shown;
+        var a = one('[data-set-nav="' + g[0] + '"]', root), on = !q && g[0] === active;
+        a.classList.toggle("rp-set-nav-on", on);
+        a.classList.toggle("rp-set-nav-empty", !!q && !shown);
+        if (on) a.setAttribute("aria-current", "true"); else a.removeAttribute("aria-current");
+        // The count is what tapping the group shows: its matches while searching.
+        one("[data-set-n]", a).textContent = q ? shown : total;
+      });
+      if (none) none.hidden = !q || any;
+    }
+    function set(k, raw) {
+      if (raw === byKey[k].from) delete ss.ans[k]; else ss.ans[k] = raw;
+      syncBox(k); saveNow(); paintRow(k); tally();
+    }
+    function refocus(k) {
+      var c = one("[data-set-in]:not([hidden]), [data-set-choice][aria-pressed=true], [data-set-tog], [data-set-change]", rowEl(k));
+      if (c) c.focus();
+    }
+    root.addEventListener("click", function (e) {
+      var nav = e.target.closest("[data-set-nav]");
+      if (nav) {
+        e.preventDefault();
+        if (trimmed(search.value)) {
+          var pane = one('[data-set-group="' + nav.dataset.setNav + '"]', root);
+          if (pane && !pane.hidden) pane.scrollIntoView({ block: "start" });
+          return;
+        }
+        ss.group = nav.dataset.setNav; store(); paintGroups();
+        return;
+      }
+      var el = e.target.closest("[data-set-row]");
+      if (!el) return;
+      var k = el.dataset.setRow, it = byKey[k], b = e.target.closest("[data-set-choice]");
+      if (b) set(k, b.dataset.setChoice);
+      else if (e.target.closest("[data-set-tog]")) set(k, current(it) ? "0" : "1");
+      else if (e.target.closest("[data-set-reset]")) { set(k, setCanon(it["default"])); refocus(k); }
+      else if (e.target.closest("[data-set-undo]")) { delete ss.ans[k]; syncBox(k); saveNow(); paintRow(k); tally(); refocus(k); }
+      else if (e.target.closest("[data-set-change]")) { opened[k] = true; paintRow(k); one("[data-set-in]", el).focus(); }
+    });
+    root.addEventListener("input", function (e) {
+      if (e.target === search) { paintGroups(); return; }
+      var k = e.target.dataset && e.target.dataset.setIn;
+      if (!k) return;
+      ss.ans[k] = e.target.value;
+      save(); paintRow(k); tally();
+    });
+    function restore() { sec.items.forEach(function (it) { syncBox(it.id); paintRow(it.id); }); }
+    root.__rpRefresh = function () { restore(); paintGroups(); tally(); };
+    restore(); paintGroups(); tally();
+  }
+
   S.sections.forEach(function (sec) {
     var root = rootOf(sec);
     if (root) SETUP[sec.kind](sec, root, secState(st, sec));
@@ -664,6 +914,8 @@
     dbFlush();
   }
   function cleared(b) {
+    // An undone setting keeps the row's shape (answer null means no change to apply).
+    if (b.kind === "setting") return { id: b.id, section: b.section, kind: b.kind, answer: null, from: b.from, scope: b.scope, note: "" };
     return { id: b.id, section: b.section, kind: b.kind, answer: b.kind === "log" ? {} : null, note: "", read: false,
              variant: b.kind === "review" ? null : undefined, works_as_designed: b.kind === "review" ? false : undefined };
   }

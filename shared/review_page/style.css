@@ -426,3 +426,107 @@ body.rp-mode-questions, :root[data-theme] body.rp-mode-questions {
     position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); clip-path:inset(50%); white-space:nowrap; }
   body[data-rp-sync="unsaved"] .rp-statusbar #rp-tally { display:none; }
 }
+
+/* settings mode (layout B, picked in the 1.9.0 design review; the mockup's sx- classes became
+   rp-set-): a sticky save bar at the top, then a sidebar of the groups beside one group's
+   pane. Below 720px of page width the sidebar stacks above the pane. */
+.rp-mode-settings .rp-main { container-type:inline-size; padding-bottom:48px; }
+.rp-mode-settings .rp-brandline { margin-bottom:14px; font-size:15.5px; }
+.rp-set-save { position:sticky; top:0; z-index:5; display:flex; flex-wrap:wrap; gap:10px 18px; align-items:center;
+  justify-content:space-between; margin:0 0 24px; padding:12px 16px; border:1px solid var(--rp-rule); background:var(--rp-sunk);
+  border-radius:10px; }
+.rp-set-save-t { display:flex; flex-direction:column; min-width:0; flex:1 1 260px; }
+.rp-set-save-t span { color:var(--rp-soft); font-size:16px; }
+.rp-set-save-a { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+.rp-set-btn, .rp-set-save .rp-send { font:inherit; font-size:16px; font-weight:700; min-height:44px; padding:8px 18px; border-radius:9px;
+  border:1.5px solid var(--rp-rule); background:var(--rp-card); color:var(--rp-ink); cursor:pointer; }
+.rp-set-save .rp-send { background:var(--rp-send); color:var(--rp-on-send); border-color:transparent; }
+.rp-set-btn:focus-visible, .rp-set-seg-b:focus-visible, .rp-set-tog:focus-visible, .rp-set-link:focus-visible,
+.rp-set-nav-i:focus-visible, .rp-set-in:focus-visible { outline:3px solid var(--rp-accent); outline-offset:2px; }
+.rp-set-split { display:grid; grid-template-columns:240px minmax(0, 1fr); gap:32px; }
+.rp-set-nav { display:flex; flex-direction:column; gap:2px; align-self:start; }
+.rp-set-search { display:block; margin-bottom:10px; }
+.rp-set-search .rp-set-in { width:100%; -webkit-appearance:none; appearance:none; }
+.rp-set-nav-i { display:flex; align-items:center; gap:10px; min-height:44px; padding:6px 12px; border-radius:9px; color:var(--rp-ink);
+  text-decoration:none; font-weight:600; }
+:where(body.rp) a.rp-set-nav-i { color:var(--rp-ink); }
+.rp-set-nav-i:hover { background:color-mix(in srgb, var(--rp-card) 60%, transparent); }
+.rp-set-nav-on, .rp-set-nav-on:hover { background:var(--rp-card); box-shadow:inset 3px 0 0 var(--rp-accent); }
+.rp-set-nav-empty { color:var(--rp-soft); font-weight:500; }
+.rp-set-nav-n { margin-left:auto; color:var(--rp-soft); font-weight:500; font-variant-numeric:tabular-nums; }
+.rp-set-dot { width:8px; height:8px; border-radius:50%; background:var(--rp-accent); flex:none; visibility:hidden; }
+.rp-set-has-dot .rp-set-dot { visibility:visible; }
+.rp-set-dot.rp-set-dot-p { background:var(--rp-revise); }
+.rp-set-group[hidden], .rp-set-row[hidden], .rp-set-h2[hidden], .rp-set-none[hidden], .rp-set-mark[hidden],
+.rp-set-err[hidden], .rp-set-auto[hidden], .rp-set-in[hidden] { display:none; }
+.rp-set-h1 { font-size:34px; line-height:1.15; letter-spacing:-.02em; margin:0 0 6px; }
+.rp-set-lede { color:var(--rp-soft); margin:0 0 22px; max-width:46em; }
+.rp-set-lede code, .rp-set-where code { font-family:var(--rp-mono); font-size:15.5px; }
+.rp-set-h2 { font-size:20px; margin:6px 0 0; padding:0 0 10px; border-bottom:1px solid var(--rp-rule); }
+.rp-set-list { margin:0 0 30px; }
+.rp-set-row { display:flex; gap:12px 24px; align-items:center; justify-content:space-between; padding:14px 0;
+  border-bottom:1px solid var(--rp-rule); }
+.rp-set-row-p { box-shadow:inset 4px 0 0 var(--rp-revise); padding-left:14px; }
+.rp-set-row-bad { align-items:flex-start; }
+.rp-set-rl { min-width:0; flex:1 1 auto; }
+.rp-set-lab { font-weight:650; }
+.rp-set-help, .rp-set-where, .rp-set-note { margin:2px 0 0; color:var(--rp-soft); font-size:16px; max-width:56ch; }
+.rp-set-note { color:var(--rp-revise); }
+.rp-set-rc { flex:0 0 auto; display:flex; flex-direction:column; align-items:flex-end; max-width:100%; }
+.rp-set-mark { display:inline-flex; flex-wrap:wrap; align-items:center; gap:0 8px; font-size:15.5px; color:var(--rp-accent);
+  font-weight:600; margin-top:2px; }
+.rp-set-mark-p { color:var(--rp-revise); }
+.rp-set-err { margin:6px 0 0; max-width:360px; text-align:right; text-wrap:balance; color:var(--rp-deny); font-size:16px; font-weight:600; }
+.rp-set-in { font:inherit; font-size:17px; color:var(--rp-ink); background:var(--rp-card); border:1.5px solid var(--rp-rule);
+  border-radius:9px; min-height:44px; padding:8px 12px; }
+.rp-set-row-bad .rp-set-in { border-color:var(--rp-deny); }
+.rp-set-in-num { width:92px; text-align:right; }
+.rp-set-in-text { width:260px; max-width:100%; font-family:var(--rp-mono); font-size:15.5px; }
+.rp-set-num { display:inline-flex; align-items:center; gap:8px; font-weight:600; }
+.rp-set-unit { color:var(--rp-soft); font-weight:500; white-space:nowrap; }
+.rp-set-seg { display:inline-flex; flex-wrap:wrap; border:1.5px solid var(--rp-rule); border-radius:10px; padding:2px;
+  background:var(--rp-sunk); gap:2px; }
+.rp-set-seg-b { font:inherit; font-size:16px; font-weight:600; min-height:44px; min-width:44px; padding:6px 14px; border:0;
+  border-radius:8px; background:transparent; color:var(--rp-soft); cursor:pointer; }
+.rp-set-seg-b[aria-pressed="true"] { background:var(--rp-card); color:var(--rp-ink); box-shadow:0 0 0 1.5px var(--rp-accent); }
+.rp-set-tog { display:inline-flex; align-items:center; gap:10px; min-height:44px; padding:0 4px; border:0; background:transparent;
+  color:var(--rp-ink); font:inherit; font-weight:600; cursor:pointer; }
+.rp-set-tog-t { width:52px; height:32px; border-radius:16px; background:var(--rp-rule); position:relative; flex:none; }
+.rp-set-tog-t::after { content:""; position:absolute; top:3px; left:3px; width:26px; height:26px; border-radius:50%; background:var(--rp-card); }
+.rp-set-tog[aria-checked="true"] .rp-set-tog-t { background:var(--rp-accept); }
+.rp-set-tog[aria-checked="true"] .rp-set-tog-t::after { left:23px; }
+.rp-set-auto { display:inline-flex; align-items:center; gap:10px; white-space:nowrap; font-family:var(--rp-mono); font-size:15.5px; }
+.rp-set-link { font:inherit; font-family:var(--rp-sans); font-size:15.5px; font-weight:600; color:var(--rp-link); background:none;
+  border:0; min-height:44px; min-width:44px; padding:0 6px; cursor:pointer; text-decoration:underline; }
+.rp-set-none { color:var(--rp-soft); margin:0 0 22px; }
+.rp-set-fixed { font-size:16px; color:var(--rp-soft); max-width:60ch; margin:4px 0 22px; }
+.rp-set-fixed b { color:var(--rp-ink); }
+@media (prefers-reduced-motion: no-preference) { .rp-set-tog-t::after { transition:left .15s; } }
+
+@container (max-width: 720px) {
+  .rp-set-h1 { font-size:30px; }
+  /* The sticky bar stays short on a phone: the count and the buttons share its first row,
+     and the list of changes takes at most two lines below them. */
+  .rp-set-save { display:grid; grid-template-columns:minmax(0, 1fr) auto; gap:6px 10px; padding:10px 12px; }
+  .rp-set-save-t { display:contents; }
+  .rp-set-save-t b { grid-area:1 / 1; align-self:center; line-height:1.3; }
+  .rp-set-save-a { grid-area:1 / 2; flex-wrap:nowrap; }
+  .rp-set-save-t span { grid-column:1 / -1; font-size:15.5px; line-height:1.4; display:-webkit-box; -webkit-box-orient:vertical;
+    -webkit-line-clamp:2; overflow:hidden; }
+  .rp-set-save .rp-set-btn, .rp-set-save .rp-send { padding:8px 14px; }
+  .rp-set-split { grid-template-columns:minmax(0, 1fr); gap:8px; }
+  .rp-set-nav { border-bottom:1px solid var(--rp-rule); padding-bottom:10px; margin-bottom:10px; }
+  .rp-set-row { flex-direction:column; align-items:stretch; }
+  .rp-set-rc { align-items:stretch; }
+  .rp-set-ctl > * { max-width:100%; }
+  .rp-set-err { max-width:none; text-align:left; }
+  .rp-set-in-text { width:100%; }
+  .rp-set-auto { white-space:normal; flex-wrap:wrap; }
+  /* Segmented controls span the row. Their options share it evenly and stay one height
+     (the mockup let "Separate helper" wrap onto a second row of its own); long labels,
+     such as where pages go, stack as a full-width list instead. */
+  .rp-set-seg { display:flex; width:100%; flex-wrap:nowrap; }
+  .rp-set-seg-b { flex:1 1 0; min-width:0; padding:6px 8px; font-size:15.5px; line-height:1.25; }
+  .rp-set-seg-stack { flex-direction:column; }
+  .rp-set-seg-stack .rp-set-seg-b { flex:none; text-align:left; padding:6px 14px; }
+}

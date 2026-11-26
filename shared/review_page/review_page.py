@@ -7,10 +7,11 @@ Usage:
   review_page.py --check PAGE.html                        node --check + structure
   review_page.py --smoke PAGE.html [--playwright DIR]     click through in Chromium
 
-Four modes share one engine: "review" (decision buttons per item: design-review,
+Five modes share one engine: "review" (decision buttons per item: design-review,
 article-copy-edit, photo-picker, style-guide), "questions" (a standalone questions
 or QA checklist page), "session" (working-log's session page: questions, checks,
-log and decided on one URL) and "log" (a log-only page). The spec format is documented
+log and decided on one URL), "log" (a log-only page) and "settings" (the settings
+page, from `shared/settings.py --spec`). The spec format is documented
 in reference/review-page.md at the plugin root. Python 3 stdlib only; node is
 needed for --check and --smoke, Playwright only for --smoke.
 """
@@ -102,9 +103,9 @@ PRESETS = {
         ]},
 }
 CATEGORY_COLORS = ["#2563eb", "#b45309", "#047857", "#9333ea", "#be123c", "#0e7490", "#4d7c0f", "#c2410c"]
-MODES = ("review", "questions", "log", "session")
+MODES = ("review", "questions", "log", "session", "settings")
 # Modes built with no --out go to .proofs/pages/<spec name>.html.
-DEFAULT_OUT_MODES = ("log", "session")
+DEFAULT_OUT_MODES = ("log", "session", "settings")
 # The skill named in the page's brand pill when the spec gives no `skill`: a review
 # page takes it from its decisions preset (a custom set with no preset shows the
 # wordmark alone), the other modes from their kind of page.
@@ -392,8 +393,8 @@ def decisions_for(d):
 # of sections. Each section has a kind, renders its own items and contributes its
 # own block to the export, so one page can mix kinds.
 
-KINDS = ("review", "questions", "links", "qa", "log", "decided")
-DEFAULT_KIND = {"review": "review", "questions": "questions", "log": "log", "session": "log"}
+KINDS = ("review", "questions", "links", "qa", "log", "decided", "settings")
+DEFAULT_KIND = {"review": "review", "questions": "questions", "log": "log", "session": "log", "settings": "settings"}
 DEFAULT_TITLE = {"questions": "Open — needs you", "qa": "QA after deploy — check these off",
                  "links": "Other pages waiting on you", "decided": "Decided"}
 SESSION_TITLE = {"questions": "Waiting on you", "links": "Other pages waiting on you", "qa": "Checks for you",
@@ -434,6 +435,8 @@ def flat_sections(spec):
 
 def sections_of(spec):
     mode, secs = spec["mode"], spec.get("sections")
+    if mode == "settings":
+        return [{"kind": "settings", "id": "settings", "items": settings_rows(spec)}]
     if secs is None:  # flat shorthands
         secs = flat_sections(spec)
     ids = set()
@@ -823,8 +826,179 @@ def render_decided(sec, ctx):
     return out, {"items": []}
 
 
+# ------------------------------------------------------------- settings
+#
+# The settings page (layout B, picked in the 1.9.0 design review): a sticky save bar, a
+# sidebar of the five groups and one group's pane. The rules a value must pass (min, max,
+# raise_only, choices, item_type) are the table rows of shared/settings.json, embedded in
+# the page's spec, and engine.js checks a typed value against them the way settings.py
+# validate does: no number is copied into the page's code.
+
+SETTING_TYPES = ("int", "choice", "bool", "list", "text", "path", "auto")
+SETTING_SOURCES = ("default", "environment", "user", "project", "local")
+SETTING_FILES = {"user": "~/.claude/settings.json", "project": ".claude/settings.json",
+                 "local": ".claude/settings.local.json"}
+SCOPE_LEDE = {"user": "Saved for you, in <code>%s</code>, on every project.",
+              "project": "Saved for this project, in <code>%s</code>, so everyone on it gets them.",
+              "local": "Saved for this computer only, in <code>%s</code>."}
+SCOPE_ROW = {"user": "Saved for you only, in <code>%s</code>.",
+             "project": "Saved for this project, in <code>%s</code>.",
+             "local": "Saved for this computer only, in <code>%s</code>."}
+# The KEEP FIXED list, in the reader's words: quality floors no setting may lower.
+SETTINGS_FIXED_HTML = ("<b>Fixed on purpose.</b> Contrast, the 44 px tap floor, line length, off-center and "
+                       "near-copy checks can’t be turned down. No setting can weaken a check.")
+SETTINGS_NONE_TEXT = "Pick a new value below, then Send to Claude or Copy: Claude saves it to your settings."
+
+
+def settings_rows(spec):
+    """The table rows, in table order, each with the value the spec gives (validated as
+    settings.py would), its source and note, and `from`: the value as settings.py writes it.
+    The rules always come from shared/settings.json; a spec row only brings value, source
+    and note. A table key the spec leaves out shows its default."""
+    given = spec.get("settings")
+    if not isinstance(given, list) or not given:
+        raise SpecError("settings mode needs `settings`: the rows `shared/settings.py --spec` prints")
+    table = {r["key"]: r for r in proofs_settings.load_table()}
+    by = {}
+    for s in given:
+        key = (s or {}).get("key")
+        if key not in table:
+            raise SpecError("%r is not a Proofs setting (see shared/settings.json)" % key)
+        if key in by:
+            raise SpecError("setting %s is listed twice" % key)
+        by[key] = s
+    rows = []
+    for key, base in table.items():
+        if base["type"] not in SETTING_TYPES:
+            raise SpecError("setting %s has an unknown type %r" % (key, base["type"]))
+        s = by.get(key, {})
+        value = s.get("value")
+        if value is None:
+            value = base["default"]
+        try:
+            value = proofs_settings._parse(base, proofs_settings._canonical(base, value))
+        except proofs_settings.SettingError as e:
+            raise SpecError("%s: %s" % (key, e))
+        source = s.get("source") or "default"
+        if source not in SETTING_SOURCES:
+            raise SpecError("setting %s: source must be one of %s" % (key, ", ".join(SETTING_SOURCES)))
+        rows.append(dict(base, id=key, value=value, source=source, note=s.get("note") or "",
+                         **{"from": proofs_settings._canonical(base, value)}))
+    return rows
+
+
+def setting_shown(row, value, unit=True):
+    """A value as the page shows it: On/Off, a choice's label, a list with commas or none."""
+    if isinstance(value, bool):
+        text = "On" if value else "Off"
+    elif isinstance(value, list):
+        text = ", ".join(str(v) for v in value) or "none"
+    elif row["type"] == "choice":
+        text = (row.get("choice_labels") or {}).get(str(value), str(value))
+    else:
+        text = str(value)
+    if not unit or not row.get("unit") or value == []:
+        return text
+    # "$ est." reads as "$5 est.", not "5 $ est."
+    return "$%s %s" % (text, row["unit"][2:]) if row["unit"].startswith("$ ") else "%s %s" % (text, row["unit"])
+
+
+def setting_text(row):
+    """What a text box holds at first: the value, lists joined with ", "."""
+    v = row["value"]
+    return ", ".join(str(x) for x in v) if isinstance(v, list) else str(v)
+
+
+def setting_control(row):
+    key, lab = esc(row["id"]), 'aria-labelledby="set-lab-%s"' % esc(row["id"])
+    kind, value = row["type"], row["value"]
+    if kind == "int":
+        unit = '<span class="rp-set-unit">%s</span>' % esc(row["unit"]) if row.get("unit") else ""
+        return ('<span class="rp-set-num"><input class="rp-set-in rp-set-in-num" inputmode="numeric" autocomplete="off" '
+                'data-set-in="%s" %s value="%s">%s</span>' % (key, lab, esc(value), unit))
+    if kind == "choice":
+        labels = [(c, (row.get("choice_labels") or {}).get(c, c)) for c in row["choices"]]
+        # Long labels stack on a phone instead of squeezing three to a line.
+        stack = any(len(t) > 16 for _, t in labels) or (len(labels) > 2 and sum(len(t) for _, t in labels) > 24)
+        return ('<span class="rp-set-seg%s" role="group" %s>%s</span>'
+                % (" rp-set-seg-stack" if stack else "", lab, "".join(
+                    '<button type="button" class="rp-set-seg-b" data-set-choice="%s" aria-pressed="%s">%s</button>'
+                    % (esc(c), "true" if c == row["from"] else "false", esc(t)) for c, t in labels)))
+    if kind == "bool":
+        return ('<button type="button" class="rp-set-tog" role="switch" aria-checked="%s" data-set-tog %s>'
+                '<span class="rp-set-tog-t" aria-hidden="true"></span><span data-set-tog-l>%s</span></button>'
+                % ("true" if value else "false", lab, "On" if value else "Off"))
+    box = ('<input class="rp-set-in rp-set-in-text" spellcheck="false" autocapitalize="off" autocomplete="off" '
+           'data-set-in="%s" %s value="%s"%s%%s>' % (key, lab, esc(setting_text(row)),
+                                                    ' placeholder="none"' if kind == "list" else ""))
+    if kind == "auto":
+        auto = value == "auto"
+        return ('<span class="rp-set-auto" data-set-auto%s><span>auto</span>'
+                '<button type="button" class="rp-set-link" data-set-change>Change</button></span>'
+                % ("" if auto else " hidden")) + box % (" hidden" if auto else "")
+    return box % ""
+
+
+def setting_mark(row):
+    if row["from"] == proofs_settings._canonical(row, row["default"]):
+        return '<span class="rp-set-mark" data-set-mark hidden></span>'
+    return ('<span class="rp-set-mark" data-set-mark>Changed · default %s · '
+            '<button type="button" class="rp-set-link" data-set-reset>Reset</button></span>'
+            % esc(setting_shown(row, row["default"])))
+
+
+def render_settings(sec, ctx):
+    files = dict(SETTING_FILES, **(ctx.spec.get("files") or {}))
+    rows, groups = sec["items"], list(proofs_settings.GROUP_TITLES.items())
+    for r in rows:
+        ctx.claim(r["id"], "setting")
+        if r["group"] not in proofs_settings.GROUP_TITLES:
+            raise SpecError("setting %s has an unknown group %r" % (r["id"], r["group"]))
+    groups = [(g, t) for g, t in groups if any(r["group"] == g for r in rows)]
+    out = ['<div class="rp-set-split">', '<nav class="rp-set-nav" aria-label="Setting groups">',
+           '<label class="rp-set-search"><span class="rp-sr">Search settings</span><input class="rp-set-in" '
+           'type="search" placeholder="Search settings" autocomplete="off" data-set-search></label>']
+    for i, (g, title) in enumerate(groups):
+        out.append('<a class="rp-set-nav-i%s" href="#set-%s" data-set-nav="%s"%s><span class="rp-set-dot" data-set-dot>'
+                   '</span><span class="rp-set-nav-t">%s</span><span class="rp-set-nav-n" data-set-n>%d</span></a>'
+                   % (" rp-set-nav-on" if not i else "", esc(g), esc(g), ' aria-current="true"' if not i else "",
+                      esc(title), sum(1 for r in rows if r["group"] == g)))
+    out.append("</nav>")
+    out.append('<div class="rp-set-pane"><p class="rp-set-none" data-set-none hidden>No setting matches that search.</p>')
+    for i, (g, title) in enumerate(groups):
+        mine = [r for r in rows if r["group"] == g]
+        scopes = [r["scope"] for r in mine]
+        scope = max(scopes, key=lambda s: (scopes.count(s), -scopes.index(s)))
+        out.append('<div class="rp-set-group" data-set-group="%s" id="set-%s"%s>' % (esc(g), esc(g), " hidden" if i else ""))
+        out.append('<h1 class="rp-set-h1">%s</h1>' % esc(title))
+        out.append('<p class="rp-set-lede">%s</p>' % (SCOPE_LEDE[scope] % esc(files[scope])))
+        for adv in (False, True):
+            part = [r for r in mine if bool(r.get("advanced")) == adv]
+            if not part:
+                continue
+            if adv:
+                out.append('<h2 class="rp-set-h2" data-set-adv-h>Advanced</h2>')
+            out.append('<div class="rp-set-list">')
+            for r in part:
+                key = esc(r["id"])
+                where = ('<p class="rp-set-where">%s</p>' % (SCOPE_ROW[r["scope"]] % esc(files[r["scope"]]))
+                         if r["scope"] != scope else "")
+                note = '<p class="rp-set-note">%s</p>' % esc(r["note"]) if r.get("note") else ""
+                out.append('<div class="rp-set-row" data-set-row="%s"><div class="rp-set-rl">'
+                           '<div class="rp-set-lab" id="set-lab-%s">%s</div><p class="rp-set-help">%s</p>%s%s%s</div>'
+                           '<div class="rp-set-rc"><div class="rp-set-ctl">%s</div>'
+                           '<p class="rp-set-err" data-set-err aria-live="polite" hidden></p></div></div><!--/row-->'
+                           % (key, key, esc(r["label"]), esc(r["help"]), where, note, setting_mark(r),
+                              setting_control(r)))
+            out.append("</div>")
+        out.append("</div><!--/group-->")
+    out.append('<p class="rp-set-fixed">%s</p>' % (ctx.spec.get("fixed_html") or SETTINGS_FIXED_HTML))
+    out.append("</div></div>")
+    return out, {"items": rows, "groups": [[g, t] for g, t in groups]}
+
+
 RENDER = {"review": render_review, "questions": render_questions, "qa": render_qa, "log": render_log,
-          "links": render_links, "decided": render_decided}
+          "links": render_links, "decided": render_decided, "settings": render_settings}
 
 
 def render_sections(spec):
@@ -886,6 +1060,11 @@ def frame_js(spec):
     mode, proj = spec["mode"], spec.get("project") or {}
     if mode == "review":
         return {"header": spec.get("header") or "[%s]" % spec["title"], "session": proj.get("session")}
+    if mode == "settings":
+        if not proj.get("name"):
+            raise SpecError("settings mode needs project.name")
+        return {"project": proj.get("name"), "repo": proj.get("repo"),
+                "bool_true": list(proofs_settings.BOOL_TRUE), "bool_false": list(proofs_settings.BOOL_FALSE)}
     if mode == "questions":
         for k in ("name", "stream"):
             if not proj.get(k):
@@ -913,6 +1092,8 @@ def skill_name(spec, js_sections):
     if "skill" in spec:
         return spec["skill"] or None
     mode = spec["mode"]
+    if mode == "settings":
+        return "settings"
     if mode in ("log", "session"):
         return "working-log"
     if mode == "questions":
@@ -980,7 +1161,7 @@ def page(spec):
                             if proj.get("session") else ""), SYNC_HTML, esc(spec.get("copy_label", "Copy my answers")),
                            SEND_HTML, SEND_MSG_HTML))
     html_out.append('<main class="rp-main" data-preview="light">')
-    if mode == "review":
+    if mode in ("review", "settings"):
         # project · session, then the repo (dropped on phones, separator and all). Each
         # separator belongs to the part after it, so it hides with that part, and on a
         # phone, where the parts wrap, none is drawn (Rails run 1: a dot ended a line).
@@ -992,6 +1173,13 @@ def page(spec):
             where += '<span class="rp-pb-x">%s%s</span>' % (sep if where else "", esc(proj["repo"]))
         html_out.append('<div class="rp-brandline">%s%s</div>' % (
             mark, '<span class="rp-where">%s</span>' % where if where else ""))
+    if mode == "settings":
+        # The save bar: sticky at the top, above the sidebar and the pane. Send to Claude is
+        # its one primary; engine.js fills the count and one "Label old → new" per change.
+        html_out.append('<div class="rp-set-save" data-set-save><div class="rp-set-save-t"><b data-set-count>No changes yet</b>'
+                        '<span data-set-list>%s</span></div><div class="rp-set-save-a">%s'
+                        '<button type="button" class="rp-set-btn" data-copy>Copy</button>%s</div>%s</div>'
+                        % (esc(SETTINGS_NONE_TEXT), SYNC_HTML, SEND_HTML, SEND_MSG_HTML))
     context = []
     if spec.get("heading"):
         context.append('<h1 class="rp-h1">%s</h1>' % esc(spec["heading"]))
@@ -1283,6 +1471,12 @@ def check(path):
                     got = len(re.findall(r'data-item="%s" data-choice=' % re.escape(html.escape(it["id"], quote=True)), text))
                     if got != need:
                         errs.append("item %s has %d decision buttons, expected %d" % (it["id"], got, need))
+        for sec in secs:
+            if sec["kind"] == "settings":
+                keys = re.findall(r'<div class="rp-set-row" data-set-row="([^"]+)"', text)
+                want = [it["id"] for it in sec["items"]]
+                if sorted(keys) != sorted(want):
+                    errs.append("settings: %d rows on the page for %d settings" % (len(keys), len(want)))
         if mode == "review" and not spec.get("header", "").startswith("["):
             errs.append("export header must be bracketed")
         if mode in ("log", "session") and title and not html.unescape(title.group(1)).startswith(spec.get("session") or "\0"):

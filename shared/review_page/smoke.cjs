@@ -3,7 +3,8 @@
 // Prints one JSON line: { mode, items, export, problems: [...] }. Exercises the
 // first item of each kind the page's frame uses, and on question and session
 // pages checks that open questions sit directly under the sticky bar; on review pages it
-// also flags a word a mockup breaks mid-word, by item and variant. Run through
+// also flags a word a mockup breaks mid-word, by item and variant; on the settings page it
+// types a refused value and a good one, and measures every tap target in every group. Run through
 // review_page.py --smoke rather than directly.
 const path = require("path");
 const { chromium } = require(process.argv[2]);
@@ -81,6 +82,10 @@ async function sendToClaude(browser, problems) {
   } else if (await page.locator("[data-tick]").count()) {
     answeredId = await page.locator("[data-tick]").first().getAttribute("data-tick");
     await page.locator("[data-tick]").first().check();
+  } else if (await page.locator('.rp-set-seg-b[aria-pressed="false"]:visible').count()) {
+    const seg = page.locator('.rp-set-seg-b[aria-pressed="false"]:visible').first();
+    answeredId = await seg.evaluate((b) => b.closest("[data-set-row]").dataset.setRow);
+    await seg.click();
   }
   await page.waitForTimeout(100);
   r.available = await state();
@@ -205,6 +210,30 @@ async function sendToClaude(browser, problems) {
     const tick = page.locator("[data-tick]").first();
     if (await tick.count()) await tick.check();
     if (S.mode === "session" && !(await page.title()).startsWith(S.session)) problems.push("<title> does not lead with the session name");
+  } else if (S.mode === "settings") {
+    const rows = items("settings").map(([, it]) => it);
+    out.items = await page.locator("[data-set-row]").count();
+    if (out.items !== rows.length) problems.push(`rendered ${out.items} setting rows, spec has ${rows.length}`);
+    const count = () => page.locator("[data-set-count]").innerText();
+    // A refused value shows its reason under the field and stays out of the save bar.
+    const num = rows.find((it) => it.type === "int");
+    if (num) {
+      await page.locator(`[data-set-nav="${num.group}"]`).click();
+      const box = page.locator(`[data-set-row="${num.id}"] [data-set-in]`);
+      await box.fill("not a number");
+      const err = page.locator(`[data-set-row="${num.id}"] [data-set-err]`);
+      if (!(await err.isVisible()) || !(await err.innerText()).trim()) problems.push(`a refused ${num.id} shows no reason under its field`);
+      if (!(await count()).startsWith("No changes")) problems.push("a refused value went into the save bar");
+      await box.fill(num.from);
+    }
+    // A good value typed into a text box shows in the save bar (and, below, in the export).
+    const path = rows.find((it) => it.type === "path");
+    if (path) {
+      await page.locator(`[data-set-nav="${path.group}"]`).click();
+      await page.locator(`[data-set-row="${path.id}"] [data-set-in]`).fill("smoke/" + path.from);
+      await page.waitForTimeout(50);
+      if (!(await page.locator("[data-set-list]").innerText()).includes(path.label)) problems.push("a change did not show in the save bar");
+    }
   } else {
     out.items = await page.locator("[data-entry]").count();
     if (out.items !== items("log").length) problems.push(`rendered ${out.items} entries, spec has ${items("log").length}`);
@@ -300,10 +329,33 @@ async function sendToClaude(browser, problems) {
       out.mockup_widths.push({ item: it ? it.num : b.id, label: it ? it.label : "", variant: b.variant, width: b.width });
     }
   }
+  if (S.mode === "settings") {
+    out.small_taps = [];
+    // the clipboard fallback above is still open over the page
+    await page.locator(".rp-fallback [data-close]").click();
+  }
   for (const w of [1280, 390]) {
     await page.setViewportSize({ width: w, height: 900 });
     const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     if (over > 0) problems.push(`page scrolls sideways by ${over}px at ${w}px wide`);
+    if (S.mode === "settings") {
+      // Every tap target in every group, at both widths: 44 by 44 at least.
+      for (const [g] of S.sections[0].groups) {
+        await page.locator(`[data-set-nav="${g}"]`).click();
+        const small = await page.evaluate(() => Array.from(document.querySelectorAll("main button, main a[href], main input"))
+          .filter((el) => el.offsetParent !== null)
+          .map((el) => ({ el, r: el.getBoundingClientRect() }))
+          .filter(({ r }) => r.width < 43.5 || r.height < 43.5)
+          .map(({ el, r }) => `${(el.closest("[data-set-row]") || {}).dataset ? el.closest("[data-set-row]").dataset.setRow + " " : ""}${(el.textContent || el.getAttribute("placeholder") || el.tagName).trim()} ${Math.round(r.width)}x${Math.round(r.height)}`));
+        for (const t of small) {
+          if (out.small_taps.includes(`${t} at ${w}px`)) continue;
+          out.small_taps.push(`${t} at ${w}px`);
+          problems.push(`settings: tap target under 44x44: ${t} at ${w}px wide`);
+        }
+        const overG = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+        if (overG > 0) problems.push(`settings group ${g} scrolls sideways by ${overG}px at ${w}px wide`);
+      }
+    }
     if (!reviewItems.length) continue;
     for (const b of await page.evaluate(midWordBreaks, { selector: ".rp-item .rp-body, .rp-item .rp-vbody", limit: 40 })) {
       const it = reviewItems.find((i) => i.id === b.where.item);

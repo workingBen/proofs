@@ -1215,6 +1215,51 @@ const { chromium } = require(process.env.PROOFS_PLAYWRIGHT);
                 self.assertTrue((Path(tmp) / a).is_file(), a)
             self.assertEqual(res["external"], [self.base.replace("127.0.0.1", "localhost") + "/snapshot/browser-only.css"])
 
+    PROBE = r"""
+const path = require('path');
+const [snapshotJs, root, url, outDir] = process.argv.slice(1);  // node -e: no script path in argv
+const { snapshotPage } = require(snapshotJs);
+const { launchChromium } = require(path.join(root, 'shared', 'review_page', 'launch.cjs'));
+const { chromium } = require(process.env.PROOFS_PLAYWRIGHT);
+(async () => {
+  const browser = await launchChromium(chromium, process.env);
+  const page = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
+  await page.goto(url, { waitUntil: 'load' });
+  await page.waitForTimeout(300);
+  const r = await snapshotPage(page, outDir, 'x');
+  await browser.close();
+  process.stdout.write(JSON.stringify(r));
+})().catch((e) => { console.error(e.stack); process.exit(1); });
+"""
+
+    def probe(self, url, tmp):
+        env = dict(os.environ, PROOFS_PLAYWRIGHT=playwright_dir())
+        r = subprocess.run([NODE, "-e", self.PROBE, str(SNAPSHOT), str(ROOT), url, tmp], env=env, capture_output=True,
+                           text=True, timeout=180)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return json.loads(r.stdout)
+
+    @unittest.skipUnless(Path("/etc/hosts").is_file(), "needs a local file to name")
+    def test_a_served_page_never_copies_a_local_file(self):
+        # A cross-origin sheet (and the page itself) naming file:///etc/hosts: nothing local is read.
+        hosts = Path("/etc/hosts").read_bytes()
+        with tempfile.TemporaryDirectory() as tmp:
+            res = self.probe(self.base + "/snapshot/file-leak.html", tmp)
+            for f in Path(tmp).rglob("*"):
+                if f.is_file() and f.suffix != ".html":
+                    self.assertNotEqual(f.read_bytes(), hosts, f)
+            text = (Path(tmp) / "x-snapshot.html").read_text()
+            self.assertIn("#123456", text)  # the sheet itself is still inlined
+            self.assertIn('@import url("file:///etc/hosts")', text)  # kept as a reference, never read
+            self.assertIn("file:///etc/hosts", res["external"])
+
+    def test_a_file_page_still_copies_its_own_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.probe((FIXTURES / "snapshot" / "index.html").as_uri(), tmp)
+            img = Tags((Path(tmp) / "x-snapshot.html").read_text()).find("img", id="photo")[0]
+            self.assertTrue(img["src"].startswith("x-snapshot-assets/"), img)
+            self.assertTrue((Path(tmp) / img["src"]).is_file())
+
     def test_snapshot_inlines_a_cross_origin_sheet_it_can_fetch(self):
         # A published page loads no stylesheet from another site, so a sheet the page could not
         # read is fetched node-side and inlined; one that cannot be fetched stays an @import of

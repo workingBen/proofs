@@ -302,10 +302,17 @@ function assetName(url, contentType) {
   return leaf ? `${hash}-${leaf}` : hash;
 }
 
-// The bytes at a URL, with the page's cookies; null when they cannot be had.
-async function fetchAsset(page, url) {
+// Whether a file: URL may be read for a document at `from` (the page's URL for its own content, a
+// sheet's URL for what that sheet names): only when that document is itself a file:. A page
+// served over http, or a sheet from another site, that names file:///... would otherwise have a
+// local file copied into the assets folder and published.
+const fileAllowed = (url, from) => !/^file:/i.test(url) || /^file:/i.test(from || '');
+
+// The bytes at a URL, with the page's cookies; null when they cannot be had, or when `url` is a
+// file: and `from` is not (fileAllowed).
+async function fetchAsset(page, url, from) {
   try {
-    if (url.startsWith('file:')) return { body: fs.readFileSync(fileURLToPath(url)), type: '' };
+    if (/^file:/i.test(url)) return fileAllowed(url, from) ? { body: fs.readFileSync(fileURLToPath(url)), type: '' } : null;
     const res = await page.context().request.get(url, { timeout: 15000 });
     if (!res.ok()) return null;
     return { body: await res.body(), type: res.headers()['content-type'] || '' };
@@ -327,8 +334,9 @@ const IMPORT_RULE = /@import\s+(?:url\(\s*(['"]?)([^'")]*)\1\s*\)|(['"])([^'"]*)
 // supports(...) are not carried, as for a readable sheet). imports holds the @import rules that
 // could not be fetched, absolute, to hoist to the top of the <style>; `external` gets their URLs.
 // null when the sheet itself cannot be fetched.
-async function inlineSheet(page, href, asset, external, depth = 0) {
-  const got = await fetchAsset(page, href);
+async function inlineSheet(page, href, asset, external, from, depth = 0) {
+  if (!fileAllowed(href, from)) return null;
+  const got = await fetchAsset(page, href, from);
   if (!got) return null;
   let text = got.body.toString('utf8').replace(/^\uFEFF/, '').replace(/@charset\s+(['"])[^'"]*\1\s*;/gi, '');
   const imports = [];
@@ -339,7 +347,7 @@ async function inlineSheet(page, href, asset, external, depth = 0) {
   });
   const inner = [];
   for (const f of found) {
-    const sub = depth < IMPORT_DEPTH ? await inlineSheet(page, f.href, asset, external, depth + 1) : null;
+    const sub = depth < IMPORT_DEPTH ? await inlineSheet(page, f.href, asset, external, href, depth + 1) : null;
     if (!sub) {
       imports.push(`@import url("${f.href}")${f.media ? ` ${f.media}` : ''};`);
       if (!external.includes(f.href)) external.push(f.href);
@@ -361,7 +369,7 @@ async function inlineSheet(page, href, asset, external, depth = 0) {
     try { abs = new URL(t, href).href; } catch (_) { continue; }
     const hash = abs.indexOf('#');
     const bare = hash >= 0 ? abs.slice(0, hash) : abs;
-    const r = /^(https?|file):/i.test(bare) ? await asset(bare) : null;
+    const r = /^(https?|file):/i.test(bare) ? await asset(bare, href) : null;
     rel.set(t, (r || bare) + (hash >= 0 ? abs.slice(hash) : ''));
   }
   text = text.replace(/url\(\s*(['"]?)([^'")]*)\1\s*\)/gi, (m, q, u) => (rel.has(u.trim()) ? `url("${rel.get(u.trim())}")` : m));
@@ -389,22 +397,29 @@ async function snapshotPage(page, outDir, name) {
   };
   // One fetch per URL, for the page's own references and the fetched sheets' alike.
   const fetched = new Map();
-  const assetPath = async (url) => {
+  // A file: URL a document may not read (fileAllowed) is never fetched: it keeps its absolute
+  // URL and is listed in `external`.
+  const external = [];
+  const assetPath = async (url, from) => {
+    if (!fileAllowed(url, from)) {
+      if (!external.includes(url)) external.push(url);
+      return null;
+    }
     if (!fetched.has(url)) {
-      const got = await fetchAsset(page, url);
+      const got = await fetchAsset(page, url, from);
       fetched.set(url, got ? write(assetName(url, got.type), got.body) : null);
     }
     return fetched.get(url);
   };
+  const pageUrl = page.url();
   const paths = [];
-  for (const url of snap.urls) paths.push(await assetPath(url));
+  for (const url of snap.urls) paths.push(await assetPath(url, pageUrl));
   // Sheets from another origin: inlined like the page's own, since a published page loads
   // no stylesheet from another site but Google Fonts. One that cannot be fetched stays an
   // @import of its absolute URL and is listed in `external`.
-  const external = [];
   const sheets = [];
   for (const sh of snap.sheets) {
-    const got = await inlineSheet(page, sh.href, assetPath, external);
+    const got = await inlineSheet(page, sh.href, assetPath, external, pageUrl);
     if (!got) {
       if (!external.includes(sh.href)) external.push(sh.href);
       sheets.push({ imports: [`@import url("${sh.href}")${sh.media ? ` ${sh.media}` : ''};`], text: '' });

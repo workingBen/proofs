@@ -9,6 +9,7 @@ Usage:
        [--shots DIR]                                      (a Refine page: where its before shots are)
   review_page.py --match-preview PAGE.html --picks 1,3 --shots DIR
                                                           the built page against the Refine preview
+  review_page.py --crops PAGE.html --out DIR              each Refine change's before and after crops
 
 Five modes share one engine: "review" (decision buttons per item: design-review,
 article-copy-edit, photo-picker, style-guide), "questions" (a standalone questions
@@ -16,7 +17,8 @@ or QA checklist page), "session" (working-log's session page: questions, checks,
 log and decided on one URL), "log" (a log-only page) and "settings" (the settings
 page, from `shared/settings.py --spec`). The spec format is documented
 in reference/review-page.md at the plugin root. Python 3 stdlib only; node is
-needed for --check, --smoke and --match-preview, Playwright only for --smoke and --match-preview.
+needed for --check, --smoke, --match-preview and --crops, Playwright only for --smoke,
+--match-preview and --crops.
 """
 import argparse
 import base64
@@ -57,6 +59,7 @@ CAPABILITIES = {"db": {}, "comments": {}}
 STYLE = HERE / "style.css"
 SMOKE = HERE / "smoke.cjs"
 MATCH = HERE / "match.cjs"
+CROPS = HERE / "crops.cjs"
 
 # Decision sets. Each button: state, label, label_variant (used when the item has
 # variants), export, export_variant ({sel} = selected variant text), comment
@@ -1749,6 +1752,69 @@ def refine_base(it, base, cache):
     return doc
 
 
+def load_crops(it, spec):
+    """The item's `crops` folder (crops.cjs output, relative to the spec's folder, then the working
+    directory) as it["_crops"]: {change id: {width: {"before", "after", "w", "h"} | {"note"}}},
+    each crop PNG embedded as an asset the way the spec's own screenshots are. A folder with no
+    crops.json yet (--crops not run) leaves the cards' slots empty."""
+    rel = it.get("crops")
+    if not rel:
+        return
+    p, _ = find_file(str(Path(rel) / "crops.json"), spec.get("_base") or Path.cwd())
+    if p is None:
+        return
+    try:
+        data = json.loads(p.read_text())
+    except ValueError as e:
+        raise SpecError("item %s: crops: %s is not valid JSON (%s)" % (it["id"], p, e))
+    if not isinstance(data, dict):
+        raise SpecError("item %s: crops: %s must map change ids to their crops" % (it["id"], p))
+    report = spec.setdefault("_image_report", {"converted": 0, "before": 0, "after": 0, "fallback": 0,
+                                                "missing_tool": False, "settings": image_settings(spec)})
+    assets, tool = spec.setdefault("_assets", {}), image_tool()
+    out = {}
+    for c in it["changes"]:
+        per = data.get(c["id"])
+        if not isinstance(per, dict):
+            continue
+        for width, _ in REFINE_WIDTHS:
+            box = per.get(str(width))
+            if not isinstance(box, dict):
+                continue
+            if isinstance(box.get("note"), str):
+                out.setdefault(c["id"], {})[str(width)] = {"note": box["note"]}
+                continue
+            files = [p.parent / ("%s-%s-%d.png" % (c["id"], s, width)) for s in ("before", "after")]
+            if not (all(f.is_file() for f in files) and isinstance(box.get("w"), int) and isinstance(box.get("h"), int)):
+                continue
+            names = []
+            for f in files:
+                name = "rp-rc-crop-%d" % len(assets)
+                while name in assets:
+                    name += "x"
+                assets[name] = embed_asset(f, report["settings"], tool, report)
+                names.append(name)
+            out.setdefault(c["id"], {})[str(width)] = {"before": names[0], "after": names[1], "w": box["w"], "h": box["h"]}
+    it["_crops"] = out
+
+
+def crop_figures(c, crops):
+    """A change card's crops: before and after at each width, or that width's note."""
+    out = []
+    for width, _ in REFINE_WIDTHS:
+        cw = (crops or {}).get(str(width))
+        if not cw:
+            continue
+        if "note" in cw:
+            out.append('<p class="rp-rc-crop-note" data-rc-crop-w="%d">%s</p>' % (width, esc(cw["note"])))
+            continue
+        for state, word in (("before", "Before"), ("after", "After")):
+            out.append('<figure class="rp-rc-crop" data-rc-crop-w="%d"><img src="{{asset:%s}}" alt="%s: %s, %d px" '
+                       'width="%d" height="%d"><figcaption>%s, %d px</figcaption></figure>'
+                       % (width, cw[state], word, esc(c["label"]), width, cw["w"], cw["h"], word, width))
+    return "".join(out)
+
+
 def render_refine(it, ctx) -> str:
     """The change cards, then the combined preview: both frames of the base, the current
     page's scores and the recommended set's, and the picks/original toggle."""
@@ -1761,8 +1827,9 @@ def render_refine(it, ctx) -> str:
             body.append('<ul class="rp-rc-removes">%s</ul>' % "".join(
                 '<li class="rp-rc-remove"><b>Removes</b> %s — %s</li>' % (esc(r["element"]), esc(r["reason"]))
                 for r in c["removes"]))
-        # Filled with the change's before and after crops at 1280 and 390 when the item names `crops`.
-        body.append('<div class="rp-rc-crops" data-rc-crops="%s"></div>' % esc(c["id"]))
+        # The change's before and after crops at 1280 and 390, when the item names `crops`.
+        body.append('<div class="rp-rc-crops" data-rc-crops="%s">%s</div>'
+                    % (esc(c["id"]), crop_figures(c, (it.get("_crops") or {}).get(c["id"]))))
         if c.get("scores"):
             body.append('<div class="rp-scores">%s</div>' % _score_pairs(c["scores"], REFINE_SCORES))
         elif scored:
@@ -1770,8 +1837,9 @@ def render_refine(it, ctx) -> str:
         card = review_item({"id": c["id"], "num": c["_num"], "label": c["label"],
                             "location": c.get("location") or it.get("location"),
                             "recommended": c.get("recommended"), "body_html": "\n".join(body)}, dec, ctx.colors)
+        # data-rc-targets: what --crops (crops.cjs) cuts the change's crops to.
         h.append(card.replace('<article class="rp-item" ', '<article class="rp-item" data-rc-change="%s" '
-                              % esc(c["id"]), 1))
+                              'data-rc-targets="%s" ' % (esc(c["id"]), esc(json.dumps(c["targets"]))), 1))
     p = ['<div class="rp-rc-preview" data-rc-preview="%s" data-rc-base="%s">' % (esc(iid), esc(it["_base_path"])),
          '<div class="rp-rc-head"><h3 class="rp-rc-title">Your picks together</h3>'
          '<div class="rp-rc-view" role="group" aria-label="Show the preview">'
@@ -1816,6 +1884,7 @@ def refine_entry(it, sec, ctx):
         c["_num"] = str(ctx.n)
     it["_dec"] = sec["_dec"]
     it["_doc"] = refine_base(it, ctx.spec.get("_base") or Path.cwd(), {})
+    load_crops(it, ctx.spec)
     js = [{"id": c["id"], "num": c["_num"], "label": c["label"], "category": None, "variants": [],
            "selected": None, "before_font_sizes": [], "before_sections": None,
            # Measured inside the frames, never as mockups: no near-copy check (spec §3).
@@ -2132,6 +2201,32 @@ def match_preview(page_path, picks, shots, playwright=None):
     return 2 if res.get("cannot") else 0
 
 
+def crops(page_path, out, playwright=None):
+    """--crops: each Refine change's before and after at 1280 and 390, cut from PAGE's frames
+    (crops.cjs), into the folder `out`. A width where no target is shown gets a note, printed
+    here and kept in crops.json, instead of a crop. Returns the exit code: 0 when written, 2
+    when it cannot run (no Playwright, or PAGE has no Refine preview)."""
+    pw = find_playwright(playwright)
+    if not pw:
+        print("crops: Playwright not found. " + HOW_TO_PY, file=sys.stderr)
+        return 2
+    r = subprocess.run([shutil.which("node"), str(CROPS), pw, str(Path(page_path).resolve()), str(Path(out).resolve())],
+                       capture_output=True, text=True, timeout=600)
+    try:
+        res = json.loads(r.stdout.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        print("crops: " + (r.stdout + r.stderr).strip()[-2000:], file=sys.stderr)
+        return 2
+    if res.get("error"):
+        print("crops: " + res["error"], file=sys.stderr)
+        return 2
+    n = sum(1 for per in res["crops"].values() for box in per.values() if "note" not in box)
+    print("wrote %d crops of %d changes to %s" % (n * 2, len(res["crops"]), out))
+    for note in res["notes"]:
+        print("note: " + note)
+    return 0
+
+
 def answers(page_path, rows):
     """Print a page's answers from its database rows, as its Copy export. Returns the exit code."""
     node = shutil.which("node")
@@ -2157,6 +2252,8 @@ def main(argv=None):
     ap.add_argument("--picks", help="with --match-preview: the numbers of the changes answered Yes, such as 1,3")
     ap.add_argument("--shots", metavar="DIR", help="with --match-preview: the folder of the capture of the built "
                     "page; with --smoke: where a Refine page's before shots are, when not beside its base")
+    ap.add_argument("--crops", metavar="PAGE", help="write PAGE's Refine change crops (before and after at 1280 "
+                    "and 390) and crops.json to the folder --out names")
     ap.add_argument("--answers", metavar="PAGE", help="print PAGE's answers from its database rows (--rows) "
                     "as the same text its Copy button makes")
     ap.add_argument("--rows", metavar="PATH", help="with --answers: the out_dir ArtifactData list wrote, or a JSON file")
@@ -2165,6 +2262,10 @@ def main(argv=None):
         if not a.rows:
             ap.error("--answers needs --rows (the folder ArtifactData list wrote with out_dir)")
         return answers(a.answers, a.rows)
+    if a.crops:
+        if not a.out:
+            ap.error("--crops needs --out DIR (the folder for the crops, such as .proofs/design-review/crops)")
+        return crops(a.crops, a.out, a.playwright)
     if a.match_preview:
         if not (a.picks and a.shots):
             ap.error("--match-preview needs --picks (such as 1,3) and --shots (the capture's folder)")

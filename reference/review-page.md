@@ -181,7 +181,7 @@ change.
 | `before_scores` | the current page on the six criteria (as `scores` above), shown in the preview as "Current page" |
 | `set_scores` | the recommended changes together, on the same six criteria and checks, shown under it as "Your picks together (recommended)" |
 | `judged_by` | as above; shown once, in the preview. With it (or any scored change), an unscored change says "Not scored" and recommending one is a spec error |
-| `crops` | the folder of the change crops (`--crops`); each card has a `data-rc-crops` slot for them |
+| `crops` | the folder `--crops` wrote (such as `.proofs/design-review/crops`), relative to the spec's folder, then the working directory. Each card then shows its change's before and after at 1280 and 390, embedded like any screenshot asset, or a width's note in their place. A folder with no `crops.json` yet leaves the cards' `data-rc-crops` slots empty |
 
 Each change:
 
@@ -244,6 +244,18 @@ compares the new capture's whole-page shots in `DIR` (the before shot's name, `a
 than `FIDELITY.pixelRatio` or leaves more than `MISSED_PICKS` of the picks' changed pixels
 unlike the preview, 2 when it cannot measure (no shot of the build, a `--shots` folder that
 does not exist, or picks that change nothing visible at either width).
+
+`review_page.py --crops PAGE --out DIR` cuts each change's crops from the built page's own
+frames, each at its width, with that one change off and then on (every other change off):
+`DIR/<change id>-<before|after>-<1280|390>.png`, shot at device scale `CROP_SCALE` (2), and
+`DIR/crops.json`, `{<change id>: {"1280": {x, y, w, h}, "390": {...}}}` in CSS pixels of the
+frame's page. A crop is the union of the boxes of everything the change's `targets` select,
+with the change off and on (so a target it hides or swaps counts), plus `CROP_MARGIN` (24 px,
+in `shared/review_page/crops.cjs`), kept inside the page; a reflow the change causes outside
+its targets is not in it. A width where no target is shown (hidden or of no size) gets
+`{"note": "..."}` instead of a crop, printed as a `note:` line; it is not an error. It writes
+nothing outside `DIR`; exit 2 when it cannot run (no Playwright, or no Refine preview). Build
+again with the item's `crops` set to `DIR` to show them.
 
 ### `questions` mode
 

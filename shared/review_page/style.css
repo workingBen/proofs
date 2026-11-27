@@ -98,6 +98,14 @@ picture.rp-pic { display:contents; }
    never scrolls the page sideways. */
 .rp-rc-removes { margin:8px 0 0; padding:0; list-style:none; }
 .rp-rc-remove { color:var(--rp-deny); }
+/* A change's crops: before and after side by side at each width. On a phone the 1280 pair
+   stacks, so the wide crops stay readable. */
+.rp-rc-crops:not(:empty) { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px 12px; margin:12px 0 0; }
+.rp-rc-crop { margin:0; min-width:0; }
+.rp-rc-crop img { display:block; max-width:100%; height:auto; border:1px solid var(--rp-rule); }
+.rp-rc-crop figcaption { font-size:14px; color:var(--rp-soft); margin-top:4px; }
+.rp-rc-crop-note { grid-column:1 / -1; margin:0; color:var(--rp-soft); }
+@media (max-width: 600px) { .rp-rc-crop[data-rc-crop-w="1280"] { grid-column:1 / -1; } }
 .rp-rc-preview { margin:16px 0; padding:16px; background:var(--rp-card); border:1px solid var(--rp-rule); border-radius:10px; }
 .rp-rc-head { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; }
 .rp-rc-title { margin:0; }

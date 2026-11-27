@@ -2483,6 +2483,231 @@ class RefineSmoke(unittest.TestCase):
         self.assertEqual(sorted(shot), ["1280", "390"])
 
 
+# Measures a change outside the review page, for RefineCrops: the base rendered as its own page
+# at each width with the change off and on (fidelity.cjs applyChanges, as the engine paints it):
+# each target's box, the page's height, the bounding box of the pixels the change moves
+# (renderBase, diffMask), and the two crops crops.cjs wrote.
+CROP_MEASURE = r"""
+const fs = require("fs");
+const path = require("path");
+const [pw, rp, page, id, targetsArg, crops] = process.argv.slice(2);
+const { chromium } = require(pw);
+const { launchChromium } = require(path.join(rp, "launch.cjs"));
+const { renderBase, applyChanges, diffMask, SHOT_VIEWPORTS } = require(path.join(rp, "fidelity.cjs"));
+const targets = JSON.parse(targetsArg);
+const text = fs.readFileSync(page, "utf8");
+const doc = JSON.parse(text.match(/<script type="application\/json" id="rp-rc-base-[^"]*">([\s\S]*?)<\/script>/)[1]);
+function bbox(d, scale) {
+  let x0 = Infinity, y0 = Infinity, x1 = -1, y1 = -1;
+  for (let y = 0; y < d.height; y++) for (let x = 0; x < d.width; x++) {
+    if (!d.mask[y * d.width + x]) continue;
+    x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x + 1); y1 = Math.max(y1, y + 1);
+  }
+  return x1 < 0 ? null : [x0 / scale, y0 / scale, x1 / scale, y1 / scale];
+}
+(async () => {
+  const browser = await launchChromium(chromium, process.env);
+  const out = {};
+  for (const w of [1280, 390]) {
+    const boxes = [], heights = [];
+    for (const on of [[], [id]]) {
+      const ctx = await browser.newContext({ viewport: { width: w, height: 800 } });
+      const p = await ctx.newPage();
+      await p.setContent(doc, { waitUntil: "load" });
+      await p.evaluate(applyChanges, on);
+      boxes.push(...await p.evaluate((sels) => sels.flatMap((s) => Array.from(document.querySelectorAll(s)).map((e) => {
+        const r = e.getBoundingClientRect();
+        return [r.left + scrollX, r.top + scrollY, r.right + scrollX, r.bottom + scrollY];
+      })).filter((b) => b[2] > b[0] && b[3] > b[1]), targets));
+      heights.push(await p.evaluate(() => document.documentElement.getBoundingClientRect().height));
+      await ctx.close();
+    }
+    const dpr = SHOT_VIEWPORTS[w].deviceScaleFactor || 1;
+    const moved = bbox(diffMask(await renderBase(browser, doc, w, []), await renderBase(browser, doc, w, [id])), dpr);
+    const r = { targets: boxes, height: Math.min(...heights), moved, crops: null };
+    const before = path.join(crops, `${id}-before-${w}.png`), after = path.join(crops, `${id}-after-${w}.png`);
+    if (fs.existsSync(before) && fs.existsSync(after)) {
+      const d = diffMask(before, after);
+      r.crops = { width: d.width, height: d.height, differ: d.count };
+    }
+    out[w] = r;
+  }
+  await browser.close();
+  console.log(JSON.stringify(out));
+})().catch((e) => { console.log(JSON.stringify({ crash: String(e && e.stack || e) })); process.exit(1); });
+"""
+
+
+@unittest.skipUnless(NODE and playwright_dir(), "Playwright not found")
+class RefineCrops(unittest.TestCase):
+    """--crops: each change's before and after at 1280 and 390, cut from the built page's frames
+    to the union of its targets plus the margin, and the next build showing them on its card
+    (spec §4, "One card per change")."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.tmp = Path(self._tmp.name)
+        self.dir = self.tmp / "refine"
+        shutil.copytree(REFINE, self.dir)
+        self.snap = self.dir / "before" / "home-snapshot.html"
+        self.out = self.dir / ".proofs" / "design-review" / "crops"
+
+    def spec(self):
+        return json.loads((REFINE / "spec.json").read_text())
+
+    def build(self, spec=None):
+        src, out = self.dir / "s.json", self.tmp / "page.html"
+        src.write_text(json.dumps(spec or self.spec()))
+        r = subprocess.run([sys.executable, str(BUILD), str(src), "--out", str(out)],
+                           capture_output=True, text=True, cwd=str(self.dir))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        return out
+
+    def crops(self, page):
+        r = subprocess.run([sys.executable, str(BUILD), "--crops", str(page), "--out", str(self.out)],
+                           capture_output=True, text=True, cwd=str(self.dir), timeout=300)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        return json.loads((self.out / "crops.json").read_text()), r.stdout
+
+    def measure(self, page, change):
+        script = self.tmp / "measure.cjs"
+        script.write_text(CROP_MEASURE)
+        r = subprocess.run([NODE, str(script), playwright_dir(), str(RP), str(page), change["id"],
+                            json.dumps(change["targets"]), str(self.out)], capture_output=True, text=True, timeout=300)
+        res = json.loads(r.stdout.strip().splitlines()[-1])
+        self.assertNotIn("crash", res, res.get("crash"))
+        return res
+
+    @staticmethod
+    def crop_constants():
+        r = subprocess.run([NODE, "-e", "const c = require(process.argv[1]); "
+                            "console.log(JSON.stringify([c.CROP_MARGIN, c.CROP_SCALE]))", str(RP / "crops.cjs")],
+                           capture_output=True, text=True)
+        return json.loads(r.stdout)
+
+    @staticmethod
+    def card(text, cid):
+        """The inside of change cid's crops slot (figures and notes, no inner div)."""
+        m = re.search(r'<div class="rp-rc-crops" data-rc-crops="%s">(.*?)</div>' % cid, text, re.S)
+        return m.group(1) if m else None
+
+    def test_crops_cover_the_union_of_targets_plus_margin(self):
+        margin, _ = self.crop_constants()
+        self.assertGreater(margin, 0)
+        spec = self.spec()
+        page = self.build(spec)
+        boxes, _ = self.crops(page)
+        changes = spec["sections"][0]["items"][0]["changes"]
+        self.assertEqual(sorted(boxes), sorted(c["id"] for c in changes))
+        # alert-color: two targets, and .badge is hidden while it is on, so the union spans both states.
+        change = [c for c in changes if c["id"] == "alert-color"][0]
+        res = self.measure(page, change)
+        for w in ("1280", "390"):
+            box, t = boxes["alert-color"][w], res[w]["targets"]
+            self.assertTrue(t)
+            want = [max(0, min(b[0] for b in t) - margin), max(0, min(b[1] for b in t) - margin),
+                    min(int(w), max(b[2] for b in t) + margin), min(res[w]["height"], max(b[3] for b in t) + margin)]
+            got = [box["x"], box["y"], box["x"] + box["w"], box["y"] + box["h"]]
+            # Contains every target plus the margin (a pixel for rounding), and no more than that.
+            self.assertLessEqual(got[0], want[0] + 1e-6, (w, box, want))
+            self.assertLessEqual(got[1], want[1] + 1e-6, (w, box, want))
+            self.assertGreaterEqual(got[2], want[2] - 1e-6, (w, box, want))
+            self.assertGreaterEqual(got[3], want[3] - 1e-6, (w, box, want))
+            self.assertLessEqual(box["w"], want[2] - want[0] + 2, (w, box, want))
+            self.assertLessEqual(box["h"], want[3] - want[1] + 2, (w, box, want))
+            for k in "xywh":
+                self.assertIsInstance(box[k], int)
+
+    def test_crops_before_and_after_differ_only_inside_the_box(self):
+        _, scale = self.crop_constants()
+        spec = self.spec()
+        # A change that moves nothing but its targets' pixels. (Bolder totals also widen their
+        # column, which shifts the table's other columns: the crop is cut to the targets, as
+        # spec §4 says, so that reflow is outside it.)
+        change = {"id": "alert-ink", "label": "Darker alert text", "why_html": "<p>i</p>", "targets": [".alert"],
+                  "css": ".alert { color: #b42318; }"}
+        spec["sections"][0]["items"][0]["changes"].append(change)
+        page = self.build(spec)
+        boxes, _ = self.crops(page)
+        res = self.measure(page, change)
+        for w in ("1280", "390"):
+            box, r = boxes["alert-ink"][w], res[w]
+            # Every pixel the change moves, on the page as its own page, is inside the box.
+            self.assertIsNotNone(r["moved"], w)
+            x0, y0, x1, y1 = r["moved"]
+            self.assertGreaterEqual(x0, box["x"], (w, r["moved"], box))
+            self.assertGreaterEqual(y0, box["y"], (w, r["moved"], box))
+            self.assertLessEqual(x1, box["x"] + box["w"], (w, r["moved"], box))
+            self.assertLessEqual(y1, box["y"] + box["h"], (w, r["moved"], box))
+            # Both crops are that box, at the crop scale, and they show the change.
+            self.assertEqual((r["crops"]["width"], r["crops"]["height"]), (box["w"] * scale, box["h"] * scale), w)
+            self.assertGreater(r["crops"]["differ"], 0, w)
+        for c in spec["sections"][0]["items"][0]["changes"]:
+            for state in ("before", "after"):
+                for w in ("1280", "390"):
+                    self.assertTrue((self.out / ("%s-%s-%s.png" % (c["id"], state, w))).is_file())
+        # Nothing but the crops and crops.json in the folder, and nothing outside it.
+        self.assertEqual(sorted(p.name for p in self.out.iterdir() if not p.name.endswith(".png")), ["crops.json"])
+
+    def test_a_card_shows_four_crops_when_crops_is_set(self):
+        spec = self.spec()
+        boxes, _ = self.crops(self.build(spec))
+        # Without `crops` the slot stays empty; a folder that is not there yet changes nothing.
+        self.assertEqual(self.card(self.build(spec).read_text(), "bold-totals"), "")
+        spec["sections"][0]["items"][0]["crops"] = ".proofs/design-review/nowhere"
+        self.assertEqual(self.card(self.build(spec).read_text(), "bold-totals"), "")
+        spec["sections"][0]["items"][0]["crops"] = ".proofs/design-review/crops"
+        text = self.build(spec).read_text()
+        for c in spec["sections"][0]["items"][0]["changes"]:
+            inner = self.card(text, c["id"])
+            self.assertTrue(inner, c["id"])
+            imgs = re.findall(r"<img\b[^>]*>", inner)
+            self.assertEqual(len(imgs), 4, inner[:400])
+            alts = sorted(re.search(r'alt="([^"]*)"', i).group(1) for i in imgs)
+            self.assertEqual(alts, sorted("%s: %s, %s px" % (s, html.escape(c["label"]), w)
+                                          for s in ("Before", "After") for w in ("1280", "390")))
+            for i in imgs:   # each shown at its box's size, never wider than the column
+                w = re.search(r'alt="[^"]*, (\d+) px"', i).group(1)
+                self.assertIn('width="%d" height="%d"' % (boxes[c["id"]][w]["w"], boxes[c["id"]][w]["h"]), i)
+        self.assertNotIn("{{asset:", text)
+        self.assertNotIn(str(self.out), text)
+
+    def test_a_target_hidden_at_390_gives_a_note_not_a_crash(self):
+        self.snap.write_text(self.snap.read_text().replace(
+            "</style>", "@media (max-width: 600px) { .photo { display: none; } }\n</style>", 1))
+        spec = self.spec()
+        spec["sections"][0]["items"][0]["changes"].append(
+            {"id": "photo-ring", "label": "Ring on the photo", "why_html": "<p>r</p>", "targets": [".photo"],
+             "css": ".photo { outline: 3px solid #b42318; }"})
+        boxes, stdout = self.crops(self.build(spec))
+        self.assertEqual(sorted(boxes["photo-ring"]["1280"]), ["h", "w", "x", "y"])
+        note = boxes["photo-ring"]["390"]["note"]
+        self.assertIn(".photo", note)
+        self.assertIn("390", note)
+        self.assertIn(note, stdout)
+        self.assertTrue((self.out / "photo-ring-after-1280.png").is_file())
+        self.assertFalse((self.out / "photo-ring-before-390.png").exists())
+        self.assertFalse((self.out / "photo-ring-after-390.png").exists())
+        # The other changes still get all four.
+        self.assertEqual(sorted(boxes["bold-totals"]), ["1280", "390"])
+        spec["sections"][0]["items"][0]["crops"] = ".proofs/design-review/crops"
+        inner = self.card(self.build(spec).read_text(), "photo-ring")
+        self.assertEqual(len(re.findall(r"<img\b", inner)), 2, inner[:400])
+        self.assertIn(html.escape(note), inner)
+
+    def test_crops_needs_a_refine_page_and_an_out_folder(self):
+        r = subprocess.run([sys.executable, str(BUILD), "--crops", str(self.build())], capture_output=True, text=True,
+                           cwd=str(self.dir))
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("--out", r.stderr)
+        plain = build("design-review", self.tmp)
+        r = subprocess.run([sys.executable, str(BUILD), "--crops", str(plain), "--out", str(self.out)],
+                           capture_output=True, text=True, cwd=str(self.dir), timeout=300)
+        self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+        self.assertIn("no Refine preview", r.stderr)
+        self.assertFalse(self.out.exists())
+
 
 READ_JUMP = r"""
 const { chromium } = require(process.argv[2]);

@@ -1205,6 +1205,28 @@ class RefineGuidance(unittest.TestCase):
             with self.subTest(word=word):
                 self.assertIn(word, text)
 
+    def test_refine_critic_points_at_the_redesign_rules_and_lists_its_inputs(self):
+        text = self.skill()
+        sec = text[text.index("6. **Critic.**"):text.index("7. **Rebuild.**")]
+        self.assertNotIn("Same rules as step 4", sec)   # step 4 of this list is --smoke
+        self.assertIn('The Redesign critic\'s rules ("Who scores", in step 4)', sec)
+        self.assertIn("crops and `removes` lines only", sec)
+        self.assertIn("crops and `removes` lines only", self.rubric())
+        for given in ("crops at both widths", "`removes` lines", "`Density:` line", "the `--smoke` output",
+                      "the set shots", "the current page's shots at 1280 and 390"):
+            with self.subTest(given=given):
+                self.assertIn(given, sec)
+        self.assertIn("Never `why_html`", sec)
+        self.assertNotIn("shots and inventory only", sec)
+        self.assertIn("--crops .proofs/pages/<review-name>.html --out .proofs/design-review/crops --set 1,3", sec)
+        self.assertIn("`set-1280.png` and `set-390.png`", sec)
+
+    def test_match_preview_uses_the_same_data_as_the_before(self):
+        text = self.skill()
+        self.assertIn("**Capture the built page from the same input data as the before**", text)
+        self.assertIn("When you cannot use the same data, say so in chat", text)
+        self.assertIn("mostly text", text)
+
     def test_apply_step_matches_the_preview_and_states_the_yes_plus_revise_rule(self):
         text = self.skill()
         self.assertIn("--match-preview .proofs/pages/<review-name>.html --picks 1,3 --shots .proofs/capture/after", text)

@@ -115,7 +115,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/shared/capture/with_server.py --start "npm run dev
 python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py --smoke .proofs/pages/<review-name>.html
 ```
 
-   In Refine it checks that the base matches the before capture (`base differs from the page`), flags two changes that touch the same property on the same element, and measures every change on alone and all together for contrast, tap targets, mid-word breaks, sideways scroll, line length and edges. There is no near-copy check. A problem line means revise or drop the change.
+   In Refine it checks that the base matches the before capture (`base differs from the page`) and that each frame is as tall as the before shot, flags two changes that touch the same property on the same element, a target or swap that matches nothing, and a change that hides elements or changes words without a `removes` line, and measures every change on alone and all together for contrast, tap targets, mid-word breaks, sideways scroll, line length and edges. There is no near-copy check. A problem line means revise or drop the change. A builder warning that the base still loads files from another site means the published preview will be missing them: say so on the page, or capture again.
 5. **Crops.** Cut each change's before and after at 1280 and 390:
 
 ```bash
@@ -123,7 +123,13 @@ python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py --crops .proofs/
 ```
 
    Open a few crops yourself; the critic reads all of them.
-6. **Critic.** Same rules as step 4 (a fresh helper when the session can start one, else you, from the shots and inventory only). It scores each change on `gain` and `keeps`, then the recommended changes together on the six criteria against the current page, using the Refine section of `../../reference/design-rubric.md`. A change below its bar is revised once per correction pass or dropped, with the reason on the page. A change that makes the set worse loses its recommendation.
+6. **Critic.** The Redesign critic's rules ("Who scores", in step 4): the critic setting picks a fresh helper when the session can start one, else you, scoring as a fresh checklist. In Refine its inputs are crops and `removes` lines only, as the rubric's Refine section says: the rubric file, the request, the current page's shots at 1280 and 390, each change's label and its crops at both widths, each change's `removes` lines, the profile with its `Density:` line, the `--smoke` output, and the set shots below. Never `why_html`: that is the designer's reasoning. It scores each change on `gain` and `keeps` with the Refine section of `../../reference/design-rubric.md`. Then shoot the changes it recommends, on together, with their numbers:
+
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py --crops .proofs/pages/<review-name>.html --out .proofs/design-review/crops --set 1,3
+```
+
+   and give it `set-1280.png` and `set-390.png` from that folder, to score the set on the six criteria against the current page's shots (`before_scores`). A change below its bar is revised once per correction pass or dropped, with the reason on the page. A change that makes the set worse loses its recommendation.
 7. **Rebuild.** Add `scores` and `recommended` on each change, `before_scores`, `set_scores` and `judged_by` on the item, and the item's `crops` set to `.proofs/design-review/crops`. Run `--smoke` again. If a pass changed a change's `targets`, `css` or `swaps`, run the crops command again first (the builder warns when a card's crops are stale).
 8. **Publish.** As in "Where the page goes". Undecided and recommended changes start off in the preview, so it shows only what the reader chose. A Refine with no change that clears its bar says the page already works and lists what it looked at, instead of showing weak changes.
 
@@ -179,7 +185,7 @@ Results first: within the spend cap setting (default $5; an estimate you plan ar
 python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py --match-preview .proofs/pages/<review-name>.html --picks 1,3 --shots .proofs/capture/after
 ```
 
-with the numbers of the `YES` changes (the export's `Combined:` line has them). Exit 1 is a failure: fix the build and capture again before you say the picks are built, and say in chat what differed. A difference the reader can see but the measure cannot explain is reported, never hidden. **A round with both `YES` and `REVISE`:** build the `YES` changes now, because the reader saw them together in the preview and approved them; the follow-up round on the `REVISE` changes then takes a **fresh snapshot** of the page with those built.
+with the numbers of the `YES` changes (the export's `Combined:` line has them). **Capture the built page from the same input data as the before**: the same fixture, seed or frozen data file the before capture showed. A page that reads live data shows newer numbers after the build, and the measure fails however faithful the build is. When you cannot use the same data, say so in chat, and treat a failure whose line says the differing pixels outside the picks are mostly text as the data, not the build: check the picks by eye against the preview and report it, rather than rebuilding. Exit 1 is otherwise a failure: fix the build and capture again before you say the picks are built, and say in chat what differed. A difference the reader can see but the measure cannot explain is reported, never hidden. **A round with both `YES` and `REVISE`:** build the `YES` changes now, because the reader saw them together in the preview and approved them; the follow-up round on the `REVISE` changes then takes a **fresh snapshot** of the page with those built.
 
 When the user pastes back the copied summary, match items by number (and variant letter, where relevant). **Change only what was picked.** Anything else you think should change (shorter copy so a layout fits, a neighbor section, a word you would put better) is proposed, not applied: leave it as it is and list it in chat as a proposal for the next round, with the item it came from.
 

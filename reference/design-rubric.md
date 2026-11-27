@@ -96,11 +96,11 @@ Results first (`house-rules.md` rule 0): never skip the critic, the measured che
 
 ## Refine mode
 
-In Refine mode (`SKILL.md`, "Refine mode") the page is not redesigned: the original stays and the designer offers 3 to 8 small, separate changes, each a layer the reader can turn on or off. The critic scores each change from its before and after crops at 1280 and 390 (the same helper rules as above: fresh context, crops and `removes` lines only, never the designer's reasoning), then the recommended changes together. The six criteria above still apply to the combination. There is no near-copy penalty and no "must beat the current page" rule for a change on its own: a change only has to help without hurting.
+In Refine mode (`SKILL.md`, "Refine mode") the page is not redesigned: the original stays and the designer offers 3 to 8 small, separate changes, each a layer the reader can turn on or off. The critic scores each change from its before and after crops at 1280 and 390 (the same helper rules as above: fresh context, crops and `removes` lines only, with each change's label, never the designer's reasoning such as `why_html`), then the recommended changes together, from the set shots (`--crops --set`: the whole page with them on, at 1280 and 390) against the current page's shots. The six criteria above still apply to the combination. There is no near-copy penalty and no "must beat the current page" rule for a change on its own: a change only has to help without hurting.
 
 ### `gain`: it improves what it says it fixes
 
-Compare the change's before and after crop against the problem its `why_html` names.
+Compare the change's before and after crop against what its label says it changes.
 
 - **1**: the after is no better than the before, or it is worse; or the problem it names cannot be seen in the before.
 - **3**: the problem is visibly better at one width but barely at the other, or the change is real but small enough that a reader would not miss it.

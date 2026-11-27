@@ -16,12 +16,10 @@ Result: PASS, 34 of 34 checks (both-frame and single-frame toggles, data-rc c2 a
 - Toggle: both frames turn rgb(128, 0, 128); toggling again restores both
 - No sideways scroll on the 390-wide outer page
 
-## Artifact and iPhone: pending controller
+## Artifact and iPhone: PASS (2026-11-26)
 
-To record: does it render, does the toggle work, are both widths correct (artifact, then the owner's iPhone).
-A sandboxed artifact origin may block `contentDocument` access; the page reports that as `ERROR ...`.
+Published as a claude.ai artifact (version 2, with the not-loaded and scoped-toggle checks). The owner opened it on an iPhone and tapped every button: every line PASS. Both frames loaded, each kept its own width's layout, and the outer page could reach each frame's `contentDocument` to toggle `data-rc`.
 
 ## Decision
 
-Provisional: `iframe` (file:// passes). Final decision waits on the artifact and iPhone results;
-if any fails, record `container-queries` with what failed.
+**`iframe`.** Every check passed via file://, in a published artifact, and on an iPhone. Tasks 3 and 4 build `srcdoc` iframes. Set `data-rc` after each frame's `load` event: a `srcdoc` load replaces the document.

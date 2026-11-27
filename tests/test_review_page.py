@@ -2958,6 +2958,24 @@ class RefineBaseRewrites(unittest.TestCase):
         self.assertIn("<p>a 100vh page</p>", out)                            # nor the page's words
         self.assertNotIn("vh}", out.replace("1vh))}", ""))
 
+    def test_vh_rewrite_leaves_urls_strings_and_media_queries_alone(self):
+        css = ('@font-face{src:url(data:font/woff2;base64,AAAA/12vh+BBBB)}'
+               '.a::after{content:"fits 100vh"}.b{background:url("x 3vh.png")}'
+               '@media (min-height: 50vh) and (orientation: portrait) { .h{height:100vh} }'
+               '@supports (height: 1dvh) { .i{height:50dvh} }/* 100vh */')
+        out = review_page._vh_css(css)
+        for kept in ("url(data:font/woff2;base64,AAAA/12vh+BBBB)", 'content:"fits 100vh"', 'url("x 3vh.png")',
+                     "@media (min-height: 50vh) and (orientation: portrait) {", "@supports (height: 1dvh) {", "/* 100vh */"):
+            self.assertIn(kept, out)
+        self.assertIn(".h{height:calc(100 * var(--rp-vh, 1vh))}", out)
+        self.assertIn(".i{height:calc(50 * var(--rp-vh, 1dvh))}", out)
+        doc = ('<style>.h{height:100vh}.f{src:url(data:font/woff2;base64,AAAA/12vh+BBBB)}</style>'
+               '<p style="height:10vh; background:url(&quot;data:image/png;base64,QQ12vhQQ&quot;)">a</p>')
+        out = review_page.vh_to_var(doc)
+        self.assertIn(".h{height:calc(100 * var(--rp-vh, 1vh))}", out)
+        self.assertIn("AAAA/12vh+BBBB", out)
+        self.assertIn('style="height:calc(10 * var(--rp-vh, 1vh)); background:url(&quot;data:image/png;base64,QQ12vhQQ&quot;)"', out)
+
     def test_nested_iframe_srcdoc_is_dropped(self):
         doc = '<p>x</p><iframe src="https://e.example/a" srcdoc="&lt;script&gt;parent.x=1&lt;/script&gt;" width="9"></iframe>'
         out = review_page.strip_nested_srcdoc(doc)

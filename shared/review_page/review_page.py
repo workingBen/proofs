@@ -1770,9 +1770,41 @@ def refine_base(it, base, cache):
 
 
 def _vh_css(css):
-    """Each viewport-height length in css as a multiple of --rp-vh (falling back to the unit
-    itself, so the base opened as its own page lays out as before)."""
-    return VH_UNIT.sub(lambda m: "calc(%s * var(--rp-vh, 1%s))" % (m.group(1), m.group(2)), css)
+    """Each viewport-height length in css's declarations as a multiple of --rp-vh (falling back
+    to the unit itself, so the base opened as its own page lays out as before). Left as written:
+    quoted strings (content: "fits 100vh"), url(...) bodies (a data: URI's base64 can hold
+    "12vh"), comments, and at-rule preludes up to their { or ; (@media (min-height: 50vh): var()
+    is not allowed in a media query, so a rewrite would make it never match)."""
+    out, plain, i, n = [], [], 0, len(css)
+
+    def flush():
+        if plain:
+            out.append(VH_UNIT.sub(lambda m: "calc(%s * var(--rp-vh, 1%s))" % (m.group(1), m.group(2)), "".join(plain)))
+            plain.clear()
+    while i < n:
+        c = css[i]
+        if c in "\"'" or css.startswith("/*", i):
+            j = _css_skip(css, i)
+        elif c == "\\":  # an escape stays in the run, so the unit regex sees what is around it
+            plain.append(css[i:i + 2])
+            i += 2
+            continue
+        elif css[i:i + 4].lower() == "url(" and not (i and (css[i - 1].isalnum() or css[i - 1] in "-_")):
+            j = i + 4
+            while j < n and css[j] != ")":
+                j = _css_skip(css, j) if css[j] in "\"'\\" else j + 1
+            j = min(j + 1, n)
+        elif c == "@":
+            j = _css_scan(css, i, "{;")
+        else:
+            plain.append(c)
+            i += 1
+            continue
+        flush()
+        out.append(css[i:j])
+        i = j
+    flush()
+    return "".join(out)
 
 
 def vh_to_var(doc):
@@ -1784,8 +1816,14 @@ def vh_to_var(doc):
     media query still sees the frame's full height."""
     doc = re.sub(r"(<style\b[^>]*>)(.*?)(</style\s*>)", lambda m: m.group(1) + _vh_css(m.group(2)) + m.group(3),
                  doc, flags=re.S | re.I)
-    return re.sub(r"""(<[A-Za-z][^<>]*?\sstyle=)("[^"]*"|'[^']*')""",
-                  lambda m: m.group(1) + _vh_css(m.group(2)), doc)
+    def attr(m):
+        q, raw = m.group(2)[0], m.group(2)[1:-1]
+        val = html.unescape(raw)  # &quot; inside a value is a CSS string's quote
+        new = _vh_css(val)
+        if new == val:
+            return m.group(0)
+        return m.group(1) + q + new.replace("&", "&amp;").replace(q, "&quot;" if q == '"' else "&#39;") + q
+    return re.sub(r"""(<[A-Za-z][^<>]*?\sstyle=)("[^"]*"|'[^']*')""", attr, doc)
 
 
 def strip_nested_srcdoc(doc):

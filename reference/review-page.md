@@ -175,7 +175,7 @@ change.
 |---|---|
 | `kind` | `"refine"` |
 | `id` | the item's id (default `refine`); unique on the page, like the change ids |
-| `base` | `{"from": ".proofs/capture/before/<name>-snapshot.html"}`, the capture's snapshot (`--snapshot`); relative to the spec's folder, then the working directory. Each file of its sibling `<name>-snapshot-assets/` folder it refers to is embedded as a data URI, made once per file. A PNG becomes lossless WebP when that is smaller; nothing is resized or lossy, so the base renders like the page. A reference to a file the folder does not have is a spec error. Every `vh`, `svh`, `lvh` and `dvh` in its `<style>` elements and `style` attributes (and in the changes' `css`) is written as `calc(N * var(--rp-vh, 1vh))`, which each frame sets to its capture viewport's height / 100 (8 px at 1280, 8.44 px at 390), so a `min-height: 100vh` hero is as tall as in the before shot. Known limits: `vmin`, `vmax` and a `max-height` media query still see the frame's full height. A nested `<iframe>`'s `srcdoc` is dropped. A file the base still loads from another site (a stylesheet the snapshot could not fetch, an image or iframe `src`) is a builder warning: a published page will not load it |
+| `base` | `{"from": ".proofs/capture/before/<name>-snapshot.html"}`, the capture's snapshot (`--snapshot`); relative to the spec's folder, then the working directory. Each file of its sibling `<name>-snapshot-assets/` folder it refers to is embedded as a data URI, made once per file. A PNG becomes lossless WebP when that is smaller; nothing is resized or lossy, so the base renders like the page. A reference to a file the folder does not have is a spec error. Every `vh`, `svh`, `lvh` and `dvh` in its `<style>` elements and `style` attributes (and in the changes' `css`) is written as `calc(N * var(--rp-vh, 1vh))`, which each frame sets to its capture viewport's height / 100 (8 px at 1280, 8.44 px at 390), so a `min-height: 100vh` hero is as tall as in the before shot. Only declarations are rewritten: quoted strings, `url(...)` bodies and at-rule preludes stay as written. Known limits: `vmin` and `vmax` are not rewritten, and `max-height`, `min-height`, `orientation` and `aspect-ratio` media queries still see the frame's full height. A nested `<iframe>`'s `srcdoc` is dropped. A file the base still loads from another site (a stylesheet the snapshot could not fetch, an image or iframe `src`) is a builder warning: a published page will not load it |
 | `changes` | 1 to 8 changes (more than 8 says the page wants a Redesign); any other count is a spec error naming the cap |
 | `location` | the section's name, shown on every card whose change has no `location` of its own |
 | `before_scores` | the current page on the six criteria (as `scores` above), shown in the preview as "Current page" |
@@ -208,8 +208,8 @@ are empty without JavaScript. Each frame is measured at `data-rc-height` (the ca
 viewport height at that width) and never shorter, so a page sized to 100% of the viewport (an
 `html, body { height: 100% }` app shell) lays out as the capture saw it. The frames take no
 taps (`pointer-events: none`): a link in the page would navigate the frame, or the review page
-with `target="_top"`. (Adding the iframe `sandbox` attribute as well is a planned follow-up,
-once it is checked on an iPhone.) After each frame's `load` (and again after any later load) the engine
+with `target="_top"`. (`pointer-events: none` does not stop keyboard focus into a frame's links; adding the
+iframe `sandbox` attribute as well is a planned follow-up, once it is checked on an iPhone.) After each frame's `load` (and again after any later load) the engine
 writes the Yes set to the frame's `<html data-rc>` (empty in the Original view), puts
 each on change's swaps in place (restoring the original element when it goes off),
 scales the frame to its column and marks it `data-rc-ready="1"`; it repaints on every

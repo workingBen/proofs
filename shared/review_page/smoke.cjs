@@ -70,18 +70,27 @@ function added(d, base) {
 // each element a swap took out. Every change is diffed on the union of all changes' declared
 // longhands (custom properties too), not only its own: a change that sets --accent changes the
 // color of whatever reads var(--accent), the property another change may set outright. Declared
-// longhands come from the frame's <style data-rc-css>, so a neighbor that only moves (its width,
-// its top) is not counted unless some change declares width or top itself.
+// longhands come from the frame's <style data-rc-css>. The first call also records, per element,
+// the properties each change's rules declare on it directly (window.__rcDirect), measured with
+// every change's attribute on and on the base DOM, so it holds for an element a swap later takes
+// out. An overlap needs one of the two changes to declare the property on the element itself:
+// getComputedStyle gives used values for width, height and margins, so a reflow from one change
+// would otherwise meet a layout property another declares on some other element.
 function styleDiff({ ids }) {
-  const declared = {};
+  const declared = {}, parts = [];
   const sheet = Array.from(document.styleSheets).find((sh) => sh.ownerNode && sh.ownerNode.hasAttribute("data-rc-css"));
   const walk = (rules) => {
     for (const r of rules) {
       if (r.cssRules && !r.selectorText) { walk(r.cssRules); continue; }
       if (!r.selectorText || !r.style) continue;
+      const longhands = Array.from({ length: r.style.length }, (_, i) => r.style[i]);
       for (const m of r.selectorText.matchAll(/\[data-rc~="([a-z0-9-]+)"\]/g)) {
         const set = declared[m[1]] || (declared[m[1]] = new Set());
-        for (let i = 0; i < r.style.length; i++) set.add(r.style[i]);
+        longhands.forEach((l) => set.add(l));
+      }
+      for (const part of r.selectorText.split(/,\s*(?=html\[data-rc~=)/)) {
+        const m = part.match(/^html\[data-rc~="([a-z0-9-]+)"\]/);
+        if (m) parts.push([part, m[1], longhands]);
       }
     }
   };
@@ -91,6 +100,21 @@ function styleDiff({ ids }) {
     window.__rcEls = [document.body, ...document.body.querySelectorAll("*")];
     window.__rcProps = props;
     window.__rcBase = window.__rcEls.map((el) => { const cs = getComputedStyle(el); return props.map((p) => cs.getPropertyValue(p)); });
+    const index = new Map(window.__rcEls.map((el, i) => [el, i]));
+    window.__rcDirect = window.__rcEls.map(() => ({}));
+    const root = document.documentElement, was = root.getAttribute("data-rc");
+    root.setAttribute("data-rc", Object.keys(declared).join(" "));
+    for (const [part, id, longhands] of parts) {
+      let els = [];
+      try { els = document.querySelectorAll(part); } catch (e) { continue; }
+      for (const el of els) {
+        const i = index.get(el);
+        if (i === undefined) continue;
+        const d = window.__rcDirect[i];
+        d[id] = [...new Set([...(d[id] || []), ...longhands])];
+      }
+    }
+    if (was === null) root.removeAttribute("data-rc"); else root.setAttribute("data-rc", was);
     return [];
   }
   const out = [];
@@ -149,7 +173,7 @@ async function refineChecks(browser, page, S, problems, notes) {
     const before = tried.find((f) => fs.existsSync(f));
     if (!before) {
       out.fidelity[w] = null;
-      problems.push(`${label}: no before shot at ${w} (looked for ${tried.map((f) => path.relative(process.cwd(), f)).join(", ")}); fidelity not measured`);
+      problems.push(`${label}: no before shot at ${w} (looked for ${tried.map((f) => path.relative(process.cwd(), f)).join(", ")}); fidelity not measured${shotsDir ? "" : "; pass --shots DIR with the folder of the before shots"}`);
       continue;
     }
     const r = await compareShots(await renderBase(browser, doc, w, []), before);
@@ -216,17 +240,23 @@ async function refineChecks(browser, page, S, problems, notes) {
         const ta = touched[w + "|" + a.num] || [], tb = touched[w + "|" + b.num] || [];
         const props = (t) => { const m = new Map(); for (const [e, p] of t) m.set(e, (m.get(e) || new Set()).add(p)); return m; };
         const pa = props(ta), pb = props(tb);
+        const shared = [...pa.keys()].filter((e) => pb.has(e));
+        const direct = shared.length ? await frames[w].evaluate((ix) => ix.map((i) => window.__rcDirect[i]), shared) : [];
+        const on = (k, c) => direct[k][c.id] || [];
         const both = [];  // [element index, property, which side swaps it or null]
-        for (const [e, sa] of pa) {
-          const sb = pb.get(e);
-          if (!sb) continue;
+        shared.forEach((e, k) => {
+          const sa = pa.get(e), sb = pb.get(e);
           if (sa.has("markup") || sb.has("markup")) {
-            const swapper = sa.has("markup") ? a : b, other = sa.has("markup") ? sb : sa;
-            for (const p of other) both.push([e, p, swapper]);  // "markup" in other: both swap it
+            const swapper = sa.has("markup") ? a : b, other = swapper === a ? b : a;
+            const otherSet = swapper === a ? sb : sa;
+            // "markup" on both sides: both swap it. Otherwise the other change must have a rule on
+            // this element itself, not one it inherits from or is pushed around by.
+            if (otherSet.has("markup")) { both.push([e, "markup", swapper]); return; }
+            for (const p of otherSet) if (on(k, other).length) both.push([e, p, swapper]);
           } else {
-            for (const p of sa) if (sb.has(p)) both.push([e, p, null]);
+            for (const p of sa) if (sb.has(p) && (on(k, a).includes(p) || on(k, b).includes(p))) both.push([e, p, null]);
           }
-        }
+        });
         if (!both.length) continue;
         const names = await frames[w].evaluate(elementNames, { indices: both.map(([e]) => e), ids: [a.id, b.id] });
         both.forEach(([, prop, swapper], k) => {

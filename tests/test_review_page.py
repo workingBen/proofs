@@ -2303,8 +2303,8 @@ class RefineSmoke(unittest.TestCase):
 
     def test_fidelity_without_a_before_shot_is_a_problem_not_a_pass(self):
         res = self.smoke()
-        self.assertTrue(any(p.startswith("item home (Refine): no before shot at 1280") for p in res["problems"]),
-                        res["problems"])
+        self.assertTrue(any(p.startswith("item home (Refine): no before shot at 1280") and p.endswith(
+            "pass --shots DIR with the folder of the before shots") for p in res["problems"]), res["problems"])
 
     def test_overlap_names_both_changes_the_element_and_the_property(self):
         self.before_shots()
@@ -2343,6 +2343,32 @@ class RefineSmoke(unittest.TestCase):
         self.assertIn({"a": "3", "b": "4", "element": ".status-icon", "property": "color"}, res["refine"]["overlaps"])
         self.assertIn("item home (Refine): change 3 swaps .status-icon, which change 4 also changes (color)",
                       res["problems"])
+
+    def test_no_overlap_from_a_reflow_onto_a_layout_property(self):
+        # Change 4's bigger type makes the header and table taller; change 5 declares a height,
+        # on the logo only. Neither declares height on the header, so they do not overlap there.
+        self.before_shots()
+        spec = self.spec()
+        spec["sections"][0]["items"][0]["changes"] += [
+            {"id": "big-type", "label": "Bigger type", "why_html": "<p>t</p>", "targets": [".wrap"],
+             "css": ".wrap { font-size: 20px; }"},
+            {"id": "tall-logo", "label": "Taller logo", "why_html": "<p>l</p>", "targets": [".logo"],
+             "css": ".logo { height: 30px; }"}]
+        res = self.smoke(spec)
+        self.assertEqual([o for o in res["refine"]["overlaps"] if {o["a"], o["b"]} & {"4", "5"}], [],
+                         res["refine"]["overlaps"])
+
+    def test_no_overlap_from_a_property_inherited_into_a_swap(self):
+        # Change 4's font size reaches the swapped .status-icon only by inheritance.
+        self.before_shots()
+        spec = self.spec()
+        spec["sections"][0]["items"][0]["changes"].append(
+            {"id": "big-type", "label": "Bigger type", "why_html": "<p>t</p>", "targets": [".wrap"],
+             "css": ".wrap { font-size: 20px; }"})
+        res = self.smoke(spec)
+        self.assertEqual([o for o in res["refine"]["overlaps"] if (o["a"], o["b"]) == ("3", "4")], [],
+                         res["refine"]["overlaps"])
+        self.assertFalse([p for p in res["problems"] if "swaps" in p], res["problems"])
 
     def test_design_checks_run_on_each_change_alone_and_all_on(self):
         self.before_shots()

@@ -60,6 +60,18 @@ class SiteTests(unittest.TestCase):
         txt = open(os.path.join(DOCS, "index.html"), encoding="utf-8").read()
         self.assertIn("12 skills", txt)
 
+    def test_every_page_has_link_preview_and_tab_icon(self):
+        card = "https://workingben.github.io/proofs/assets/social-card.jpg"
+        for f in glob.glob(os.path.join(DOCS, "*.html")):
+            txt = open(f, encoding="utf-8").read()
+            self.assertIn(f'<meta property="og:image" content="{card}">', txt, f)
+            self.assertIn('<meta name="twitter:card" content="summary_large_image">', txt, f)
+            self.assertRegex(txt, r'<meta property="og:title" content="[^"%]+">', f)
+            self.assertRegex(txt, r'<meta property="og:description" content="[^"%]+">', f)
+            self.assertIn('<link rel="icon" href="assets/favicon.svg"', txt, f)
+        for a in ("social-card.jpg", "favicon.svg", "apple-touch-icon.png"):
+            self.assertTrue(os.path.exists(os.path.join(DOCS, "assets", a)), a)
+
     def test_install_line_uses_https(self):
         # The owner/repo shorthand clones over SSH and fails without a GitHub SSH key.
         line = "/plugin marketplace add https://github.com/workingBen/proofs.git"

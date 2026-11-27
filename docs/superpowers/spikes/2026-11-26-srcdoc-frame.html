@@ -17,7 +17,11 @@
 </style></head><body>
 <h1>Srcdoc frame spike</h1>
 <p>Two frames, 1280 and 390 wide. Inside each, a heading is <b>green</b> on a wide frame and <b>red</b> on a narrow one (600 px media query). The toggle sets a data attribute that turns it <b>purple</b>.</p>
-<button id="toggle" type="button">Toggle data-rc="c1"</button>
+<button id="toggle" type="button">Toggle data-rc="c1" on both</button>
+<button id="t1280" type="button">Toggle c1 on 1280 only</button>
+<button id="t390" type="button">Toggle c1 on 390 only</button>
+<button id="c2" type="button">Set data-rc="c2" on both</button>
+<button id="c1c2" type="button">Set data-rc="c1 c2" on both</button>
 <div id="checks" class="box" aria-live="polite"></div>
 <div id="reports" class="box"></div>
 <p>Frame 1280 (scaled to fit)</p>
@@ -33,7 +37,10 @@ const INNER = '<!doctype html><html><head><meta charset="utf-8"><meta name="view
   '<body><h1 id="h">Heading</h1><p>Inner page</p></body></html>';
 const GREEN = "rgb(0, 128, 0)", RED = "rgb(200, 0, 0)", PURPLE = "rgb(128, 0, 128)";
 const frames = { "1280": document.getElementById("f1280"), "390": document.getElementById("f390") };
-let on = false;
+const rc = { "1280": "", "390": "" };   // what we last set on each frame
+const ready = { "1280": false, "390": false };
+const BASE = { "1280": GREEN, "390": RED };
+const NOLOAD = new URLSearchParams(location.search).get("noload"); // test hook: skip srcdoc on that frame
 
 function fit() {
   const stage = document.getElementById("stage1280");
@@ -41,35 +48,43 @@ function fit() {
   frames["1280"].style.transform = "scale(" + s + ")";
   stage.style.height = Math.ceil(200 * s) + "px";
 }
-function colorOf(f) {
-  try { const d = f.contentDocument; return getComputedStyle(d.getElementById("h")).color; }
+function colorOf(k) {
+  if (!ready[k]) return "NOT LOADED";
+  try { return getComputedStyle(frames[k].contentDocument.getElementById("h")).color; }
   catch (e) { return "ERROR " + e.name; }
 }
+function widthOf(k) { try { return ready[k] ? frames[k].contentWindow.innerWidth : "NOT LOADED"; } catch (e) { return "ERROR " + e.name; } }
 function line(ok, text) { return '<div class="report ' + (ok ? "pass" : "fail") + '">' + (ok ? "PASS" : "FAIL") + ": " + text + "</div>"; }
+function expected(k) { return rc[k].split(/\s+/).indexOf("c1") >= 0 ? PURPLE : BASE[k]; }
 function render() {
-  const c1280 = colorOf(frames["1280"]), c390 = colorOf(frames["390"]);
-  const w = (f) => { try { return f.contentWindow.innerWidth; } catch (e) { return "?"; } };
-  const e1280 = on ? PURPLE : GREEN, e390 = on ? PURPLE : RED;
+  const c = { "1280": colorOf("1280"), "390": colorOf("390") };
   document.getElementById("reports").innerHTML =
-    '<div class="report" id="r1280">1280 frame color: ' + c1280 + '</div>' +
-    '<div class="report" id="r390">390 frame color: ' + c390 + '</div>' +
-    '<div class="report">toggle state: ' + (on ? "ON" : "OFF") + '</div>';
-  document.getElementById("checks").innerHTML =
-    line(w(frames["1280"]) === 1280, "1280 frame inner width is " + w(frames["1280"])) +
-    line(w(frames["390"]) === 390, "390 frame inner width is " + w(frames["390"])) +
-    line(c1280 === e1280, "1280 frame expected " + e1280) +
-    line(c390 === e390, "390 frame expected " + e390) +
-    line(document.documentElement.scrollWidth <= document.documentElement.clientWidth, "no sideways page scroll");
-}
-document.getElementById("toggle").addEventListener("click", () => {
-  on = !on;
-  for (const f of Object.values(frames)) {
-    try { f.contentDocument.documentElement.setAttribute("data-rc", on ? "c1" : ""); } catch (e) {}
+    '<div class="report" id="r1280">1280 frame color: ' + c["1280"] + '</div>' +
+    '<div class="report" id="r390">390 frame color: ' + c["390"] + '</div>' +
+    '<div class="report" id="rstate">data-rc: 1280=[' + rc["1280"] + '] 390=[' + rc["390"] + ']</div>';
+  let h = "";
+  for (const k of ["1280", "390"]) {
+    h += line(ready[k], k + " frame loaded") +
+         line(widthOf(k) === Number(k), k + " frame inner width is " + widthOf(k)) +
+         line(c[k] === expected(k), k + " frame expected " + expected(k));
   }
-  render();
-});
-let loaded = 0;
-for (const f of Object.values(frames)) f.addEventListener("load", () => { if (++loaded === 2) render(); });
-for (const f of Object.values(frames)) f.srcdoc = INNER;
+  h += line(document.documentElement.scrollWidth <= document.documentElement.clientWidth, "no sideways page scroll");
+  document.getElementById("checks").innerHTML = h;
+}
+function setRc(k, v) {
+  rc[k] = v;
+  try { frames[k].contentDocument.documentElement.setAttribute("data-rc", v); } catch (e) {}
+}
+const has = (k) => rc[k].split(/\s+/).indexOf("c1") >= 0;
+function bind(id, fn) { document.getElementById(id).addEventListener("click", () => { fn(); render(); }); }
+bind("toggle", () => { const v = has("1280") && has("390") ? "" : "c1"; setRc("1280", v); setRc("390", v); });
+bind("t1280", () => setRc("1280", has("1280") ? "" : "c1"));
+bind("t390", () => setRc("390", has("390") ? "" : "c1"));
+bind("c2", () => { setRc("1280", "c2"); setRc("390", "c2"); });
+bind("c1c2", () => { setRc("1280", "c1 c2"); setRc("390", "c1 c2"); });
+for (const k of Object.keys(frames)) frames[k].addEventListener("load", () => { ready[k] = true; render(); });
+for (const k of Object.keys(frames)) if (NOLOAD !== k) frames[k].srcdoc = INNER;
 window.addEventListener("resize", fit); fit();
+render();                      // at once, so a frame that never loads shows FAIL, not a blank
+setTimeout(render, 2000);      // fallback: report whatever loaded
 </script></body></html>

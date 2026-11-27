@@ -9,7 +9,7 @@ and the outer page prints each frame's computed heading color with a PASS/FAIL l
 
 ## file:// (headless Chromium via launchChromium, viewport 390)
 
-Result: PASS, 15 of 15 checks (before toggle, after toggle, toggled back).
+Result: PASS, 34 of 34 checks (both-frame and single-frame toggles, data-rc c2 and "c1 c2", and a not-loaded frame reporting FAIL).
 
 - 1280 frame: inner width 1280, desktop color rgb(0, 128, 0)
 - 390 frame: inner width 390, phone color rgb(200, 0, 0) (media query fires per frame, not per outer page)

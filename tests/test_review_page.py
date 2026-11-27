@@ -7,6 +7,7 @@ PROOFS_PLAYWRIGHT to an installed playwright package folder, or it is skipped.
 import base64
 import contextlib
 import html
+import io
 import json
 import os
 import re
@@ -2629,7 +2630,12 @@ class RefineCrops(unittest.TestCase):
                   "css": ".alert { color: #b42318; }"}
         spec["sections"][0]["items"][0]["changes"].append(change)
         page = self.build(spec)
+        # Every file and folder but --out, what is in it, and the folders it sits in.
+        files = lambda: {p for p in self.tmp.rglob("*")
+                         if self.out not in p.parents and p != self.out and p not in self.out.parents}
+        before = files()
         boxes, _ = self.crops(page)
+        self.assertEqual(files() - before, set(), "--crops wrote outside its --out folder")
         res = self.measure(page, change)
         for w in ("1280", "390"):
             box, r = boxes["alert-ink"][w], res[w]
@@ -2647,7 +2653,7 @@ class RefineCrops(unittest.TestCase):
             for state in ("before", "after"):
                 for w in ("1280", "390"):
                     self.assertTrue((self.out / ("%s-%s-%s.png" % (c["id"], state, w))).is_file())
-        # Nothing but the crops and crops.json in the folder, and nothing outside it.
+        # Nothing but the crops and crops.json in the folder (nothing outside it: checked above).
         self.assertEqual(sorted(p.name for p in self.out.iterdir() if not p.name.endswith(".png")), ["crops.json"])
 
     def test_a_card_shows_four_crops_when_crops_is_set(self):
@@ -2690,11 +2696,29 @@ class RefineCrops(unittest.TestCase):
         self.assertFalse((self.out / "photo-ring-before-390.png").exists())
         self.assertFalse((self.out / "photo-ring-after-390.png").exists())
         # The other changes still get all four.
-        self.assertEqual(sorted(boxes["bold-totals"]), ["1280", "390"])
+        self.assertEqual(sorted(boxes["bold-totals"]), ["1280", "390", "key"])
         spec["sections"][0]["items"][0]["crops"] = ".proofs/design-review/crops"
         inner = self.card(self.build(spec).read_text(), "photo-ring")
         self.assertEqual(len(re.findall(r"<img\b", inner)), 2, inner[:400])
         self.assertIn(html.escape(note), inner)
+
+    def test_crops_of_a_change_edited_since_are_not_shown(self):
+        spec = self.spec()
+        self.crops(self.build(spec))
+        item = spec["sections"][0]["items"][0]
+        item["crops"] = ".proofs/design-review/crops"
+        item["changes"][0]["css"] = ".total { font-weight: 800; }"
+        src, out = self.dir / "s.json", self.tmp / "page.html"
+        src.write_text(json.dumps(spec))
+        r = subprocess.run([sys.executable, str(BUILD), str(src), "--out", str(out)],
+                           capture_output=True, text=True, cwd=str(self.dir))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("change bold-totals changed since its crops were made", r.stderr)
+        text = out.read_text()
+        self.assertEqual(self.card(text, "bold-totals"), "")
+        # The changes left as they were keep theirs, and only the edited one is warned about.
+        self.assertEqual(len(re.findall(r"<img\b", self.card(text, "tight-rows"))), 4)
+        self.assertEqual(r.stderr.count("changed since its crops were made"), 1, r.stderr)
 
     def test_crops_needs_a_refine_page_and_an_out_folder(self):
         r = subprocess.run([sys.executable, str(BUILD), "--crops", str(self.build())], capture_output=True, text=True,
@@ -2707,6 +2731,38 @@ class RefineCrops(unittest.TestCase):
         self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
         self.assertIn("no Refine preview", r.stderr)
         self.assertFalse(self.out.exists())
+
+
+class HelperErrors(unittest.TestCase):
+    """--crops and --match-preview without node, or with a helper that never finishes: one line
+    on stderr and exit 2, never a traceback."""
+
+    def run_both(self):
+        out = []
+        for name, call in (("crops", lambda: review_page.crops("page.html", "out", "pw")),
+                           ("match-preview", lambda: review_page.match_preview("page.html", "1", "shots", "pw"))):
+            err = io.StringIO()
+            with mock.patch.object(review_page, "find_playwright", return_value="pw"), \
+                    contextlib.redirect_stderr(err):
+                code = call()
+            out.append((name, code, err.getvalue()))
+        return out
+
+    def test_no_node(self):
+        with mock.patch.object(review_page.shutil, "which", return_value=None):
+            for name, code, err in self.run_both():
+                self.assertEqual(code, 2, name)
+                self.assertTrue(err.startswith(name + ": node is not installed"), err)
+
+    def test_timeout(self):
+        def slow(cmd, **kw):
+            raise subprocess.TimeoutExpired(cmd, kw.get("timeout"))
+        with mock.patch.object(review_page.shutil, "which", return_value="/usr/bin/node"), \
+                mock.patch.object(review_page.subprocess, "run", side_effect=slow):
+            for name, code, err in self.run_both():
+                self.assertEqual(code, 2, name)
+                self.assertIn("did not finish in %d seconds" % review_page.HELPER_TIMEOUT, err)
+                self.assertTrue(err.startswith(name + ": "), err)
 
 
 READ_JUMP = r"""

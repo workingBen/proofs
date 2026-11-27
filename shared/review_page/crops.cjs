@@ -5,8 +5,9 @@
 // and on (so an element it hides or swaps counts), plus CROP_MARGIN, kept inside the page.
 // Usage: node crops.cjs <playwright package dir> <page.html> <out dir>
 // Writes <out>/<change id>-<before|after>-<1280|390>.png and <out>/crops.json,
-// { <change id>: { "1280": {x, y, w, h}, "390": {note} } }: CSS pixels in the frame's page, or a
-// note for a width where no target is shown (hidden or of no size), which gets no crop. Prints
+// { <change id>: { key, "1280": {x, y, w, h}, "390": {note} } }: CSS pixels in the frame's page, or
+// a note for a width where no target is shown (hidden or of no size), which gets no crop. key is
+// the card's data-rc-key (review_page.py change_key), so a later build skips crops gone stale. Prints
 // one JSON line: { out, crops, notes: [...] }, or { error } when it cannot start. Run through
 // review_page.py --crops.
 const fs = require("fs");
@@ -100,13 +101,13 @@ async function main(pw, pagePath, outDir) {
     });
     if (!info) return { error: `${pagePath} has no Refine preview` };
     // Each change card carries its targets (data-rc-targets, a JSON list of selectors).
-    const targets = await page.evaluate(() => {
-      const t = {};
-      document.querySelectorAll("[data-rc-change][data-rc-targets]").forEach((el) => {
-        t[el.dataset.rcChange] = JSON.parse(el.dataset.rcTargets);
-      });
-      return t;
-    });
+    const targets = {}, keys = {};
+    for (const [id, t, key] of await page.evaluate(() => Array.from(
+      document.querySelectorAll("[data-rc-change][data-rc-targets]"),
+      (el) => [el.dataset.rcChange, JSON.parse(el.dataset.rcTargets), el.dataset.rcKey]))) {
+      targets[id] = t;
+      keys[id] = key;
+    }
     // Let the column out so both frames fit at scale 1; hide the page's fixed and sticky bars,
     // which a full-page shot would paint over the frames.
     await page.evaluate(() => {
@@ -143,7 +144,7 @@ async function main(pw, pagePath, outDir) {
         await show(page, frames, ids);
         for (const w of WIDTHS) m[state][w] = await frames[w].evaluate(measureTargets, sels);
       }
-      crops[c.id] = {};
+      crops[c.id] = { key: keys[c.id] };
       for (const w of WIDTHS) {
         const box = cropBox(m.off[w], m.on[w]);
         if (box) { crops[c.id][w] = box; continue; }

@@ -1752,11 +1752,19 @@ def refine_base(it, base, cache):
     return doc
 
 
+def change_key(c):
+    """A short hash of what a change's crops show (its targets, css and swaps). --crops stores it
+    in crops.json; a build shows a change's crops only while it still matches."""
+    what = json.dumps([c["targets"], c["css"], c.get("swaps") or []], sort_keys=True, ensure_ascii=False)
+    return hashlib.sha1(what.encode()).hexdigest()[:12]
+
+
 def load_crops(it, spec):
     """The item's `crops` folder (crops.cjs output, relative to the spec's folder, then the working
     directory) as it["_crops"]: {change id: {width: {"before", "after", "w", "h"} | {"note"}}},
     each crop PNG embedded as an asset the way the spec's own screenshots are. A folder with no
-    crops.json yet (--crops not run) leaves the cards' slots empty."""
+    crops.json yet (--crops not run) leaves the cards' slots empty. A change whose targets, css or
+    swaps changed since (change_key) gets no crops and a warning on stderr: never stale ones."""
     rel = it.get("crops")
     if not rel:
         return
@@ -1776,6 +1784,10 @@ def load_crops(it, spec):
     for c in it["changes"]:
         per = data.get(c["id"])
         if not isinstance(per, dict):
+            continue
+        if per.get("key") != change_key(c):
+            print("warning: item %s: change %s changed since its crops were made, so its card shows none; "
+                  "run --crops again" % (it["id"], c["id"]), file=sys.stderr)
             continue
         for width, _ in REFINE_WIDTHS:
             box = per.get(str(width))
@@ -1837,9 +1849,10 @@ def render_refine(it, ctx) -> str:
         card = review_item({"id": c["id"], "num": c["_num"], "label": c["label"],
                             "location": c.get("location") or it.get("location"),
                             "recommended": c.get("recommended"), "body_html": "\n".join(body)}, dec, ctx.colors)
-        # data-rc-targets: what --crops (crops.cjs) cuts the change's crops to.
+        # data-rc-targets: what --crops (crops.cjs) cuts the change's crops to; data-rc-key: what
+        # it stores with them, so a later build knows they still show this change.
         h.append(card.replace('<article class="rp-item" ', '<article class="rp-item" data-rc-change="%s" '
-                              'data-rc-targets="%s" ' % (esc(c["id"]), esc(json.dumps(c["targets"]))), 1))
+                              'data-rc-targets="%s" data-rc-key="%s" ' % (esc(c["id"]), esc(json.dumps(c["targets"])), change_key(c)), 1))
     p = ['<div class="rp-rc-preview" data-rc-preview="%s" data-rc-base="%s">' % (esc(iid), esc(it["_base_path"])),
          '<div class="rp-rc-head"><h3 class="rp-rc-title">Your picks together</h3>'
          '<div class="rp-rc-view" role="group" aria-label="Show the preview">'
@@ -2170,6 +2183,35 @@ def smoke(path, playwright=None, shots=None):
     return not res.get("problems"), res
 
 
+HELPER_TIMEOUT = 600
+
+
+def run_helper(cmd, script, args):
+    """Run one of the node helpers (match.cjs, crops.cjs), which prints one JSON line. The
+    result, or None after printing why on stderr: node not installed, the run over
+    HELPER_TIMEOUT seconds, output that is not that line, or the helper's own { error }."""
+    node = shutil.which("node")
+    if not node:
+        print("%s: node is not installed; it is needed to run %s" % (cmd, script.name), file=sys.stderr)
+        return None
+    try:
+        r = subprocess.run([node, str(script)] + [str(a) for a in args], capture_output=True, text=True,
+                           timeout=HELPER_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        print("%s: %s did not finish in %d seconds and was stopped" % (cmd, script.name, HELPER_TIMEOUT),
+              file=sys.stderr)
+        return None
+    try:
+        res = json.loads(r.stdout.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        print("%s: %s" % (cmd, (r.stdout + r.stderr).strip()[-2000:]), file=sys.stderr)
+        return None
+    if res.get("error"):
+        print("%s: %s" % (cmd, res["error"]), file=sys.stderr)
+        return None
+    return res
+
+
 def match_preview(page_path, picks, shots, playwright=None):
     """--match-preview: the built page's shots in `shots` against the Refine preview with the
     picked changes on (fidelity.cjs comparePicks). Prints one line per width; returns the exit
@@ -2183,15 +2225,8 @@ def match_preview(page_path, picks, shots, playwright=None):
     if not nums:
         print("match-preview: --picks needs the numbers of the changes answered Yes, such as 1,3", file=sys.stderr)
         return 2
-    r = subprocess.run([shutil.which("node"), str(MATCH), pw, str(Path(page_path).resolve()), ",".join(nums),
-                        str(Path(shots).resolve())], capture_output=True, text=True, timeout=600)
-    try:
-        res = json.loads(r.stdout.strip().splitlines()[-1])
-    except (ValueError, IndexError):
-        print("match-preview: " + (r.stdout + r.stderr).strip()[-2000:], file=sys.stderr)
-        return 2
-    if res.get("error"):
-        print("match-preview: " + res["error"], file=sys.stderr)
+    res = run_helper("match-preview", MATCH, [pw, Path(page_path).resolve(), ",".join(nums), Path(shots).resolve()])
+    if res is None:
         return 2
     for line in res["lines"]:
         print(line)
@@ -2205,22 +2240,15 @@ def crops(page_path, out, playwright=None):
     """--crops: each Refine change's before and after at 1280 and 390, cut from PAGE's frames
     (crops.cjs), into the folder `out`. A width where no target is shown gets a note, printed
     here and kept in crops.json, instead of a crop. Returns the exit code: 0 when written, 2
-    when it cannot run (no Playwright, or PAGE has no Refine preview)."""
+    when it cannot run (no Playwright or node, PAGE has no Refine preview, or it timed out)."""
     pw = find_playwright(playwright)
     if not pw:
         print("crops: Playwright not found. " + HOW_TO_PY, file=sys.stderr)
         return 2
-    r = subprocess.run([shutil.which("node"), str(CROPS), pw, str(Path(page_path).resolve()), str(Path(out).resolve())],
-                       capture_output=True, text=True, timeout=600)
-    try:
-        res = json.loads(r.stdout.strip().splitlines()[-1])
-    except (ValueError, IndexError):
-        print("crops: " + (r.stdout + r.stderr).strip()[-2000:], file=sys.stderr)
+    res = run_helper("crops", CROPS, [pw, Path(page_path).resolve(), Path(out).resolve()])
+    if res is None:
         return 2
-    if res.get("error"):
-        print("crops: " + res["error"], file=sys.stderr)
-        return 2
-    n = sum(1 for per in res["crops"].values() for box in per.values() if "note" not in box)
+    n = sum(1 for per in res["crops"].values() for w, box in per.items() if w != "key" and "note" not in box)
     print("wrote %d crops of %d changes to %s" % (n * 2, len(res["crops"]), out))
     for note in res["notes"]:
         print("note: " + note)

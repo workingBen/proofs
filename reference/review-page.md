@@ -248,13 +248,15 @@ does not exist, or picks that change nothing visible at either width).
 `review_page.py --crops PAGE --out DIR` cuts each change's crops from the built page's own
 frames, each at its width, with that one change off and then on (every other change off):
 `DIR/<change id>-<before|after>-<1280|390>.png`, shot at device scale `CROP_SCALE` (2), and
-`DIR/crops.json`, `{<change id>: {"1280": {x, y, w, h}, "390": {...}}}` in CSS pixels of the
-frame's page. A crop is the union of the boxes of everything the change's `targets` select,
+`DIR/crops.json`, `{<change id>: {"key": "...", "1280": {x, y, w, h}, "390": {...}}}` in CSS
+pixels of the frame's page. `key` is a short hash of the change's `targets`, `css` and `swaps`
+(the card's `data-rc-key`): a build whose change no longer matches its key shows no crops for
+it and warns on stderr to run `--crops` again, so a card never shows stale crops. A crop is the union of the boxes of everything the change's `targets` select,
 with the change off and on (so a target it hides or swaps counts), plus `CROP_MARGIN` (24 px,
 in `shared/review_page/crops.cjs`), kept inside the page; a reflow the change causes outside
 its targets is not in it. A width where no target is shown (hidden or of no size) gets
 `{"note": "..."}` instead of a crop, printed as a `note:` line; it is not an error. It writes
-nothing outside `DIR`; exit 2 when it cannot run (no Playwright, or no Refine preview). Build
+nothing outside `DIR`; exit 2 when it cannot run (no Playwright or node, no Refine preview, or over 10 minutes; `--match-preview` stops the same way). Build
 again with the item's `crops` set to `DIR` to show them.
 
 ### `questions` mode

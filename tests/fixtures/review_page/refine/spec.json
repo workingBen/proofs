@@ -21,8 +21,9 @@
          {"id": "alert-color", "label": "Status color on the alert column",
           "why_html": "<p>A high reading should stand out from an ok one.</p>",
           "targets": [".alert", ".badge"], "css": ".alert { color: #b42318; } .badge { display: none; }",
-          "swaps": [{"selector": ".brand", "html": "<b class=\"brand\">Host Headroom</b>"}],
-          "removes": [{"element": "new badge", "reason": "It repeats what the alert color now says."}],
+          "swaps": [{"selector": ".status-icon", "html": "<i class=\"status-icon\">▲</i>"}],
+          "removes": [{"element": "new badge", "reason": "It repeats what the alert color now says."},
+                      {"element": "! status icon", "reason": "An arrow that points up says high at a glance."}],
           "scores": {"gain": 4, "keeps": 4}, "recommended": true}
        ]}
     ]}

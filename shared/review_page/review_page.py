@@ -1420,7 +1420,9 @@ REFINE_SCORES = (("gain", "Gain"), ("keeps", "Keeps"))
 REFINE_WIDTHS = ((1280, "Desktop, 1280 px"), (390, "Phone, 390 px"))
 # At-rules whose blocks hold style rules, which get scoped; any other block at-rule
 # (@font-face, @keyframes, @page, @property, @counter-style) passes through as written.
-CSS_NESTED_AT = ("media", "supports", "container", "layer", "scope", "document")
+# @scope is refused: its inner selectors match from the scope root, so a prefix above it
+# would not decide whether the change is on.
+CSS_NESTED_AT = ("media", "supports", "container", "layer", "document", "starting-style")
 HIDES = re.compile(r"display\s*:\s*none", re.I)
 # Types mimetypes may not know, for the snapshot's fonts and images.
 SNAPSHOT_MIME = {".woff2": "font/woff2", ".woff": "font/woff", ".ttf": "font/ttf", ".otf": "font/otf",
@@ -1428,8 +1430,11 @@ SNAPSHOT_MIME = {".woff2": "font/woff2", ".woff": "font/woff", ".ttf": "font/ttf
 
 
 def _css_skip(css, i):
-    """The index past a string or comment that starts at i, or i itself when neither does."""
+    """The index past a string, comment or backslash escape (Tailwind's .md\\:flex, .a\\,b) that
+    starts at i, or i itself when none does."""
     c = css[i]
+    if c == "\\":
+        return min(i + 2, len(css))
     if c in "\"'":
         j = i + 1
         while j < len(css) and css[j] != c:
@@ -1492,6 +1497,25 @@ def _css_uncomment(css):
     return "".join(out)
 
 
+def _css_prelude(head):
+    """A rule's prelude with comments dropped and each whitespace run made one space, except
+    inside strings and escapes ([title="a  b"] keeps both spaces)."""
+    out, i = "", 0
+    while i < len(head):
+        j = _css_skip(head, i)
+        if j != i:
+            out += " " if head.startswith("/*", i) and not out.endswith(" ") else (
+                "" if head.startswith("/*", i) else head[i:j])
+            i = j
+        elif head[i].isspace():
+            out += "" if out.endswith(" ") else " "
+            i += 1
+        else:
+            out += head[i]
+            i += 1
+    return out.strip()
+
+
 def _css_split(prelude):
     """A selector list's parts, split on the commas outside :is(), [attr] and strings."""
     parts, i = [], 0
@@ -1504,7 +1528,9 @@ def _css_split(prelude):
 
 
 def _scope_selector(sel, attr):
-    """html and :root are the frame's own root, so the attribute goes on them, not above them."""
+    """html and :root are the frame's own root, so the attribute goes on them, not above them.
+    Known limit: only a leading html or :root is seen. One inside a pseudo-class
+    (:is(html.dark) .a, :not(:root) .b) gets the plain prefix, and so never matches."""
     m = re.match(r"(?i)(html|:root)(?![\w-])", sel)
     return "html" + attr + sel[m.end():] if m else "html%s %s" % (attr, sel)
 
@@ -1528,9 +1554,13 @@ def _scope_rules(css, attr, where):
         close = _css_block_end(css, end)
         if close < 0:
             raise SpecError("%s: css has a { that is never closed, after %r" % (where, head.strip()[:60]))
-        prelude, body = " ".join(_css_uncomment(head).split()), css[end + 1:close]
+        prelude, body = _css_prelude(head), css[end + 1:close]
         if prelude.startswith("@"):
-            if re.match(r"@([\w-]+)", prelude).group(1).lower() in CSS_NESTED_AT:
+            name = re.match(r"@([\w-]*)", prelude).group(1).lower()
+            if name == "scope":
+                raise SpecError("%s: css cannot use @scope (its rules match from the scope root, so the "
+                                "change could not be turned off); write the selectors out instead" % where)
+            if name in CSS_NESTED_AT:
                 rules.append("%s { %s }" % (prelude, "\n".join(_scope_rules(body, attr, where))))
             else:
                 rules.append(css[i:close + 1].strip())
@@ -1600,8 +1630,10 @@ def check_refine_fields(it) -> None:
         for r in removes or []:
             if not (isinstance(r, dict) and str(r.get("element") or "").strip() and str(r.get("reason") or "").strip()):
                 raise SpecError("%s: every removes line needs an element and a reason" % where)
-        if HIDES.search(c["css"]) and not removes:
+        if HIDES.search(_css_uncomment(c["css"])) and not removes:
             raise SpecError("%s hides an element (display: none) but has no removes line saying what and why" % where)
+        if c.get("swaps") and not removes:
+            raise SpecError("%s swaps an element but has no removes line saying what it replaces and why" % where)
         sc = c.get("scores")
         if sc is not None:
             if not isinstance(sc, dict):

@@ -831,6 +831,25 @@ class Refine(unittest.TestCase):
         with self.assertRaises(review_page.SpecError):
             scope(".a { color: red", "x")
 
+    def test_refine_scope_css_keeps_escaped_selectors_whole(self):
+        # Tailwind-style escapes: an escaped comma is not a list, an escaped quote opens no string.
+        scope = review_page.scope_css
+        self.assertEqual(scope(".a\\,b { color: red }", "x"), RC + ".a\\,b { color: red }")
+        self.assertEqual(scope('.x\\:\\"q { color: red }', "x"), RC + '.x\\:\\"q { color: red }')
+        self.assertEqual(scope(".md\\:flex, .w-1\\/2 { display: flex }", "x"),
+                         RC + ".md\\:flex, " + RC + ".w-1\\/2 { display: flex }")
+
+    def test_refine_scope_css_leaves_whitespace_in_strings_alone(self):
+        self.assertEqual(review_page.scope_css('.a  /* c */  [title="a  b"]\n.c { color: red }', "x"),
+                         RC + '.a [title="a  b"] .c { color: red }')
+
+    def test_refine_scope_css_scopes_starting_style_and_refuses_scope(self):
+        self.assertEqual(review_page.scope_css("@starting-style { .a { opacity: 0 } }", "x"),
+                         "@starting-style { " + RC + ".a { opacity: 0 } }")
+        with self.assertRaises(review_page.SpecError) as cm:
+            review_page.scope_css("@scope (.card) { .a { color: red } }", "x")
+        self.assertIn("cannot use @scope", str(cm.exception))
+
     def test_refine_css_goes_in_one_style_inside_the_snapshot(self):
         frames = self.frames(self.html())
         self.assertEqual([w for w, _ in frames], ["1280", "390"])
@@ -843,8 +862,8 @@ class Refine(unittest.TestCase):
             # After the page's own sheet, so an equal rule still wins, and in its <head>.
             self.assertLess(doc.index(".total { font-weight:400; }"), doc.index("<style data-rc-css>"))
             self.assertLess(doc.index("<style data-rc-css>"), doc.index("</head>"))
-            self.assertIn('<template data-rc-swap="alert-color" data-rc-target=".brand">'
-                          '<b class="brand">Host Headroom</b></template>', doc)
+            self.assertIn('<template data-rc-swap="alert-color" data-rc-target=".status-icon">'
+                          '<i class="status-icon">▲</i></template>', doc)
 
     def test_refine_embeds_the_snapshot_assets(self):
         for _, doc in self.frames(self.html()):
@@ -932,6 +951,16 @@ class Refine(unittest.TestCase):
         spec = self.spec()
         self.item(spec)["changes"][2].pop("removes")
         self.assertIn("change alert-color hides an element (display: none) but has no removes line", self.error(spec))
+
+    def test_refine_a_swap_needs_a_removes_line(self):
+        spec = self.spec()
+        self.item(spec)["changes"][1]["swaps"] = [{"selector": ".badge", "html": "<span class=\"badge\">NEW</span>"}]
+        self.assertIn("change tight-rows swaps an element but has no removes line", self.error(spec))
+
+    def test_refine_display_none_in_a_comment_needs_no_removes_line(self):
+        spec = self.spec()
+        self.item(spec)["changes"][1]["css"] = ".rows td { padding: 6px 8px; } /* not display: none */"
+        self.assertIn("Tighter row spacing", self.html(spec))
 
     def test_refine_base_must_name_a_snapshot_that_exists(self):
         spec = self.spec()

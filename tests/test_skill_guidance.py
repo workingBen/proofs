@@ -473,6 +473,8 @@ class AdHocShellAndOpen(unittest.TestCase):
         found = 0
         for path in guidance_files():
             for m in re.finditer(builders + r" [^`\n]*?--out (\S+?)`?(?=[\s`;,)]|$)", path.read_text()):
+                if "--crops" in m.group(0):  # crops are images in a folder, not a built page
+                    continue
                 out = m.group(1).strip("`")
                 if out.startswith("<"):  # a placeholder in a helper's usage line
                     continue
@@ -1154,3 +1156,78 @@ class SkillsReadSettings(unittest.TestCase):
         self.assertIn("checkpoint setting's number of items (default 5)", self.text("skills/review-cycle/SKILL.md"))
         self.assertIn("mockups-per-item setting (default 2)", self.text("skills/visual-qa/SKILL.md"))
         self.assertIn("`PROOFS_SEND_WAIT_MIN`", self.text("reference/review-page.md"))
+
+
+class RefineGuidance(unittest.TestCase):
+    """Refine and Redesign modes (Proofs 1.10.0): the skill text, the rubric and the profile."""
+
+    def skill(self):
+        return " ".join((REPO / "skills" / "design-review" / "SKILL.md").read_text().split())
+
+    def rubric(self):
+        return " ".join((REPO / "reference" / "design-rubric.md").read_text().split())
+
+    def profile(self):
+        return " ".join((REPO / "reference" / "design-profile.md").read_text().split())
+
+    def test_skill_names_both_modes_and_gives_the_mode_rule(self):
+        text = self.skill()
+        self.assertIn("Refine mode", text)
+        self.assertIn("Redesign mode", text)
+        self.assertIn("Refine** when the page exists, renders, and the capture shows no blocking flaw", text)
+        self.assertIn("without asking for a new layout", text)
+        self.assertIn("**Redesign** when the request says redesign", text)
+        self.assertIn("Refine: your page works, so these are small changes you can take or leave. Say 'redesign' for full alternatives.", text)
+        self.assertIn("`intro_html`", text)
+        self.assertIn("In `claude -p`", text)
+
+    def test_refine_capture_takes_the_snapshot(self):
+        text = self.skill()
+        self.assertIn("--out .proofs/capture/before --sizes 390,1280 --snapshot", text)
+        self.assertIn("<name>-snapshot.html", text)
+
+    def test_refine_flow_is_in_order(self):
+        text = self.skill()
+        steps = ["`--snapshot`", "`changes`", "critic build", "review_page.py --smoke .proofs/pages/<review-name>.html",
+                 "--crops .proofs/pages/<review-name>.html --out .proofs/design-review/crops", "rebuild", "publish"]
+        start = text.index("### Refine mode")
+        pos = start
+        for step in steps:
+            with self.subTest(step=step):
+                found = text.find(step, pos)
+                self.assertNotEqual(found, -1, step)
+                pos = found
+        for word in ("`base`", "`crops`", "`targets`", "`css`", "`swaps`", "`removes`", "3 to 8", "`refine`"):
+            with self.subTest(word=word):
+                self.assertIn(word, text)
+
+    def test_apply_step_matches_the_preview_and_states_the_yes_plus_revise_rule(self):
+        text = self.skill()
+        self.assertIn("--match-preview .proofs/pages/<review-name>.html --picks 1,3 --shots .proofs/capture/after", text)
+        self.assertIn("A round with both `YES` and `REVISE`", text)
+        self.assertIn("fresh snapshot", text)
+
+    def test_redesign_falls_back_to_refine_and_reads_density(self):
+        text = self.skill()
+        self.assertIn("offers Refine for the next round", text)
+        self.assertIn("Density", text)
+
+    def test_rubric_has_a_refine_section(self):
+        text = self.rubric()
+        self.assertIn("## Refine mode", text)
+        for key in ("gain", "keeps"):
+            with self.subTest(key=key):
+                self.assertIn(f"`{key}`", text)
+        sec = text[text.index("## Refine mode"):]
+        for anchor in ("**1**", "**3**", "**5**"):
+            self.assertGreaterEqual(sec.count(anchor), 2, anchor)
+        self.assertIn("`gain` 3 or more, `keeps` 4 or more, and no failed design check", sec)
+        self.assertIn("no worse on any of the six criteria", sec)
+        self.assertIn("better on at least one", sec)
+
+    def test_profile_has_a_density_line_asked_with_audience(self):
+        text = self.profile()
+        self.assertIn("Density: dense. Many numbers on one screen; people scan, not read. Don't add padding.", text)
+        for word in ("`dense`", "`balanced`", "`airy`"):
+            self.assertIn(word, text)
+        self.assertIn("**Density**, asked next to Audience.", text)

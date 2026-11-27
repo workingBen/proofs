@@ -1,6 +1,6 @@
 ---
 name: design-review
-version: 1.12.0
+version: 1.13.0
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -32,6 +32,14 @@ Confirm the live route, and which specific section(s) are in scope. A whole-page
 
 **Read the design profile if the project has one.** It is a short project file, the design profile path setting (`PROOFS_DESIGN_PROFILE`, default `docs/design-profile.md`; take it from the settings, not by echoing the variable). It holds the references the owner loves and dislikes and why, a few rules, the audience and where the tokens live (format: `../../reference/design-profile.md`). Design toward it, and the critic scores `fit` against it (step 4). **It is optional. Never require it.** When it is missing, say so in one line in chat and in the page's `intro_html`, offer in one line to create one with the two questions pages that file describes (references and audience first, then the rules), build the questions pages only if the reader says yes (in `claude -p`, just the one line), and go on without it this round: take the tokens from the style guide, or from the site's CSS when there is none, and use the rubric alone. Do not stop to wait for the profile, and never write one the reader did not answer for.
 
+**Pick the mode, after you have read the request and the capture (step 2).** There are two, and a page can ask for either:
+
+- **Refine mode.** Pick **Refine** when the page exists, renders, and the capture shows no blocking flaw in the sections in scope (sideways scroll, blank content, broken layout), *and* the request asks to improve, polish, tidy, tighten or "make it nicer" without asking for a new layout. Refine keeps the original page and offers 3 to 8 small, separate changes. The reader says Yes or No to each and watches a live preview of the result (below).
+- **Redesign mode.** Pick **Redesign** when the request says redesign, new layout, rethink or "show me something different"; when there is no current page (a new page); or when the section in scope is broken. Redesign is the Careful, Step up and Bold options of step 3.
+- A bug-sized fix stays the one-option item it is, in either mode.
+
+**State the mode in one line**, in chat and in `intro_html`: "Refine: your page works, so these are small changes you can take or leave. Say 'redesign' for full alternatives." The reader switches by saying so, and the next round uses the other mode. In `claude -p`, state the line and go on.
+
 ### 2. Capture "before": always from the running app
 
 The "before" is a screenshot of the page as the running app serves it today, never an image committed in the repo (it shows an older page).
@@ -55,6 +63,7 @@ Then, in order:
 python3 ${CLAUDE_PLUGIN_ROOT}/shared/capture/with_server.py --start "npm run dev -- --port 3311" --url http://localhost:3311/ -- node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs .proofs/capture/pages.json --out .proofs/capture/before --sizes 390,1280
 ```
 
+   - **In Refine mode, add `--snapshot` to the same capture line** (after `--sizes 390,1280`). Besides the shots it writes `<name>-snapshot.html` and its `<name>-snapshot-assets/` folder: the page as rendered, with its styles inlined and its scripts removed. That is the base Refine builds on (the Refine mode section, below). The line is otherwise the same, so one permission prompt is still expected.
    - **Read what it found from `summary.md` and `measures.json` with Read**, not with `node -e` or `grep` (Astro run 3: a `node -e` was refused and three greps followed). Each mid-word break is listed with where it is (`midWordAt`: the element, the heading above it, its y in page px and the part shot that shows it); small text, small tap targets and off-center rows carry a `y` too. **A page taller than one part is also saved in parts** (`<name>-<state>-<width>-part-NN.png`, at 1x, at most 4 widths or 1,600 px tall, y ranges in `parts`): open the part a finding names, never the 390 full shot of a long page, which an image reader shrinks until nothing is legible (Astro run 3: 31,000 px tall, and the break was put in the wrong section).
    - It renders a true 390 px phone viewport and writes `summary.md` with measured sideways overflow. **When `summary.md` shows sideways overflow at 390, state it as a finding with the numbers** (for example: the page is 455 px wide on a 390 px screen; the nav is cut off), and show the shot. Hedge only about what was not measured. Open the PNGs and confirm each shows the route you meant.
    - The capture scrolls each page to the bottom and back before the shots, so sections that fade in on scroll are there. **If a row reads `blank or hidden content`, the shot does not show the page below its first screen:** say so in chat and on the page and name what was not seen: that page is not clean. Rerun once; if it is still blank, review only what the shot shows and say why (Astro run 1: every shot was blank below the hero).
@@ -79,13 +88,46 @@ No standing-audit section here; raise accessibility or readability points inline
 Each item is one section or component:
 
 - Give it coded mockups: real HTML/CSS built from the target page's own fonts, colors, and spacing (the same "reuse the target page's own design system" principle as a copy review), not AI-generated images and not a text diff.
-- **A redesign request gets the option count setting (default 3) options, one per role**, set as each variant's `role` (with 2, use Careful and Step up and leave out Bold): **Careful** (`careful`) fixes what was asked and keeps the structure; **Step up** (`step-up`) is a clearly better layout in the site's own language; **Bold** (`bold`) is a different hierarchy or layout: a different lead, order or arrangement of the main blocks, never only new colors or spacing, and never a brand change or new words. Separate roles, because a set of variations on one idea "barely changed anything" and leaves the reader nothing to choose between. **Give one option for a bug-sized fix or a "Found by the capture" item**, with no `role`: a fix has one right answer, and two extra layouts would only cost the reader time. Follow-up rounds may show more (the worked example's four), when the reader asks for them.
+- **Redesign mode: a redesign request gets the option count setting (default 3) options, one per role**, set as each variant's `role` (with 2, use Careful and Step up and leave out Bold): **Careful** (`careful`) fixes what was asked and keeps the structure; **Step up** (`step-up`) is a clearly better layout in the site's own language; **Bold** (`bold`) is a different hierarchy or layout: a different lead, order or arrangement of the main blocks, never only new colors or spacing, and never a brand change or new words. Separate roles, because a set of variations on one idea "barely changed anything" and leaves the reader nothing to choose between. **Give one option for a bug-sized fix or a "Found by the capture" item**, with no `role`: a fix has one right answer, and two extra layouts would only cost the reader time. Follow-up rounds may show more (the worked example's four), when the reader asks for them. **Redesign mode reads the profile's `Density:` line** (`../../reference/design-profile.md`) too: a `dense` page stays dense in every option, and the critic scores `grouping` and `fit` against it. **If every option misses the bar on beating the current page**, the page says so and offers Refine for the next round, and chat says it in one line.
 - **Options must differ in layout or hierarchy**, from each other and, for Step up and Bold, from the current page. `--smoke` compares them and prints a line such as `item 2 (Hero): Variant A and the current page are near-copies (0.91)`: on an item with two or more options, that stays a problem line, not a note. A near-copy of the current page on a one-option fix (one proposal, or exactly one variant) is a note instead (Ruling 30), since a fix keeps the page's layout by design; say what changed in the Reason. Look at both shots, then either change the option or keep it with one line in the item's Reason saying what genuinely differs; never ignore it silently. How to read it for each case (a Careful that visibly fixes the problem, a one-option fix) is in `../../reference/design-rubric.md`.
 - **Take the section's inventory from the capture before you design.** `summary.md` lists each page's sections by label (the 1280 shot's `measures.sections` in `measures.json`). Name the one this item changes, and let the builder read it into the item's `before_sections`, and the page's `measures.fontSizes` into `before_font_sizes`, from the file: `"before_sections": {"from": ".proofs/capture/before/measures.json", "page": "home", "width": 1280, "label": "Hero"}` and `"before_font_sizes": {"from": ".proofs/capture/before/measures.json", "page": "home", "width": 1280}` (a label it cannot find is a build error that lists the labels it has). Point at the file; never copy the section object out of `measures.json` by hand: it is long, and the file is thousands of lines; `--smoke` compares the options with the page's own section and type scale from them (at 1280, where it measures near-copies). Then every mockup (each option, and a one-option item's proposal) carries `inventory`: one row per captured element, `kept`, `moved` or `removed`, each with a reason (format: `../../reference/review-page.md`). An element with no row shows on the page as "removed — no reason given": the reader's "dropped an element I liked" is caught there, not after the build. Remove little, and only with a reason the reader can accept or reject in one read. A "Found by the capture" item without a mockup carries neither `inventory` nor `scores`: there is no layout to account for or judge.
 - A single-variant item works exactly like a copy-edit item: no gallery needed, just Original vs. the one proposed variant. Its accept button reads "Use Proposed", not "Use Selected": with nothing selectable, "Use Selected" reads as a control the reviewer has failed to find. The builder does this for any item without `variants`.
 - Give every item a **Reason** and a **Recommended / Not Recommended** badge, the same convention as a copy review: your own honest judgment, independent of whether you present the item at all.
 - **Keep the brand exactly as it is.** The brand is the logo, any wordmark, the company name, product names, the brand colors that identify the site (not the incidental grays of its interface) and taglines or slogans. Every mockup shows them as the page does, unless the user asked to change them. Use the site's own logo: its file from the project (an SVG, PNG or inline SVG in a template), listed in `assets` or copied in as-is, never redrawn, recolored, simplified or replaced by a text stand-in. Careful, Step up and Bold all keep the brand: Bold may change everything around it (layout, hierarchy, imagery, and the palette outside the brand colors, with new colors only from the site's own palette, its style guide or the profile's Love references), never the brand itself. In the inventory, give each brand element its own row with `"brand": true`, so the page tags it "Brand" and the critic checks it (a brand element removed or changed is `care` 1 and fails the option: `../../reference/design-rubric.md`). The rule against changing words below already covers copy; this one names the brand because sessions have swapped logos and company names before, and the owner had to put them back by hand. If the logo file cannot be found in the project, use the crop the capture made: the before capture's `measures.json` names it as each shot's `logo.file` (`<name>-logo-<width>.png`, take the 1280 one). Put that crop in `assets` and use it; it counts as the site's own logo, and the item's Reason says so (on the page and in chat), naming the file. When `logo` is `null`, show the header's part shot as is, never a typed stand-in; never invent one. When `logo.file` is `null` with an `error` (the crop failed), treat it the same as `logo: null`. The one exception is a user who asks for a rebrand or a new logo: the request names what changes, and only that changes.
 - **Never change words the user did not pick.** Build each mockup with the page's copy as it is. If a layout only works with shorter copy, say so in that variant's `note_html` and offer the shorter wording as its own item (or a variant whose label says it changes the copy), so the reader picks it or not (Astro run 3: the build dropped "creating websites with" from the hero headline to fit a split layout, and nobody had picked that).
+
+### Refine mode: small changes on one copy of your page
+
+Use this in place of the options of step 3 and the mockup-building of step 4 when step 1 picked Refine. The capture (step 2, with `--snapshot`), the critic, `--smoke`, the profile, the brand rule and the rule against changing words all stay. The builder's fields are in `../../reference/review-page.md` ("Refine items"); this is the order and the judgment.
+
+1. **Snapshot.** Take the before capture of step 2 with `--snapshot`:
+
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/shared/capture/with_server.py --start "npm run dev -- --port 3311" --url http://localhost:3311/ -- node ${CLAUDE_PLUGIN_ROOT}/skills/visual-qa/scripts/capture.cjs .proofs/capture/pages.json --out .proofs/capture/before --sizes 390,1280 --snapshot
+```
+
+   The `<name>-snapshot.html` it writes is the page's own rendered copy. Never hand-code a stand-in for the page, and never edit the snapshot.
+2. **Write the `changes`.** 3 to 8 per page, one `refine` item (`"kind": "refine"`, `"base": {"from": ".proofs/capture/before/<name>-snapshot.html"}`) in a section whose `"decisions"` is `refine`. Fewer is fine when that is all the page needs; more than 8 says the page wants Redesign mode. Each change has an `id`, a `label` in plain words, `why_html` (what it fixes and why, in one or two sentences), `targets` (the selectors it touches) and `css` (rules that apply only while it is on; the builder scopes them). A change may also carry `swaps` (one element's markup: an icon, a badge, a control, never a section) and, for anything it hides or replaces, `removes` with a reason. A change may change spacing, size, weight, alignment, color from the site's own palette (or the profile's Love references), borders and rules, and small swaps of single elements. A change may **not** reorder or regroup sections, change or add words, touch the brand, or add padding to a page whose density is `dense` unless that is its stated purpose and the reader can see it. Two changes that touch the same property of the same element become one change. **Read the profile's `Density:` line first**; with no profile, infer it from the page (a table- or number-heavy page counts as dense) and say so in one line.
+3. **Critic build.** Set the item's `location`, leave out `scores`, `before_scores`, `set_scores`, `recommended` and `judged_by`, and build. This build is never published.
+4. **`--smoke`.** Run it on the critic build:
+
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py --smoke .proofs/pages/<review-name>.html
+```
+
+   In Refine it checks that the base matches the before capture (`base differs from the page`), flags two changes that touch the same property on the same element, and measures every change on alone and all together for contrast, tap targets, mid-word breaks, sideways scroll and line length. There is no near-copy check. A problem line means revise or drop the change.
+5. **Crops.** Cut each change's before and after at 1280 and 390:
+
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py --crops .proofs/pages/<review-name>.html --out .proofs/design-review/crops
+```
+
+   Open a few crops yourself; the critic reads all of them.
+6. **Critic.** Same rules as step 4 (a fresh helper when the session can start one, else you, from the shots and inventory only). It scores each change on `gain` and `keeps`, then the recommended changes together on the six criteria against the current page, using the Refine section of `../../reference/design-rubric.md`. A change below its bar is revised once per correction pass or dropped, with the reason on the page. A change that makes the set worse loses its recommendation.
+7. **Rebuild.** Add `scores` and `recommended` on each change, `before_scores`, `set_scores` and `judged_by` on the item, and the item's `crops` set to `.proofs/design-review/crops`. Run `--smoke` again. If a pass changed a change's `targets`, `css` or `swaps`, run the crops command again first (the builder warns when a card's crops are stale).
+8. **Publish.** As in "Where the page goes". Undecided and recommended changes start off in the preview, so it shows only what the reader chose. A Refine with no change that clears its bar says the page already works and lists what it looked at, instead of showing weak changes.
+
+Each change gets **Yes**, **No** or **Revise** (Revise needs a comment), and the export ends with a `Combined:` line listing the Yes changes. "Found by the capture" works as in step 4, after the changes.
 
 ### 4. Build the review page with the shared builder
 
@@ -131,6 +173,14 @@ Results first: within the spend cap setting (default $5; an estimate you plan ar
 
 ### 5. Applying the decisions
 
+**Refine mode (`YES`, `NO`, `REVISE`).** Only changes marked `YES` are built, translated the way an accepted variant is (real classes and the site's tokens, never pasted snapshot markup); `NO` and `PENDING` change nothing. Then, after the build, type check and `--compare` capture below, **prove the built page matches the preview you showed**: capture the real page at 1280 and 390 into `.proofs/capture/after` and run
+
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py --match-preview .proofs/pages/<review-name>.html --picks 1,3 --shots .proofs/capture/after
+```
+
+with the numbers of the `YES` changes (the export's `Combined:` line has them). Exit 1 is a failure: fix the build and capture again before you say the picks are built, and say in chat what differed. A difference the reader can see but the measure cannot explain is reported, never hidden. **A round with both `YES` and `REVISE`:** build the `YES` changes now, because the reader saw them together in the preview and approved them; the follow-up round on the `REVISE` changes then takes a **fresh snapshot** of the page with those built.
+
 When the user pastes back the copied summary, match items by number (and variant letter, where relevant). **Change only what was picked.** Anything else you think should change (shorter copy so a layout fits, a neighbor section, a word you would put better) is proposed, not applied: leave it as it is and list it in chat as a proposal for the next round, with the item it came from.
 
 - **`ACCEPT`**: translate the selected variant's markup into the real view or template. This is *not* a paste-in the way a copy edit is: the mockup used static stand-in content (a hardcoded example title and image) previewing what a loop over live records will render, so applying it means adapting the chosen structure and styling into the real template, wiring in loops, real image URLs and real data, not copying the mockup's HTML verbatim.
@@ -143,7 +193,7 @@ Then rebuild styles if the project compiles them and verify against a real rende
 
 ### 6. Follow-up rounds on `REVISE` items
 
-Scope the new Artifact to only the still-open item(s). Carry the prior round's rejected proposal forward on each card in `history_html` (clearly labeled "Round 1," "Round 2," etc.) alongside the new one, rebuild and republish to the same URL, re-running the verification before every republish; a smaller page is not a lower-risk page. Items the reader marked read are dropped, not carried.
+In Refine mode, capture again with `--snapshot` first (the page now has the `YES` changes built in), so the new base, crops and preview show the real page as it is. Scope the new Artifact to only the still-open item(s). Carry the prior round's rejected proposal forward on each card in `history_html` (clearly labeled "Round 1," "Round 2," etc.) alongside the new one, rebuild and republish to the same URL, re-running the verification before every republish; a smaller page is not a lower-risk page. Items the reader marked read are dropped, not carried.
 
 ## Worked example
 

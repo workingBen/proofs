@@ -93,6 +93,20 @@ picture.rp-pic { display:contents; }
 .rp-scores { font-size:14px; color:var(--rp-soft); margin-top:8px; }
 .rp-scores b { color:var(--rp-ink, inherit); }
 .rp-before-scores { margin:0 0 8px; }
+/* Refine: a change's removes lines, and the combined preview. Each frame keeps its real
+   width (1280 or 390) for the page's own layout; its box clips it, so an unscaled frame
+   never scrolls the page sideways. */
+.rp-rc-removes { margin:8px 0 0; padding:0; list-style:none; }
+.rp-rc-remove { color:var(--rp-deny); }
+.rp-rc-preview { margin:16px 0; padding:16px; background:var(--rp-card); border:1px solid var(--rp-rule); border-radius:10px; }
+.rp-rc-head { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; }
+.rp-rc-title { margin:0; }
+.rp-rc-view { display:flex; gap:6px; }
+.rp-rc-note { margin:8px 0; color:var(--rp-soft); }
+.rp-rc-fig { margin:12px 0 0; }
+.rp-rc-fig figcaption { font-size:14px; color:var(--rp-soft); margin-bottom:4px; }
+.rp-rc-box { max-width:100%; overflow:hidden; border:1px solid var(--rp-rule); }
+.rp-rc-frame { display:block; border:0; background:#fff; }
 .rp-scores-label { font-weight:600; color:var(--rp-ink, inherit); }
 .rp-unscored { color:var(--rp-faint); }
 .rp-judged { font-size:14px; color:var(--rp-soft); margin:8px 0; }

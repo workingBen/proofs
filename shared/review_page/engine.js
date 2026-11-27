@@ -149,11 +149,24 @@
     return line;
   }
 
+  // A Refine item's changes are items marked with its id; after the last one, one line
+  // names the changes answered Yes ("Combined: 1, 3"), or "Combined: none".
+  function combinedLine(sec, refine, recs) {
+    var yes = sec.items.filter(function (it) { return it.refine === refine && (recs[it.id] || {}).s === "accept"; })
+      .map(function (it) { return it.num; });
+    return "Combined: " + (yes.length ? yes.join(", ") : "none");
+  }
+
   var BLOCK = {
     review: function (sec, ss) {
-      var recs = ss.items || {};
-      return sec.items.map(function (it) { return reviewLine(sec, it, recs[it.id] || {}); })
-        .filter(function (l) { return l !== null; });
+      var recs = ss.items || {}, lines = [];
+      sec.items.forEach(function (it, i) {
+        var l = reviewLine(sec, it, recs[it.id] || {});
+        if (l !== null) lines.push(l);
+        var next = sec.items[i + 1];
+        if (it.refine && !(next && next.refine === it.refine)) lines.push(combinedLine(sec, it.refine, recs));
+      });
+      return lines;
     },
     questions: function (sec, ss) {
       var ans = ss.ans || {}, notes = ss.notes || {}, lines = [];

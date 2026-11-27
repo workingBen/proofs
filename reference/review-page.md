@@ -120,6 +120,7 @@ inserted as written; every other text field is escaped.
 | `design-review` | Keep Original → `DENY`; Use Proposed → `ACCEPT (Use Proposed)`, or with variants Use Selected → `ACCEPT (Use Selected: Variant B)`; `ACCEPT WITH COMMENT` (with variants `ACCEPT WITH COMMENT (Use Selected: Variant B)`); `REVISE`; `PENDING`; Mark as read on |
 | `photo-picker` | Keep None → `DENY (Keep None)`, Use Selected → `ACCEPT (Use Selected: Option B, trail map)`, `ACCEPT WITH COMMENT (Use Selected: …)`, `REVISE`; `PENDING` |
 | `style-guide` | Deny → `DENY`, or `DENY (Works as Designed)` with its checkbox; Request Revision → `REVISE`; `ACCEPT (Apply Everywhere Now)`; `ACCEPT (Record for Later)` (with variants `… : Option B)`); comment box always open; legend on; undecided items left out of the export |
+| `refine` | design-review's Refine mode (see "Refine items" below): Yes → `YES`, No → `NO`, Revise → `REVISE` (needs a comment); `PENDING`; after a refine item's changes, `Combined: 1, 3` (the Yes changes' numbers) or `Combined: none` |
 
 Override keys: `buttons` (each `state`, `label`, `label_variant`, `export`,
 `export_variant` with `{sel}`, `comment`: `required` or `optional`, `meaning`),
@@ -160,6 +161,51 @@ Helper classes for item HTML: `.rp-panes` (side-by-side panes that stack on a ph
 `.rp-pane` and `.rp-pane-label`, `.rp-scroll` (sideways scroll inside, never the
 page), `.rp-shot` (a screenshot), and `<del>` / `<ins>` inside `.rp-panes` for
 word-level diffs.
+
+#### Refine items
+
+design-review's Refine mode puts **one** item with `"kind": "refine"` on the page, in
+a section whose decisions are the `refine` preset (anything else, or a second refine
+item, is a spec error). It shows each change as its own card, numbered on from the
+page's running number, then the combined preview. A "Found by the capture" section
+after it (its own `decisions`, usually `design-review`) numbers on after the last
+change.
+
+| Field | Meaning |
+|---|---|
+| `kind` | `"refine"` |
+| `id` | the item's id (default `refine`); unique on the page, like the change ids |
+| `base` | `{"from": ".proofs/capture/before/<name>-snapshot.html"}`, the capture's snapshot (`--snapshot`); relative to the spec's folder, then the working directory. Each file of its sibling `<name>-snapshot-assets/` folder it refers to is embedded as a data URI, made once per file. A PNG becomes lossless WebP when that is smaller; nothing is resized or lossy, so the base renders like the page. A reference to a file the folder does not have is a spec error |
+| `changes` | 1 to 8 changes (more than 8 says the page wants a Redesign); any other count is a spec error naming the cap |
+| `location` | the section's name, shown on every card whose change has no `location` of its own |
+| `before_scores` | the current page on the six criteria (as `scores` above), shown in the preview as "Current page" |
+| `set_scores` | the recommended changes together, on the same six criteria and checks, shown under it as "Your picks together (recommended)" |
+| `judged_by` | as above; shown once, in the preview. With it (or any scored change), an unscored change says "Not scored" and recommending one is a spec error |
+| `crops` | the folder of the change crops (`--crops`); each card has a `data-rc-crops` slot for them |
+
+Each change:
+
+| Field | Meaning |
+|---|---|
+| `id` | lowercase letters, digits and hyphens (`[a-z0-9-]+`), unique on the page; the answer is saved under it |
+| `label` | required; the card's title and the export line |
+| `why_html` | required; one or two sentences: what it fixes and why |
+| `targets` | required; a non-empty list of the selectors it touches |
+| `css` | required; rules that apply only while the change is on. Every selector is prefixed with `html[data-rc~="<id>"] ` (each part of a comma list, and the rules inside `@media`, `@supports`, `@container` and `@layer`); `html` and `:root` take the attribute themselves (`html[data-rc~="<id>"].dark`). `@font-face`, `@keyframes` and statements like `@import` pass through. An unclosed block, a declaration outside a rule, or `</style>` is a spec error. `display: none` needs a `removes` line |
+| `swaps` | `[{selector, html}]`: one element's markup while the change is on (an icon, a badge, a control); never a section, never new words. No `</template>` in `html` |
+| `removes` | `[{element, reason}]`: what the change hides or replaces, each shown on the card with its reason in the deny color |
+| `scores` | `{gain, keeps}`, each a whole number 1 to 5 (`design-rubric.md`); any other key is a spec error |
+| `recommended` | `true` / `false` badge |
+| `location` | overrides the item's on this card |
+
+In the page, both frames are `<iframe class="rp-rc-frame" data-rc-width="1280|390"
+srcdoc="…">` holding the snapshot with one `<style data-rc-css>` (every change's
+scoped CSS) at the end of its `<head>`, and one `<template data-rc-swap="<id>"
+data-rc-target="<selector>">` per swap at the end of its `<body>`. A change is on
+while its id is in the frame's `<html data-rc>`. The preview has a
+`[data-rc-view="picks"|"original"]` toggle. Each change's JS item carries
+`refine: <item id>` and `near_copy: false`: `--smoke` skips the mockup and near-copy
+checks for it.
 
 ### `questions` mode
 

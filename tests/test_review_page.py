@@ -5,6 +5,7 @@ node but not a browser. The click-through test needs Playwright: set
 PROOFS_PLAYWRIGHT to an installed playwright package folder, or it is skipped.
 """
 import contextlib
+import html
 import json
 import os
 import re
@@ -724,6 +725,353 @@ class BuildAndCheck(unittest.TestCase):
         text = review_page.page(review_page.load_spec(p))
         self.assertIn("Mark as read", text)
         self.assertIn("✓ Use Edit", text)
+
+
+REFINE = ROOT / "tests" / "fixtures" / "review_page" / "refine"
+RC = 'html[data-rc~="x"] '
+
+
+class Refine(unittest.TestCase):
+    """design-review's Refine mode: one `refine` item, a base snapshot and a list of changes,
+    each its own card and export line, then a `Combined:` line (spec §3 and §4)."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.dir = Path(self._tmp.name) / "refine"
+        shutil.copytree(REFINE, self.dir)
+        self.driver = Path(self._tmp.name) / "driver.cjs"
+        self.driver.write_text(DRIVER)
+
+    def spec(self):
+        return json.loads((REFINE / "spec.json").read_text())
+
+    @staticmethod
+    def item(spec):
+        return spec["sections"][0]["items"][0]
+
+    def load(self, spec):
+        p = self.dir / "s.json"
+        p.write_text(json.dumps(spec))
+        return review_page.load_spec(p)
+
+    def html(self, spec=None):
+        return review_page.page(self.load(spec or self.spec()))
+
+    def error(self, spec):
+        with self.assertRaises(review_page.SpecError) as cm:
+            self.html(spec)
+        return str(cm.exception)
+
+    def built(self, spec=None):
+        out = Path(self._tmp.name) / "page.html"
+        out.write_text(self.html(spec))
+        return out
+
+    def export(self, state, spec=None):
+        r = subprocess.run([NODE, str(self.driver), str(self.built(spec)), json.dumps({"items": state})],
+                           capture_output=True, text=True, env=dict(os.environ, TZ="UTC"))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return r.stdout
+
+    def frames(self, text):
+        found = re.findall(r'<iframe class="rp-rc-frame" data-rc-width="(\d+)"[^>]*?\ssrcdoc="([^"]*)"', text)
+        return [(w, html.unescape(doc)) for w, doc in found]
+
+    def card(self, text, cid):
+        m = re.search(r'<article class="rp-item"[^>]*data-rc-change="%s".*?</article>' % re.escape(cid), text, re.S)
+        self.assertTrue(m, "no card for change %s" % cid)
+        return m.group(0)
+
+    @unittest.skipUnless(NODE, "node is not installed")
+    def test_refine_export_lists_each_change_and_the_combined_line(self):
+        text = self.export({"bold-totals": {"s": "accept"}, "tight-rows": {"s": "deny"}, "alert-color": {"s": "accept"}})
+        self.assertEqual(text, "[Host Headroom dashboard — Design Review (Refine)]\n"
+                               "1. Bolder totals — YES\n"
+                               "2. Tighter row spacing — NO\n"
+                               "3. Status color on the alert column — YES\n"
+                               "Combined: 1, 3")
+        text = self.export({"alert-color": {"s": "revise", "c": "amber,\nnot red"}})
+        self.assertEqual(text, "[Host Headroom dashboard — Design Review (Refine)]\n"
+                               "1. Bolder totals — PENDING\n"
+                               "2. Tighter row spacing — PENDING\n"
+                               "3. Status color on the alert column — REVISE — COMMENT: amber, not red\n"
+                               "Combined: none")
+
+    def test_refine_preset_buttons_and_skill(self):
+        self.assertEqual(review_page.PRESETS["refine"]["buttons"], [
+            {"state": "accept", "label": "✓ Yes", "export": "YES"},
+            {"state": "deny", "label": "✕ No", "export": "NO"},
+            {"state": "revise", "label": "↻ Revise", "export": "REVISE", "comment": "required"}])
+        self.assertEqual(review_page.PRESETS["refine"]["pending"], "PENDING")
+        self.assertEqual(review_page.PRESET_SKILLS["refine"], "design-review")
+        text = self.html()
+        self.assertIn('<span class="rp-sk" aria-hidden="true">design-review</span>', text)
+        card = self.card(text, "tight-rows")
+        for label in ("✓ Yes", "✕ No", "↻ Revise"):
+            self.assertIn(">%s</button>" % label, card)
+
+    def test_refine_scopes_every_selector_of_a_comma_list(self):
+        scope = review_page.scope_css
+        self.assertEqual(scope(".a, .b > c { color: red }", "x"), RC + ".a, " + RC + ".b > c { color: red }")
+        media = scope("@media (max-width: 600px) { .a, .b { margin: 0 } .c { padding: 0 } }", "x")
+        self.assertEqual(media, "@media (max-width: 600px) { " + RC + ".a, " + RC + ".b { margin: 0 }\n"
+                                + RC + ".c { padding: 0 } }")
+        for verbatim in ("@font-face { font-family: X; src: url(a.woff2) format(\"woff2\") }",
+                         "@keyframes spin { from { opacity: 0 } to { opacity: 1 } }",
+                         "@import url(\"x.css\");"):
+            self.assertEqual(scope(verbatim, "x"), verbatim)
+        # A comma inside :is(), an attribute value or a string is not a selector list.
+        self.assertEqual(scope(':is(.a, .b) [title="p, q"] { content: "}, {" }', "x"),
+                         RC + ':is(.a, .b) [title="p, q"] { content: "}, {" }')
+        # html and :root are the frame's own root: the attribute goes on them, not above them.
+        self.assertEqual(scope("html.dark .a, :root { --gap: 4px }", "x"),
+                         'html[data-rc~="x"].dark .a, html[data-rc~="x"] { --gap: 4px }')
+        self.assertEqual(scope("/* note */ .a { color: red } /* end */", "x"), RC + ".a { color: red }")
+        with self.assertRaises(review_page.SpecError):
+            scope(".a { color: red", "x")
+
+    def test_refine_css_goes_in_one_style_inside_the_snapshot(self):
+        frames = self.frames(self.html())
+        self.assertEqual([w for w, _ in frames], ["1280", "390"])
+        for _, doc in frames:
+            self.assertEqual(doc.count("<style data-rc-css>"), 1)
+            css = doc[doc.index("<style data-rc-css>"):]
+            css = css[:css.index("</style>")]
+            self.assertIn('html[data-rc~="bold-totals"] .total { font-weight: 700; }', css)
+            self.assertIn('html[data-rc~="alert-color"] .badge { display: none; }', css)
+            # After the page's own sheet, so an equal rule still wins, and in its <head>.
+            self.assertLess(doc.index(".total { font-weight:400; }"), doc.index("<style data-rc-css>"))
+            self.assertLess(doc.index("<style data-rc-css>"), doc.index("</head>"))
+            self.assertIn('<template data-rc-swap="alert-color" data-rc-target=".brand">'
+                          '<b class="brand">Host Headroom</b></template>', doc)
+
+    def test_refine_embeds_the_snapshot_assets(self):
+        for _, doc in self.frames(self.html()):
+            self.assertNotIn("home-snapshot-assets/", doc)
+            self.assertIn('url("data:image/svg+xml;base64,', doc)
+            self.assertRegex(doc, r'<img class="photo" src="data:image/(png|webp|jpeg);base64,')
+
+    @unittest.skipUnless(NODE, "node is not installed")
+    def test_refine_srcdoc_survives_quotes_and_script_text(self):
+        page = self.built()
+        self.assertEqual(review_page.check(page), [])
+        text = page.read_text()
+        raw = re.findall(r'\ssrcdoc="([^"]*)"', text)
+        self.assertEqual(len(raw), 2)
+        for r in raw:
+            self.assertNotIn("<", r)
+        self.assertEqual(len(review_page.SCRIPT_RX.findall(text)), 1)
+        for _, doc in self.frames(text):
+            self.assertIn('print("&lt;/script&gt;") # it\'s "quoted"</pre>', doc)
+            self.assertIn('title="a &quot;quoted&quot; title with </script> in it"', doc)
+
+    def test_refine_rejects_more_than_eight_changes(self):
+        spec = self.spec()
+        base = self.item(spec)["changes"][1]
+        self.item(spec)["changes"] = [dict(base, id="c%d" % i) for i in range(9)]
+        msg = self.error(spec)
+        self.assertIn("9 changes", msg)
+        self.assertIn("1 to 8", msg)
+
+    def test_refine_rejects_fewer_than_one(self):
+        spec = self.spec()
+        self.item(spec)["changes"] = []
+        msg = self.error(spec)
+        self.assertIn("0 changes", msg)
+        self.assertIn("1 to 8", msg)
+
+    def test_refine_rejects_duplicate_change_ids(self):
+        spec = self.spec()
+        self.item(spec)["changes"][2]["id"] = "bold-totals"
+        self.assertIn("unique on the page (got 'bold-totals')", self.error(spec))
+        spec = self.spec()
+        self.item(spec)["changes"][2]["id"] = "home"
+        self.assertIn("unique on the page (got 'home')", self.error(spec))
+        spec = self.spec()
+        self.item(spec)["changes"][2]["id"] = "Alert_Color"
+        self.assertIn("[a-z0-9-]+", self.error(spec))
+
+    def test_refine_rejects_a_change_with_no_targets(self):
+        for targets in (None, [], [""], ".total"):
+            spec = self.spec()
+            ch = self.item(spec)["changes"][0]
+            if targets is None:
+                ch.pop("targets")
+            else:
+                ch["targets"] = targets
+            self.assertIn("change bold-totals: targets", self.error(spec), targets)
+
+    def test_refine_rejects_scores_out_of_range(self):
+        for scores, word in (({"gain": 6, "keeps": 4}, "gain must be a whole number from 1 to 5"),
+                             ({"gain": 0, "keeps": 4}, "gain must be a whole number from 1 to 5"),
+                             ({"gain": 3, "keeps": True}, "keeps must be a whole number from 1 to 5"),
+                             ({"gain": 3, "hierarchy": 4}, "unknown score 'hierarchy' (use gain, keeps)")):
+            spec = self.spec()
+            self.item(spec)["changes"][0]["scores"] = scores
+            self.assertIn(word, self.error(spec))
+
+    def test_refine_rejects_missing_fields_and_bad_shapes(self):
+        cases = (("label", None, "change bold-totals needs a label"),
+                 ("why_html", None, "change bold-totals needs why_html"),
+                 ("css", None, "change bold-totals needs css"),
+                 ("css", ".a { color: red } </style>", "</style>"),
+                 ("swaps", [{"selector": ".a"}], "every swap needs a selector and html"),
+                 ("swaps", [{"selector": ".a", "html": "<p></template></p>"}], "</template>"),
+                 ("removes", [{"element": "badge"}], "every removes line needs an element and a reason"))
+        for key, value, word in cases:
+            spec = self.spec()
+            ch = self.item(spec)["changes"][0]
+            if value is None:
+                ch.pop(key)
+            else:
+                ch[key] = value
+            self.assertIn(word, self.error(spec), key)
+
+    def test_refine_hiding_an_element_needs_a_removes_line(self):
+        spec = self.spec()
+        self.item(spec)["changes"][2].pop("removes")
+        self.assertIn("change alert-color hides an element (display: none) but has no removes line", self.error(spec))
+
+    def test_refine_base_must_name_a_snapshot_that_exists(self):
+        spec = self.spec()
+        self.item(spec)["base"] = "before/home-snapshot.html"
+        self.assertIn('base must be {"from": ', self.error(spec))
+        spec = self.spec()
+        self.item(spec)["base"] = {"from": "before/nope-snapshot.html"}
+        msg = self.error(spec)
+        self.assertIn("nope-snapshot.html not found (tried ", msg)
+
+    def test_refine_needs_the_refine_preset_and_one_item_per_page(self):
+        spec = self.spec()
+        spec["decisions"] = "design-review"
+        self.assertIn('a refine item needs the "refine" decisions preset', self.error(spec))
+        spec = self.spec()
+        second = json.loads(json.dumps(self.item(spec)))
+        second["id"] = "home-2"
+        for ch in second["changes"]:
+            ch["id"] += "-2"
+        spec["sections"][0]["items"].append(second)
+        self.assertIn("one refine item per page", self.error(spec))
+
+    def test_refine_recommending_an_unscored_change_is_an_error_when_judged(self):
+        spec = self.spec()
+        self.item(spec)["changes"][0].pop("scores")
+        self.assertIn("change bold-totals is recommended but has no scores", self.error(spec))
+        # Unjudged and nothing scored: recommending is fine, and no score rows show.
+        spec = self.spec()
+        it = self.item(spec)
+        it.pop("judged_by")
+        for ch in it["changes"]:
+            ch.pop("scores")
+        text = self.html(spec)
+        self.assertNotIn("Not scored", text)
+        # Judged: an unscored change that is not recommended says "Not scored".
+        spec = self.spec()
+        self.item(spec)["changes"][1].pop("scores")
+        self.assertIn("Not scored", self.card(self.html(spec), "tight-rows"))
+
+    def test_refine_card_shows_label_why_location_scores_badge_and_a_crops_slot(self):
+        text = self.html()
+        card = self.card(text, "bold-totals")
+        self.assertIn('<span class="rp-num">1</span><h3 class="rp-label">Bolder totals</h3>', card)
+        self.assertIn('<span class="rp-loc">Hosts table</span>', card)
+        self.assertIn("at regular weight they read like the host names", card)
+        self.assertIn("Gain <b>4</b> · Keeps <b>5</b>", card)
+        self.assertIn('<span class="rp-badge rp-rec">Recommended</span>', card)
+        self.assertIn('data-rc-crops="bold-totals"', card)
+        # A change with no location of its own names the item's section.
+        self.assertIn('<span class="rp-loc">Dashboard</span>', self.card(text, "tight-rows"))
+        self.assertIn('<span class="rp-badge rp-notrec">Not recommended</span>', self.card(text, "tight-rows"))
+
+    def test_refine_combined_preview_follows_the_cards(self):
+        text = self.html()
+        prev = text.index('data-rc-preview="home"')
+        self.assertLess(text.index('data-rc-change="alert-color"'), prev)
+        self.assertLess(prev, text.index('data-rc-width="1280"'))
+        self.assertIn('data-rc-view="picks" aria-pressed="true">With your picks</button>', text)
+        self.assertIn('data-rc-view="original" aria-pressed="false">Original</button>', text)
+        self.assertIn("Judged by a separate helper", text[prev:])
+
+    def test_refine_items_get_no_near_copy_check(self):
+        text = self.html()
+        js = json.loads(re.search(r'<script type="application/json" id="rp-spec">(.*?)</script>', text, re.S).group(1))
+        items = js["sections"][0]["items"]
+        self.assertEqual([i["id"] for i in items], ["bold-totals", "tight-rows", "alert-color"])
+        self.assertEqual([i["num"] for i in items], ["1", "2", "3"])
+        for i in items:
+            self.assertEqual(i["refine"], "home")
+            self.assertIs(i["near_copy"], False)
+            self.assertIs(i["design_review"], False)
+            self.assertIsNone(i["before_sections"])
+        self.assertIn("if (it.refine) continue;", (RP / "smoke.cjs").read_text())
+
+    def test_refine_set_scores_use_the_six_criteria_and_show_against_the_current_page(self):
+        spec = self.spec()
+        self.item(spec)["set_scores"] = {"hierarchy": 9}
+        self.assertIn("item home, your picks together: score hierarchy must be a whole number from 1 to 5",
+                      self.error(spec))
+        spec = self.spec()
+        self.item(spec)["set_scores"] = {"gain": 4}
+        self.assertIn("unknown score 'gain'", self.error(spec))
+        text = self.html()
+        prev = text[text.index('data-rc-preview="home"'):]
+        cur = prev.index('<span class="rp-scores-label">Current page</span> Hierarchy <b>3</b>')
+        picks = prev.index('<span class="rp-scores-label">Your picks together (recommended)</span> Hierarchy <b>4</b>')
+        self.assertLess(cur, picks)
+
+    def test_refine_removes_lines_show_on_the_card(self):
+        card = self.card(self.html(), "alert-color")
+        self.assertIn('<li class="rp-rc-remove"><b>Removes</b> new badge — It repeats what the alert color now says.</li>',
+                      card)
+        self.assertRegex((RP / "style.css").read_text(), r"\.rp-rc-remove \{[^}]*color:var\(--rp-deny\)")
+
+    @unittest.skipUnless(NODE, "node is not installed")
+    def test_capture_findings_number_on_after_the_changes(self):
+        spec = self.spec()
+        spec["sections"].append({"title": "Found by the capture", "decisions": "design-review", "items": [
+            {"label": "Totals column out of line at 1280", "category": "capture",
+             "body_html": "<p>off-center columns</p>"},
+            {"label": "Host name breaks mid-word at 390", "category": "capture", "body_html": "<p>mid-word</p>"}]})
+        text = self.export({"bold-totals": {"s": "accept"}, "4": {"s": "accept"}, "5": {"s": "deny"}}, spec)
+        self.assertEqual(text, "[Host Headroom dashboard — Design Review (Refine)]\n"
+                               "1. Bolder totals — YES\n"
+                               "2. Tighter row spacing — PENDING\n"
+                               "3. Status color on the alert column — PENDING\n"
+                               "Combined: 1\n"
+                               "4. Totals column out of line at 1280 — ACCEPT (Use Proposed)\n"
+                               "5. Host name breaks mid-word at 390 — DENY")
+        self.assertEqual(review_page.check(self.built(spec)), [])
+
+    @unittest.skipUnless(NODE, "node is not installed")
+    def test_existing_presets_unchanged(self):
+        # Pinned before Refine was added: the other presets' exports must not move a byte.
+        pinned = {
+            "design-review": [
+                ({"1": {"s": "accept-comment", "v": "A", "c": "a\nb"}, "2": {"s": "revise", "r": True, "c": "x"}},
+                 "[Articles Index — Design Review]\n1. Article card layout — ACCEPT WITH COMMENT (Use Selected: "
+                 "Variant A) — COMMENT: a b\n2. Read More button placement — REVISE — READ — COMMENT: x"),
+                ({"1": {"s": "deny", "r": True}},
+                 "[Articles Index — Design Review]\n1. Article card layout — DENY — READ\n"
+                 "2. Read More button placement — PENDING"),
+                ({"2": {"s": "accept"}},
+                 "[Articles Index — Design Review]\n1. Article card layout — PENDING\n"
+                 "2. Read More button placement — ACCEPT (Use Proposed)")],
+            "copy-edit": [({"1": {"s": "deny"}, "2": {"s": "revise", "c": "z"}},
+                           "[Pricing Page — Copy-Edit Review]\n1. Intro — first sentence — DENY (Keep Original)\n"
+                           "2. New — Introduction to the Method — REVISE — COMMENT: z")],
+            "photo-picker": [({"1": {"s": "deny"}, "2": {"s": "revise", "c": "z"}},
+                              "[How-To Guides — Photo Picker]\n1. Article One — Introduction section — DENY (Keep None)\n"
+                              "2. Article Two — Proofing Basket — REVISE — COMMENT: z")],
+            "style-guide": [({"1": {"s": "deny"}, "2": {"s": "revise", "c": "z"}},
+                             "[Style Guide Audit — 2026-01-15]\n1. Body text size on disclaimer notes — DENY\n"
+                             "2. H2 size on plain articles vs templated ones — REVISE — COMMENT: z")]}
+        for name, cases in pinned.items():
+            page = build(name, self._tmp.name)
+            for state, want in cases:
+                r = subprocess.run([NODE, str(self.driver), str(page), json.dumps({"items": state})],
+                                   capture_output=True, text=True, env=dict(os.environ, TZ="UTC"))
+                self.assertEqual(r.stdout, want, name)
 
 
 MAGICK = shutil.which("magick")

@@ -372,6 +372,8 @@ async function sendToClaude(browser, problems) {
     // Unmeasured text and off-scale type sizes are notes, never problem lines. Design reviews only:
     // a style guide's or photo picker's options hold deliberately small or low-contrast examples.
     for (const it of reviewItems) {
+      // A Refine change has no mockup: it is measured inside the base's frames, and never for near-copies.
+      if (it.refine) continue;
       const sigs = [];
       const item = `.rp-item[data-id=${JSON.stringify(it.id)}]`;
       const oneOption = !(it.variants || []).length;

@@ -101,6 +101,15 @@ PRESETS = {
              "export_variant": "ACCEPT (Record for Later: {sel})", "comment": "optional",
              "meaning": "Record the rule; the retrofit becomes a to-do."},
         ]},
+    # design-review's Refine mode: one card per change of a `refine` item, then a
+    # "Combined: 1, 3" line naming the Yes changes (render_refine, engine.js).
+    "refine": {
+        "variant_word": "Change", "pending": "PENDING", "mark_read": False,
+        "buttons": [
+            {"state": "accept", "label": "✓ Yes", "export": "YES"},
+            {"state": "deny", "label": "✕ No", "export": "NO"},
+            {"state": "revise", "label": "↻ Revise", "export": "REVISE", "comment": "required"},
+        ]},
 }
 CATEGORY_COLORS = ["#2563eb", "#b45309", "#047857", "#9333ea", "#be123c", "#0e7490", "#4d7c0f", "#c2410c"]
 MODES = ("review", "questions", "log", "session", "settings")
@@ -110,7 +119,7 @@ DEFAULT_OUT_MODES = ("log", "session", "settings")
 # page takes it from its decisions preset (a custom set with no preset shows the
 # wordmark alone), the other modes from their kind of page.
 PRESET_SKILLS = {"copy-edit": "article-copy-edit", "design-review": "design-review",
-                 "style-guide": "style-guide", "photo-picker": "photo-picker"}
+                 "style-guide": "style-guide", "photo-picker": "photo-picker", "refine": "design-review"}
 
 
 class SpecError(Exception):
@@ -472,7 +481,7 @@ def sections_of(spec):
 class Ctx:
     def __init__(self, spec, secs):
         self.spec, self.n, self.seen, self.anchors = spec, 0, set(), set()
-        self.cats = []
+        self.cats, self.refine = [], None
         for sec in secs:
             if sec["kind"] == "review":
                 raw = sec.get("decisions", spec.get("decisions", "copy-edit"))
@@ -643,6 +652,11 @@ def render_review(sec, ctx):
     dec, out, items = sec["_dec"], [], []
     word = dec.get("variant_word", "Option")
     for it in sec["items"]:
+        if it.get("kind") == "refine":
+            h, js_items = refine_entry(it, sec, ctx)
+            out.append(h)
+            items.extend(js_items)
+            continue
         ctx.n += 1
         it.setdefault("num", str(ctx.n))
         it["id"] = str(it.get("id") or it["num"])
@@ -1389,6 +1403,352 @@ def review_item(it, dec, colors):
         h.append('<label class="rp-wad" hidden><input type="checkbox" data-wad="%s"> Works as Designed</label>' % iid)
     h.append("</div></article>")
     return "\n".join(h)
+
+
+# ------------------------------------------------------------------- refine
+#
+# design-review's Refine mode (reference/review-page.md, "Refine items"): one item of
+# "kind": "refine" holds a base (the capture's static snapshot of the page) and 1 to 8
+# changes. Each change is its own card, decision and export line; the combined preview
+# shows the base in two iframes (1280 and 390), each carrying every change's CSS scoped
+# under html[data-rc~="<id>"], so a change applies only while the engine has its id in
+# the frame's data-rc.
+
+REFINE_MAX = 8
+REFINE_ID = re.compile(r"[a-z0-9-]+\Z")
+REFINE_SCORES = (("gain", "Gain"), ("keeps", "Keeps"))
+REFINE_WIDTHS = ((1280, "Desktop, 1280 px"), (390, "Phone, 390 px"))
+# At-rules whose blocks hold style rules, which get scoped; any other block at-rule
+# (@font-face, @keyframes, @page, @property, @counter-style) passes through as written.
+CSS_NESTED_AT = ("media", "supports", "container", "layer", "scope", "document")
+HIDES = re.compile(r"display\s*:\s*none", re.I)
+# Types mimetypes may not know, for the snapshot's fonts and images.
+SNAPSHOT_MIME = {".woff2": "font/woff2", ".woff": "font/woff", ".ttf": "font/ttf", ".otf": "font/otf",
+                 ".svg": "image/svg+xml", ".webp": "image/webp", ".avif": "image/avif", ".ico": "image/x-icon"}
+
+
+def _css_skip(css, i):
+    """The index past a string or comment that starts at i, or i itself when neither does."""
+    c = css[i]
+    if c in "\"'":
+        j = i + 1
+        while j < len(css) and css[j] != c:
+            j += 2 if css[j] == "\\" else 1
+        return min(j + 1, len(css))
+    if css.startswith("/*", i):
+        j = css.find("*/", i + 2)
+        return len(css) if j < 0 else j + 2
+    return i
+
+
+def _css_scan(css, i, stops):
+    """The index of the first character in stops outside strings, comments, () and [], or len(css)."""
+    depth = 0
+    while i < len(css):
+        j = _css_skip(css, i)
+        if j != i:
+            i = j
+            continue
+        c = css[i]
+        if c in "([":
+            depth += 1
+        elif c in ")]":
+            depth = max(0, depth - 1)
+        elif depth == 0 and c in stops:
+            return i
+        i += 1
+    return i
+
+
+def _css_block_end(css, i):
+    """css[i] is "{": the index of the "}" that closes it, or -1 when nothing does."""
+    depth = 0
+    while i < len(css):
+        j = _css_skip(css, i)
+        if j != i:
+            i = j
+            continue
+        if css[i] == "{":
+            depth += 1
+        elif css[i] == "}":
+            depth -= 1
+            if not depth:
+                return i
+        i += 1
+    return -1
+
+
+def _css_uncomment(css):
+    out, i = [], 0
+    while i < len(css):
+        j = _css_skip(css, i)
+        if j == i:
+            out.append(css[i])
+            i += 1
+        else:
+            if not css.startswith("/*", i):
+                out.append(css[i:j])
+            i = j
+    return "".join(out)
+
+
+def _css_split(prelude):
+    """A selector list's parts, split on the commas outside :is(), [attr] and strings."""
+    parts, i = [], 0
+    while True:
+        j = _css_scan(prelude, i, ",")
+        parts.append(prelude[i:j].strip())
+        if j >= len(prelude):
+            return parts
+        i = j + 1
+
+
+def _scope_selector(sel, attr):
+    """html and :root are the frame's own root, so the attribute goes on them, not above them."""
+    m = re.match(r"(?i)(html|:root)(?![\w-])", sel)
+    return "html" + attr + sel[m.end():] if m else "html%s %s" % (attr, sel)
+
+
+def _scope_rules(css, attr, where):
+    rules, i, n = [], 0, len(css)
+    while True:
+        while i < n and (css[i].isspace() or css.startswith("/*", i)):
+            i = _css_skip(css, i) if css.startswith("/*", i) else i + 1
+        if i >= n:
+            return rules
+        end = _css_scan(css, i, "{;}")
+        head = css[i:end]
+        if end < n and css[end] == ";" and head.lstrip().startswith("@"):
+            rules.append(head.strip() + ";")  # @import, @charset, @layer a, b;
+            i = end + 1
+            continue
+        if end >= n or css[end] != "{":
+            raise SpecError("%s: css must be rules (selector { ... }); this has no block of its own: %r"
+                            % (where, head.strip()[:60] or css[end:end + 1]))
+        close = _css_block_end(css, end)
+        if close < 0:
+            raise SpecError("%s: css has a { that is never closed, after %r" % (where, head.strip()[:60]))
+        prelude, body = " ".join(_css_uncomment(head).split()), css[end + 1:close]
+        if prelude.startswith("@"):
+            if re.match(r"@([\w-]+)", prelude).group(1).lower() in CSS_NESTED_AT:
+                rules.append("%s { %s }" % (prelude, "\n".join(_scope_rules(body, attr, where))))
+            else:
+                rules.append(css[i:close + 1].strip())
+        else:
+            sels = _css_split(prelude)
+            if not all(sels):
+                raise SpecError("%s: css has an empty selector in %r" % (where, prelude[:60]))
+            rules.append("%s {%s}" % (", ".join(_scope_selector(s, attr) for s in sels), body))
+        i = close + 1
+
+
+def scope_css(css: str, change_id: str) -> str:
+    """Prefix every selector of css with html[data-rc~="<change_id>"], so the rules apply only
+    while the change is on: each part of a selector list, the rules inside @media, @supports,
+    @container and @layer blocks; @font-face, @keyframes and statements pass through."""
+    return "\n".join(_scope_rules(css, '[data-rc~="%s"]' % change_id, "change %s" % change_id))
+
+
+def _score_pairs(sc, dims):
+    return " · ".join("%s <b>%d</b>" % (lab, sc[k]) for k, lab in dims if k in sc)
+
+
+def check_refine_fields(it) -> None:
+    """Validate a refine item: base, 1 to 8 changes, their fields, and the scores (SpecError, one line)."""
+    iid = it["id"]
+    base = it.get("base")
+    if not (isinstance(base, dict) and isinstance(base.get("from"), str) and base["from"]):
+        raise SpecError('item %s: base must be {"from": "<the capture\'s -snapshot.html>"}, got %r' % (iid, base))
+    changes = it.get("changes")
+    count = len(changes) if isinstance(changes, list) else 0
+    if not 1 <= count <= REFINE_MAX:
+        raise SpecError("item %s: %d changes; a Refine item holds 1 to %d (more than %d says the page wants "
+                        "a Redesign)" % (iid, count, REFINE_MAX, REFINE_MAX))
+    jb = it.get("judged_by")
+    if jb is not None and (not isinstance(jb, str) or jb not in JUDGED_BY):
+        raise SpecError("item %s: judged_by %r must be helper or self" % (iid, jb))
+    check_scores("item %s, current page" % iid, it.get("before_scores"))
+    check_scores("item %s, your picks together" % iid, it.get("set_scores"))
+    for key in ("location", "crops"):
+        if it.get(key) is not None and not (isinstance(it[key], str) and it[key]):
+            raise SpecError("item %s: %s must be a string" % (iid, key))
+    for c in changes:
+        if not isinstance(c, dict):
+            raise SpecError("item %s: every change must be an object" % iid)
+        cid = c.get("id")
+        if not isinstance(cid, str) or not REFINE_ID.match(cid):
+            raise SpecError("item %s: change id %r must be lowercase letters, digits and hyphens ([a-z0-9-]+)"
+                            % (iid, cid))
+        where = "change %s" % cid
+        for key, what in (("label", "a label"), ("why_html", "why_html"), ("css", "css")):
+            if not (isinstance(c.get(key), str) and c[key].strip()):
+                raise SpecError("%s needs %s" % (where, what))
+        t = c.get("targets")
+        if not (isinstance(t, list) and t and all(isinstance(s, str) and s.strip() for s in t)):
+            raise SpecError("%s: targets must be a non-empty list of selectors, got %r" % (where, t))
+        if "</style" in c["css"].lower():
+            raise SpecError("%s: css must not contain </style>" % where)
+        for sw in c.get("swaps") or []:
+            if not (isinstance(sw, dict) and isinstance(sw.get("selector"), str) and sw["selector"].strip()
+                    and isinstance(sw.get("html"), str)):
+                raise SpecError("%s: every swap needs a selector and html" % where)
+            if "</template" in sw["html"].lower():
+                raise SpecError("%s: a swap's html must not contain </template>" % where)
+        removes = c.get("removes")
+        if removes is not None and not isinstance(removes, list):
+            raise SpecError("%s: removes must be a list" % where)
+        for r in removes or []:
+            if not (isinstance(r, dict) and str(r.get("element") or "").strip() and str(r.get("reason") or "").strip()):
+                raise SpecError("%s: every removes line needs an element and a reason" % where)
+        if HIDES.search(c["css"]) and not removes:
+            raise SpecError("%s hides an element (display: none) but has no removes line saying what and why" % where)
+        sc = c.get("scores")
+        if sc is not None:
+            if not isinstance(sc, dict):
+                raise SpecError("%s: scores must be an object" % where)
+            for k, val in sc.items():
+                if k not in dict(REFINE_SCORES):
+                    raise SpecError("%s: unknown score %r (use gain, keeps)" % (where, k))
+                if isinstance(val, bool) or not isinstance(val, int) or not 1 <= val <= 5:
+                    raise SpecError("%s: score %s must be a whole number from 1 to 5, got %r" % (where, k, val))
+        if c.get("recommended") is not None and not isinstance(c["recommended"], bool):
+            raise SpecError("%s: recommended must be true or false" % where)
+        scope_css(c["css"], cid)  # a css error is a spec error now, not a broken frame later
+    if jb or any(c.get("scores") for c in changes):
+        for c in changes:
+            if c.get("recommended") and not c.get("scores"):
+                raise SpecError("item %s: change %s is recommended but has no scores" % (iid, c["id"]))
+
+
+def snapshot_asset(path, tool, cache):
+    """A data URI for one file of the snapshot's assets folder, made once per page. A PNG
+    becomes lossless WebP when that is smaller: never lossy, and never resized, because the
+    base must render pixel for pixel like the page (an image's natural size is layout)."""
+    if path not in cache:
+        mime = SNAPSHOT_MIME.get(path.suffix.lower())
+        data = None
+        if path.suffix.lower() == ".png" and tool is not None:
+            data = encode_webp(path, 100, None, True, tool)
+            if data is not None and len(data) >= path.stat().st_size:
+                data = None
+        cache[path] = data_uri(path, data, "image/webp") if data is not None else data_uri(path, mime=mime)
+    return cache[path]
+
+
+def load_snapshot(it, base, cache):
+    """The base snapshot's HTML with every reference into its sibling assets folder
+    (<name>-snapshot-assets/<file>, a relative path) replaced by that file's data URI."""
+    rel = it["base"]["from"]
+    p, tried = find_file(rel, base)
+    if p is None:
+        raise SpecError("item %s: base: %s not found (tried %s)" % (it["id"], rel, " and ".join(map(str, tried))))
+    text = p.read_text()
+    folder = p.parent / (p.stem + "-assets")
+    tool = image_tool()
+    if folder.is_dir():
+        for f in sorted(folder.iterdir(), key=lambda f: -len(f.name)):
+            ref = "%s/%s" % (folder.name, f.name)
+            if f.is_file() and ref in text:
+                uri = snapshot_asset(f, tool, cache)
+                text = text.replace("./" + ref, uri).replace(ref, uri)
+    left = re.search(r"%s/[^\s\"')]*" % re.escape(folder.name), text)
+    if left:
+        raise SpecError("item %s: base refers to %s, which is not in %s" % (it["id"], left.group(0), folder))
+    return text
+
+
+def refine_base(it, base, cache):
+    """The snapshot as each frame shows it: every change's scoped CSS in one <style data-rc-css>
+    at the end of its <head>, and each swap as a <template> at the end of its <body>."""
+    doc = load_snapshot(it, base, cache)
+    css = "\n".join("/* %s */\n%s" % (c["id"], scope_css(c["css"], c["id"])) for c in it["changes"])
+    style = "<style data-rc-css>\n%s\n</style>\n" % css
+    head = re.search(r"</head\s*>", doc, re.I)
+    if head:
+        doc = doc[:head.start()] + style + doc[head.start():]
+    else:
+        body = re.search(r"<body\b", doc, re.I)
+        at = body.start() if body else 0
+        doc = doc[:at] + style + doc[at:]
+    tpl = "".join('<template data-rc-swap="%s" data-rc-target="%s">%s</template>\n'
+                  % (esc(c["id"]), esc(sw["selector"]), sw["html"])
+                  for c in it["changes"] for sw in c.get("swaps") or [])
+    if tpl:
+        ends = list(re.finditer(r"</body\s*>", doc, re.I))
+        at = ends[-1].start() if ends else len(doc)
+        doc = doc[:at] + tpl + doc[at:]
+    return doc
+
+
+def render_refine(it, ctx) -> str:
+    """The change cards, then the combined preview: both frames of the base, the current
+    page's scores and the recommended set's, and the picks/original toggle."""
+    dec, iid = it["_dec"], it["id"]
+    scored = bool(it.get("judged_by")) or any(c.get("scores") for c in it["changes"])
+    h = []
+    for c in it["changes"]:
+        body = ['<div class="rp-rc-why">%s</div>' % c["why_html"]]
+        if c.get("removes"):
+            body.append('<ul class="rp-rc-removes">%s</ul>' % "".join(
+                '<li class="rp-rc-remove"><b>Removes</b> %s — %s</li>' % (esc(r["element"]), esc(r["reason"]))
+                for r in c["removes"]))
+        # Filled with the change's before and after crops at 1280 and 390 when the item names `crops`.
+        body.append('<div class="rp-rc-crops" data-rc-crops="%s"></div>' % esc(c["id"]))
+        if c.get("scores"):
+            body.append('<div class="rp-scores">%s</div>' % _score_pairs(c["scores"], REFINE_SCORES))
+        elif scored:
+            body.append('<div class="rp-scores rp-unscored">Not scored</div>')
+        card = review_item({"id": c["id"], "num": c["_num"], "label": c["label"],
+                            "location": c.get("location") or it.get("location"),
+                            "recommended": c.get("recommended"), "body_html": "\n".join(body)}, dec, ctx.colors)
+        h.append(card.replace('<article class="rp-item" ', '<article class="rp-item" data-rc-change="%s" '
+                              % esc(c["id"]), 1))
+    p = ['<div class="rp-rc-preview" data-rc-preview="%s">' % esc(iid),
+         '<div class="rp-rc-head"><h3 class="rp-rc-title">Your picks together</h3>'
+         '<div class="rp-rc-view" role="group" aria-label="Show the preview">'
+         '<button type="button" class="rp-chip-btn" data-rc-view="picks" aria-pressed="true">With your picks</button>'
+         '<button type="button" class="rp-chip-btn" data-rc-view="original" aria-pressed="false">Original</button>'
+         '</div></div>',
+         '<p class="rp-rc-note">Each change you answer Yes turns on here.</p>']
+    for key, label, cls in (("before_scores", "Current page", "rp-before-scores"),
+                            ("set_scores", "Your picks together (recommended)", "rp-set-scores")):
+        if it.get(key):
+            p.append('<div class="rp-scores %s"><span class="rp-scores-label">%s</span> %s</div>'
+                     % (cls, label, _score_pairs(it[key], SCORE_DIMS)))
+    if it.get("judged_by"):
+        p.append('<div class="rp-judged">%s</div>' % JUDGED_BY[it["judged_by"]])
+    doc = esc(it["_doc"])
+    p.append('<div class="rp-rc-frames">')
+    for width, caption in REFINE_WIDTHS:
+        p.append('<figure class="rp-rc-fig" data-rc-fig="%d"><figcaption>%s</figcaption><div class="rp-rc-box">'
+                 '<iframe class="rp-rc-frame" data-rc-width="%d" width="%d" title="The page with your picks, %s" '
+                 'srcdoc="%s"></iframe></div></figure>' % (width, caption, width, width, caption, doc))
+    p.append("</div></div>")
+    return "\n".join(h + ["\n".join(p)])
+
+
+def refine_entry(it, sec, ctx):
+    """Validate, number and render one refine item: (html, one JS item per change)."""
+    it["id"] = str(it.get("id") or "refine")
+    if sec.get("_preset") != "refine":
+        raise SpecError('item %s: a refine item needs the "refine" decisions preset (its section has %r)'
+                        % (it["id"], sec.get("_preset")))
+    if ctx.refine is not None:
+        raise SpecError("item %s: one refine item per page (item %s is one already)" % (it["id"], ctx.refine))
+    ctx.refine = it["id"]
+    check_refine_fields(it)
+    ctx.claim(it["id"], "item")
+    for c in it["changes"]:
+        ctx.claim(c["id"], "change")
+        ctx.n += 1
+        c["_num"] = str(ctx.n)
+    it["_dec"] = sec["_dec"]
+    it["_doc"] = refine_base(it, ctx.spec.get("_base") or Path.cwd(), {})
+    js = [{"id": c["id"], "num": c["_num"], "label": c["label"], "category": None, "variants": [],
+           "selected": None, "before_font_sizes": [], "before_sections": None,
+           # Measured inside the frames, never as mockups: no near-copy check (spec §3).
+           "design_review": False, "near_copy": False, "refine": it["id"]} for c in it["changes"]]
+    return render_refine(it, ctx), js
 
 
 # -------------------------------------------------------------------- check

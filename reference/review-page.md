@@ -212,6 +212,9 @@ answer change. Undecided and recommended changes start off. A change is on while
 id is in the frame's `<html data-rc>`. The preview has a
 `[data-rc-view="picks"|"original"]` toggle, and `window.rpRefine.state()` returns
 `{on, view}`: the ids answered Yes, in change order, and `"picks"` or `"original"`.
+`on` is the Yes set even in the Original view; read `view` to know what the frames show.
+A frame is marked ready only for the snapshot's own load (one with `<style data-rc-css>`),
+never for a blank document's, and is re-fitted whenever its column or its page changes size.
 Each change's JS item carries
 `refine: <item id>` and `near_copy: false`: `--smoke` skips the mockup and near-copy
 checks for it.

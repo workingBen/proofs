@@ -1910,6 +1910,31 @@ const file = "file://" + process.argv[4];
     f.srcdoc = f.srcdoc;
   }));
   out.frameReload = await look(a.page);
+  // A load of a document that is not the snapshot does not mark the frame ready.
+  out.blank = await a.page.evaluate(() => new Promise((res) => {
+    const f = document.querySelector('.rp-rc-frame[data-rc-width="390"]'), base = f.srcdoc;
+    delete f.dataset.rcReady;
+    f.addEventListener("load", () => setTimeout(() => {
+      const other = { ready: f.dataset.rcReady || null, rc: f.contentDocument.documentElement.getAttribute("data-rc") };
+      f.addEventListener("load", () => setTimeout(() => res({ other, after: f.dataset.rcReady || null }), 50), { once: true });
+      f.srcdoc = base;
+    }, 50), { once: true });
+    f.srcdoc = "<!doctype html><p>not the snapshot</p>";
+  }));
+  // Content that grows after load, with no window resize: the frame and its box follow.
+  out.late = await a.page.evaluate(() => new Promise((res) => {
+    const f = document.querySelector('.rp-rc-frame[data-rc-width="1280"]'), box = f.parentNode;
+    const before = { h: parseFloat(f.style.height), box: parseFloat(box.style.height) };
+    const tall = f.contentDocument.createElement("div");
+    tall.style.height = "600px";
+    f.contentDocument.body.appendChild(tall);
+    setTimeout(() => {
+      const after = { h: parseFloat(f.style.height), box: parseFloat(box.style.height) };
+      tall.remove();
+      res({ before, after });
+    }, 200);
+  }));
+  await a.page.waitForTimeout(200);
   // 6. The page reloads: saved answers come back into the preview.
   await a.page.reload();
   await ready(a.page);
@@ -1922,6 +1947,30 @@ const file = "file://" + process.argv[4];
              box: f.parentNode.getBoundingClientRect().height };
   });
   await a.ctx.close();
+
+  // WebKit fires a load for the frame's initial about:blank after the engine is listening:
+  // dispatched here before the snapshot arrives, it must not mark the frame ready.
+  const early = await browser.newContext(desk);
+  const ep = await early.newPage();
+  await ep.addInitScript(() => {
+    // The engine attaches its load listener, then sets srcdoc: fire the blank load in between.
+    const d = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, "srcdoc");
+    window.__early = [];
+    Object.defineProperty(HTMLIFrameElement.prototype, "srcdoc", { configurable: true, get: d.get,
+      set(v) {
+        if (this.classList.contains("rp-rc-frame") && !this.__blankFired) {
+          this.__blankFired = true;
+          const url = this.contentDocument && this.contentDocument.URL;
+          this.dispatchEvent(new Event("load"));
+          window.__early.push({ url, ready: this.dataset.rcReady || null });
+        }
+        d.set.call(this, v);
+      } });
+  });
+  await ep.goto(file);
+  await ready(ep);
+  out.early = { before: await ep.evaluate(() => window.__early), look: await look(ep) };
+  await early.close();
 
   // 7. Another device: the answers come from the page's database.
   const w = await open(desk, {}, "db");
@@ -2071,6 +2120,20 @@ class RefineBrowser(unittest.TestCase):
         for i in range(2):
             self.assertLess(tight[i], before[i])
             self.assertEqual(back[i], before[i])
+
+    def test_a_blank_document_load_does_not_mark_the_frame_ready(self):
+        b = self.res["blank"]
+        self.assertEqual(b["other"], {"ready": None, "rc": None})
+        self.assertEqual(b["after"], "1")
+        early = self.res["early"]
+        self.assertEqual(early["before"], [{"url": "about:blank", "ready": None}] * 2)
+        for f in self.both(early["look"]):
+            self.assertEqual(f["icons"], ["!"])   # and the snapshot still painted once it loaded
+
+    def test_frame_height_follows_late_content_without_a_window_resize(self):
+        late = self.res["late"]
+        self.assertGreaterEqual(late["after"]["h"], late["before"]["h"] + 590)
+        self.assertGreater(late["after"]["box"], late["before"]["box"])
 
     def test_each_frame_uses_its_own_width_layout(self):
         for key in ("start", "back"):

@@ -991,14 +991,33 @@
     rc = { sync: sync };
     frames.forEach(function (f) {
       f.addEventListener("load", function () {
-        f.__rcDoc = f.contentDocument;
+        var d = f.contentDocument;
+        // Only the snapshot counts: WebKit can fire a load for the frame's initial
+        // about:blank after this listener is attached, and painting that would mark the
+        // frame ready before the snapshot is in it.
+        if (!d || !d.querySelector("style[data-rc-css]")) { f.__rcDoc = null; delete f.dataset.rcReady; return; }
+        f.__rcDoc = d;
         f.__rcSwaps = [];
         paint(f);
+        // Sizes change without a window resize: the page's scrollbar appearing, web fonts
+        // or images arriving late, content that grows. Watch the frame's page too.
+        var RO = d.defaultView && d.defaultView.ResizeObserver;
+        if (RO) new RO(function () { if (f.__rcDoc === d) fit(f); }).observe(d.documentElement);
       });
     });
+    if (window.ResizeObserver) {
+      var figRO = new ResizeObserver(function (es) {
+        es.forEach(function (e) {
+          var f = one(".rp-rc-frame", e.target);
+          if (f && f.__rcDoc) fit(f);
+        });
+      });
+      frames.forEach(function (f) { figRO.observe(f.parentNode.parentNode); });
+    }
     all("[data-rc-view]", preview).forEach(function (b) {
       b.addEventListener("click", function () { view = b.dataset.rcView; sync(); });
     });
+    // A fallback for browsers without ResizeObserver.
     var fitAll = function () { frames.forEach(function (f) { if (f.__rcDoc) fit(f); }); };
     window.addEventListener("resize", fitAll);
     window.rpRefine = { state: function () { return { on: picks(), view: view }; } };

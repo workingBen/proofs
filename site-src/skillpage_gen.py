@@ -50,7 +50,7 @@ for si, s in enumerate(d["sections"]):
     secs += f'<section class="sec" id="{sid}"><h2><span>{si+1}</span>{e(s["title"])}</h2>{rows}</section>'
 
 tpl = open(os.path.join(HERE, "skillpage_tpl.html")).read()
-out = (tpl.replace("%%SKILL%%", e(skill)).replace("%%TAGLINE%%", e(d["tagline"])).replace("%%USE%%", e(d["use_when"]))
+out = (tpl.replace("%%OGTITLE%%", e(f"proofs · {skill}")).replace("%%OGDESC%%", e(d["tagline"])).replace("%%SKILL%%", e(skill)).replace("%%TAGLINE%%", e(d["tagline"])).replace("%%USE%%", e(d["use_when"]))
           .replace("%%TRY%%", e(d["try_it"])).replace("%%TOC%%", toc).replace("%%SECS%%", secs).replace("%%N%%", str(n)).replace("%%PROMISE%%", "".join(f"<span>{e(x)}</span>" for x in d.get("promises", []))))
 from site_order import ORDER
 pn = ""

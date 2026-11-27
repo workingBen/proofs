@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Visual QA capture: screenshots + measurements for whole pages at three viewports.
 //
-//   node <skill folder>/scripts/capture.cjs pages.json [--out DIR] [--sizes 390,1440] [--evidence before|after] [--no-scroll] [--compare EARLIER/measures.json]
+//   node <skill folder>/scripts/capture.cjs pages.json [--out DIR] [--sizes 390,1440] [--evidence before|after] [--no-scroll] [--compare EARLIER/measures.json] [--snapshot]
 //
 // pages.json (see pages.example.json beside this file):
 //   {
@@ -46,6 +46,11 @@
 // --compare takes an earlier run's measures.json and lists, per page, size and check, the entries
 // that are new since then, by text, not by count ("newSince"): a fix that took small tap targets
 // from 11 to 9 had made 3 of the 9 (Astro run 3).
+// --snapshot also writes, for each page at 1280 (so only when 1280 is among the sizes), a
+// standalone copy of the rendered page: <name>-<state>-snapshot.html and its -snapshot-assets/
+// folder, the base design-review's Refine mode builds on (snapshot.cjs says what it keeps).
+// measures.json names it on the page's 1280 entry: "snapshot": { file, bytes } (file null and an
+// error when it failed). Without the flag nothing about the run changes.
 // Prints only the summary table, so the run stays small in context.
 
 const fs = require('fs');
@@ -64,6 +69,7 @@ try {
   console.error(`Cannot find ${LAUNCH}. Install the whole Proofs plugin, not the visual-qa folder on its own.`);
   process.exit(2);
 }
+const { snapshotPage } = require(path.join(__dirname, 'snapshot.cjs'));
 
 function loadPlaywright() {
   const tries = [
@@ -662,10 +668,10 @@ const BLANK_SHARE = 0.9;
 const HIDDEN_BLOCKS = 3;
 
 // The rows of an 8-bit, non-interlaced RGB or RGBA PNG (what Chrome writes), unfiltered; null
-// for any other kind.
+// for any other kind. Takes a file path or the PNG's bytes (fidelity.cjs passes either).
 function decodePng(file) {
   const zlib = require('zlib');
-  const data = fs.readFileSync(file);
+  const data = Buffer.isBuffer(file) ? file : fs.readFileSync(file);
   let pos = 8, width = 0, height = 0, depth = 0, ctype = 0, interlace = 0;
   const idat = [];
   while (pos < data.length) {
@@ -980,7 +986,7 @@ async function main() {
   const opt = (name) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined; };
   const cfgPath = argv[0];
   if (!cfgPath || cfgPath.startsWith('--')) {
-    console.error('usage: capture.cjs pages.json [--out DIR] [--sizes 390,1440] [--evidence before|after] [--no-scroll]');
+    console.error('usage: capture.cjs pages.json [--out DIR] [--sizes 390,1440] [--evidence before|after] [--no-scroll] [--snapshot]');
     process.exit(1);
   }
   let cfg;
@@ -994,6 +1000,7 @@ async function main() {
   const out = opt('--out') || path.join(path.dirname(cfgPath), 'shots');
   const evidence = opt('--evidence');
   const scroll = !argv.includes('--no-scroll');
+  const snapshot = argv.includes('--snapshot');
   const comparePath = opt('--compare');
   let earlier = null;
   if (comparePath) {
@@ -1058,11 +1065,22 @@ async function main() {
       try {
         await openPage(page, base, p, scroll);
         await page.screenshot({ path: path.join(out, `${file}.png`) });
+        // Right after the 1280 shot, so the copy is the page that shot shows (scrolled through, at the top).
+        let snap = null;
+        if (snapshot && label === '1280') {
+          try {
+            const s = await snapshotPage(page, out, `${prefix}${p.name}-${state}`);
+            snap = { file: s.file, bytes: s.bytes };
+          } catch (e) {
+            snap = { file: null, bytes: 0, error: e.message.split('\n')[0] };
+          }
+        }
         const tall = await page.evaluate(() => document.documentElement.scrollHeight);
         const fullScale = tall * (vp.deviceScaleFactor || 1) > FULL_MAX_PX ? 1 : (vp.deviceScaleFactor || 1);
         await page.screenshot({ path: path.join(out, `${file}-full.png`), fullPage: true, ...(fullScale === 1 && vp.deviceScaleFactor > 1 ? { scale: 'css' } : {}) });
         const m = await page.evaluate(measure, { items: p.items, minText, minTap });
         m.fullScale = fullScale;
+        if (snap) m.snapshot = snap;
         m.parts = [];
         const ranges = m.innerWidth === vp.width ? partRanges(m.pageHeight, m.viewport.w) : [];
         const fullPng = ranges.length ? decodePng(path.join(out, `${file}-full.png`)) : null;
@@ -1291,4 +1309,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { joinUrl, readPagesFile, PagesFileError, resolveTargets, resolveViewports };
+module.exports = { joinUrl, readPagesFile, PagesFileError, resolveTargets, resolveViewports, decodePng };

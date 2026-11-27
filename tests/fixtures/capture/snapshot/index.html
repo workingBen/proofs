@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Snapshot fixture</title>
+<link rel="stylesheet" href="css/site.css">
+<style>.inline-rule { font-size: 20px; padding: 0 48px; }</style>
+<script>
+  // A sheet from another origin, as a CDN font or widget stylesheet would be.
+  var far = document.createElement('link');
+  far.rel = 'stylesheet';
+  far.href = 'http://localhost:' + location.port + '/snapshot/far.css';
+  document.head.appendChild(far);
+</script>
+</head>
+<body>
+<header class="hero"><h1>Snapshot fixture heading</h1></header>
+<p class="note">Imported through an @import rule.</p>
+<div class="row">
+  <img id="photo" src="img/photo.png" srcset="img/photo.png 1x, img/photo-2x.png 2x" width="160" height="100" alt="A blue block">
+  <canvas id="chart" width="120" height="60"></canvas>
+  <svg id="mark" width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="#0a7"></circle></svg>
+  <button id="go" onclick="alert('hi')">Press</button>
+</div>
+<p class="inline-rule">From an inline style element.</p>
+<p class="far">From the other origin.</p>
+<script>
+  var c = document.getElementById('chart').getContext('2d');
+  c.fillStyle = '#c03';
+  c.fillRect(0, 0, 120, 60);
+  c.fillStyle = '#fff';
+  c.fillRect(20, 15, 80, 30);
+  var p = document.createElement('p');
+  p.id = 'added';
+  p.className = 'inline-rule';
+  p.textContent = 'Added by a script';
+  document.body.appendChild(p);
+</script>
+</body>
+</html>

@@ -1425,6 +1425,23 @@ REFINE_MAX = 8
 REFINE_ID = re.compile(r"[a-z0-9-]+\Z")
 REFINE_SCORES = (("gain", "Gain"), ("keeps", "Keeps"))
 REFINE_WIDTHS = ((1280, "Desktop, 1280 px"), (390, "Phone, 390 px"))
+# The capture's viewport height at each width (capture.cjs VIEWPORTS, fidelity.cjs
+# SHOT_VIEWPORTS; a test keeps the three the same). Each frame is never shorter, is measured at
+# that height, and gives 1vh as a hundredth of it (--rp-vh), so the page lays out as in the
+# before shot (engine.js fit).
+REFINE_VIEWPORT_H = {1280: 800, 390: 844}
+# A number with a viewport-height unit in CSS: 100vh, -10svh, .5dvh, 1e2lvh. Not inside a
+# name (.h-100vh, .min-h-\[100vh\]) or right after a quote. vmin and vmax are not rewritten.
+VH_UNIT = re.compile(r"(?<![\w.\\\[\]#'\"-])(-?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)([sld]?vh)(?![\w-])")
+# Where the snapshot still asks another site for a file: a published artifact loads none of
+# them (its CSP allows Google Fonts stylesheets only), so each is a builder warning. A link's
+# href is left out (a plain <a> loads nothing), and so is any <link> but a stylesheet (a
+# canonical or icon link changes nothing a reader sees).
+EXTERNAL_LOAD = (
+    re.compile(r"""<link\b(?=[^<>]*\srel=["']?[^"'<>]*\bstylesheet\b)[^<>]*?\shref=["']?(https?://[^"'\s<>]+)""", re.I),
+    re.compile(r"""<(?:img|source|video|audio|iframe|embed|track|input|image|object)\b[^<>]*?\s(?:src|srcset|poster|xlink:href|href|data)=["']?\s*(https?://[^"'\s<>,]+)""", re.I),
+    re.compile(r"""(?:@import\s+(?:url\()?|url\()\s*["']?(https?://[^"'\s)<>]+)""", re.I),
+)
 # At-rules whose blocks hold style rules, which get scoped; any other block at-rule
 # (@font-face, @keyframes, @page, @property, @counter-style) passes through as written.
 # @scope is refused: its inner selectors match from the scope root, so a prefix above it
@@ -1749,7 +1766,44 @@ def refine_base(it, base, cache):
         ends = list(re.finditer(r"</body\s*>", doc, re.I))
         at = ends[-1].start() if ends else len(doc)
         doc = doc[:at] + tpl + doc[at:]
-    return doc
+    return strip_nested_srcdoc(vh_to_var(doc))
+
+
+def _vh_css(css):
+    """Each viewport-height length in css as a multiple of --rp-vh (falling back to the unit
+    itself, so the base opened as its own page lays out as before)."""
+    return VH_UNIT.sub(lambda m: "calc(%s * var(--rp-vh, 1%s))" % (m.group(1), m.group(2)), css)
+
+
+def vh_to_var(doc):
+    """The base with every vh, svh, lvh and dvh in its <style> elements and style attributes
+    written as calc(N * var(--rp-vh, 1vh)). Inside a frame, 100vh is the frame's own height,
+    and the frame takes the page's height: a min-height: 100vh hero with content below it grew
+    without bound (21,192 to 81,980 px in 1.5 s). The engine and fidelity.cjs renderBase set
+    --rp-vh to the capture's viewport height / 100 at each width. Known limit: a max-height
+    media query still sees the frame's full height."""
+    doc = re.sub(r"(<style\b[^>]*>)(.*?)(</style\s*>)", lambda m: m.group(1) + _vh_css(m.group(2)) + m.group(3),
+                 doc, flags=re.S | re.I)
+    return re.sub(r"""(<[A-Za-z][^<>]*?\sstyle=)("[^"]*"|'[^']*')""",
+                  lambda m: m.group(1) + _vh_css(m.group(2)), doc)
+
+
+def strip_nested_srcdoc(doc):
+    """No srcdoc on an <iframe> inside the base: its HTML would bypass the snapshot's script
+    and on* stripping, and it is same-origin with the review page. (snapshot.cjs drops it too;
+    this covers a snapshot taken before it did.)"""
+    return re.sub(r"""(<iframe\b[^<>]*?)\ssrcdoc=("[^"]*"|'[^']*'|[^\s>]+)""", r"\1", doc, flags=re.I)
+
+
+def external_loads(doc):
+    """The http(s) files the base would still fetch from another site, in order, once each."""
+    seen = []
+    for rx in EXTERNAL_LOAD:
+        for m in rx.finditer(doc):
+            u = html.unescape(m.group(1))
+            if u not in seen:
+                seen.append(u)
+    return seen
 
 
 def change_key(c):
@@ -1793,8 +1847,9 @@ def load_crops(it, spec):
             box = per.get(str(width))
             if not isinstance(box, dict):
                 continue
+            taller = box.get("taller") if isinstance(box.get("taller"), int) and box["taller"] > 0 else None
             if isinstance(box.get("note"), str):
-                out.setdefault(c["id"], {})[str(width)] = {"note": box["note"]}
+                out.setdefault(c["id"], {})[str(width)] = {"note": box["note"], "taller": taller}
                 continue
             files = [p.parent / ("%s-%s-%d.png" % (c["id"], s, width)) for s in ("before", "after")]
             if not (all(f.is_file() for f in files) and isinstance(box.get("w"), int) and isinstance(box.get("h"), int)):
@@ -1806,17 +1861,22 @@ def load_crops(it, spec):
                     name += "x"
                 assets[name] = embed_asset(f, report["settings"], tool, report)
                 names.append(name)
-            out.setdefault(c["id"], {})[str(width)] = {"before": names[0], "after": names[1], "w": box["w"], "h": box["h"]}
+            out.setdefault(c["id"], {})[str(width)] = {"before": names[0], "after": names[1], "w": box["w"], "h": box["h"],
+                                                       "taller": taller}
     it["_crops"] = out
 
 
 def crop_figures(c, crops):
-    """A change card's crops: before and after at each width, or that width's note."""
+    """A change card's crops: before and after at each width, or that width's note, and a line
+    when the change makes the page taller there (a crop shows only its targets)."""
     out = []
     for width, _ in REFINE_WIDTHS:
         cw = (crops or {}).get(str(width))
         if not cw:
             continue
+        if cw.get("taller"):
+            out.append('<p class="rp-rc-crop-note" data-rc-taller="%d">Makes the page %d px taller at %d px.</p>'
+                       % (width, cw["taller"], width))
         if "note" in cw:
             out.append('<p class="rp-rc-crop-note" data-rc-crop-w="%d">%s</p>' % (width, esc(cw["note"])))
             continue
@@ -1874,8 +1934,9 @@ def render_refine(it, ctx) -> str:
     p.append('<div class="rp-rc-frames">')
     for width, caption in REFINE_WIDTHS:
         p.append('<figure class="rp-rc-fig" data-rc-fig="%d"><figcaption>%s</figcaption><div class="rp-rc-box">'
-                 '<iframe class="rp-rc-frame" data-rc-width="%d" width="%d" title="The page with your picks, %s">'
-                 '</iframe></div></figure>' % (width, caption, width, width, caption))
+                 '<iframe class="rp-rc-frame" data-rc-width="%d" data-rc-height="%d" width="%d" '
+                 'title="The page with your picks, %s"></iframe></div></figure>'
+                 % (width, caption, width, REFINE_VIEWPORT_H[width], width, caption))
     p.append("</div></div>")
     return "\n".join(h + ["\n".join(p)])
 
@@ -1897,11 +1958,19 @@ def refine_entry(it, sec, ctx):
         c["_num"] = str(ctx.n)
     it["_dec"] = sec["_dec"]
     it["_doc"] = refine_base(it, ctx.spec.get("_base") or Path.cwd(), {})
+    far = external_loads(it["_doc"])
+    if far:
+        print("warning: item %s: the base still loads %d file%s from another site (%s%s), which will not load "
+              "in a published page; capture again so the snapshot inlines %s"
+              % (it["id"], len(far), "" if len(far) == 1 else "s", ", ".join(far[:3]), ", ..." if len(far) > 3 else "",
+                 "it" if len(far) == 1 else "them"), file=sys.stderr)
     load_crops(it, ctx.spec)
     js = [{"id": c["id"], "num": c["_num"], "label": c["label"], "category": None, "variants": [],
            "selected": None, "before_font_sizes": [], "before_sections": None,
            # Measured inside the frames, never as mockups: no near-copy check (spec §3).
-           "design_review": False, "near_copy": False, "refine": it["id"]} for c in it["changes"]]
+           "design_review": False, "near_copy": False, "refine": it["id"],
+           # What its removes lines name, for --smoke's hidden-element and changed-word lines.
+           "removes": [r["element"] for r in c.get("removes") or []]} for c in it["changes"]]
     return render_refine(it, ctx), js
 
 
@@ -2173,9 +2242,17 @@ def smoke(path, playwright=None, shots=None):
     pw = find_playwright(playwright)
     if not pw:
         return None, {"error": "Playwright not found. " + HOW_TO_PY}
-    r = subprocess.run([shutil.which("node"), str(SMOKE), pw, str(Path(path).resolve())]
-                       + ([str(Path(shots).resolve())] if shots else []),
-                       capture_output=True, text=True, timeout=600)
+    node = shutil.which("node")
+    if not node:
+        print("smoke: node is not installed; it is needed to run %s" % SMOKE.name, file=sys.stderr)
+        return None, None
+    try:
+        r = subprocess.run([node, str(SMOKE), pw, str(Path(path).resolve())]
+                           + ([str(Path(shots).resolve())] if shots else []),
+                           capture_output=True, text=True, timeout=HELPER_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        print("smoke: %s did not finish in %d seconds and was stopped" % (SMOKE.name, HELPER_TIMEOUT), file=sys.stderr)
+        return None, None
     try:
         res = json.loads(r.stdout.strip().splitlines()[-1])
     except (ValueError, IndexError):
@@ -2236,20 +2313,31 @@ def match_preview(page_path, picks, shots, playwright=None):
     return 2 if res.get("cannot") else 0
 
 
-def crops(page_path, out, playwright=None):
+def crops(page_path, out, playwright=None, set_picks=None):
     """--crops: each Refine change's before and after at 1280 and 390, cut from PAGE's frames
     (crops.cjs), into the folder `out`. A width where no target is shown gets a note, printed
-    here and kept in crops.json, instead of a crop. Returns the exit code: 0 when written, 2
-    when it cannot run (no Playwright or node, PAGE has no Refine preview, or it timed out)."""
+    here and kept in crops.json, instead of a crop, and so does a change that makes the page
+    taller. With set_picks (--set 1,3, the recommended changes), also set-1280.png and
+    set-390.png: the whole base with those on together, for the critic. Returns the exit code:
+    0 when written, 2 when it cannot run (no Playwright or node, PAGE has no Refine preview, a
+    --set number it does not have, or it timed out)."""
     pw = find_playwright(playwright)
     if not pw:
         print("crops: Playwright not found. " + HOW_TO_PY, file=sys.stderr)
         return 2
-    res = run_helper("crops", CROPS, [pw, Path(page_path).resolve(), Path(out).resolve()])
+    nums = [n.strip() for n in str(set_picks or "").split(",") if n.strip()]
+    if set_picks is not None and not nums:
+        print("crops: --set needs the numbers of the recommended changes, such as 1,3", file=sys.stderr)
+        return 2
+    res = run_helper("crops", CROPS, [pw, Path(page_path).resolve(), Path(out).resolve()] + ([",".join(nums)] if nums else []))
     if res is None:
         return 2
     n = sum(1 for per in res["crops"].values() for w, box in per.items() if w != "key" and "note" not in box)
     print("wrote %d crops of %d changes to %s" % (n * 2, len(res["crops"]), out))
+    if res.get("set"):
+        print("wrote %s with change%s %s on together, for the critic" % (
+            " and ".join(str(Path(out) / res["set"]["files"][w]) for w in ("1280", "390")),
+            "s" if len(res["set"]["changes"]) > 1 else "", ", ".join(res["set"]["changes"])))
     for note in res["notes"]:
         print("note: " + note)
     return 0
@@ -2282,10 +2370,14 @@ def main(argv=None):
                     "page; with --smoke: where a Refine page's before shots are, when not beside its base")
     ap.add_argument("--crops", metavar="PAGE", help="write PAGE's Refine change crops (before and after at 1280 "
                     "and 390) and crops.json to the folder --out names")
+    ap.add_argument("--set", metavar="NUMS", help="with --crops: also shoot the whole page with these changes "
+                    "(the recommended set, such as 1,3) on together, as set-1280.png and set-390.png")
     ap.add_argument("--answers", metavar="PAGE", help="print PAGE's answers from its database rows (--rows) "
                     "as the same text its Copy button makes")
     ap.add_argument("--rows", metavar="PATH", help="with --answers: the out_dir ArtifactData list wrote, or a JSON file")
     a = ap.parse_args(argv)
+    if a.set is not None and not a.crops:
+        ap.error("--set goes with --crops PAGE --out DIR")
     if a.answers:
         if not a.rows:
             ap.error("--answers needs --rows (the folder ArtifactData list wrote with out_dir)")
@@ -2293,7 +2385,7 @@ def main(argv=None):
     if a.crops:
         if not a.out:
             ap.error("--crops needs --out DIR (the folder for the crops, such as .proofs/design-review/crops)")
-        return crops(a.crops, a.out, a.playwright)
+        return crops(a.crops, a.out, a.playwright, a.set)
     if a.match_preview:
         if not (a.picks and a.shots):
             ap.error("--match-preview needs --picks (such as 1,3) and --shots (the capture's folder)")
@@ -2309,6 +2401,8 @@ def main(argv=None):
             return 1
         if a.smoke:
             ok, res = smoke(target, a.playwright, a.shots)
+            if res is None:  # node missing or the run timed out: said on stderr, in one line
+                return 2
             print(json.dumps(res, indent=2, ensure_ascii=False))
             if ok is None:
                 return 2

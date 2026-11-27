@@ -969,9 +969,19 @@
       var d = f.__rcDoc, box = f.parentNode, fig = box.parentNode;
       var w = +f.dataset.rcWidth, edge = box.offsetWidth - box.clientWidth;
       var s = Math.min(1, Math.max(0, fig.clientWidth - edge) / w);
-      // The page's own height, not scrollHeight: that never drops below the frame's
-      // current height, so a frame would grow with a change and never shrink back.
-      var h = d && d.documentElement ? Math.ceil(d.documentElement.getBoundingClientRect().height) : 0;
+      // The page is measured with the frame at the capture's viewport height (data-rc-height:
+      // 800 at 1280, 844 at 390), never at its own last height: inside the frame, 100% of the
+      // viewport is the frame, so a page measured at its own height (an html, body { height:
+      // 100% } app shell, a wrapper with min-height: 100% and a footer below it) grows with
+      // every fit. At that height scrollHeight is the page's height as the capture's full shot
+      // has it, and it shrinks back when a change makes the page shorter. Viewport units are
+      // not in play: the builder made each vh a multiple of --rp-vh, set per frame on load.
+      var floor = +f.dataset.rcHeight || 0, h = floor;
+      if (d && d.documentElement) {
+        f.style.height = floor + "px";
+        var root = d.documentElement;
+        h = Math.max(floor, Math.ceil(root.scrollHeight), Math.ceil(root.getBoundingClientRect().height));
+      }
       f.style.height = h + "px";
       f.style.transform = s < 1 ? "scale(" + s + ")" : "";
       box.style.width = Math.floor(w * s) + "px";
@@ -1000,6 +1010,9 @@
         if (!d || !d.querySelector("style[data-rc-css]")) { f.__rcDoc = null; delete f.dataset.rcReady; return; }
         f.__rcDoc = d;
         f.__rcSwaps = [];
+        // 1vh as the capture saw it at this width (its viewport height / 100), so a 100vh
+        // hero is as tall here as in the before shot, whatever height the frame takes.
+        if (+f.dataset.rcHeight > 0) d.documentElement.style.setProperty("--rp-vh", +f.dataset.rcHeight / 100 + "px");
         paint(f);
         // Sizes change without a window resize: the page's scrollbar appearing, web fonts
         // or images arriving late, content that grows. Watch the frame's page too.

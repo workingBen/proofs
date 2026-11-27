@@ -137,11 +137,17 @@ function applyChanges(on) {
 // and swap templates) at one of SHOT_VIEWPORTS' widths, with the given changes on. Shot as a
 // page of its own, not through the review page's frame: the frame is scaled to fit its column,
 // and the before shot was taken at the capture's device scale with no frame around it.
+// The builder writes each vh (svh, lvh, dvh) in the base as a multiple of --rp-vh, which the
+// engine sets per frame to the capture's viewport height / 100 (rpVh); a base shot sets it the
+// same way, so the preview and this measure lay the page out alike.
+const rpVh = (width) => SHOT_VIEWPORTS[width].viewport.height / 100;
+
 async function renderBase(browser, doc, width, on = []) {
   const ctx = await browser.newContext(SHOT_VIEWPORTS[width]);
   try {
     const page = await ctx.newPage();
     await page.setContent(doc, { waitUntil: 'load' });
+    await page.evaluate((vh) => document.documentElement.style.setProperty('--rp-vh', vh + 'px'), rpVh(width));
     await page.evaluate(applyChanges, on);
     await page.evaluate(() => document.fonts.ready.then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))));
     await page.waitForTimeout(SETTLE_MS);
@@ -154,6 +160,57 @@ async function renderBase(browser, doc, width, on = []) {
   }
 }
 
+// The boxes of every piece of visible text in a base document at one width with `on` on, in CSS
+// pixels of the whole page (one per line of each text node), laid out as renderBase lays it out.
+async function textBoxes(browser, doc, width, on = []) {
+  const ctx = await browser.newContext(SHOT_VIEWPORTS[width]);
+  try {
+    const page = await ctx.newPage();
+    await page.setContent(doc, { waitUntil: 'load' });
+    await page.evaluate((vh) => document.documentElement.style.setProperty('--rp-vh', vh + 'px'), rpVh(width));
+    await page.evaluate(applyChanges, on);
+    await page.evaluate(() => document.fonts.ready);
+    return await page.evaluate(() => {
+      const out = [];
+      const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+        if (!n.data.trim()) continue;
+        const range = document.createRange();
+        range.selectNodeContents(n);
+        for (const r of range.getClientRects()) {
+          if (r.width > 0 && r.height > 0) out.push([r.left + scrollX, r.top + scrollY, r.right + scrollX, r.bottom + scrollY]);
+        }
+      }
+      return out;
+    });
+  } finally {
+    await ctx.close();
+  }
+}
+
+// For a build that does not match: of the pixels where the build differs from the preview and the
+// picks change nothing (base and preview agree), the share inside text boxes (textBoxes, CSS px;
+// scale is the shots' device pixels per CSS pixel). A share near 1 is what a page showing other
+// data than the before looks like (new numbers, dates, names), not a missed pick, whose pixels are
+// the picks' own. null when there are no such pixels or the shots are not the same width.
+function textShare(basePng, previewPng, buildPng, boxes, scale) {
+  const picked = diffMask(basePng, previewPng), off = diffMask(previewPng, buildPng);
+  if (picked.width !== off.width) return null;
+  const inText = new Uint8Array(off.width * off.height);
+  for (const [x0, y0, x1, y1] of boxes) {
+    const ya = Math.max(0, Math.floor(y0 * scale)), yb = Math.min(off.height, Math.ceil(y1 * scale));
+    const xa = Math.max(0, Math.floor(x0 * scale)), xb = Math.min(off.width, Math.ceil(x1 * scale));
+    for (let y = ya; y < yb; y++) inText.fill(1, y * off.width + xa, y * off.width + xb);
+  }
+  let other = 0, text = 0;
+  for (let i = 0; i < off.mask.length; i++) {
+    if (!off.mask[i] || (i < picked.mask.length && picked.mask[i])) continue;
+    other++;
+    if (inText[i]) text++;
+  }
+  return other ? { share: text / other, pixels: other } : null;
+}
+
 // The before shot's file names for a snapshot, best first: the capture writes
 // <name>-<state>-snapshot.html beside <name>-<state>-<width>-full.png (the whole page; the
 // <width>.png beside it is only the first screen), so the snapshot's own stem first, then
@@ -163,5 +220,5 @@ function shotNames(snapshotFile, width) {
   return [`${stem}-${width}-full.png`, `${stem}-default-${width}-full.png`];
 }
 
-module.exports = { compareShots, comparePicks, diffMask, renderBase, shotNames, applyChanges,
+module.exports = { compareShots, comparePicks, diffMask, renderBase, textBoxes, textShare, shotNames, applyChanges, rpVh,
   FIDELITY, MISSED_PICKS, CHANNEL_TOLERANCE, SHOT_VIEWPORTS, SETTLE_MS, FULL_MAX_PX };

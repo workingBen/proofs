@@ -8,11 +8,17 @@
 // { <change id>: { key, "1280": {x, y, w, h}, "390": {note} } }: CSS pixels in the frame's page, or
 // a note for a width where no target is shown (hidden or of no size), which gets no crop. key is
 // the card's data-rc-key (review_page.py change_key), so a later build skips crops gone stale. Prints
-// one JSON line: { out, crops, notes: [...] }, or { error } when it cannot start. Run through
-// review_page.py --crops.
+// one JSON line: { out, crops, notes: [...], set }, or { error } when it cannot start. A change that
+// makes the page taller at a width gets "taller": <CSS px> on that width's entry and a note ("makes
+// the page 140 px taller at 390"), which its card shows. With a fifth argument, the numbers of the
+// recommended changes (such as 1,3), it also writes <out>/set-1280.png and <out>/set-390.png: the
+// whole base with those changes on together, shot as the capture shoots a page (fidelity.cjs
+// renderBase), for the critic to score the set against the current page; `set` names them.
+// Run through review_page.py --crops (--set).
 const fs = require("fs");
 const path = require("path");
 const { launchChromium } = require("./launch.cjs");
+const { renderBase } = require("./fidelity.cjs");
 
 // CSS pixels around the targets: enough to show what sits next to them (the row a value is in,
 // the space above a heading) without the crop becoming the section.
@@ -40,7 +46,8 @@ function measureTargets(selectors) {
       x1 = Math.max(x1, r.right + scrollX); y1 = Math.max(y1, r.bottom + scrollY);
     }
   }
-  const page = { w: document.documentElement.clientWidth, h: document.documentElement.getBoundingClientRect().height };
+  const root = document.documentElement;
+  const page = { w: root.clientWidth, h: root.getBoundingClientRect().height, tall: Math.max(root.scrollHeight, root.getBoundingClientRect().height) };
   return { box: x1 > x0 ? { x0, y0, x1, y1 } : null, page };
 }
 
@@ -85,7 +92,7 @@ async function shoot(page, w, box, file) {
   await page.screenshot({ path: file, fullPage: true, clip: { x: at.x + box.x, y: at.y + box.y, width: box.w, height: box.h } });
 }
 
-async function main(pw, pagePath, outDir) {
+async function main(pw, pagePath, outDir, setArg) {
   const { chromium } = require(pw);
   const browser = await launchChromium(chromium, process.env);
   try {
@@ -100,6 +107,11 @@ async function main(pw, pagePath, outDir) {
       return { id, changes: S.sections.flatMap((s) => s.items || []).filter((i) => i.refine === id) };
     });
     if (!info) return { error: `${pagePath} has no Refine preview` };
+    const setNums = setArg ? setArg.split(",").map((n) => n.trim()).filter(Boolean) : null;
+    if (setNums) {
+      const unknown = setNums.filter((n) => !info.changes.some((c) => c.num === n));
+      if (!setNums.length || unknown.length) return { error: `--set: no change ${unknown.join(", ") || "given"} on this page (its changes are ${info.changes.map((c) => c.num).join(", ")})` };
+    }
     // Each change card carries its targets (data-rc-targets, a JSON list of selectors).
     const targets = {}, keys = {};
     for (const [id, t, key] of await page.evaluate(() => Array.from(
@@ -147,11 +159,19 @@ async function main(pw, pagePath, outDir) {
       crops[c.id] = { key: keys[c.id] };
       for (const w of WIDTHS) {
         const box = cropBox(m.off[w], m.on[w]);
-        if (box) { crops[c.id][w] = box; continue; }
-        const note = `Change ${c.num}: ${sels.join(", ")} ${sels.length > 1 ? "are" : "is"} not shown at ${w} px wide ` +
-          `(hidden or of no size, with the change off and on), so there is no crop at this width.`;
-        crops[c.id][w] = { note };
-        notes.push(note);
+        if (box) crops[c.id][w] = box;
+        else {
+          const note = `Change ${c.num}: ${sels.join(", ")} ${sels.length > 1 ? "are" : "is"} not shown at ${w} px wide ` +
+            `(hidden or of no size, with the change off and on), so there is no crop at this width.`;
+          crops[c.id][w] = { note };
+          notes.push(note);
+        }
+        // A crop shows only the targets: a change that pushes everything below them down says so.
+        const taller = Math.round(m.on[w].page.tall - m.off[w].page.tall);
+        if (taller >= 1) {
+          crops[c.id][w].taller = taller;
+          notes.push(`Change ${c.num} makes the page ${taller} px taller at ${w}.`);
+        }
       }
       for (const [state, ids] of [["before", []], ["after", [c.id]]]) {
         await show(page, frames, ids);
@@ -163,15 +183,26 @@ async function main(pw, pagePath, outDir) {
     }
     await page.evaluate(() => window.rpRefine.only(null));
     fs.writeFileSync(path.join(outDir, "crops.json"), JSON.stringify(crops, null, 2) + "\n");
-    return { out: outDir, crops, notes };
+    let set = null;
+    if (setNums) {
+      const doc = await page.evaluate((id) => JSON.parse(document.getElementById("rp-rc-base-" + id).textContent), info.id);
+      const ids = info.changes.filter((c) => setNums.includes(c.num)).map((c) => c.id);
+      set = { changes: setNums, files: {} };
+      for (const w of WIDTHS) {
+        const file = `set-${w}.png`;
+        fs.writeFileSync(path.join(outDir, file), await renderBase(browser, doc, w, ids));
+        set.files[w] = file;
+      }
+    }
+    return { out: outDir, crops, notes, set };
   } finally {
     await browser.close();
   }
 }
 
 if (require.main === module) {
-  const [pw, pagePath, outDir] = process.argv.slice(2);
-  main(pw, pagePath, path.resolve(outDir))
+  const [pw, pagePath, outDir, setArg] = process.argv.slice(2);
+  main(pw, pagePath, path.resolve(outDir), setArg)
     .then((r) => console.log(JSON.stringify(r)))
     .catch((e) => { console.log(JSON.stringify({ error: "crops crashed: " + (e && e.message) })); process.exit(1); });
 }

@@ -64,6 +64,39 @@ function added(d, base) {
   return out;
 }
 
+// What `added` leaves out: an entry the page already had that a change makes worse (lower
+// contrast, a smaller tap target, a longer line). Never a problem, since the page had it, but a
+// note, so a change does not pass for deepening a failure.
+const WORSE = {
+  contrast: { val: (e) => e.ratio, worse: (now, was) => now < was - 0.05,
+    what: ["text element already below AA contrast", "text elements already below AA contrast"],
+    say: (e, b) => `"${e.text}" ${b.ratio.toFixed(2)} to ${e.ratio.toFixed(2)}` },
+  smallTargets: { val: (e) => Math.min(e.w, e.h), worse: (now, was) => now < was - 0.5,
+    what: ["tap target already under 44x44", "tap targets already under 44x44"],
+    say: (e, b) => `"${e.text}" ${b.w}x${b.h} to ${e.w}x${e.h}` },
+  longLines: { val: (e) => e.chars, worse: (now, was) => now > was,
+    what: ["line already over 80 characters", "lines already over 80 characters"],
+    say: (e, b) => `"${e.text}" ${b.chars} to ${e.chars} characters` },
+};
+function worseLines(where, d, base, w) {
+  const out = [];
+  for (const [k, c] of Object.entries(WORSE)) {
+    const left = new Map();
+    for (const b of base[k] || []) {
+      const key = CHECK_KEYS[k](b);
+      if (!left.has(key)) left.set(key, []);
+      left.get(key).push(b);
+    }
+    const hits = [];
+    for (const e of d[k] || []) {
+      const was = (left.get(CHECK_KEYS[k](e)) || []).shift();
+      if (was && c.worse(c.val(e), c.val(was))) hits.push(c.say(e, was));
+    }
+    if (hits.length) out.push(`${where}: makes ${hits.length} ${c.what[hits.length > 1 ? 1 : 0]} worse at ${w}px (${hits.join("; ")})`);
+  }
+  return out;
+}
+
 // Runs in a Refine frame. The first call (no `ids`) records, for every element, the computed
 // value of each property any change declares; a later call returns [index, property] for each
 // element whose value of any of those properties is not what it was, and [index, "markup"] for
@@ -151,6 +184,95 @@ function elementNames({ indices, ids }) {
   });
 }
 
+// Runs in a Refine frame, after styleDiff's first call recorded the base's elements
+// (window.__rcEls): which of them a reader can see, and what each one's own words look like.
+// Seen: still in the page, not hidden by display, visibility or opacity (checkVisibility), of a
+// size, and not cut away by an ancestor that clips its overflow (height: 0; overflow: hidden).
+// Words: an element's own text with how it is set (text-transform, the alpha of its color, the
+// content of its ::before and ::after), so color: transparent, text-transform and content:
+// read as changed words while the element stays in place. Returns { seen: [index...], words:
+// { index: signature } }.
+function seenState() {
+  const els = window.__rcEls || [];
+  const clip = new Map();
+  const box = (a) => {
+    if (!clip.has(a)) {
+      const cs = getComputedStyle(a);
+      clip.set(a, cs.overflowX === "visible" && cs.overflowY === "visible" ? null : a.getBoundingClientRect());
+    }
+    return clip.get(a);
+  };
+  const shown = (el) => {
+    if (!el.isConnected) return false;
+    if (el.checkVisibility && !el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true, opacityProperty: true, visibilityProperty: true })) return false;
+    const r = el.getBoundingClientRect();
+    if (!(r.width > 0 && r.height > 0)) return false;
+    for (let a = el.parentElement; a && a !== document.documentElement; a = a.parentElement) {
+      const b = box(a);
+      if (b && (r.right <= b.left || r.left >= b.right || r.bottom <= b.top || r.top >= b.bottom)) return false;
+    }
+    return true;
+  };
+  const alpha = (c) => { const m = /rgba?\(([^)]*)\)/.exec(c || ""); const p = m ? m[1].split(/[\s,/]+/).filter(Boolean) : []; return p.length > 3 ? parseFloat(p[3]) : 1; };
+  const out = { seen: [], words: {} };
+  els.forEach((el, i) => {
+    if (!shown(el)) return;
+    out.seen.push(i);
+    const own = Array.from(el.childNodes).filter((n) => n.nodeType === 3).map((n) => n.data).join("").replace(/\s+/g, " ").trim();
+    const cs = getComputedStyle(el);
+    const pseudo = ["::before", "::after"].map((p) => getComputedStyle(el, p).content).filter((c) => c && c !== "none" && c !== "normal");
+    if (!own && !pseudo.length) return;
+    const ink = cs.webkitTextFillColor && alpha(cs.webkitTextFillColor) === 0 ? 0 : alpha(cs.color);
+    out.words[i] = JSON.stringify([own, own ? cs.textTransform : "", own ? (ink > 0 && parseFloat(cs.fontSize) > 0) : true, pseudo]);
+  });
+  return out;
+}
+
+// Runs in a Refine frame: for each change, how many elements each of its targets and each of its
+// swaps' selectors match now, or "throws" for one that is not a valid selector.
+function selectorCounts(changes) {
+  const count = (sel) => { try { return document.querySelectorAll(sel).length; } catch (e) { return "throws"; } };
+  return changes.map((c) => ({
+    targets: (c.targets || []).map((t) => [t, count(t)]),
+    swaps: Array.from(document.querySelectorAll("template[data-rc-swap]"))
+      .filter((t) => t.dataset.rcSwap === c.id).map((t) => [t.dataset.rcTarget, count(t.dataset.rcTarget)]),
+  }));
+}
+
+// A PNG's size from its header, without decoding it.
+function pngSize(file) {
+  const b = fs.readFileSync(file);
+  return b.length > 24 ? { width: b.readUInt32BE(16), height: b.readUInt32BE(20) } : null;
+}
+// CSS pixels a frame may differ from its before shot in height: rounding (a frame is a whole
+// number of pixels, a phone shot two device pixels to one).
+const HEIGHT_SLACK = 2;
+
+// What one change on hides or rewords, against the page as it is, at one width: problem lines
+// when the change has no removes line, notes when it has (the reader sees its removes lines on
+// the card; this says what they cover). Hidden elements are counted where they start, not once
+// per descendant.
+async function lostLines(f, st, was, now, w, label, problems, notes) {
+  if (!was || !now) return;
+  const shown = new Set(now.seen);
+  const lost = was.seen.filter((i) => !shown.has(i));
+  const reworded = [...new Set([...Object.keys(was.words), ...Object.keys(now.words)])]
+    .map(Number).filter((i) => shown.has(i) && was.words[i] !== now.words[i]);
+  const top = lost.length ? await f.evaluate((ix) => {
+    const set = new Set(ix.map((i) => window.__rcEls[i]));
+    return ix.filter((i) => { for (let a = window.__rcEls[i].parentElement; a; a = a.parentElement) if (set.has(a)) return false; return true; });
+  }, lost) : [];
+  const c = st.change, has = (c.removes || []).length > 0;
+  const say = async (ix, what) => {
+    const names = await f.evaluate(elementNames, { indices: ix.slice(0, 3), ids: [c.id] });
+    const list = `${names.join(", ")}${ix.length > 3 ? `, and ${ix.length - 3} more` : ""}`;
+    if (has) notes.push(`${label}: change ${c.num} ${what(ix.length)} at ${w}px (${list}); check its removes lines (${c.removes.join("; ")}) cover them`);
+    else problems.push(`${label}: change ${c.num} ${what(ix.length)} at ${w}px (${list}) with no removes line saying what and why`);
+  };
+  if (top.length) await say(top, (n) => `hides ${n} element${n > 1 ? "s" : ""}`);
+  if (reworded.length) await say(reworded, (n) => `changes words in ${n} element${n > 1 ? "s" : ""}`);
+}
+
 // design-review's Refine mode (spec §2 and §3). The base with every change off, shot as its own
 // page at the capture's 1280 and 390, against the before shots (fidelity.cjs); then, inside each
 // frame at its own width, the page as it is, each change on alone and all on: computed styles
@@ -198,7 +320,11 @@ async function refineChecks(browser, page, S, problems, notes) {
   const states = [{ key: "base", ids: [], where: `${label}, the page as it is` },
     ...changes.map((c) => ({ key: c.num, ids: [c.id], where: `${label}, change ${c.num} on`, change: c })),
     ...(changes.length > 1 ? [{ key: "all", ids: changes.map((c) => c.id), where: `${label}, all changes on` }] : [])];
-  const base = {}, touched = {};
+  // Each change's targets, from its card (the spec items carry no selectors).
+  const cardTargets = Object.fromEntries(await page.evaluate(() => Array.from(
+    document.querySelectorAll("[data-rc-change][data-rc-targets]"), (el) => [el.dataset.rcChange, JSON.parse(el.dataset.rcTargets)])));
+  const probe = changes.map((c) => ({ id: c.id, targets: cardTargets[c.id] || [] }));
+  const base = {}, touched = {}, shownIn = {}, counts = {};
   for (const st of states) {
     await page.evaluate((ids) => window.rpRefine.only(ids), st.ids);
     for (const w of [1280, 390]) {
@@ -210,6 +336,10 @@ async function refineChecks(browser, page, S, problems, notes) {
       const over = await f.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       const diff = await f.evaluate(styleDiff, { ids: st.key === "base" ? null : st.ids });
       if (st.change) touched[w + "|" + st.change.num] = diff;
+      if (st.key !== "all") {
+        shownIn[w + "|" + st.key] = await f.evaluate(seenState);
+        counts[w + "|" + st.key] = await f.evaluate(selectorCounts, probe);
+      }
       out.checks.push({ state: st.key, width: w, contrast: d.contrast.length, smallTargets: d.smallTargets.length,
         longLines: d.longLines.length, edges: d.edges.length, clippedRows: d.clippedRows.length,
         midWord: mid.length, sideways: Math.max(0, over) });
@@ -223,9 +353,42 @@ async function refineChecks(browser, page, S, problems, notes) {
       }
       const l = designLines(st.where, added(d, base[w].d), w);
       problems.push(...l.problems);
-      notes.push(...l.notes);
+      notes.push(...l.notes, ...worseLines(st.where, d, base[w].d, w));
+      if (st.change) await lostLines(f, st, shownIn[w + "|base"], shownIn[w + "|" + st.key], w, label, problems, notes);
       for (const b of minus(mid, base[w].mid, (e) => e.at)) problems.push(`${st.where}: "${b.at}" breaks mid-word at ${w}px wide`);
       if (over > Math.max(0, base[w].over)) problems.push(`${st.where}: the page scrolls sideways by ${over}px at ${w}px wide`);
+    }
+  }
+  // A target or swap selector that is not a selector, or that matches nothing with the change
+  // off or on at either width, means the change's crops, overlap and removes checks see nothing.
+  changes.forEach((c, k) => {
+    for (const kind of ["targets", "swaps"]) {
+      const sels = (counts["1280|base"] || [])[k] ? counts["1280|base"][k][kind].map(([sel]) => sel) : [];
+      sels.forEach((sel, j) => {
+        const all = [1280, 390].flatMap((w) => ["base", c.num].map((key) => ((counts[w + "|" + key] || [])[k] || { [kind]: [] })[kind][j]));
+        const what = kind === "targets" ? "target" : "swap";
+        if (all.some((x) => x && x[1] === "throws")) problems.push(`${label}: change ${c.num}: ${what} ${sel} is not a valid selector`);
+        else if (all.every((x) => x && x[1] === 0)) problems.push(`${label}: change ${c.num}: ${what} ${sel} matches nothing`);
+      });
+    }
+  });
+
+  // The frames' heights against the before shots': the preview must lay the page out as tall as
+  // it is, or 100%-of-the-viewport layouts are wrong in it (an app shell 150 px tall, a 100vh
+  // hero growing without bound).
+  await page.evaluate(() => window.rpRefine.only([]));
+  await page.waitForFunction(() => Array.from(document.querySelectorAll("iframe.rp-rc-frame"))
+    .every((x) => (x.contentDocument.documentElement.getAttribute("data-rc") || "") === ""), null, { timeout: 15000 });
+  await page.waitForTimeout(300);
+  out.heights = {};
+  for (const w of [1280, 390]) {
+    const frame = await page.evaluate((w) => parseFloat(document.querySelector(`iframe.rp-rc-frame[data-rc-width="${w}"]`).style.height), w);
+    const fid = out.fidelity[w];
+    const png = fid ? pngSize(fid.before) : null;
+    const before = png ? Math.round(png.height * w / png.width) : null;
+    out.heights[w] = { frame, before };
+    if (before !== null && Math.abs(frame - before) > HEIGHT_SLACK) {
+      problems.push(`${label}: the ${w} frame lays the page out ${Math.round(frame)} px tall, but the before shot is ${before} px; the preview does not show the page as it is`);
     }
   }
   await page.evaluate(() => window.rpRefine.only(null));

@@ -2051,6 +2051,10 @@ class RefineBrowser(unittest.TestCase):
         cls.tmp = tempfile.TemporaryDirectory()
         tmp = Path(cls.tmp.name)
         shutil.copytree(REFINE, tmp / "refine")
+        # Taller than the frames' floor (the capture's 800 and 844 px viewports), so the height
+        # tests see the frame follow its page.
+        snap = tmp / "refine" / "before" / "home-snapshot.html"
+        snap.write_text(snap.read_text().replace("</div></body>", '<div style="height:1200px"></div>\n</div></body>', 1))
         src, out = tmp / "refine" / "s.json", tmp / "page.html"
         src.write_text((REFINE / "spec.json").read_text())
         r = subprocess.run([sys.executable, str(BUILD), str(src), "--out", str(out)], capture_output=True, text=True,
@@ -2470,6 +2474,98 @@ class RefineSmoke(unittest.TestCase):
         self.assertEqual(code, 2, out)
         self.assertIn("9", out)
 
+    def viewport_page(self, name):
+        """A Refine page on before/<name>-snapshot.html, one change, with its before shots."""
+        self.snap = self.dir / "before" / ("%s-snapshot.html" % name)
+        self.shoot(self.snap, self.dir / "before" / name)
+        spec = self.spec()
+        item = spec["sections"][0]["items"][0]
+        item["base"] = {"from": "before/%s-snapshot.html" % name}
+        item["changes"] = [{"id": "bold-totals", "label": "Bolder totals", "why_html": "<p>b</p>",
+                            "targets": [".total"], "css": ".total { font-weight: 700; }"}]
+        return spec
+
+    def test_a_100vh_hero_keeps_its_height_in_the_frames(self):
+        # Inside a frame 100vh is the frame, and the frame took the page's height, so a
+        # min-height: 100vh hero with content below grew without bound. The builder writes vh as
+        # --rp-vh, which each frame and renderBase set to the capture's viewport / 100.
+        res = self.smoke(self.viewport_page("hero"))
+        self.assertEqual(self.refine_lines(res), [])
+        for w, vh in (("1280", 800), ("390", 844)):
+            h = res["refine"]["heights"][w]
+            self.assertIsNotNone(h["before"], h)
+            self.assertGreater(h["before"], vh + 900)                    # the hero, then the rest
+            self.assertLessEqual(abs(h["frame"] - h["before"]), 2, (w, h))
+            self.assertLessEqual(res["refine"]["fidelity"][w]["pixelRatio"], 0.001, res["refine"]["fidelity"])
+
+    def test_an_app_shell_is_as_tall_as_the_capture_viewport(self):
+        # html, body { height: 100% } with the body scrolling: the frame used to stay at the
+        # iframe's default 150 px. It is measured at the capture's viewport height instead.
+        res = self.smoke(self.viewport_page("shell"))
+        self.assertEqual(self.refine_lines(res), [])
+        for w, vh in (("1280", 800), ("390", 844)):
+            self.assertEqual(res["refine"]["heights"][w], {"frame": vh, "before": vh}, w)
+
+    def test_a_frame_that_does_not_match_the_before_height_is_a_problem(self):
+        self.before_shots()
+        self.make_tall()   # the base is now 1600 px taller than the page the before shots show
+        res = self.smoke()
+        for w in ("1280", "390"):
+            h = res["refine"]["heights"][w]
+            self.assertIn("item home (Refine): the %s frame lays the page out %d px tall, but the before shot is %d px; "
+                          "the preview does not show the page as it is" % (w, round(h["frame"]), h["before"]), res["problems"])
+
+    def test_hidden_or_reworded_without_removes_is_a_problem_and_with_removes_a_note(self):
+        self.add_css(".code { color: #999; }")    # the page's own failure, made worse by change 8
+        self.before_shots()
+        spec = self.spec()
+        spec["sections"][0]["items"][0]["changes"] += [
+            {"id": "ghost-brand", "label": "g", "why_html": "<p>g</p>", "targets": [".brand"], "css": ".brand { visibility: hidden; }"},
+            {"id": "faded-photo", "label": "f", "why_html": "<p>f</p>", "targets": [".photo"], "css": ".photo { opacity: 0; }"},
+            # Both .alert cells, and the icon inside one, which inherits the transform.
+            {"id": "loud-alert", "label": "l", "why_html": "<p>l</p>", "targets": [".alert"], "css": ".alert { text-transform: uppercase; }"},
+            {"id": "missing", "label": "m", "why_html": "<p>m</p>", "targets": [".nope", "a[["], "css": ".nope { color: #000; }"},
+            {"id": "paler-code", "label": "p", "why_html": "<p>p</p>", "targets": [".code"], "css": ".code { color: #c8c8c8; }"}]
+        res = self.smoke(spec)
+        probs = self.refine_lines(res)
+        for w in (1280, 390):
+            self.assertIn("item home (Refine): change 4 hides 1 element at %dpx (.brand) with no removes line saying what and why" % w, probs)
+            self.assertIn("item home (Refine): change 5 hides 1 element at %dpx (.photo) with no removes line saying what and why" % w, probs)
+            self.assertTrue([p for p in probs if p.startswith("item home (Refine): change 6 changes words in 3 elements at %dpx (.alert, .alert, .status-icon)" % w)
+                             and p.endswith("with no removes line saying what and why")], probs)
+            # Change 3 hides the two badges and swaps out the icon, and says so: notes, not problems.
+            self.assertFalse([p for p in probs if "change 3 hides" in p or "change 3 changes words" in p], probs)
+            self.assertTrue([n for n in res["notes"] if n.startswith("item home (Refine): change 3 hides 3 elements at %dpx (.badge, .status-icon, .badge)" % w)
+                             and "check its removes lines (new badge; ! status icon) cover them" in n], res["notes"])
+            self.assertTrue([n for n in res["notes"] if n.startswith("item home (Refine), change 8 on: makes 1 text element already "
+                             "below AA contrast worse at %dpx" % w)], res["notes"])
+        self.assertIn("item home (Refine): change 7: target .nope matches nothing", probs)
+        self.assertIn("item home (Refine): change 7: target a[[ is not a valid selector", probs)
+        self.assertFalse([p for p in probs if "change 1 " in p or "change 2 " in p], probs)
+
+    def test_match_preview_says_when_a_mismatch_is_mostly_text(self):
+        # The build shows other numbers than the before did (a page on live data): most of what
+        # differs, outside the picked change, is text, and the line says so.
+        digits = '<p class="data" style="font:14px/1.4 ui-monospace, monospace">%s</p>'
+        self.snap.write_text(self.snap.read_text().replace("</div></body>", digits % ("1234567890 " * 60) + "\n</div></body>", 1))
+        page = self.build()
+        built = self.dir / "before" / "built.html"
+        built.write_text(self.snap.read_text().replace("1234567890 " * 60, "9876543210 " * 60)
+                         .replace("</style>", ".total { font-weight: 700; }\n</style>", 1))
+        after = self.tmp / "after"
+        after.mkdir()
+        self.shoot(built, after / "home")
+        code, out = self.match(page, "1", after)
+        self.assertEqual(code, 1, out)
+        for w in ("1280", "390"):
+            self.assertTrue(re.search(r"^%s: .*\d+%% of the differing pixels outside the picks are text, as when the page shows "
+                                      r"other data than the before did" % w, out, re.M), out)
+        # A real miss (change 1 never built) is not called data.
+        self.shoot(self.snap, self.dir / "before" / "home")
+        code, out = self.match(page, "1", self.dir / "before")
+        self.assertEqual(code, 1, out)
+        self.assertNotIn("are text", out)
+
     def test_shot_viewports_are_the_captures(self):
         r = subprocess.run([NODE, "-e", "const c = require(process.argv[1]); const f = require(process.argv[2]);"
                             "console.log(JSON.stringify([c.VIEWPORTS, f.SHOT_VIEWPORTS]))",
@@ -2482,6 +2578,8 @@ class RefineSmoke(unittest.TestCase):
                 want["viewport"] = {"width": vp["width"], "height": vp["height"]}
                 self.assertEqual(shot[vp["label"]], want)
         self.assertEqual(sorted(shot), ["1280", "390"])
+        # The frames' floors and --rp-vh come from the builder's copy of the same heights.
+        self.assertEqual({int(k): v["viewport"]["height"] for k, v in shot.items()}, review_page.REFINE_VIEWPORT_H)
 
 
 # Measures a change outside the review page, for RefineCrops: the base rendered as its own page
@@ -2720,6 +2818,63 @@ class RefineCrops(unittest.TestCase):
         self.assertEqual(len(re.findall(r"<img\b", self.card(text, "tight-rows"))), 4)
         self.assertEqual(r.stderr.count("changed since its crops were made"), 1, r.stderr)
 
+    def test_set_shoots_the_recommended_changes_together_for_the_critic(self):
+        page = self.build()
+        r = subprocess.run([sys.executable, str(BUILD), "--crops", str(page), "--out", str(self.out), "--set", "1,3"],
+                           capture_output=True, text=True, cwd=str(self.dir), timeout=300)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("with changes 1, 3 on together, for the critic", r.stdout)
+        for w in ("1280", "390"):
+            self.assertTrue((self.out / ("set-%s.png" % w)).is_file(), w)
+        # The whole page as the capture shoots it: renderBase's own shot of the base with them on.
+        script = self.tmp / "set.cjs"
+        script.write_text(r"""
+const fs = require("fs"), path = require("path");
+const [pw, rp, page, out] = process.argv.slice(2);
+const { chromium } = require(pw);
+const { launchChromium } = require(path.join(rp, "launch.cjs"));
+const { renderBase, diffMask } = require(path.join(rp, "fidelity.cjs"));
+const doc = JSON.parse(fs.readFileSync(page, "utf8").match(/<script type="application\/json" id="rp-rc-base-[^"]*">([\s\S]*?)<\/script>/)[1]);
+(async () => {
+  const browser = await launchChromium(chromium, process.env);
+  const res = {};
+  for (const w of [1280, 390]) {
+    const on = diffMask(await renderBase(browser, doc, w, ["bold-totals", "alert-color"]), path.join(out, `set-${w}.png`));
+    const off = diffMask(await renderBase(browser, doc, w, []), path.join(out, `set-${w}.png`));
+    res[w] = { on: on.count, off: off.count };
+  }
+  await browser.close();
+  console.log(JSON.stringify(res));
+})();
+""")
+        m = subprocess.run([NODE, str(script), playwright_dir(), str(RP), str(page), str(self.out)], capture_output=True,
+                           text=True, timeout=300)
+        res = json.loads(m.stdout)
+        for w in ("1280", "390"):
+            self.assertEqual(res[w]["on"], 0, res)
+            self.assertGreater(res[w]["off"], 0, res)
+        bad = subprocess.run([sys.executable, str(BUILD), "--crops", str(page), "--out", str(self.out), "--set", "9"],
+                             capture_output=True, text=True, cwd=str(self.dir), timeout=300)
+        self.assertEqual(bad.returncode, 2, bad.stdout + bad.stderr)
+        self.assertIn("--set: no change 9", bad.stderr)
+
+    def test_a_change_that_makes_the_page_taller_says_so(self):
+        # Taller than the frames' floor, so the extra row height shows in the page's height.
+        self.snap.write_text(self.snap.read_text().replace("</div></body>", '<div style="height:1200px"></div>\n</div></body>', 1))
+        spec = self.spec()
+        spec["sections"][0]["items"][0]["changes"].append(
+            {"id": "roomy-rows", "label": "Roomier rows", "why_html": "<p>r</p>", "targets": [".rows td"],
+             "css": ".rows td { padding: 30px 8px; }"})
+        boxes, stdout = self.crops(self.build(spec))
+        for w in ("1280", "390"):
+            taller = boxes["roomy-rows"][w]["taller"]
+            self.assertGreater(taller, 40, boxes["roomy-rows"])
+            self.assertIn("note: Change 4 makes the page %d px taller at %s." % (taller, w), stdout)
+            self.assertNotIn("taller", boxes["bold-totals"][w])
+        spec["sections"][0]["items"][0]["crops"] = ".proofs/design-review/crops"
+        inner = self.card(self.build(spec).read_text(), "roomy-rows")
+        self.assertIn("Makes the page %d px taller at 390 px." % boxes["roomy-rows"]["390"]["taller"], inner)
+
     def test_crops_needs_a_refine_page_and_an_out_folder(self):
         r = subprocess.run([sys.executable, str(BUILD), "--crops", str(self.build())], capture_output=True, text=True,
                            cwd=str(self.dir))
@@ -2763,6 +2918,107 @@ class HelperErrors(unittest.TestCase):
                 self.assertEqual(code, 2, name)
                 self.assertIn("did not finish in %d seconds" % review_page.HELPER_TIMEOUT, err)
                 self.assertTrue(err.startswith(name + ": "), err)
+
+    def test_smoke_timeout_and_no_node(self):
+        def slow(cmd, **kw):
+            raise subprocess.TimeoutExpired(cmd, kw.get("timeout"))
+        for which, run, want in (("/usr/bin/node", slow, "did not finish in %d seconds" % review_page.HELPER_TIMEOUT),
+                                 (None, None, "node is not installed")):
+            err, out = io.StringIO(), io.StringIO()
+            with mock.patch.object(review_page, "find_playwright", return_value="pw"), \
+                    mock.patch.object(review_page.shutil, "which", return_value=which), \
+                    mock.patch.object(review_page.subprocess, "run", side_effect=run), \
+                    mock.patch.object(review_page, "check", return_value=[]), \
+                    mock.patch.object(review_page, "warnings", return_value=[]), \
+                    contextlib.redirect_stderr(err), contextlib.redirect_stdout(out):
+                code = review_page.main(["--smoke", "page.html"])
+            self.assertEqual(code, 2)
+            self.assertEqual(len(err.getvalue().strip().splitlines()), 1, err.getvalue())
+            self.assertTrue(err.getvalue().startswith("smoke: "), err.getvalue())
+            self.assertIn(want, err.getvalue())
+            self.assertEqual(out.getvalue(), "")
+
+
+class RefineBaseRewrites(unittest.TestCase):
+    """What the builder does to a Refine base before the frames get it: viewport-height units
+    as --rp-vh, no nested srcdoc, a warning for files from another site, the frames' heights."""
+
+    def test_vh_units_in_styles_and_style_attributes_become_rp_vh(self):
+        doc = ('<style>.hero{min-height:100vh}.a{height:calc(50dvh - 2rem);margin-top:-10svh}'
+               '.h-100vh{top:.5lvh}.min-h-\\[100vh\\]{x:1}</style>'
+               '<div style="height: 30vh" title="100vh"><p>a 100vh page</p></div>')
+        out = review_page.vh_to_var(doc)
+        self.assertIn("min-height:calc(100 * var(--rp-vh, 1vh))", out)
+        self.assertIn("height:calc(calc(50 * var(--rp-vh, 1dvh)) - 2rem)", out)
+        self.assertIn("margin-top:calc(-10 * var(--rp-vh, 1svh))", out)
+        self.assertIn(".h-100vh{top:calc(.5 * var(--rp-vh, 1lvh))}", out)   # the class name kept
+        self.assertIn(".min-h-\\[100vh\\]", out)
+        self.assertIn('style="height: calc(30 * var(--rp-vh, 1vh))"', out)
+        self.assertIn('title="100vh"', out)                                  # not a style
+        self.assertIn("<p>a 100vh page</p>", out)                            # nor the page's words
+        self.assertNotIn("vh}", out.replace("1vh))}", ""))
+
+    def test_nested_iframe_srcdoc_is_dropped(self):
+        doc = '<p>x</p><iframe src="https://e.example/a" srcdoc="&lt;script&gt;parent.x=1&lt;/script&gt;" width="9"></iframe>'
+        out = review_page.strip_nested_srcdoc(doc)
+        self.assertNotIn("srcdoc", out)
+        self.assertIn('<iframe src="https://e.example/a" width="9"></iframe>', out)
+
+    def test_external_loads_name_what_a_published_page_cannot_load(self):
+        doc = ('<link rel="stylesheet" href="https://cdn.example/a.css"><link rel="canonical" href="https://x.example/">'
+               '<style>@import url("https://cdn.example/b.css"); .x{background:url(https://img.example/c.png)}</style>'
+               '<img src="https://img.example/d.png"><a href="https://x.example/page">link</a><img src="data:image/png;base64,AA">')
+        self.assertEqual(review_page.external_loads(doc), ["https://cdn.example/a.css", "https://img.example/d.png",
+                                                           "https://cdn.example/b.css", "https://img.example/c.png"])
+
+    def build(self, tmp, edit=None):
+        shutil.copytree(REFINE, tmp / "refine")
+        snap = tmp / "refine" / "before" / "home-snapshot.html"
+        if edit:
+            snap.write_text(edit(snap.read_text()))
+        src, out = tmp / "refine" / "s.json", tmp / "page.html"
+        src.write_text((REFINE / "spec.json").read_text())
+        r = subprocess.run([sys.executable, str(BUILD), str(src), "--out", str(out), "--no-check"],
+                           capture_output=True, text=True, cwd=str(tmp / "refine"))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        return out.read_text(), r.stderr
+
+    def test_build_warns_about_files_from_another_site(self):
+        with tempfile.TemporaryDirectory() as t:
+            _, err = self.build(Path(t))
+            self.assertNotIn("another site", err)
+        with tempfile.TemporaryDirectory() as t:
+            _, err = self.build(Path(t), lambda h: h.replace("</head>", '<link rel="stylesheet" href="https://cdn.example/far.css"></head>', 1))
+            self.assertIn("warning: item home: the base still loads 1 file from another site (https://cdn.example/far.css), "
+                          "which will not load in a published page", err)
+
+    def test_frames_carry_the_capture_viewport_height_and_take_no_taps(self):
+        with tempfile.TemporaryDirectory() as t:
+            text, _ = self.build(Path(t))
+        self.assertIn('data-rc-width="1280" data-rc-height="800"', text)
+        self.assertIn('data-rc-width="390" data-rc-height="844"', text)
+        css = (RP / "style.css").read_text()
+        rule = re.search(r"\.rp-rc-frame \{[^}]*\}", css).group(0)
+        self.assertIn("pointer-events:none", rule)
+        self.assertEqual(review_page.REFINE_VIEWPORT_H, {1280: 800, 390: 844})
+
+    def test_change_js_items_carry_their_removes(self):
+        with tempfile.TemporaryDirectory() as t:
+            text, _ = self.build(Path(t))
+        spec = json.loads(re.search(r'<script type="application/json" id="rp-spec">(.*?)</script>', text, re.S).group(1))
+        items = {i["id"]: i for sec in spec["sections"] for i in sec["items"]}
+        self.assertEqual(items["bold-totals"]["removes"], [])
+        self.assertEqual(items["alert-color"]["removes"], ["new badge", "! status icon"])
+
+    def test_a_card_says_when_its_change_makes_the_page_taller(self):
+        html_ = review_page.crop_figures({"label": "L"}, {"390": {"note": "n", "taller": 140}})
+        self.assertIn("Makes the page 140 px taller at 390 px.", html_)
+
+    def test_set_goes_with_crops(self):
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err), self.assertRaises(SystemExit):
+            review_page.main(["--smoke", "page.html", "--set", "1,3"])
+        self.assertIn("--set goes with --crops", err.getvalue())
 
 
 READ_JUMP = r"""

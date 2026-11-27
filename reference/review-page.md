@@ -175,7 +175,7 @@ change.
 |---|---|
 | `kind` | `"refine"` |
 | `id` | the item's id (default `refine`); unique on the page, like the change ids |
-| `base` | `{"from": ".proofs/capture/before/<name>-snapshot.html"}`, the capture's snapshot (`--snapshot`); relative to the spec's folder, then the working directory. Each file of its sibling `<name>-snapshot-assets/` folder it refers to is embedded as a data URI, made once per file. A PNG becomes lossless WebP when that is smaller; nothing is resized or lossy, so the base renders like the page. A reference to a file the folder does not have is a spec error |
+| `base` | `{"from": ".proofs/capture/before/<name>-snapshot.html"}`, the capture's snapshot (`--snapshot`); relative to the spec's folder, then the working directory. Each file of its sibling `<name>-snapshot-assets/` folder it refers to is embedded as a data URI, made once per file. A PNG becomes lossless WebP when that is smaller; nothing is resized or lossy, so the base renders like the page. A reference to a file the folder does not have is a spec error. Every `vh`, `svh`, `lvh` and `dvh` in its `<style>` elements and `style` attributes (and in the changes' `css`) is written as `calc(N * var(--rp-vh, 1vh))`, which each frame sets to its capture viewport's height / 100 (8 px at 1280, 8.44 px at 390), so a `min-height: 100vh` hero is as tall as in the before shot. Known limits: `vmin`, `vmax` and a `max-height` media query still see the frame's full height. A nested `<iframe>`'s `srcdoc` is dropped. A file the base still loads from another site (a stylesheet the snapshot could not fetch, an image or iframe `src`) is a builder warning: a published page will not load it |
 | `changes` | 1 to 8 changes (more than 8 says the page wants a Redesign); any other count is a spec error naming the cap |
 | `location` | the section's name, shown on every card whose change has no `location` of its own |
 | `before_scores` | the current page on the six criteria (as `scores` above), shown in the preview as "Current page" |
@@ -203,8 +203,13 @@ In the page, the snapshot is embedded once, as a JSON string in
 `<style data-rc-css>` (every change's scoped CSS) at the end of its `<head>` and one
 `<template data-rc-swap="<id>" data-rc-target="<selector>">` per swap at the end of
 its `<body>`. The engine gives it to both `<iframe class="rp-rc-frame"
-data-rc-width="1280|390">` frames as their `srcdoc`, so the frames are empty without
-JavaScript. After each frame's `load` (and again after any later load) the engine
+data-rc-width="1280|390" data-rc-height="800|844">` frames as their `srcdoc`, so the frames
+are empty without JavaScript. Each frame is measured at `data-rc-height` (the capture's
+viewport height at that width) and never shorter, so a page sized to 100% of the viewport (an
+`html, body { height: 100% }` app shell) lays out as the capture saw it. The frames take no
+taps (`pointer-events: none`): a link in the page would navigate the frame, or the review page
+with `target="_top"`. (Adding the iframe `sandbox` attribute as well is a planned follow-up,
+once it is checked on an iPhone.) After each frame's `load` (and again after any later load) the engine
 writes the Yes set to the frame's `<html data-rc>` (empty in the Original view), puts
 each on change's swaps in place (restoring the original element when it goes off),
 scales the frame to its column and marks it `data-rc-ready="1"`; it repaints on every
@@ -224,16 +229,27 @@ it: the whole-page `<stem>-1280-full.png` and `<stem>-390-full.png` for
 `<stem>-snapshot.html` (the capture's naming), else `<stem>-default-<width>-full.png`. The
 base is shot full page the same way, so drift below the first screen counts. Its `refine` key holds
 `fidelity` (per width: `pixelRatio`, `before`), `overlaps` (`[{a, b, element, property}]`,
-change numbers) and `checks` (per state and width: `base`, a change number or `all`). Problem
+change numbers), `checks` (per state and width: `base`, a change number or `all`) and
+`heights` (per width: the frame's `frame` height and the before shot's `before`, CSS px). Problem
 lines: `item home (Refine): base differs from the page at 390 (pixel ratio 0.031)` (over
 `FIDELITY.pixelRatio` in `shared/review_page/fidelity.cjs`, or no before shot at all),
+`item home (Refine): the 390 frame lays the page out 81980 px tall, but the before shot is 1650 px`
+(more than 2 px off), `item home (Refine): change 3: target .x matches nothing` (or `swap .x`,
+or `is not a valid selector`: with the change off and on, at both widths), `item home (Refine):
+change 3 hides 2 elements at 390px (.badge, .badge) with no removes line saying what and why`
+(display, `visibility`, `opacity`, a size of 0, or clipped away by an ancestor) and `item home
+(Refine): change 3 changes words in 1 element at 1280px (.total) ...` (its own text, its
+`text-transform`, a transparent color, or `::before`/`::after` `content`); a change that has
+`removes` lines gets those two as notes instead, naming them, for you to check they cover what it hides,
 `item home (Refine): changes 2 and 5 both change font-weight on .total` (each change is
 diffed on every property any change declares, so `--accent` in one and `color` in another
 meet on the element that reads it), `item home (Refine): change 3 swaps .status-icon, which
 change 4 also changes (color)`, and the design
 check, mid-word and sideways-scroll lines for `item home (Refine), change 3 on:` and
 `item home (Refine), all changes on:`. Those count only what the state adds to the page
-as it is; the page's own findings are notes (`item home (Refine), the page as it is: …`).
+as it is; the page's own findings are notes (`item home (Refine), the page as it is: …`),
+and so is a change that makes one of them worse (`makes 1 text element already below AA
+contrast worse at 390px ("72%" 3.10 to 2.40)`; also tap targets and long lines).
 Measuring uses the test-only `window.rpRefine.only(ids)` (both frames show exactly
 those changes; `null` goes back to the answers), never the reader's answers.
 
@@ -243,7 +259,10 @@ compares the new capture's whole-page shots in `DIR` (the before shot's name, `a
 1280 and 390: exit 0 on a match, 1 with one line per width when the build is off by more
 than `FIDELITY.pixelRatio` or leaves more than `MISSED_PICKS` of the picks' changed pixels
 unlike the preview, 2 when it cannot measure (no shot of the build, a `--shots` folder that
-does not exist, or picks that change nothing visible at either width).
+does not exist, or picks that change nothing visible at either width). When a width differs
+and at least 70% of its differing pixels outside the picks' own are text, the line says so:
+that is what a page showing other data than the before looks like (fresh numbers, dates,
+names), so capture the build from the same data as the before.
 
 `review_page.py --crops PAGE --out DIR` cuts each change's crops from the built page's own
 frames, each at its width, with that one change off and then on (every other change off):
@@ -255,7 +274,12 @@ it and warns on stderr to run `--crops` again, so a card never shows stale crops
 with the change off and on (so a target it hides or swaps counts), plus `CROP_MARGIN` (24 px,
 in `shared/review_page/crops.cjs`), kept inside the page; a reflow the change causes outside
 its targets is not in it. A width where no target is shown (hidden or of no size) gets
-`{"note": "..."}` instead of a crop, printed as a `note:` line; it is not an error. It writes
+`{"note": "..."}` instead of a crop, printed as a `note:` line; it is not an error. A change
+that makes the page taller at a width gets `"taller": <px>` there, a `note:` line, and a
+"Makes the page 140 px taller at 390 px." line on its card (a crop shows only its targets).
+`--set 1,3` also writes `DIR/set-1280.png` and `DIR/set-390.png`: the whole base with those
+changes (the recommended set) on together, shot as the capture shoots a page, for the critic
+to score the set against the current page; a number the page does not have is exit 2. It writes
 nothing outside `DIR`; exit 2 when it cannot run (no Playwright or node, no Refine preview, or over 10 minutes; `--match-preview` stops the same way). Build
 again with the item's `crops` set to `DIR` to show them.
 

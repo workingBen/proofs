@@ -9,7 +9,12 @@ const fs = require("fs");
 const path = require("path");
 const { chromium } = require(process.argv[2]);
 const { launchChromium } = require("./launch.cjs");
-const { comparePicks, renderBase, shotNames, FIDELITY, MISSED_PICKS } = require("./fidelity.cjs");
+const { comparePicks, renderBase, textBoxes, textShare, shotNames, FIDELITY, MISSED_PICKS } = require("./fidelity.cjs");
+
+// The share of a mismatch's other pixels (outside the picks) that must be text before the line
+// says the build likely shows other data than the before: most of a page's pixels are not text,
+// so a layout or color miss rarely reaches it, while new numbers or dates are nothing but text.
+const MOSTLY_TEXT = 0.7;
 
 const [pagePath, picksArg, shots] = process.argv.slice(3);
 
@@ -69,7 +74,17 @@ function buildShot(baseRel, w) {
     const bad = [];
     if (r.pixelRatio > FIDELITY.pixelRatio) bad.push(`the build differs from the preview of ${which} (pixel ratio ${r.pixelRatio.toFixed(3)}, over ${FIDELITY.pixelRatio})`);
     if (r.missed !== null && r.missed > MISSED_PICKS) bad.push(`${Math.round(r.missed * 100)}% of the pixels ${which} change are not as the preview shows them (over ${MISSED_PICKS * 100}%)`);
-    if (bad.length) { out.match = false; out.differs = true; out.lines.push(`${w}: ${bad.join("; ")}`); }
+    if (bad.length) {
+      // Fresh data (a page that reads a database or an API) differs in its words, not its looks.
+      // The preview's PNG width (its header) over the CSS width: the shots' device scale.
+      const t = textShare(baseShot, preview, shot.file, await textBoxes(browser, info.doc, w, on.map((c) => c.id)),
+        preview.readUInt32BE(16) / w);
+      out.widths[w].textShare = t ? t.share : null;
+      if (t && t.share >= MOSTLY_TEXT) {
+        bad.push(`${Math.round(t.share * 100)}% of the differing pixels outside the picks are text, as when the page shows other data than the before did (new numbers, dates or names): capture the build from the same data as the before, then compare again`);
+      }
+      out.match = false; out.differs = true; out.lines.push(`${w}: ${bad.join("; ")}`);
+    }
     else out.lines.push(`${w}: match: the build matches the preview of ${which} (pixel ratio ${r.pixelRatio.toFixed(3)}${r.missed === null ? ", the picks change nothing at this width" : `, ${Math.round(r.missed * 100)}% of the picks' pixels off`})`);
   }
   await browser.close();

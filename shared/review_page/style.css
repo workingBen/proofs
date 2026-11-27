@@ -115,7 +115,9 @@ picture.rp-pic { display:contents; }
 .rp-rc-fig figcaption { font-size:14px; color:var(--rp-soft); margin-bottom:4px; }
 .rp-rc-box { position:relative; max-width:100%; overflow:hidden; border:1px solid var(--rp-rule); }
 /* Laid out at its real width (1280 or 390), scaled by the engine to fit the column. */
-.rp-rc-frame { position:absolute; top:0; left:0; display:block; border:0; background:#fff; transform-origin:0 0; }
+/* A picture of the page, never a page to use: a tap on a link in it would navigate the frame
+   (or, with target="_top", the review page) away. The view toggle sits outside the frame. */
+.rp-rc-frame { position:absolute; top:0; left:0; display:block; border:0; background:#fff; transform-origin:0 0; pointer-events:none; }
 .rp-scores-label { font-weight:600; color:var(--rp-ink, inherit); }
 .rp-unscored { color:var(--rp-faint); }
 .rp-judged { font-size:14px; color:var(--rp-soft); margin:8px 0; }

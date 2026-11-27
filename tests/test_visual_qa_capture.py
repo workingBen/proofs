@@ -1048,20 +1048,24 @@ class LogoCrop(unittest.TestCase):
 # the capture's own 1280 shot through the shared fidelity helper.
 SNAPSHOT_SHOT = r"""
 const path = require('path');
-const [root, html, shot, captured] = process.argv.slice(1);  // node -e: no script path in argv
+const [root, html, shot, captured, width] = process.argv.slice(1);  // node -e: no script path in argv
 const { launchChromium } = require(path.join(root, 'shared', 'review_page', 'launch.cjs'));
 const { compareShots, FIDELITY } = require(path.join(root, 'shared', 'review_page', 'fidelity.cjs'));
 const { chromium } = require(process.env.PROOFS_PLAYWRIGHT);
 (async () => {
   const browser = await launchChromium(chromium, process.env);
-  const page = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
+  const phone = width === '390';  // the capture's own viewports
+  const page = await (await browser.newContext(phone
+    ? { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 }
+    : { viewport: { width: 1280, height: 800 } })).newPage();
   await page.goto('file://' + html, { waitUntil: 'networkidle' });
   await page.evaluate(() => document.fonts.ready);
+  const probe = await page.evaluate(() => { const s = getComputedStyle(document.getElementById('probe')); return { color: s.color, background: s.backgroundColor }; });
   const fontLoaded = await page.evaluate(() => [...document.fonts].some((f) => f.family.includes('Fixture Jost') && f.status === 'loaded'));
   await page.screenshot({ path: shot });
   await browser.close();
   const res = await compareShots(captured, shot);
-  process.stdout.write(JSON.stringify({ ...res, fontLoaded, FIDELITY }));
+  process.stdout.write(JSON.stringify({ ...res, fontLoaded, probe, FIDELITY }));
 })().catch((e) => { console.error(e.stack); process.exit(1); });
 """
 
@@ -1106,7 +1110,7 @@ class Snapshot(unittest.TestCase):
         cfg.write_text(json.dumps({"base": cls.base, "pages": [{"name": "t", "path": "/snapshot/index.html"}]}))
         cls.out = Path(cls.tmp.name) / "out"
         env = dict(os.environ, PROOFS_PLAYWRIGHT=playwright_dir())
-        cls.captured = subprocess.run([NODE, str(CAPTURE), str(cfg), "--out", str(cls.out), "--sizes", "1280", "--snapshot"],
+        cls.captured = subprocess.run([NODE, str(CAPTURE), str(cfg), "--out", str(cls.out), "--sizes", "1280,390", "--snapshot"],
                                  env=env, capture_output=True, text=True, timeout=180)
         measures = cls.out / "measures.json"
         cls.data = json.loads(measures.read_text()) if measures.is_file() else {"results": [{}]}
@@ -1207,17 +1211,44 @@ const { chromium } = require(process.env.PROOFS_PLAYWRIGHT);
         links = [a for t, a in self.parsed.tags if t == "link" and a.get("rel") == "stylesheet"]
         self.assertEqual([a.get("href") for a in links], [far])
 
-    def test_snapshot_renders_like_the_page(self):
-        shot = self.out / "snapshot-1280.png"
+    def render(self, width):
+        shot = self.out / f"snapshot-{width}.png"
         env = dict(os.environ, PROOFS_PLAYWRIGHT=playwright_dir())
         r = subprocess.run([NODE, "-e", SNAPSHOT_SHOT, str(ROOT), str(self.html_file), str(shot),
-                            str(self.out / "t-default-1280.png")], env=env, capture_output=True, text=True, timeout=180)
+                            str(self.out / f"t-default-{width}.png"), width], env=env, capture_output=True, text=True, timeout=180)
         self.assertEqual(r.returncode, 0, r.stderr)
-        res = json.loads(r.stdout)
+        return json.loads(r.stdout)
+
+    def test_snapshot_renders_like_the_page(self):
+        res = self.render("1280")
         self.assertTrue(res["fontLoaded"], "the @font-face font did not load from the assets folder over file://")
         self.assertLess(res["pixelRatio"], 0.01, res)
         self.assertIsNone(res["signature"])  # no measures passed, so no signature half
         self.assertLessEqual(res["FIDELITY"]["pixelRatio"], 0.05)
+
+    def test_snapshot_renders_like_the_page_at_390(self):
+        # The phone layout comes from the page's own media queries, kept in the copy.
+        res = self.render("390")
+        self.assertTrue(res["fontLoaded"])
+        self.assertLess(res["pixelRatio"], 0.01, res)
+
+    def test_snapshot_keeps_each_sheets_media(self):
+        styles = self.parsed.find("style")
+        self.assertIn("print", [a.get("media") for a in styles])
+        self.assertIn("(max-width: 600px)", [a.get("media") for a in styles])
+        wide, narrow = self.render("1280")["probe"], self.render("390")["probe"]
+        self.assertNotEqual(wide["background"], "rgb(200, 0, 0)")  # the print sheet stays off screen
+        self.assertNotEqual(narrow["background"], "rgb(200, 0, 0)")
+        self.assertNotEqual(wide["color"], "rgb(0, 0, 200)")  # the max-width sheet only at 390
+        self.assertEqual(narrow["color"], "rgb(0, 0, 200)")
+
+    def test_snapshot_copies_an_external_svg_use_into_the_page(self):
+        # Chrome will not load an external <use> from a file:// page, so the symbol comes along inline.
+        use = self.parsed.find("use")
+        self.assertEqual(len(use), 1)
+        self.assertEqual(use[0]["href"], "#proofs-use-1")
+        self.assertEqual(len(self.parsed.find("symbol", id="proofs-use-1")), 1)
+        self.assertNotIn("icons.svg", self.html)
 
     def test_without_the_flag_there_is_no_snapshot(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -1,0 +1,2 @@
+/* media="(max-width: 600px)": applies at 390, not at 1280. */
+.media-probe { color: rgb(0, 0, 200); }

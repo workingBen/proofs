@@ -22,7 +22,8 @@
 //     A target that cannot be fetched keeps its absolute URL;
 //   - each <canvas> drawn into a PNG in the assets folder and swapped for an <img> with the
 //     canvas's attributes, width and height (`canvases` counts them; a canvas tainted by a
-//     cross-origin image cannot be read and stays an empty canvas). Inline SVG is kept as is;
+//     cross-origin image cannot be read and stays an empty canvas). Inline SVG is kept as is; an
+//     svg <use> of another file gets the element it names copied in (see below);
 //   - no <script>, <noscript>, on* attribute or javascript: URL, no <base>, no meta refresh or
 //     CSP (an inline-style CSP would block the inlined sheets), and a single <meta charset=utf-8>;
 //   - typed form values written back into the markup; other links made absolute.
@@ -36,7 +37,7 @@ const path = require('path');
 const { fileURLToPath } = require('url');
 
 // Runs in the page. Returns the serialized copy with tokens where asset paths go, and the URLs.
-function collectSnapshot() {
+async function collectSnapshot() {
   const urls = [];
   const seen = new Map();
   const external = [];
@@ -66,6 +67,7 @@ function collectSnapshot() {
     const out = [];
     for (const r of rules) {
       if (r.type === CSSRule.IMPORT_RULE) {
+        // Only the import's media is carried; its layer(...) and supports(...) are not (a known gap).
         const media = r.media && r.media.mediaText;
         if (!r.styleSheet) continue; // it never loaded, so it never applied
         const href = r.styleSheet.href || resolve(r.href, from);
@@ -102,7 +104,9 @@ function collectSnapshot() {
       continue;
     }
     const style = document.createElement('style');
-    if (owner.media && owner.media.mediaText) style.setAttribute('media', owner.media.mediaText);
+    // The sheet's MediaList, not owner.media: on <link> and <style> that is a plain string, so
+    // .mediaText was always undefined and a print or max-width sheet applied everywhere.
+    if (sheet.media && sheet.media.mediaText) style.setAttribute('media', sheet.media.mediaText);
     style.textContent = [...imports, text].join('\n');
     el.replaceWith(style);
   }
@@ -143,6 +147,57 @@ function collectSnapshot() {
     } else if (el.tagName === 'TEXTAREA') c.textContent = el.value;
     else if (el.tagName === 'OPTION') { if (el.selected) c.setAttribute('selected', ''); else c.removeAttribute('selected'); }
   });
+
+  // <use href="sprite.svg#id"> pointing at another file. Chrome refuses an external <use> from a
+  // file:// page ("'file:' URLs are treated as unique security origins") and from a data: URL, so
+  // copying the sprite into the assets folder would leave the icon blank. Instead the referenced
+  // element is copied into a hidden <svg> at the end of the body under a new id, and the <use>
+  // points at that. A sprite that cannot be fetched (another origin, which the page could not use
+  // either) keeps its absolute URL. References from the copied element to other parts of its sprite
+  // are not followed.
+  const sprites = new Map();
+  const inlined = new Map();
+  const defs = [];
+  for (const el of clone.querySelectorAll('use')) {
+    for (const attr of ['href', 'xlink:href']) {
+      const v = el.getAttribute(attr);
+      if (!v || v.trim().startsWith('#')) continue;
+      const abs = resolve(v.trim(), base);
+      if (!abs) continue;
+      const u = new URL(abs);
+      const frag = decodeURIComponent(u.hash.slice(1));
+      u.hash = '';
+      if (!sprites.has(u.href)) {
+        let doc = null;
+        try {
+          const r = await fetch(u.href, { credentials: 'include' });
+          if (r.ok) doc = new DOMParser().parseFromString(await r.text(), 'image/svg+xml');
+        } catch (_) { /* another origin, or gone: keep the URL */ }
+        sprites.set(u.href, doc);
+      }
+      const doc = sprites.get(u.href);
+      const target = frag && doc ? doc.getElementById(frag) : null;
+      if (!target) { el.setAttribute(attr, abs); continue; }
+      if (!inlined.has(abs)) {
+        const id = `proofs-use-${inlined.size + 1}`;
+        const node = document.importNode(target, true);
+        node.setAttribute('id', id);
+        defs.push(node);
+        inlined.set(abs, id);
+      }
+      el.setAttribute(attr, `#${inlined.get(abs)}`);
+    }
+  }
+  if (defs.length) {
+    const NS = 'http://www.w3.org/2000/svg';
+    const holder = document.createElementNS(NS, 'svg');
+    holder.setAttribute('aria-hidden', 'true');
+    holder.setAttribute('style', 'position:absolute;width:0;height:0;overflow:hidden');
+    const d = document.createElementNS(NS, 'defs');
+    defs.forEach((n) => d.appendChild(n));
+    holder.appendChild(d);
+    (clone.querySelector('body') || clone).appendChild(holder);
+  }
 
   // No code, and nothing that navigates, redirects or blocks the inlined sheets.
   clone.querySelectorAll('script, noscript, base, meta[http-equiv], meta[charset], '
@@ -198,7 +253,7 @@ function collectSnapshot() {
     } else if (tag === 'video') {
       swap('poster'); absolute('src');
     } else if (tag === 'image') {
-      swap('href'); swap('xlink:href');
+      swap('href'); swap('xlink:href'); // the #fragment is kept after the asset path
     } else if (tag === 'a' || tag === 'area' || tag === 'link') absolute('href');
     else if (tag === 'form') absolute('action');
     else if (['iframe', 'embed', 'audio', 'source', 'track'].includes(tag)) absolute('src');

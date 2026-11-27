@@ -4,6 +4,7 @@ The export tests run the page's own engine under plain node (no DOM), so they ne
 node but not a browser. The click-through test needs Playwright: set
 PROOFS_PLAYWRIGHT to an installed playwright package folder, or it is skipped.
 """
+import base64
 import contextlib
 import html
 import json
@@ -874,6 +875,36 @@ class Refine(unittest.TestCase):
             self.assertNotIn("home-snapshot-assets/", doc)
             self.assertIn('url("data:image/svg+xml;base64,', doc)
             self.assertRegex(doc, r'<img class="photo" src="data:image/(png|webp|jpeg);base64,')
+
+    def test_refine_embeds_color_managed_pngs_untouched(self):
+        """Lossless WebP keeps the pixel values but not a PNG's gAMA (ImageMagick rewrites the
+        values, Chrome then draws them differently) or its ICC profile (cwebp drops it): measured
+        in Chrome, 99.8% and 48% of pixels changed. Such a PNG goes in as it is, so the base
+        still matches the page pixel for pixel."""
+        import struct
+        import zlib
+        def chunk(k, b):
+            return struct.pack(">I", len(b)) + k + b + struct.pack(">I", zlib.crc32(k + b) & 0xFFFFFFFF)
+        rows = b"".join(b"\0" + bytes((x * 37 + y * 11) % 256 for x in range(8 * 3)) for y in range(8))
+        ihdr = chunk(b"IHDR", struct.pack(">IIBBBBB", 8, 8, 8, 2, 0, 0, 0))
+        tail = chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b"")
+        sig = b"\x89PNG\r\n\x1a\n"
+        assets = self.dir / "before" / "home-snapshot-assets"
+        for extra in (chunk(b"gAMA", struct.pack(">I", 100000)), chunk(b"iCCP", b"p\0\0" + zlib.compress(b"x" * 64))):
+            png = sig + ihdr + extra + tail
+            (assets / "3f2a9c81d0-photo.png").write_bytes(png)
+            with mock.patch.object(review_page, "image_tool", return_value=("magick", "/bin/false")), \
+                    mock.patch.object(review_page, "encode_webp", return_value=b"RIFF") as enc:
+                for _, doc in self.frames(self.html()):
+                    self.assertIn('src="data:image/png;base64,%s"' % base64.b64encode(png).decode(), doc)
+            enc.assert_not_called()
+        # A plain 8-bit PNG still becomes lossless WebP when that is smaller.
+        (assets / "3f2a9c81d0-photo.png").write_bytes(sig + ihdr + tail)
+        with mock.patch.object(review_page, "image_tool", return_value=("magick", "/bin/false")), \
+                mock.patch.object(review_page, "encode_webp", return_value=b"RIFF") as enc:
+            doc = self.frames(self.html())[0][1]
+        self.assertIn('src="data:image/webp;base64,UklGRg=="', doc)
+        enc.assert_called_once()
 
     @unittest.skipUnless(NODE, "node is not installed")
     def test_refine_srcdoc_survives_quotes_and_script_text(self):
@@ -2141,6 +2172,192 @@ class RefineBrowser(unittest.TestCase):
             self.assertEqual(look["1280"]["h1"], "rgb(0, 128, 0)", key)
             self.assertEqual(look["390"]["h1"], "rgb(200, 0, 0)", key)
         self.assertEqual(self.res["phoneLook"]["390"]["h1"], "rgb(200, 0, 0)")
+
+
+# Shoots an HTML file the way the capture shoots a page (fidelity.cjs's SHOT_VIEWPORTS, the
+# capture's own 1280 and 390): one viewport PNG per width, named <out>-<width>.png.
+SHOOT = r"""
+const path = require("path");
+const [pw, rp, file, out] = process.argv.slice(2);
+const { chromium } = require(pw);
+const { launchChromium } = require(path.join(rp, "launch.cjs"));
+const { SHOT_VIEWPORTS, SETTLE_MS } = require(path.join(rp, "fidelity.cjs"));
+(async () => {
+  const browser = await launchChromium(chromium, process.env);
+  for (const w of Object.keys(SHOT_VIEWPORTS)) {
+    const ctx = await browser.newContext(SHOT_VIEWPORTS[w]);
+    const page = await ctx.newPage();
+    await page.goto("file://" + path.resolve(file));
+    await page.evaluate(() => document.fonts.ready);
+    await page.waitForTimeout(SETTLE_MS);
+    await page.screenshot({ path: out + "-" + w + ".png" });
+    await ctx.close();
+  }
+  await browser.close();
+})().catch((e) => { console.error(e.stack || String(e)); process.exit(1); });
+"""
+
+
+@unittest.skipUnless(NODE and playwright_dir(), "Playwright not found")
+class RefineSmoke(unittest.TestCase):
+    """--smoke on a Refine page: the base against the before shots (fidelity), overlapping
+    changes, the design checks with each change on alone and all on, and --match-preview (spec
+    §2, §3 and §7)."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.tmp = Path(self._tmp.name)
+        self.dir = self.tmp / "refine"
+        shutil.copytree(REFINE, self.dir)
+        self.snap = self.dir / "before" / "home-snapshot.html"
+        self.shoot_js = self.tmp / "shoot.cjs"
+        self.shoot_js.write_text(SHOOT)
+
+    def shoot(self, html_file, out_stem):
+        r = subprocess.run([NODE, str(self.shoot_js), playwright_dir(), str(RP), str(html_file), str(out_stem)],
+                           capture_output=True, text=True, timeout=120)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def before_shots(self):
+        """The capture's shots of the page the snapshot was taken from: home-1280.png and home-390.png
+        beside home-snapshot.html."""
+        self.shoot(self.snap, self.dir / "before" / "home")
+
+    def spec(self):
+        return json.loads((REFINE / "spec.json").read_text())
+
+    def build(self, spec=None):
+        src, out = self.dir / "s.json", self.tmp / "page.html"
+        src.write_text(json.dumps(spec or self.spec()))
+        r = subprocess.run([sys.executable, str(BUILD), str(src), "--out", str(out), "--no-check"],
+                           capture_output=True, text=True, cwd=str(self.dir))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        return out
+
+    def smoke(self, spec=None):
+        page = self.build(spec)
+        r = subprocess.run([sys.executable, str(BUILD), "--smoke", str(page)], capture_output=True, text=True,
+                           cwd=str(self.dir), timeout=300)
+        try:
+            return json.loads(r.stdout)
+        except ValueError:
+            raise AssertionError(r.stdout + r.stderr)
+
+    @staticmethod
+    def refine_lines(res):
+        return [p for p in res["problems"] if "(Refine)" in p]
+
+    def test_fidelity_passes_the_exact_snapshot(self):
+        self.before_shots()
+        res = self.smoke()
+        self.assertEqual(self.refine_lines(res), [])
+        fid = res["refine"]["fidelity"]
+        self.assertEqual(sorted(fid), ["1280", "390"])
+        for w in ("1280", "390"):
+            self.assertLessEqual(fid[w]["pixelRatio"], 0.001, fid)
+            self.assertTrue(fid[w]["before"].endswith("home-%s.png" % w), fid)
+
+    def test_fidelity_flags_a_base_that_does_not_match_the_before_shot(self):
+        self.before_shots()
+        # The base is a copy with one extra margin: everything under the heading moves down. This
+        # page is mostly white, so a shift moves few pixels: 40px measured 0.012 at 1280, 80px more.
+        self.snap.write_text(self.snap.read_text().replace("</style>", "h1 { margin-top: 80px; }\n</style>", 1))
+        res = self.smoke()
+        for w in ("1280", "390"):
+            ratio = res["refine"]["fidelity"][w]["pixelRatio"]
+            self.assertGreater(ratio, 0.01)
+            self.assertIn("item home (Refine): base differs from the page at %s (pixel ratio %.3f)" % (w, ratio),
+                          res["problems"])
+
+    def test_fidelity_without_a_before_shot_is_a_problem_not_a_pass(self):
+        res = self.smoke()
+        self.assertTrue(any(p.startswith("item home (Refine): no before shot at 1280") for p in res["problems"]),
+                        res["problems"])
+
+    def test_overlap_names_both_changes_the_element_and_the_property(self):
+        self.before_shots()
+        spec = self.spec()
+        changes = spec["sections"][0]["items"][0]["changes"]
+        changes.append({"id": "heavy-totals", "label": "Heavier totals", "why_html": "<p>w</p>",
+                        "targets": [".total"], "css": ".total { font-weight: 800; letter-spacing: 1px; }"})
+        res = self.smoke(spec)
+        ov = res["refine"]["overlaps"]
+        self.assertIn({"a": "1", "b": "4", "element": ".total", "property": "font-weight"}, ov)
+        self.assertIn("item home (Refine): changes 1 and 4 both change font-weight on .total", res["problems"])
+        # Only what both change: the letter spacing is change 4's alone, and changes 2 and 3 touch other things.
+        self.assertEqual([o for o in ov if (o["a"], o["b"]) != ("1", "4") or o["property"] != "font-weight"], [], ov)
+
+    def test_design_checks_run_on_each_change_alone_and_all_on(self):
+        self.before_shots()
+        spec = self.spec()
+        changes = spec["sections"][0]["items"][0]["changes"]
+        changes[2]["css"] = ".alert { color: #d0d0d0; } .badge { display: none; }"
+        res = self.smoke(spec)
+        for state in ("change 3 on", "all changes on"):
+            for w in (1280, 390):
+                line = r"item home \(Refine\), %s: \d+ text elements below AA contrast at %dpx" % (state, w)
+                self.assertTrue([p for p in res["problems"] if re.fullmatch(line, p)], res["problems"])
+        # The other changes keep contrast: no line for them, and none for the page as it is.
+        self.assertFalse([p for p in res["problems"] if "change 1 on" in p or "change 2 on" in p], res["problems"])
+        states = {(c["state"], c["width"]) for c in res["refine"]["checks"]}
+        self.assertEqual(states, {(s, w) for s in ("base", "1", "2", "3", "all") for w in (1280, 390)})
+
+    def test_no_near_copy_line_for_refine_items(self):
+        self.before_shots()
+        res = self.smoke()
+        self.assertEqual(res["near_copies"], [])
+        self.assertEqual(res["layout_scores"], [])
+        self.assertFalse([t for t in res["problems"] + res["notes"] if "near-copies" in t])
+
+    def match(self, page, picks, shots):
+        r = subprocess.run([sys.executable, str(BUILD), "--match-preview", str(page), "--picks", picks,
+                            "--shots", str(shots)], capture_output=True, text=True, cwd=str(self.dir), timeout=300)
+        return r.returncode, r.stdout + r.stderr
+
+    def test_match_preview_passes_identical_and_fails_a_different_build(self):
+        self.before_shots()
+        page = self.build()
+        after = self.tmp / "after"
+        after.mkdir()
+        # The real page with change 1 built: its CSS in the page's own sheet, not scoped.
+        built = self.dir / "before" / "built.html"
+        built.write_text(self.snap.read_text().replace("</style>", ".total { font-weight: 700; }\n</style>", 1))
+        self.shoot(built, after / "home")
+        code, out = self.match(page, "1", after)
+        self.assertEqual(code, 0, out)
+        self.assertIn("match", out)
+        # The same build against picks 1 and 3: change 3 was never built.
+        code, out = self.match(page, "1,3", after)
+        self.assertEqual(code, 1, out)
+        for w in ("1280", "390"):
+            self.assertTrue(re.search(r"^%s: .*changes 1, 3" % w, out, re.M), out)
+        # A build that missed its one pick fails too, though it changes only a few pixels of the page.
+        nothing = self.tmp / "nothing"
+        nothing.mkdir()
+        self.shoot(self.snap, nothing / "home")
+        code, out = self.match(page, "1", nothing)
+        self.assertEqual(code, 1, out)
+        self.assertEqual(len([l for l in out.splitlines() if re.match(r"(1280|390): ", l)]), 2, out)
+
+    def test_match_preview_refuses_a_pick_the_page_does_not_have(self):
+        self.before_shots()
+        code, out = self.match(self.build(), "9", self.dir / "before")
+        self.assertEqual(code, 2, out)
+        self.assertIn("9", out)
+
+    def test_shot_viewports_are_the_captures(self):
+        r = subprocess.run([NODE, "-e", "const c = require(process.argv[1]); const f = require(process.argv[2]);"
+                            "console.log(JSON.stringify([c.VIEWPORTS, f.SHOT_VIEWPORTS]))",
+                            str(ROOT / "skills" / "visual-qa" / "scripts" / "capture.cjs"), str(RP / "fidelity.cjs")],
+                           capture_output=True, text=True)
+        cap, shot = json.loads(r.stdout)
+        for vp in cap:
+            if vp["label"] in shot:
+                want = {k: v for k, v in vp.items() if k not in ("label", "width", "height")}
+                want["viewport"] = {"width": vp["width"], "height": vp["height"]}
+                self.assertEqual(shot[vp["label"]], want)
+        self.assertEqual(sorted(shot), ["1280", "390"])
 
 
 

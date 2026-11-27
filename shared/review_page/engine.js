@@ -931,6 +931,8 @@
     if (!sec) return;
     var ids = sec.items.filter(function (i) { return i.refine === refine; }).map(function (i) { return i.id; });
     var view = "picks";
+    // Set only through rpRefine.only, for measuring: the on set whatever the answers say.
+    var only = null;
     var frames = all(".rp-rc-frame", preview);
     function picks() {
       var recs = secState(st, sec).items || {};
@@ -978,7 +980,7 @@
     function paint(f) {
       var d = f.__rcDoc;
       if (!d || f.contentDocument !== d) return;
-      var on = view === "picks" ? picks() : [];
+      var on = only || (view === "picks" ? picks() : []);
       d.documentElement.setAttribute("data-rc", on.join(" "));
       swaps(f, d, on);
       fit(f);
@@ -1020,7 +1022,13 @@
     // A fallback for browsers without ResizeObserver.
     var fitAll = function () { frames.forEach(function (f) { if (f.__rcDoc) fit(f); }); };
     window.addEventListener("resize", fitAll);
-    window.rpRefine = { state: function () { return { on: picks(), view: view }; } };
+    // only(ids) is for --smoke, not readers: both frames show exactly these changes, whatever
+    // the answers say and without touching them; only(null) goes back to the answers. state()
+    // still reports the answers.
+    window.rpRefine = {
+      state: function () { return { on: picks(), view: view }; },
+      only: function (on) { only = on ? on.slice() : null; sync(); },
+    };
     var base = JSON.parse(baseEl.textContent);
     frames.forEach(function (f) { f.srcdoc = base; });
     sync();

@@ -4,15 +4,228 @@
 // first item of each kind the page's frame uses, and on question and session
 // pages checks that open questions sit directly under the sticky bar; on review pages it
 // also flags a word a mockup breaks mid-word, by item and variant; on the settings page it
-// types a refused value and a good one, and measures every tap target in every group. Run through
-// review_page.py --smoke rather than directly.
+// types a refused value and a good one, and measures every tap target in every group. On a
+// Refine page it checks the base against the before shots, finds changes that overlap, and runs
+// the design checks inside each frame with each change on alone and all on (refineChecks). Run
+// through review_page.py --smoke rather than directly; an optional third argument is the folder
+// of a Refine page's before shots, when they are not beside its base snapshot.
 const path = require("path");
 const { chromium } = require(process.argv[2]);
 const { launchChromium } = require("./launch.cjs");
 const { midWordBreaks } = require("./midword.cjs");
 const { designChecks } = require("./designchecks.cjs");
 const { layoutSignature, signatureFromSection, similarity, NEAR_COPY } = require("./signature.cjs");
+const { compareShots, renderBase, shotNames, FIDELITY } = require("./fidelity.cjs");
+const fs = require("fs");
 const file = "file://" + path.resolve(process.argv[3]);
+const shotsDir = process.argv[4] || null;
+
+// One box's design check results as lines, worded the same for a mockup and a Refine frame:
+// problems, and notes that are never problems (peeks, unmeasured contrast, off-scale sizes).
+function designLines(where, d, w) {
+  const problems = [], notes = [];
+  if (d.contrast.length) problems.push(`${where}: ${d.contrast.length} text elements below AA contrast at ${w}px`);
+  if (d.smallTargets.length) problems.push(`${where}: ${d.smallTargets.length} tap targets under 44x44 at ${w}px`);
+  if (d.longLines.length) problems.push(`${where}: ${d.longLines.length} lines over 80 characters at ${w}px`);
+  if (d.edges.length) problems.push(`${where}: ${d.edges.length} left edges 1 to 6px out of line at ${w}px`);
+  // A row with a partly visible item is "cut"; one whose items sit wholly past the edge "hides" them.
+  const cutRows = d.clippedRows.filter((c) => c.cut !== null);
+  const hideRows = d.clippedRows.filter((c) => c.cut === null);
+  if (cutRows.length) problems.push(`${where}: ${cutRows.length} row${cutRows.length > 1 ? "s" : ""} cut at the right edge at ${w}px (${cutRows.map((c) => `"${c.cut}" cut${c.hidden.length ? `; ${c.hidden.length} more hidden past it` : ""}`).join("; ")})`);
+  for (const c of hideRows) problems.push(`${where}: 1 row hides ${c.hidden.length} item${c.hidden.length > 1 ? "s" : ""} past the right edge at ${w}px (${c.hidden.map((h) => `"${h}"`).join(", ")})`);
+  if (d.peekRows.length) notes.push(`${where}: ${d.peekRows.length} carousel${d.peekRows.length > 1 ? "s" : ""} show a partly visible card at ${w}px (${d.peekRows.map((c) => `"${c.cut || c.text}"`).join("; ")}); a swipe peek, check it is meant`);
+  if (d.unmeasured.length) {
+    const why = [...new Set(d.unmeasured.map((u) => u.reason.replace(/^contrast: not measured \((.*)\)$/, "$1")))];
+    notes.push(`${where}: contrast not measured for ${d.unmeasured.length} text elements (${why.join("; ")}) at ${w}px`);
+  }
+  if (d.offScale.length) notes.push(`${where}: ${d.offScale.length} text sizes off the page's own scale at ${w}px (${d.offScale.map((o) => o.size + "px").join(", ")})`);
+  return { problems, notes };
+}
+
+// What identifies one entry of each design check list, so a Refine state is held only to what
+// it adds to the page as it is: a text still under AA with a change on is the page's, not the change's.
+const CHECK_KEYS = {
+  contrast: (e) => e.text, unmeasured: (e) => e.text + "|" + e.reason, smallTargets: (e) => e.text,
+  longLines: (e) => e.text, edges: (e) => e.a + "|" + e.b, offScale: (e) => e.text,
+  clippedRows: (e) => e.text + "|" + e.cut, peekRows: (e) => e.text,
+};
+function minus(list, base, key) {
+  const left = new Map();
+  for (const e of base) left.set(key(e), (left.get(key(e)) || 0) + 1);
+  return list.filter((e) => {
+    const n = left.get(key(e)) || 0;
+    if (n) { left.set(key(e), n - 1); return false; }
+    return true;
+  });
+}
+function added(d, base) {
+  const out = {};
+  for (const k of Object.keys(CHECK_KEYS)) out[k] = minus(d[k] || [], base[k] || [], CHECK_KEYS[k]);
+  return out;
+}
+
+// Runs in a Refine frame. The first call (no `ids`) records, for every element, the computed
+// value of each property any change declares; a later call returns [index, property] for each
+// element whose value of a property the `ids` changes declare is not what it was, and
+// [index, "markup"] for each element a swap took out. Declared longhands come from the frame's
+// <style data-rc-css>, so a neighbor that only moves (its width, its top) is never counted.
+function styleDiff({ ids }) {
+  const declared = {};
+  const sheet = Array.from(document.styleSheets).find((sh) => sh.ownerNode && sh.ownerNode.hasAttribute("data-rc-css"));
+  const walk = (rules) => {
+    for (const r of rules) {
+      if (r.cssRules && !r.selectorText) { walk(r.cssRules); continue; }
+      if (!r.selectorText || !r.style) continue;
+      for (const m of r.selectorText.matchAll(/\[data-rc~="([a-z0-9-]+)"\]/g)) {
+        const set = declared[m[1]] || (declared[m[1]] = new Set());
+        for (let i = 0; i < r.style.length; i++) set.add(r.style[i]);
+      }
+    }
+  };
+  if (sheet) walk(sheet.cssRules);
+  if (!ids) {
+    const props = [...new Set(Object.values(declared).flatMap((s) => [...s]))];
+    window.__rcEls = [document.body, ...document.body.querySelectorAll("*")];
+    window.__rcProps = props;
+    window.__rcBase = window.__rcEls.map((el) => { const cs = getComputedStyle(el); return props.map((p) => cs.getPropertyValue(p)); });
+    return [];
+  }
+  const mine = new Set(ids.flatMap((id) => [...(declared[id] || [])]));
+  const out = [];
+  window.__rcEls.forEach((el, i) => {
+    if (!el.isConnected) { out.push([i, "markup"]); return; }
+    const cs = getComputedStyle(el);
+    window.__rcProps.forEach((p, j) => { if (mine.has(p) && cs.getPropertyValue(p) !== window.__rcBase[i][j]) out.push([i, p]); });
+  });
+  return out;
+}
+
+// Runs in a Refine frame: a short name for each element index, the selector of the first rule
+// of changes `ids` that matches it (its html[data-rc~] prefix taken off), else #id, .class or tag.
+function elementNames({ indices, ids }) {
+  const sheet = Array.from(document.styleSheets).find((sh) => sh.ownerNode && sh.ownerNode.hasAttribute("data-rc-css"));
+  const sels = [];
+  const walk = (rules) => {
+    for (const r of rules) {
+      if (r.cssRules && !r.selectorText) { walk(r.cssRules); continue; }
+      if (!r.selectorText) continue;
+      for (const part of r.selectorText.split(/,\s*(?=html\[data-rc~=)/)) {
+        const m = part.match(/^html\[data-rc~="([a-z0-9-]+)"\]\s*(.*)$/);
+        if (m && ids.includes(m[1])) sels.push(m[2].trim() || "html");
+      }
+    }
+  };
+  if (sheet) walk(sheet.cssRules);
+  return indices.map((i) => {
+    const el = window.__rcEls[i];
+    for (const s of sels) { try { if (el.matches(s)) return s; } catch (e) { /* not a selector on its own */ } }
+    if (el.id) return "#" + el.id;
+    const cls = typeof el.className === "string" && el.className.trim() ? el.className.trim().split(/\s+/)[0] : "";
+    return cls ? "." + cls : el.tagName.toLowerCase();
+  });
+}
+
+// design-review's Refine mode (spec §2 and §3). The base with every change off, shot as its own
+// page at the capture's 1280 and 390, against the before shots (fidelity.cjs); then, inside each
+// frame at its own width, the page as it is, each change on alone and all on: computed styles
+// for overlaps, and the design checks, mid-word breaks and sideways scroll. A state's problem
+// lines are what it adds to the page as it is; the page's own findings are notes.
+async function refineChecks(browser, page, S, problems, notes) {
+  const preview = await page.$("[data-rc-preview]");
+  if (!preview) return null;
+  const id = await preview.getAttribute("data-rc-preview");
+  const baseRel = (await preview.getAttribute("data-rc-base")) || "";
+  const label = `item ${id} (Refine)`;
+  const changes = S.sections.flatMap((s) => s.items || []).filter((i) => i.refine === id);
+  const doc = await page.evaluate((id) => JSON.parse(document.getElementById("rp-rc-base-" + id).textContent), id);
+  const out = { item: id, fidelity: {}, overlaps: [], checks: [] };
+
+  const dirs = shotsDir ? [shotsDir]
+    : [...new Set([process.cwd(), path.dirname(path.resolve(process.argv[3]))].map((d) => path.dirname(path.resolve(d, baseRel))))];
+  for (const w of [1280, 390]) {
+    const tried = dirs.flatMap((d) => shotNames(baseRel, w).map((n) => path.join(d, n)));
+    const before = tried.find((f) => fs.existsSync(f));
+    if (!before) {
+      out.fidelity[w] = null;
+      problems.push(`${label}: no before shot at ${w} (looked for ${tried.map((f) => path.relative(process.cwd(), f)).join(", ")}); fidelity not measured`);
+      continue;
+    }
+    const r = await compareShots(await renderBase(browser, doc, w, []), before);
+    out.fidelity[w] = { pixelRatio: r.pixelRatio, signature: r.signature, before };
+    if (r.pixelRatio > FIDELITY.pixelRatio) problems.push(`${label}: base differs from the page at ${w} (pixel ratio ${r.pixelRatio.toFixed(3)})`);
+  }
+
+  await page.waitForFunction(() => {
+    const f = document.querySelectorAll("iframe.rp-rc-frame");
+    return f.length > 0 && Array.from(f).every((x) => x.dataset.rcReady === "1");
+  }, null, { timeout: 15000 });
+  const frames = {};
+  for (const w of [1280, 390]) {
+    frames[w] = await (await page.$(`iframe.rp-rc-frame[data-rc-width="${w}"]`)).contentFrame();
+    // A transition would show a value part way from off to on; measure the end of it.
+    await frames[w].evaluate(() => {
+      const st = document.createElement("style");
+      st.textContent = "*, *::before, *::after { transition: none !important; }";
+      document.head.appendChild(st);
+    });
+  }
+  const states = [{ key: "base", ids: [], where: `${label}, the page as it is` },
+    ...changes.map((c) => ({ key: c.num, ids: [c.id], where: `${label}, change ${c.num} on`, change: c })),
+    ...(changes.length > 1 ? [{ key: "all", ids: changes.map((c) => c.id), where: `${label}, all changes on` }] : [])];
+  const base = {}, touched = {};
+  for (const st of states) {
+    await page.evaluate((ids) => window.rpRefine.only(ids), st.ids);
+    for (const w of [1280, 390]) {
+      const f = frames[w];
+      const rc = await f.evaluate(() => document.documentElement.getAttribute("data-rc") || "");
+      if (rc !== st.ids.join(" ")) problems.push(`${label}: the ${w} frame shows "${rc}" for ${st.where.slice(label.length + 2)}`);
+      const d = await designChecks(f, "body", { width: w });
+      const mid = await f.evaluate(midWordBreaks, { selector: "body", limit: 40 });
+      const over = await f.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      const diff = await f.evaluate(styleDiff, { ids: st.key === "base" ? null : st.ids });
+      if (st.change) touched[w + "|" + st.change.num] = diff;
+      out.checks.push({ state: st.key, width: w, contrast: d.contrast.length, smallTargets: d.smallTargets.length,
+        longLines: d.longLines.length, edges: d.edges.length, clippedRows: d.clippedRows.length,
+        midWord: mid.length, sideways: Math.max(0, over) });
+      if (st.key === "base") {
+        base[w] = { d, mid, over };
+        const l = designLines(st.where, d, w);
+        notes.push(...l.problems, ...l.notes);
+        for (const b of mid) notes.push(`${st.where}: "${b.at}" breaks mid-word at ${w}px wide`);
+        if (over > 0) notes.push(`${st.where}: the page scrolls sideways by ${over}px at ${w}px wide`);
+        continue;
+      }
+      const l = designLines(st.where, added(d, base[w].d), w);
+      problems.push(...l.problems);
+      notes.push(...l.notes);
+      for (const b of minus(mid, base[w].mid, (e) => e.at)) problems.push(`${st.where}: "${b.at}" breaks mid-word at ${w}px wide`);
+      if (over > Math.max(0, base[w].over)) problems.push(`${st.where}: the page scrolls sideways by ${over}px at ${w}px wide`);
+    }
+  }
+  await page.evaluate(() => window.rpRefine.only(null));
+
+  // Overlaps: two changes that change the same property on the same element, at either width.
+  const seen = new Set();
+  for (let i = 0; i < changes.length; i++) {
+    for (let j = i + 1; j < changes.length; j++) {
+      const a = changes[i], b = changes[j];
+      for (const w of [1280, 390]) {
+        const mine = new Set((touched[w + "|" + a.num] || []).map(([e, p]) => e + "|" + p));
+        const both = (touched[w + "|" + b.num] || []).filter(([e, p]) => mine.has(e + "|" + p));
+        if (!both.length) continue;
+        const names = await frames[w].evaluate(elementNames, { indices: both.map(([e]) => e), ids: [a.id, b.id] });
+        both.forEach(([, prop], k) => {
+          const key = [a.num, b.num, names[k], prop].join("|");
+          if (seen.has(key)) return;
+          seen.add(key);
+          out.overlaps.push({ a: a.num, b: b.num, element: names[k], property: prop });
+          problems.push(`${label}: changes ${a.num} and ${b.num} both change ${prop} on ${names[k]}`);
+        });
+      }
+    }
+  }
+  return out;
+}
 
 // The claude.ai runtime, stubbed: a db that stores in memory (window.__dbMode "hold" keeps
 // each write out until window.__release()), and a comments capability whose
@@ -393,21 +606,9 @@ async function sendToClaude(browser, problems) {
         const d = await designChecks(page, sel, { width: w, beforeFontSizes: it.before_font_sizes || [] });
         out.design_checks.push({ item: it.num, variant: key, width: w, ...d });
         const where = `item ${it.num} (${it.label}), ${name}`;
-        if (d.contrast.length) problems.push(`${where}: ${d.contrast.length} text elements below AA contrast at ${w}px`);
-        if (d.smallTargets.length) problems.push(`${where}: ${d.smallTargets.length} tap targets under 44x44 at ${w}px`);
-        if (d.longLines.length) problems.push(`${where}: ${d.longLines.length} lines over 80 characters at ${w}px`);
-        if (d.edges.length) problems.push(`${where}: ${d.edges.length} left edges 1 to 6px out of line at ${w}px`);
-        // A row with a partly visible item is "cut"; one whose items sit wholly past the edge "hides" them.
-        const cutRows = d.clippedRows.filter((c) => c.cut !== null);
-        const hideRows = d.clippedRows.filter((c) => c.cut === null);
-        if (cutRows.length) problems.push(`${where}: ${cutRows.length} row${cutRows.length > 1 ? "s" : ""} cut at the right edge at ${w}px (${cutRows.map((c) => `"${c.cut}" cut${c.hidden.length ? `; ${c.hidden.length} more hidden past it` : ""}`).join("; ")})`);
-        for (const c of hideRows) problems.push(`${where}: 1 row hides ${c.hidden.length} item${c.hidden.length > 1 ? "s" : ""} past the right edge at ${w}px (${c.hidden.map((h) => `"${h}"`).join(", ")})`);
-        if (d.peekRows.length) out.notes.push(`${where}: ${d.peekRows.length} carousel${d.peekRows.length > 1 ? "s" : ""} show a partly visible card at ${w}px (${d.peekRows.map((c) => `"${c.cut || c.text}"`).join("; ")}); a swipe peek, check it is meant`);
-        if (d.unmeasured.length) {
-          const why = [...new Set(d.unmeasured.map((u) => u.reason.replace(/^contrast: not measured \((.*)\)$/, "$1")))];
-          out.notes.push(`${where}: contrast not measured for ${d.unmeasured.length} text elements (${why.join("; ")}) at ${w}px`);
-        }
-        if (d.offScale.length) out.notes.push(`${where}: ${d.offScale.length} text sizes off the page's own scale at ${w}px (${d.offScale.map((o) => o.size + "px").join(", ")})`);
+        const lines = designLines(where, d, w);
+        problems.push(...lines.problems);
+        out.notes.push(...lines.notes);
       }
       // Near-copies, measured once at 1280: each pair of options, then each option against the
       // page's own section (`before_sections`, when the item carries it).
@@ -432,6 +633,10 @@ async function sendToClaude(browser, problems) {
         for (const [key, name, sig] of sigs) near(key, name, "before", "the current page", sig, before);
       }
     }
+  }
+  if (S.mode === "review") {
+    const r = await refineChecks(browser, page, S, problems, out.notes);
+    if (r) out.refine = r;
   }
   out.send_to_claude = await sendToClaude(browser, problems);
   await browser.close();

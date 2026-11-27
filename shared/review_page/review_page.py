@@ -6,6 +6,9 @@ Usage:
   review_page.py SPEC.json                                session/log: to .proofs/pages/SPEC.html
   review_page.py --check PAGE.html                        node --check + structure
   review_page.py --smoke PAGE.html [--playwright DIR]     click through in Chromium
+       [--shots DIR]                                      (a Refine page: where its before shots are)
+  review_page.py --match-preview PAGE.html --picks 1,3 --shots DIR
+                                                          the built page against the Refine preview
 
 Five modes share one engine: "review" (decision buttons per item: design-review,
 article-copy-edit, photo-picker, style-guide), "questions" (a standalone questions
@@ -13,7 +16,7 @@ or QA checklist page), "session" (working-log's session page: questions, checks,
 log and decided on one URL), "log" (a log-only page) and "settings" (the settings
 page, from `shared/settings.py --spec`). The spec format is documented
 in reference/review-page.md at the plugin root. Python 3 stdlib only; node is
-needed for --check and --smoke, Playwright only for --smoke.
+needed for --check, --smoke and --match-preview, Playwright only for --smoke and --match-preview.
 """
 import argparse
 import base64
@@ -53,6 +56,7 @@ SEND_MSG_HTML = '<div class="rp-send-msg" data-send-msg role="status" aria-live=
 CAPABILITIES = {"db": {}, "comments": {}}
 STYLE = HERE / "style.css"
 SMOKE = HERE / "smoke.cjs"
+MATCH = HERE / "match.cjs"
 
 # Decision sets. Each button: state, label, label_variant (used when the item has
 # variants), export, export_variant ({sel} = selected variant text), comment
@@ -1652,14 +1656,37 @@ def check_refine_fields(it) -> None:
                 raise SpecError("item %s: change %s is recommended but has no scores" % (iid, c["id"]))
 
 
+# PNG chunks that tell the browser how to color the pixels. Lossless WebP keeps the pixel
+# values but none of these the same way: in Chrome, a gAMA PNG through ImageMagick changed
+# 99.8% of its pixels and an ICC (iCCP) one through cwebp 48%. A PNG carrying one, or 16 bits
+# a channel (ImageMagick rounds them), goes into the base as it is.
+PNG_COLOR_CHUNKS = (b"gAMA", b"cHRM", b"iCCP", b"cICP", b"mDCV", b"cLLI")
+
+
+def png_is_plain(data):
+    """True for an 8-bit PNG with none of PNG_COLOR_CHUNKS before its pixels."""
+    if data[:8] != b"\x89PNG\r\n\x1a\n" or len(data) < 33 or data[24] != 8:
+        return False
+    pos = 8
+    while pos + 8 <= len(data):
+        kind = data[pos + 4:pos + 8]
+        if kind in PNG_COLOR_CHUNKS:
+            return False
+        if kind == b"IDAT":
+            return True
+        pos += 12 + int.from_bytes(data[pos:pos + 4], "big")
+    return False
+
+
 def snapshot_asset(path, tool, cache):
-    """A data URI for one file of the snapshot's assets folder, made once per page. A PNG
-    becomes lossless WebP when that is smaller: never lossy, and never resized, because the
-    base must render pixel for pixel like the page (an image's natural size is layout)."""
+    """A data URI for one file of the snapshot's assets folder, made once per page. A plain
+    PNG (png_is_plain) becomes lossless WebP when that is smaller: never lossy, and never
+    resized, because the base must render pixel for pixel like the page (an image's natural
+    size is layout)."""
     if path not in cache:
         mime = SNAPSHOT_MIME.get(path.suffix.lower())
         data = None
-        if path.suffix.lower() == ".png" and tool is not None:
+        if path.suffix.lower() == ".png" and tool is not None and png_is_plain(path.read_bytes()):
             data = encode_webp(path, 100, None, True, tool)
             if data is not None and len(data) >= path.stat().st_size:
                 data = None
@@ -1675,6 +1702,12 @@ def load_snapshot(it, base, cache):
     if p is None:
         raise SpecError("item %s: base: %s not found (tried %s)" % (it["id"], rel, " and ".join(map(str, tried))))
     text = p.read_text()
+    # Where the before shots are: --smoke looks beside the snapshot (fidelity.cjs shotNames).
+    # Relative to the working directory, so the page names no folder above the project.
+    try:
+        it["_base_path"] = os.path.relpath(p, Path.cwd())
+    except ValueError:  # another drive
+        it["_base_path"] = rel
     folder = p.parent / (p.stem + "-assets")
     tool = image_tool()
     if folder.is_dir():
@@ -1735,7 +1768,7 @@ def render_refine(it, ctx) -> str:
                             "recommended": c.get("recommended"), "body_html": "\n".join(body)}, dec, ctx.colors)
         h.append(card.replace('<article class="rp-item" ', '<article class="rp-item" data-rc-change="%s" '
                               % esc(c["id"]), 1))
-    p = ['<div class="rp-rc-preview" data-rc-preview="%s">' % esc(iid),
+    p = ['<div class="rp-rc-preview" data-rc-preview="%s" data-rc-base="%s">' % (esc(iid), esc(it["_base_path"])),
          '<div class="rp-rc-head"><h3 class="rp-rc-title">Your picks together</h3>'
          '<div class="rp-rc-view" role="group" aria-label="Show the preview">'
          '<button type="button" class="rp-chip-btn" data-rc-view="picks" aria-pressed="true">With your picks</button>'
@@ -2048,18 +2081,47 @@ def find_playwright(arg):
     return None
 
 
-def smoke(path, playwright=None):
-    """Click through the page in headless Chromium. Returns (ok, result dict)."""
+def smoke(path, playwright=None, shots=None):
+    """Click through the page in headless Chromium. Returns (ok, result dict). shots: the folder
+    a Refine page's before shots are in, when not beside its base snapshot."""
     pw = find_playwright(playwright)
     if not pw:
         return None, {"error": "Playwright not found. " + HOW_TO_PY}
-    r = subprocess.run([shutil.which("node"), str(SMOKE), pw, str(Path(path).resolve())],
-                       capture_output=True, text=True, timeout=180)
+    r = subprocess.run([shutil.which("node"), str(SMOKE), pw, str(Path(path).resolve())]
+                       + ([str(Path(shots).resolve())] if shots else []),
+                       capture_output=True, text=True, timeout=600)
     try:
         res = json.loads(r.stdout.strip().splitlines()[-1])
     except (ValueError, IndexError):
         return False, {"error": (r.stdout + r.stderr).strip()[-2000:]}
     return not res.get("problems"), res
+
+
+def match_preview(page_path, picks, shots, playwright=None):
+    """--match-preview: the built page's shots in `shots` against the Refine preview with the
+    picked changes on (fidelity.cjs comparePicks). Prints one line per width; returns the exit
+    code: 0 on a match, 1 when a width differs or has no shot, 2 when it cannot be measured."""
+    pw = find_playwright(playwright)
+    if not pw:
+        print("match-preview: Playwright not found. " + HOW_TO_PY, file=sys.stderr)
+        return 2
+    nums = [n.strip() for n in str(picks).split(",") if n.strip()]
+    if not nums:
+        print("match-preview: --picks needs the numbers of the changes answered Yes, such as 1,3", file=sys.stderr)
+        return 2
+    r = subprocess.run([shutil.which("node"), str(MATCH), pw, str(Path(page_path).resolve()), ",".join(nums),
+                        str(Path(shots).resolve())], capture_output=True, text=True, timeout=600)
+    try:
+        res = json.loads(r.stdout.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        print("match-preview: " + (r.stdout + r.stderr).strip()[-2000:], file=sys.stderr)
+        return 2
+    if res.get("error"):
+        print("match-preview: " + res["error"], file=sys.stderr)
+        return 2
+    for line in res["lines"]:
+        print(line)
+    return 0 if res["match"] else 1
 
 
 def answers(page_path, rows):
@@ -2082,6 +2144,11 @@ def main(argv=None):
     ap.add_argument("--check", metavar="PAGE", help="check a built page")
     ap.add_argument("--smoke", metavar="PAGE", help="click through a built page in headless Chromium")
     ap.add_argument("--playwright", help="folder of an installed playwright package")
+    ap.add_argument("--match-preview", metavar="PAGE", help="compare the built page's shots (--shots) with "
+                    "PAGE's Refine preview with the picked changes (--picks) on")
+    ap.add_argument("--picks", help="with --match-preview: the numbers of the changes answered Yes, such as 1,3")
+    ap.add_argument("--shots", metavar="DIR", help="with --match-preview: the folder of the capture of the built "
+                    "page; with --smoke: where a Refine page's before shots are, when not beside its base")
     ap.add_argument("--answers", metavar="PAGE", help="print PAGE's answers from its database rows (--rows) "
                     "as the same text its Copy button makes")
     ap.add_argument("--rows", metavar="PATH", help="with --answers: the out_dir ArtifactData list wrote, or a JSON file")
@@ -2090,6 +2157,10 @@ def main(argv=None):
         if not a.rows:
             ap.error("--answers needs --rows (the folder ArtifactData list wrote with out_dir)")
         return answers(a.answers, a.rows)
+    if a.match_preview:
+        if not (a.picks and a.shots):
+            ap.error("--match-preview needs --picks (such as 1,3) and --shots (the capture's folder)")
+        return match_preview(a.match_preview, a.picks, a.shots, a.playwright)
     if a.check or a.smoke:
         target = a.check or a.smoke
         errs = check(target)
@@ -2100,7 +2171,7 @@ def main(argv=None):
         if errs:
             return 1
         if a.smoke:
-            ok, res = smoke(target, a.playwright)
+            ok, res = smoke(target, a.playwright, a.shots)
             print(json.dumps(res, indent=2, ensure_ascii=False))
             if ok is None:
                 return 2

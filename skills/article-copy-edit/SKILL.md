@@ -1,6 +1,6 @@
 ---
 name: article-copy-edit
-version: 1.5.3
+version: 1.6.0
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -106,9 +106,10 @@ Note anything you skipped and why. Verify and commit following the project's own
 
 When one or more items come back `REVISE`, build a new round rather than silently iterating in chat. The same human-in-the-loop principle applies to round 2 as to round 1.
 
-- **Scope the new Artifact to only the still-open items, but "still open" means every item without a final decision, not just the ones marked `REVISE`.** Don't re-show items already resolved (`ACCEPT`, `ACCEPT WITH COMMENT`, `DENY`): they're already applied or settled, and re-litigating them wastes the user's attention and risks a stray click undoing a done decision. But a `PENDING` item from the prior round (never decided at all, just not part of that round's revision batch) is not resolved either. Dropping it when you rescope to "the items sent back for revision" silently deletes the user's only path to ever deciding it. Carry every non-final item forward into each new round, not just the ones explicitly revised. If only one item is open, the whole page is one card.
+- **Only the still-open items are cards, but "still open" means every item without a final decision, not just the ones marked `REVISE`.** Don't re-show items already resolved (`ACCEPT`, `ACCEPT WITH COMMENT`, `DENY`) as cards: they're already applied or settled, and re-litigating them wastes the user's attention and risks a stray click undoing a done decision. Move each one to the spec's `decided` list instead, one `{id, title, decision, when}` line (`"when": "Round 1"`), which the builder folds at the bottom, under the open cards, so the user sees what is settled without it competing with what still needs them. But a `PENDING` item from the prior round (never decided at all, just not part of that round's revision batch) is not resolved either. Dropping it when you rescope to "the items sent back for revision" silently deletes the user's only path to ever deciding it. Carry every non-final item forward into each new round, not just the ones explicitly revised. If only one item is open, the whole page is one card.
 - **Carry the history forward on each card.** Show the prior round's proposal, clearly labeled ("Round 1 (requested revision)"), with the user's own revision comment quoted or summarized so they have full context without scrolling back through chat. Then show the new proposal, labeled "Round 2 proposal" (increment further if it goes another round). Don't make the user re-explain what they already told you.
 - **Republish to the same Artifact URL**, per the "same file path" guidance above, for every follow-up round. Put the history in each item's `history_html`.
+- **Set `project.round`** to the round number. Stale answers never pre-fill: an answer saved on last round's version of an item (its text or its round changed) shows on the card read-only ("Round 1: Request Revision: …") with the buttons on Pending and the comment box empty, and `--answers` and Copy leave it out. The same round reloaded or republished keeps every answer, so never bump the round just to republish (`../../reference/review-page.md`, "Follow-up rounds").
 - **Re-run the verification step** before every republish. A smaller page is not a lower-risk page.
 
 ## Where the page goes

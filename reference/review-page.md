@@ -104,6 +104,8 @@ the sections that need the reader (`questions`, then `links`, then `qa`) directl
 under the sticky bar, and moves `heading`, `intro_html` and `facts` below them; a
 `questions` page also moves its questions sections ahead of any others. `links` and
 `decided` sections, and any empty section on a session page, are not shown.
+On a `review` page, `decided` sections always go last, under every open item, whatever
+order the spec lists them in.
 
 Any string value written as `"@file:relative/path.html"` is replaced by that file's
 contents, so long item HTML can live in its own files. Like an asset path, it is
@@ -130,7 +132,9 @@ Export line: `N. label — DECISION[ — READ][ — COMMENT: text]`, the comment
 line, no comment suffix when the box is empty.
 
 Items go in `review` sections (`empty_html` is shown when one has no items) or a
-flat `items` list. Item fields:
+flat `items` list; items decided in an earlier round go in a flat `decided` list
+(`{id, title, decision, when}`, folded at the bottom: see **Follow-up rounds** below).
+Item fields:
 
 | Field | Meaning |
 |---|---|
@@ -150,7 +154,9 @@ flat `items` list. Item fields:
 | `before_scores` | the critic's scores for the current page, the baseline every option must beat (`design-rubric.md`): same keys and 1 to 5 checks as `scores`, errors naming "current page". Shown once per item above its options as a row labeled "Current page"; none, no row |
 | `judged_by` | `helper` ("Judged by a separate helper") or `self` ("Checked by the designer itself"); none, no line |
 | `inventory`, `scores` on an item with no `variants` | the single proposal's inventory and scores, validated and shown the same way; no `role` needed. Its score row shows only when it has `scores` or `judged_by` ("Not scored" when only `judged_by`), so copy-edit and capture items show none |
-| `history_html` | earlier rounds, shown dimmed above the body |
+| `history_html` | earlier rounds' proposals, shown dimmed above the body |
+| `round` | the round this item is shown in (default: `project.round`). Shown on the reader's earlier answers ("Round 1: …") and part of the item's fingerprint, so a new round never pre-fills an old answer |
+| `rev` | pins the item's fingerprint by hand (default: a hash of its `label`, `body_html`, `variants` and `round`). Set it only to keep the reader's answers through a same-round fix that changes the body, such as a typo |
 | `reason_html` | the Reason block |
 
 Page switches: `filters`, `preview_toggle` (examples get `[data-preview="dark"]` on
@@ -160,6 +166,38 @@ Helper classes for item HTML: `.rp-panes` (side-by-side panes that stack on a ph
 `.rp-pane` and `.rp-pane-label`, `.rp-scroll` (sideways scroll inside, never the
 page), `.rp-shot` (a screenshot), and `<del>` / `<ins>` inside `.rp-panes` for
 word-level diffs.
+
+### Follow-up rounds
+
+A follow-up round is the same spec rebuilt and republished to the same URL, so the
+page's database and the reader's browser still hold the last round's answers. Three
+rules keep round 2 clean:
+
+1. **Stale answers never pre-fill.** Every review item carries a fingerprint (`rev`)
+   of its proposal: its `label`, `body_html`, `variants` (key, name, html) and `round`.
+   Every answer is saved with the `rev` it was given on, and the page restores an
+   answer only onto the same `rev`. When the item changed, the old pick and comment
+   are not the live answer: the buttons show Pending, the comment box is empty, and a
+   dashed box on the card reads "Your answer last round · Round 1: Approve with
+   Comment: “…”". `--answers` and Copy leave them out, so a round 1 answer is never
+   read as a round 2 one. This is automatic; there is nothing to remember.
+2. **The same round keeps everything.** `history_html`, `reason_html`, notes, scores
+   and recommendations are not part of the fingerprint, so a reload, or a republish
+   that changes only those, keeps every pick and typed note. A same-round fix that
+   must change the body (a typo) and keep the answers sets `rev` by hand to the
+   previous build's value (it is in the page's `rp-spec` JSON).
+3. **Open items on top, decided at the bottom.** Set `project.round` (`2`, `3`, …).
+   Items settled in earlier rounds (`ACCEPT`, `ACCEPT WITH COMMENT`, `DENY`, or marked
+   read) leave `items` for the flat `decided` list, `{id, title, decision, when}` with
+   `when` such as `"Round 1"`; the builder folds it at the bottom, under the open
+   items, whatever the spec order. Still-open items (`REVISE`, `PENDING`) stay in
+   `items`, with the earlier proposal in `history_html`. A new `round` changes every
+   item's fingerprint, so a carried-forward item shows its old answer as an earlier
+   one, never as a live pick.
+
+Rows and browser records saved by a page built before 1.10.0 carry no `rev` and
+restore as before. For a review already in flight on such a page, give the changed
+items new ids in the next round.
 
 ### `questions` mode
 
@@ -274,11 +312,15 @@ characters other than letters, digits and `_ - . ~ : @ +` become `_`, plus a sho
 | `variant`, `works_as_designed` | review items only: the picked variant key, and the deny checkbox |
 | `updated_at` | when the reader's browser wrote it (ISO 8601, UTC) |
 | `page_version`, `page` | which build of the page (the spec's `version`, else a hash of it) and its storage key |
+| `rev`, `round` | review items only: the item's fingerprint and round the answer was given on |
+| `earlier` | review items only: the reader's answers from earlier rounds of this item, `[{round, answer, note, variant}]`, oldest first |
 
 A cleared answer is written as a document with `answer: null` and an empty `note`,
 not deleted. Rows outlive republishes: a card kept on the next version keeps its
-answer, so reuse an id only for the same question. A card you drop stays in the
-database, but the page and `--answers` ignore it.
+answer, so on questions, checks and log pages reuse an id only for the same question.
+A card you drop stays in the database, but the page and `--answers` ignore it.
+A review item's answer is kept only while the item is unchanged: see **Follow-up
+rounds** below.
 
 **Read the answers.** Read the database first, and a pasted Copy export second:
 

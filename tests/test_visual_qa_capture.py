@@ -140,6 +140,14 @@ class Quiet(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
+    def do_GET(self):
+        # A stylesheet a browser loads but a plain fetch cannot get, as from a server that checks
+        # how it is asked: the snapshot's node-side fetch of it fails, so it stays external.
+        if self.path.endswith("/browser-only.css") and self.headers.get("Sec-Fetch-Dest") != "style":
+            self.send_error(403)
+            return
+        super().do_GET()
+
 
 @unittest.skipUnless(NODE and playwright_dir(), "Playwright not found: set PROOFS_PLAYWRIGHT or install it in ~/.cache/proofs-playwright")
 class PhoneWidth(unittest.TestCase):
@@ -1149,7 +1157,8 @@ class Snapshot(unittest.TestCase):
         self.assertIn(".note", css)  # from the @import, inlined
         self.assertIn("max-width: 600px", css)  # the page's own media query, kept
         self.assertIn(".inline-rule", css)  # the page's own <style>
-        self.assertNotIn("@import", css)
+        # The one @import left is the sheet no plain fetch can get (below).
+        self.assertEqual([i for i in re.findall(r"@import[^;]*;", css) if "browser-only.css" not in i], [], css)
         font = re.search(r'url\("?([^")]*jost-400[^")]*)"?\)', css)
         self.assertTrue(font, css)
         self.assertTrue(font.group(1).startswith("t-default-snapshot-assets/"), font.group(1))
@@ -1164,7 +1173,7 @@ class Snapshot(unittest.TestCase):
             self.assertTrue(url.startswith("t-default-snapshot-assets/") and (self.out / url).is_file(), img["srcset"])
         self.assertNotIn("<base", self.html)
         snap = self.data["results"][0]["measures"]["snapshot"]
-        self.assertEqual(set(snap), {"file", "bytes"})
+        self.assertEqual(set(snap), {"file", "bytes", "external"})
 
     def test_snapshot_rasterizes_canvas_and_keeps_svg(self):
         self.assertEqual(self.parsed.find("canvas"), [])
@@ -1204,12 +1213,29 @@ const { chromium } = require(process.env.PROOFS_PLAYWRIGHT);
             for a in res["assets"]:
                 self.assertTrue(a.startswith("x-snapshot-assets/"), a)
                 self.assertTrue((Path(tmp) / a).is_file(), a)
-            self.assertEqual(res["external"], [self.base.replace("127.0.0.1", "localhost") + "/snapshot/far.css"])
+            self.assertEqual(res["external"], [self.base.replace("127.0.0.1", "localhost") + "/snapshot/browser-only.css"])
 
-    def test_snapshot_keeps_cross_origin_sheet_as_link(self):
-        far = self.base.replace("127.0.0.1", "localhost") + "/snapshot/far.css"
-        links = [a for t, a in self.parsed.tags if t == "link" and a.get("rel") == "stylesheet"]
-        self.assertEqual([a.get("href") for a in links], [far])
+    def test_snapshot_inlines_a_cross_origin_sheet_it_can_fetch(self):
+        # A published page loads no stylesheet from another site, so a sheet the page could not
+        # read is fetched node-side and inlined; one that cannot be fetched stays an @import of
+        # its absolute URL and is listed in measures.json.
+        other = self.base.replace("127.0.0.1", "localhost") + "/snapshot/"
+        links = [a for t, a in self.parsed.tags if t == "link" and "stylesheet" in (a.get("rel") or "")]
+        self.assertEqual(links, [])
+        css = "\n".join(self.parsed.styles)
+        self.assertIn(".far { color: #fff; background: #7a2048;", css)
+        self.assertNotIn("far.css", self.html)
+        self.assertIn('@import url("%sbrowser-only.css");' % other, css)
+        snap = self.data["results"][0]["measures"]["snapshot"]
+        self.assertEqual(snap["external"], [other + "browser-only.css"])
+
+    def test_snapshot_publishes_no_token_target_or_nested_srcdoc(self):
+        for secret in ("SECRET-CSRF-META", "SECRET-FORM-TOKEN", "csrf-token", "csrf-param", "parent.__nested", "srcdoc"):
+            self.assertNotIn(secret, self.html)
+        self.assertEqual(self.parsed.find("input", name="authenticity_token")[0]["value"], "")
+        self.assertNotIn("target", self.parsed.find("a", id="away")[0])
+        self.assertNotIn("target", self.parsed.find("form", id="token-form")[0])
+        self.assertEqual(len(self.parsed.find("iframe", id="nested")), 1)
 
     def render(self, width):
         shot = self.out / f"snapshot-{width}.png"

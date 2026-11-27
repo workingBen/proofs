@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="csrf-param" content="authenticity_token">
+<meta name="csrf-token" content="SECRET-CSRF-META">
 <title>Snapshot fixture</title>
 <link rel="stylesheet" href="css/site.css">
 <link rel="stylesheet" href="css/print.css" media="print">
@@ -14,6 +16,12 @@
   far.rel = 'stylesheet';
   far.href = 'http://localhost:' + location.port + '/snapshot/far.css';
   document.head.appendChild(far);
+  // One a browser gets but a plain fetch does not (the server checks Sec-Fetch-Dest), so the
+  // snapshot cannot inline it and lists it as external.
+  var only = document.createElement('link');
+  only.rel = 'stylesheet';
+  only.href = 'http://localhost:' + location.port + '/snapshot/browser-only.css';
+  document.head.appendChild(only);
 </script>
 </head>
 <body>
@@ -29,6 +37,9 @@
 <p class="inline-rule">From an inline style element.</p>
 <p id="probe" class="media-probe inline-rule">Media probe</p>
 <p class="far">From the other origin.</p>
+<p class="inline-rule"><a id="away" href="/elsewhere" target="_top">A link that leaves</a></p>
+<form id="token-form" action="/session" target="_top"><input type="hidden" name="authenticity_token" value="SECRET-FORM-TOKEN"></form>
+<iframe id="nested" width="1" height="1" style="border:0" srcdoc="<script>parent.__nested = 1</script>"></iframe>
 <script>
   var c = document.getElementById('chart').getContext('2d');
   c.fillStyle = '#c03';

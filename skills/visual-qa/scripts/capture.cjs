@@ -49,8 +49,9 @@
 // --snapshot also writes, for each page at 1280 (so only when 1280 is among the sizes), a
 // standalone copy of the rendered page: <name>-<state>-snapshot.html and its -snapshot-assets/
 // folder, the base design-review's Refine mode builds on (snapshot.cjs says what it keeps).
-// measures.json names it on the page's 1280 entry: "snapshot": { file, bytes } (file null and an
-// error when it failed). Without the flag nothing about the run changes.
+// measures.json names it on the page's 1280 entry: "snapshot": { file, bytes, external } (file
+// null and an error when it failed); external lists the stylesheets from another site that could
+// not be fetched and so are still loaded from it (a published page will not load them). Without the flag nothing about the run changes.
 // Prints only the summary table, so the run stays small in context.
 
 const fs = require('fs');
@@ -1032,7 +1033,7 @@ async function main() {
         if (snapshot && label === '1280') {
           try {
             const s = await snapshotPage(page, out, `${prefix}${p.name}-${state}`);
-            snap = { file: s.file, bytes: s.bytes };
+            snap = { file: s.file, bytes: s.bytes, external: s.external };
           } catch (e) {
             snap = { file: null, bytes: 0, error: e.message.split('\n')[0] };
           }

@@ -13,9 +13,12 @@
 //   - every readable stylesheet (linked, <style>, @import, rules a script inserted) inlined as a
 //     <style> from its cssRules, in place, so the cascade order and the page's own media queries
 //     are unchanged (a 390 frame shows the phone layout);
-//   - a stylesheet from another origin cannot be read (cssRules throws), so it stays a <link> (or
-//     an @import) to its absolute URL and is listed in `external`: dropping it would silently
-//     lose its rules;
+//   - a stylesheet from another origin cannot be read in the page (cssRules throws), so its text
+//     is fetched node-side with the page's cookies (as assets are), its url()s resolved against
+//     its own URL and fetched into the assets folder, its @imports followed, and it is inlined in
+//     the same place: a published page loads no stylesheet from another site but Google Fonts.
+//     One that cannot be fetched stays an @import of its absolute URL and is listed in
+//     `external` (dropping it would silently lose its rules);
 //   - each url() in CSS and style attributes, and each img/source src and srcset, video poster
 //     and svg <image> target, fetched with the page's own cookies into the assets folder and
 //     referenced by a plain relative path ("<name>-snapshot-assets/<hash>-<file>"), no <base>.
@@ -26,7 +29,10 @@
 //     svg <use> of another file gets the element it names copied in (see below);
 //   - no <script>, <noscript>, on* attribute or javascript: URL, no <base>, no meta refresh or
 //     CSP (an inline-style CSP would block the inlined sheets), and a single <meta charset=utf-8>;
-//   - typed form values written back into the markup; other links made absolute.
+//   - typed form values written back into the markup; other links made absolute, with no
+//     `target` (a tap must not navigate the review page); hidden inputs blanked and the
+//     csrf-token and csrf-param metas dropped, so no session token is published;
+//   - no srcdoc on a nested <iframe>: its HTML never went through the stripping above.
 // `assets` lists the files written, relative to outDir; `bytes` is the page plus its assets.
 // Not kept: open or closed shadow roots (web components render empty), blob: URLs, and CSS
 // properties Chrome drops when it parses a sheet (another engine's prefixes).
@@ -40,7 +46,10 @@ const { fileURLToPath } = require('url');
 async function collectSnapshot() {
   const urls = [];
   const seen = new Map();
-  const external = [];
+  // Sheets this page cannot read (another origin, so cssRules throws): each leaves a
+  // __PROOFS_SHEET_<i>__ token where its rules go, and snapshotPage fetches its text node-side.
+  const sheets = [];
+  const sheetToken = (href, media) => { sheets.push({ href, media: media || '' }); return `__PROOFS_SHEET_${sheets.length - 1}__`; };
   const base = document.baseURI;
   const resolve = (u, from) => { try { return new URL(u, from).href; } catch (_) { return null; } };
   // ctx 'a': the token lands in an attribute; 's': in a <style> element's text.
@@ -72,10 +81,8 @@ async function collectSnapshot() {
         if (!r.styleSheet) continue; // it never loaded, so it never applied
         const href = r.styleSheet.href || resolve(r.href, from);
         const inner = sheetText(r.styleSheet, href, imports);
-        if (inner == null) {
-          imports.push(`@import url("${href}")${media ? ` ${media}` : ''};`);
-          if (!external.includes(href)) external.push(href);
-        } else out.push(media ? `@media ${media} {\n${inner}\n}` : inner);
+        if (inner == null) imports.push(sheetToken(href, media));
+        else out.push(media ? `@media ${media} {\n${inner}\n}` : inner);
       } else out.push(rewriteCss(r.cssText, from, 's'));
     }
     return out.join('\n');
@@ -96,14 +103,15 @@ async function collectSnapshot() {
     const imports = [];
     const from = sheet.href || base;
     const text = sheetText(sheet, from, imports);
+    const style = document.createElement('style');
     if (text == null) {
-      if (el.tagName === 'LINK') {
-        el.setAttribute('href', owner.href);
-        if (!external.includes(owner.href)) external.push(owner.href);
-      }
+      // Its rules go here once fetched; the sheet's media stays on the <style>, as below.
+      if (el.tagName !== 'LINK' || !owner.href) continue;
+      if (sheet.media && sheet.media.mediaText) style.setAttribute('media', sheet.media.mediaText);
+      style.textContent = sheetToken(owner.href, '');
+      el.replaceWith(style);
       continue;
     }
-    const style = document.createElement('style');
     // The sheet's MediaList, not owner.media: on <link> and <style> that is a plain string, so
     // .mediaText was always undefined and a print or max-width sheet applied everywhere.
     if (sheet.media && sheet.media.mediaText) style.setAttribute('media', sheet.media.mediaText);
@@ -137,7 +145,8 @@ async function collectSnapshot() {
     el.replaceWith(img);
   });
 
-  // Form state the markup does not carry (typed by an action, set by a script).
+  // Form state the markup does not carry (typed by an action, set by a script). Hidden inputs are
+  // blanked below: they hold tokens (authenticity_token), never anything a reader sees.
   liveAll.forEach((el, i) => {
     const c = cloneAll[i];
     if (!c || !clone.contains(c)) return;
@@ -199,8 +208,9 @@ async function collectSnapshot() {
     (clone.querySelector('body') || clone).appendChild(holder);
   }
 
-  // No code, and nothing that navigates, redirects or blocks the inlined sheets.
-  clone.querySelectorAll('script, noscript, base, meta[http-equiv], meta[charset], '
+  // No code, and nothing that navigates, redirects or blocks the inlined sheets; no session token.
+  clone.querySelectorAll('input[type="hidden" i]').forEach((el) => el.setAttribute('value', ''));
+  clone.querySelectorAll('script, noscript, base, meta[http-equiv], meta[charset], meta[name="csrf-token" i], meta[name="csrf-param" i], '
     + 'link[rel~="preload"], link[rel~="modulepreload"], link[rel~="prefetch"], link[rel~="preconnect"], link[rel~="dns-prefetch"]')
     .forEach((el) => el.remove());
   const parseSrcset = (s) => {
@@ -254,9 +264,16 @@ async function collectSnapshot() {
       swap('poster'); absolute('src');
     } else if (tag === 'image') {
       swap('href'); swap('xlink:href'); // the #fragment is kept after the asset path
-    } else if (tag === 'a' || tag === 'area' || tag === 'link') absolute('href');
-    else if (tag === 'form') absolute('action');
-    else if (['iframe', 'embed', 'audio', 'source', 'track'].includes(tag)) absolute('src');
+    } else if (tag === 'a' || tag === 'area' || tag === 'link') {
+      absolute('href');
+      if (tag !== 'link') el.removeAttribute('target'); // target="_top" would navigate the review page
+    } else if (tag === 'form') { absolute('action'); el.removeAttribute('target'); }
+    else if (tag === 'iframe') {
+      // A nested srcdoc is a whole page of HTML the script and on* stripping never saw, and it
+      // would be same-origin with the review page: dropped, so the frame loads its src or nothing.
+      el.removeAttribute('srcdoc');
+      absolute('src');
+    } else if (['embed', 'audio', 'source', 'track'].includes(tag)) absolute('src');
   }
   const head = clone.querySelector('head');
   if (head) {
@@ -266,7 +283,7 @@ async function collectSnapshot() {
   }
   const dt = document.doctype;
   const doctype = dt ? `<!DOCTYPE ${dt.name}${dt.publicId ? ` PUBLIC "${dt.publicId}"` : ''}${dt.systemId ? `${dt.publicId ? '' : ' SYSTEM'} "${dt.systemId}"` : ''}>\n` : '';
-  return { html: doctype + clone.outerHTML + '\n', urls, external, canvases };
+  return { html: doctype + clone.outerHTML + '\n', urls, sheets, canvases };
 }
 
 const TYPE_EXT = {
@@ -299,6 +316,59 @@ async function fetchAsset(page, url) {
 
 const escapeAttr = (s) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
 
+// How deep @imports inside a fetched sheet are followed.
+const IMPORT_DEPTH = 4;
+const IMPORT_RULE = /@import\s+(?:url\(\s*(['"]?)([^'")]*)\1\s*\)|(['"])([^'"]*)\3)\s*([^;]*);/gi;
+
+// A sheet the page could not read (another origin), fetched node-side with the page's cookies,
+// the way assets are: { text, imports } with every url() resolved against the sheet's own URL
+// and fetched through `asset` (the relative path, or null to keep the absolute URL), and each
+// readable @import inlined in place (inside @media when it names one; its layer(...) and
+// supports(...) are not carried, as for a readable sheet). imports holds the @import rules that
+// could not be fetched, absolute, to hoist to the top of the <style>; `external` gets their URLs.
+// null when the sheet itself cannot be fetched.
+async function inlineSheet(page, href, asset, external, depth = 0) {
+  const got = await fetchAsset(page, href);
+  if (!got) return null;
+  let text = got.body.toString('utf8').replace(/^\uFEFF/, '').replace(/@charset\s+(['"])[^'"]*\1\s*;/gi, '');
+  const imports = [];
+  const found = [];
+  text = text.replace(IMPORT_RULE, (m, q1, u1, q2, u2, media) => {
+    found.push({ m, href: new URL(u1 != null ? u1 : u2, href).href, media: media.trim() });
+    return `__PROOFS_IMPORT_${found.length - 1}__`;
+  });
+  const inner = [];
+  for (const f of found) {
+    const sub = depth < IMPORT_DEPTH ? await inlineSheet(page, f.href, asset, external, depth + 1) : null;
+    if (!sub) {
+      imports.push(`@import url("${f.href}")${f.media ? ` ${f.media}` : ''};`);
+      if (!external.includes(f.href)) external.push(f.href);
+      inner.push('');
+      continue;
+    }
+    imports.push(...sub.imports);
+    const media = f.media.replace(/\b(layer|supports)\([^)]*\)\s*/gi, '').replace(/^layer\b\s*/i, '').trim();
+    inner.push(media ? `@media ${media} {\n${sub.text}\n}` : sub.text);
+  }
+  text = text.replace(/__PROOFS_IMPORT_(\d+)__/g, (m, i) => inner[i]);
+  const urls = [];
+  text.replace(/url\(\s*(['"]?)([^'")]*)\1\s*\)/gi, (m, q, u) => { urls.push(u); return m; });
+  const rel = new Map();
+  for (const u of urls) {
+    const t = u.trim();
+    if (!t || /^(data|blob|about|javascript):/i.test(t) || t.startsWith('#') || rel.has(t)) continue;
+    let abs;
+    try { abs = new URL(t, href).href; } catch (_) { continue; }
+    const hash = abs.indexOf('#');
+    const bare = hash >= 0 ? abs.slice(0, hash) : abs;
+    const r = /^(https?|file):/i.test(bare) ? await asset(bare) : null;
+    rel.set(t, (r || bare) + (hash >= 0 ? abs.slice(hash) : ''));
+  }
+  text = text.replace(/url\(\s*(['"]?)([^'")]*)\1\s*\)/gi, (m, q, u) => (rel.has(u.trim()) ? `url("${rel.get(u.trim())}")` : m));
+  // Its text goes inside a <style>, which only "</style" can end.
+  return { text: text.replace(/<\/(style)/gi, '<\\/$1'), imports };
+}
+
 async function snapshotPage(page, outDir, name) {
   const snap = await page.evaluate(collectSnapshot);
   const file = `${name}-snapshot.html`;
@@ -317,20 +387,45 @@ async function snapshotPage(page, outDir, name) {
     }
     return rel;
   };
+  // One fetch per URL, for the page's own references and the fetched sheets' alike.
+  const fetched = new Map();
+  const assetPath = async (url) => {
+    if (!fetched.has(url)) {
+      const got = await fetchAsset(page, url);
+      fetched.set(url, got ? write(assetName(url, got.type), got.body) : null);
+    }
+    return fetched.get(url);
+  };
   const paths = [];
-  for (const url of snap.urls) {
-    const got = await fetchAsset(page, url);
-    paths.push(got ? write(assetName(url, got.type), got.body) : null);
+  for (const url of snap.urls) paths.push(await assetPath(url));
+  // Sheets from another origin: inlined like the page's own, since a published page loads
+  // no stylesheet from another site but Google Fonts. One that cannot be fetched stays an
+  // @import of its absolute URL and is listed in `external`.
+  const external = [];
+  const sheets = [];
+  for (const sh of snap.sheets) {
+    const got = await inlineSheet(page, sh.href, assetPath, external);
+    if (!got) {
+      if (!external.includes(sh.href)) external.push(sh.href);
+      sheets.push({ imports: [`@import url("${sh.href}")${sh.media ? ` ${sh.media}` : ''};`], text: '' });
+    } else sheets.push({ imports: got.imports, text: sh.media ? `@media ${sh.media} {\n${got.text}\n}` : got.text });
   }
   const canvasPaths = snap.canvases.map((data, i) =>
     write(`canvas-${i + 1}.png`, Buffer.from(data.slice(data.indexOf(',') + 1), 'base64')));
   const html = snap.html
     .replace(/__PROOFS_ASSET_([as])_(\d+)__/g, (m, ctx, i) => paths[i] || (ctx === 'a' ? escapeAttr(snap.urls[i]) : snap.urls[i]))
-    .replace(/__PROOFS_CANVAS_(\d+)__/g, (m, i) => canvasPaths[i]);
+    .replace(/__PROOFS_CANVAS_(\d+)__/g, (m, i) => canvasPaths[i])
+    // Each <style> with a sheet token: the @imports left unfetched go first, where @import must be.
+    .replace(/(<style\b[^>]*>)([\s\S]*?)(<\/style>)/g, (m, open, body, close) => {
+      if (!body.includes('__PROOFS_SHEET_')) return m;
+      const hoist = [];
+      const text = body.replace(/__PROOFS_SHEET_(\d+)__/g, (t, i) => { hoist.push(...sheets[i].imports); return sheets[i].text; });
+      return open + [...hoist, text].join('\n') + close;
+    });
   fs.writeFileSync(path.join(outDir, file), html);
   bytes += Buffer.byteLength(html);
   if (!assets.length) fs.rmdirSync(dir);
-  return { file, assets, bytes, canvases: snap.canvases.length, external: snap.external };
+  return { file, assets, bytes, canvases: snap.canvases.length, external };
 }
 
 module.exports = { snapshotPage, collectSnapshot, assetName };

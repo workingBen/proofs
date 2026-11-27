@@ -55,6 +55,9 @@ body.rp { margin:0; background:var(--rp-bg); color:var(--rp-ink); font-family:va
 .rp-pill { margin-left:auto; color:var(--rp-soft); }
 .rp-body { margin:8px 0 14px; }
 .rp-history { opacity:.6; border:1px dashed var(--rp-rule); border-radius:10px; padding:12px 14px; margin-bottom:14px; }
+.rp-earlier { border:1px dashed var(--rp-rule); border-radius:10px; padding:10px 14px; margin-bottom:14px; color:var(--rp-soft); font-size:15.5px; }
+.rp-earlier p { margin:4px 0 0; }
+.rp-earlier-h { font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--rp-soft); }
 .rp-reason { background:var(--rp-sunk); border-radius:10px; padding:12px 14px; margin:14px 0; }
 .rp-reason b { display:block; font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--rp-faint); }
 

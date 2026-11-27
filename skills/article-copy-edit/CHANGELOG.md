@@ -1,5 +1,6 @@
 # Changelog
 
+- **1.6.0** (2026-11-27): Follow-up rounds start clean: an answer saved on last round's version of an item no longer pre-fills it (it shows read-only on the card as "Round 1: …", and `--answers` and Copy leave it out), while the same round reloaded or republished keeps every answer. Settled items move to the spec's `decided` list, folded under the open cards, instead of disappearing, and each round sets `project.round`.
 - **1.5.3** (2026-11-24): **Results first** (the maintainer's principle): nothing matters more than a result the user wants; save tokens by cutting waste, never by cutting a check, an option or a revise pass the result needs. Full text is rule 0 in `reference/house-rules.md`.
 - **1.5.2** (2026-11-23): Gives the exact build line with `--out .proofs/pages/<name>.html`, the one folder the optional `open` allow rule covers, so the page can be opened. A spec's asset path that is not found next to the spec is now tried from the working directory, and the error names both paths.
 - **1.5.1** (2026-11-22): Says to run `--smoke` every time: if it reports Playwright missing, run the one-line install it prints (no browser download) and run it again; if it still cannot run, say on the page and in chat that the self-check did not run. It no longer reads as optional when Playwright is absent.

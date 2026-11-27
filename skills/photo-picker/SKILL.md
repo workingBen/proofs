@@ -1,6 +1,6 @@
 ---
 name: photo-picker
-version: 1.3.4
+version: 1.3.5
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -75,7 +75,7 @@ Rebuild, verify and commit per the project's normal workflow.
 
 ### 5. Follow-up rounds on `REVISE` items
 
-Identical pattern to the other two tools: scope the new Artifact to only the still-open slots, carry the prior round's rejected candidates forward on each card (labeled "Round 1") alongside newly-sourced candidates ("Round 2"), rebuild and republish to the same URL, and re-run the full verification (including the image load check) before every republish.
+Identical pattern to the other two tools: scope the new Artifact to only the still-open slots, carry the prior round's rejected candidates forward on each card (labeled "Round 1") alongside newly-sourced candidates ("Round 2"), rebuild and republish to the same URL, and re-run the full verification (including the image load check) before every republish. Slots settled in an earlier round go in the spec's `decided` list, which the builder folds at the bottom under the open ones, and each round sets `project.round`; an answer saved on last round's version of a card never pre-fills it, and the same round reloaded keeps every answer (`../../reference/review-page.md`, "Follow-up rounds").
 
 ## Worked example
 

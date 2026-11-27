@@ -418,7 +418,11 @@ WIP_LINKS_TITLE = "Pages Claude is working on"
 def flat_sections(spec):
     mode, secs = spec["mode"], []
     if mode == "review":
-        return [{"items": spec.get("items", [])}]
+        secs = [{"items": spec.get("items", [])}]
+        if spec.get("decided"):
+            # Items settled in earlier rounds: folded at the bottom, under the open ones.
+            secs.append({"kind": "decided", "title": spec.get("decided_heading"), "items": spec["decided"]})
+        return secs
     if spec.get("questions"):
         secs.append({"kind": "questions", "title": spec.get("questions_heading"), "items": spec["questions"]})
     if spec.get("links"):
@@ -466,6 +470,9 @@ def sections_of(spec):
         secs = sorted(secs, key=lambda s: SESSION_ORDER.index(s["kind"]))
     elif mode == "questions":
         secs = sorted(secs, key=lambda s: s["kind"] != "questions")
+    elif mode == "review":
+        # Open items first: what was decided in an earlier round always goes to the bottom.
+        secs = sorted(secs, key=lambda s: s["kind"] == "decided")
     return secs
 
 
@@ -660,8 +667,10 @@ def render_review(sec, ctx):
                             % (it["id"], it["selected"], ", ".join(keys) or "it has none"))
         resolve_before(it, ctx.spec.get("_base") or Path.cwd())
         check_designer_fields(it)
+        rnd = item_round(it, ctx.spec)
         out.append(review_item(it, dec, ctx.colors))
         items.append({"id": it["id"], "num": it["num"], "label": it["label"], "category": it.get("category"),
+                      "rev": item_rev(it, rnd), "round": rnd,
                       "variants": [{"key": v["key"], "label": v["label"], "name": v.get("name", ""),
                                     "recommended": bool(v.get("recommended"))}
                                    for v in it.get("variants") or []],
@@ -673,6 +682,26 @@ def render_review(sec, ctx):
     js = {"items": items, "decisions": {k: dec.get(k) for k in
                                         ("buttons", "pending", "mark_read", "comment_always", "works_as_designed")}}
     return out, js
+
+
+def item_round(it, spec):
+    """The round an item is shown in: its own `round`, else the spec's `project.round`."""
+    r = it.get("round", (spec.get("project") or {}).get("round"))
+    return None if r is None or r == "" else str(r)
+
+
+def item_rev(it, rnd):
+    """The item's fingerprint, saved with every answer to it. The page restores a saved
+    answer only onto the item it was given on: when the proposal changes (its label, body
+    or options) or the round does, the old answer shows as an earlier round's, read-only,
+    and never pre-fills the new one. Commentary (history, reason, notes, scores) is left
+    out, so a reload or republish of the same round keeps every answer. `rev` in the spec
+    pins it by hand."""
+    if it.get("rev"):
+        return str(it["rev"])
+    what = {"label": it.get("label"), "body": it.get("body_html") or "", "round": rnd,
+            "variants": [[v.get("key"), v.get("name") or "", v.get("html") or ""] for v in it.get("variants") or []]}
+    return hashlib.sha1(json.dumps(what, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:10]
 
 
 def notes_box(qid, label):
@@ -1342,6 +1371,8 @@ def review_item(it, dec, colors):
          '<span class="rp-pill" data-pill>Pending</span></header>' % (esc(it["num"]), esc(it["label"]), loc, cat, badge)]
     if it.get("history_html"):
         h.append('<div class="rp-history">%s</div>' % it["history_html"])
+    # Filled by engine.js with the reader's answers from earlier rounds of this item.
+    h.append('<div class="rp-earlier" data-earlier hidden></div>')
     if it.get("body_html"):
         h.append('<div class="rp-body">%s</div>' % it["body_html"])
     scored = bool(it.get("judged_by")) or any(v.get("scores") for v in variants)

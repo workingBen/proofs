@@ -2976,6 +2976,15 @@ class RefineBaseRewrites(unittest.TestCase):
         self.assertIn("AAAA/12vh+BBBB", out)
         self.assertIn('style="height:calc(10 * var(--rp-vh, 1vh)); background:url(&quot;data:image/png;base64,QQ12vhQQ&quot;)"', out)
 
+    def test_vh_rewrite_never_touches_a_selector_or_property_registration(self):
+        css = ('.max-h-\\[min\\(50vh\\2c 400px\\)\\]{max-height:min(50vh,400px)}.x\\31 0vh{height:10vh}'
+               '@property --h{syntax:"<length>";inherits:false;initial-value:100vh}.a:hover{top:2vh}')
+        out = review_page._vh_css(css)
+        self.assertIn(".max-h-\\[min\\(50vh\\2c 400px\\)\\]{max-height:min(calc(50 * var(--rp-vh, 1vh)),400px)}", out)
+        self.assertIn(".x\\31 0vh{height:calc(10 * var(--rp-vh, 1vh))}", out)
+        self.assertIn("initial-value:100vh}", out)
+        self.assertIn(".a:hover{top:calc(2 * var(--rp-vh, 1vh))}", out)
+
     def test_nested_iframe_srcdoc_is_dropped(self):
         doc = '<p>x</p><iframe src="https://e.example/a" srcdoc="&lt;script&gt;parent.x=1&lt;/script&gt;" width="9"></iframe>'
         out = review_page.strip_nested_srcdoc(doc)

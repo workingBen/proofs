@@ -1769,12 +1769,10 @@ def refine_base(it, base, cache):
     return strip_nested_srcdoc(vh_to_var(doc))
 
 
-def _vh_css(css):
-    """Each viewport-height length in css's declarations as a multiple of --rp-vh (falling back
-    to the unit itself, so the base opened as its own page lays out as before). Left as written:
-    quoted strings (content: "fits 100vh"), url(...) bodies (a data: URI's base64 can hold
-    "12vh"), comments, and at-rule preludes up to their { or ; (@media (min-height: 50vh): var()
-    is not allowed in a media query, so a rewrite would make it never match)."""
+def _vh_value(css):
+    """css (a declaration's value) with each viewport-height length as a multiple of --rp-vh,
+    falling back to the unit itself, so the base opened as its own page lays out as before.
+    Quoted strings, url(...) bodies (a data: URI's base64 can hold "12vh") and comments stay."""
     out, plain, i, n = [], [], 0, len(css)
 
     def flush():
@@ -1794,8 +1792,6 @@ def _vh_css(css):
             while j < n and css[j] != ")":
                 j = _css_skip(css, j) if css[j] in "\"'\\" else j + 1
             j = min(j + 1, n)
-        elif c == "@":
-            j = _css_scan(css, i, "{;")
         else:
             plain.append(c)
             i += 1
@@ -1807,19 +1803,50 @@ def _vh_css(css):
     return "".join(out)
 
 
+def _vh_decl(seg):
+    """One declaration (prop: value): only the value is rewritten."""
+    k = _css_scan(seg, 0, ":")
+    return seg if k >= len(seg) or seg.lstrip().startswith("@") else seg[:k + 1] + _vh_value(seg[k + 1:])
+
+
+def _vh_css(css, declarations=False):
+    """css with each viewport-height length in its declarations' values as a multiple of --rp-vh
+    (_vh_value). Selectors and at-rule preludes are never touched (an escaped Tailwind class such
+    as .max-h-\\[min\\(50vh\\2c 400px\\)\\], or @media (min-height: 50vh), where var() is not allowed),
+    nor anything inside @property (its initial-value must stay a computationally independent
+    length). declarations: css is a style attribute's value, a list of declarations."""
+    out, i, n = [], 0, len(css)
+    stack = [True] if declarations else []   # per open block: whether its declarations are rewritten
+    while i < n:
+        j = _css_scan(css, i, "{;}")
+        seg, ch = css[i:j], css[j] if j < n else ""
+        if ch == "{":
+            prelude = _css_prelude(_css_uncomment(seg)).lower()
+            stack.append(not prelude.startswith("@property") and (stack[-1] if stack else True))
+            out.append(seg + ch)
+        else:
+            out.append(_vh_decl(seg) if stack and stack[-1] else seg)
+            out.append(ch)
+            if ch == "}" and stack and not (declarations and len(stack) == 1):
+                stack.pop()
+        i = j + 1
+    return "".join(out)
+
+
 def vh_to_var(doc):
     """The base with every vh, svh, lvh and dvh in its <style> elements and style attributes
     written as calc(N * var(--rp-vh, 1vh)). Inside a frame, 100vh is the frame's own height,
     and the frame takes the page's height: a min-height: 100vh hero with content below it grew
     without bound (21,192 to 81,980 px in 1.5 s). The engine and fidelity.cjs renderBase set
-    --rp-vh to the capture's viewport height / 100 at each width. Known limit: a max-height
-    media query still sees the frame's full height."""
+    --rp-vh to the capture's viewport height / 100 at each width. Only declarations' values are
+    rewritten (_vh_css). Known limits: vmin and vmax are not rewritten, and max-height,
+    min-height, orientation and aspect-ratio media queries still see the frame's full height."""
     doc = re.sub(r"(<style\b[^>]*>)(.*?)(</style\s*>)", lambda m: m.group(1) + _vh_css(m.group(2)) + m.group(3),
                  doc, flags=re.S | re.I)
     def attr(m):
         q, raw = m.group(2)[0], m.group(2)[1:-1]
         val = html.unescape(raw)  # &quot; inside a value is a CSS string's quote
-        new = _vh_css(val)
+        new = _vh_css(val, declarations=True)
         if new == val:
             return m.group(0)
         return m.group(1) + q + new.replace("&", "&amp;").replace(q, "&quot;" if q == '"' else "&#39;") + q

@@ -1749,12 +1749,15 @@ def render_refine(it, ctx) -> str:
                      % (cls, label, _score_pairs(it[key], SCORE_DIMS)))
     if it.get("judged_by"):
         p.append('<div class="rp-judged">%s</div>' % JUDGED_BY[it["judged_by"]])
-    doc = esc(it["_doc"])
+    # The snapshot is on the page once, as a JSON string the engine gives both frames as
+    # their srcdoc. Every "<" is escaped, so a "</script>" in the page's text cannot end it.
+    p.append('<script type="application/json" id="rp-rc-base-%s">%s</script>'
+             % (esc(iid), json.dumps(it["_doc"], ensure_ascii=False).replace("<", "\\u003c")))
     p.append('<div class="rp-rc-frames">')
     for width, caption in REFINE_WIDTHS:
         p.append('<figure class="rp-rc-fig" data-rc-fig="%d"><figcaption>%s</figcaption><div class="rp-rc-box">'
-                 '<iframe class="rp-rc-frame" data-rc-width="%d" width="%d" title="The page with your picks, %s" '
-                 'srcdoc="%s"></iframe></div></figure>' % (width, caption, width, width, caption, doc))
+                 '<iframe class="rp-rc-frame" data-rc-width="%d" width="%d" title="The page with your picks, %s">'
+                 '</iframe></div></figure>' % (width, caption, width, width, caption))
     p.append("</div></div>")
     return "\n".join(h + ["\n".join(p)])
 
@@ -1838,6 +1841,12 @@ def check(path):
             spec = json.loads(m.group(1))
         except ValueError as e:
             errs.append("rp-spec is not valid JSON: %s" % e)
+    for rid, base in re.findall(r'<script type="application/json" id="(rp-rc-base-[^"]+)">(.*?)</script>', text, re.S):
+        try:
+            if not isinstance(json.loads(base), str):
+                raise ValueError("not a string")
+        except ValueError as e:
+            errs.append("%s is not valid JSON: %s" % (rid, e))
     title = re.search(r"<title>(.*?)</title>", text, re.S)
     if not title or not title.group(1).strip():
         errs.append("page has no <title>")

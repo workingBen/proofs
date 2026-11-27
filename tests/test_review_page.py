@@ -775,8 +775,12 @@ class Refine(unittest.TestCase):
         return r.stdout
 
     def frames(self, text):
-        found = re.findall(r'<iframe class="rp-rc-frame" data-rc-width="(\d+)"[^>]*?\ssrcdoc="([^"]*)"', text)
-        return [(w, html.unescape(doc)) for w, doc in found]
+        """Each frame's width and the document the engine gives it: the page's one embedded
+        copy of the snapshot (the frames carry no srcdoc of their own)."""
+        widths = re.findall(r'<iframe class="rp-rc-frame" data-rc-width="(\d+)"', text)
+        m = re.search(r'<script type="application/json" id="rp-rc-base-home">(.*?)</script>', text, re.S)
+        self.assertTrue(m, "no embedded snapshot")
+        return [(w, json.loads(m.group(1))) for w in widths]
 
     def card(self, text, cid):
         m = re.search(r'<article class="rp-item"[^>]*data-rc-change="%s".*?</article>' % re.escape(cid), text, re.S)
@@ -876,14 +880,26 @@ class Refine(unittest.TestCase):
         page = self.built()
         self.assertEqual(review_page.check(page), [])
         text = page.read_text()
-        raw = re.findall(r'\ssrcdoc="([^"]*)"', text)
-        self.assertEqual(len(raw), 2)
-        for r in raw:
-            self.assertNotIn("<", r)
+        self.assertNotIn("srcdoc=", text)
+        raw = re.search(r'<script type="application/json" id="rp-rc-base-home">(.*?)</script>', text, re.S).group(1)
+        self.assertNotIn("<", raw)
         self.assertEqual(len(review_page.SCRIPT_RX.findall(text)), 1)
         for _, doc in self.frames(text):
             self.assertIn('print("&lt;/script&gt;") # it\'s "quoted"</pre>', doc)
             self.assertIn('title="a &quot;quoted&quot; title with </script> in it"', doc)
+
+    @unittest.skipUnless(NODE, "node is not installed")
+    def test_refine_snapshot_is_embedded_once(self):
+        page = self.built()
+        text = page.read_text()
+        # Text only the snapshot has, and one of its inlined assets: each once on the page.
+        self.assertEqual(text.count("web-2"), 1)
+        self.assertEqual(text.count("print("), 1)
+        self.assertEqual(text.count('url(\\"data:image/svg+xml;base64,'), 1)
+        self.assertEqual(review_page.check(page), [])
+        # A page whose embedded snapshot is not JSON fails the check.
+        page.write_text(text.replace('id="rp-rc-base-home">"', 'id="rp-rc-base-home">{', 1))
+        self.assertIn("rp-rc-base-home is not valid JSON", "\n".join(review_page.check(page)))
 
     def test_refine_rejects_more_than_eight_changes(self):
         spec = self.spec()
@@ -1809,6 +1825,259 @@ const { launchChromium } = require(process.argv[3]);
             self.assertIn("Q why (raised r1) | Why?\n  -> because\n", res["export"])
             self.assertNotIn("UNANSWERED", res["export"])
             self.assertNotIn("note:", res["export"])
+
+
+
+# Drives the Refine preview in real Chromium. The db runtime mock is the one the answers-db
+# tests use (tests/test_answers_db.py's install()), spliced in by RefineBrowser.
+REFINE_DRIVE = r"""
+const { chromium } = require(process.argv[2]);
+const { launchChromium } = require(process.argv[3]);
+const file = "file://" + process.argv[4];
+/*INSTALL*/
+(async () => {
+  const browser = await launchChromium(chromium, process.env);
+  const errors = [];
+  const out = {};
+  async function open(opts, seed, runtime, shared) {
+    const ctx = shared || await browser.newContext(opts);
+    const page = await ctx.newPage();
+    page.on("pageerror", (e) => errors.push(e.message));
+    if (runtime) await page.addInitScript(install, { seed, runtime });
+    await page.goto(file);
+    await ready(page);
+    return { ctx, page };
+  }
+  // Both frames loaded and painted: the engine marks each frame once its layers are set.
+  const ready = (page) => page.waitForFunction(() => {
+    const f = document.querySelectorAll(".rp-rc-frame");
+    return f.length === 2 && Array.prototype.every.call(f, (x) => x.dataset.rcReady === "1");
+  }, null, { timeout: 15000 });
+  // What each frame shows right now, keyed by its width.
+  const look = (page) => page.evaluate(() => {
+    const r = {};
+    document.querySelectorAll(".rp-rc-frame").forEach((f) => {
+      const d = f.contentDocument, cs = (sel, prop) => getComputedStyle(d.querySelector(sel))[prop];
+      r[f.dataset.rcWidth] = {
+        rc: d.documentElement.getAttribute("data-rc"),
+        weight: cs(".total", "fontWeight"), alert: cs(".alert", "color"), badge: cs(".badge", "display"),
+        pad: cs(".rows td", "paddingTop"), h1: cs("h1", "color"),
+        icons: Array.prototype.map.call(d.querySelectorAll(".status-icon"), (i) => i.textContent),
+        swapped: d.querySelectorAll("template[data-rc-swap]").length };
+    });
+    return r;
+  });
+  const tap = async (page, id, choice) => {
+    await page.locator('[data-item="' + id + '"][data-choice="' + choice + '"]').click();
+    await page.waitForTimeout(50);
+  };
+  const state = (page) => page.evaluate(() => window.rpRefine.state());
+  const desk = { viewport: { width: 1440, height: 900 } };
+
+  // 1. Undecided: every layer off, recommended ones too.
+  const a = await open(desk);
+  out.start = { look: await look(a.page), state: await state(a.page) };
+  // 2. Yes on a change: on in both frames. No and Revise: off.
+  await tap(a.page, "bold-totals", "accept");
+  out.yes = { look: await look(a.page), state: await state(a.page) };
+  // The frame's height follows its page both ways: tighter rows, then back.
+  const tall = () => a.page.evaluate(() => Array.prototype.map.call(document.querySelectorAll(".rp-rc-frame"),
+    (f) => parseFloat(f.style.height)));
+  out.heights = [await tall()];
+  await tap(a.page, "tight-rows", "accept");
+  out.heights.push(await tall());
+  await tap(a.page, "tight-rows", "deny");
+  out.heights.push(await tall());
+  await tap(a.page, "alert-color", "revise");
+  out.noRevise = { look: await look(a.page), state: await state(a.page) };
+  // 3. The swap: on with Yes, restored with No.
+  await tap(a.page, "alert-color", "accept");
+  out.swapOn = { look: await look(a.page), state: await state(a.page) };
+  await tap(a.page, "alert-color", "deny");
+  out.swapOff = await look(a.page);
+  await tap(a.page, "alert-color", "accept");
+  // 4. Original and back.
+  await a.page.locator('[data-rc-view="original"]').click();
+  out.original = { look: await look(a.page), state: await state(a.page),
+                   pressed: await a.page.evaluate(() => Array.prototype.map.call(
+                     document.querySelectorAll("[data-rc-view]"), (b) => b.dataset.rcView + ":" + b.getAttribute("aria-pressed"))) };
+  await a.page.locator('[data-rc-view="picks"]').click();
+  out.back = { look: await look(a.page), state: await state(a.page) };
+  // 5. A frame that reloads gets its layers again.
+  await a.page.evaluate(() => new Promise((res) => {
+    const f = document.querySelector('.rp-rc-frame[data-rc-width="390"]');
+    f.addEventListener("load", () => setTimeout(res, 50), { once: true });
+    f.srcdoc = f.srcdoc;
+  }));
+  out.frameReload = await look(a.page);
+  // 6. The page reloads: saved answers come back into the preview.
+  await a.page.reload();
+  await ready(a.page);
+  out.pageReload = { look: await look(a.page), state: await state(a.page) };
+  // The desktop frame scaled to its column.
+  out.fit1440 = await a.page.evaluate(() => {
+    const f = document.querySelector('.rp-rc-frame[data-rc-width="1280"]'), fig = f.closest(".rp-rc-fig");
+    const r = f.getBoundingClientRect();
+    return { frame: r.width, col: fig.getBoundingClientRect().width, h: r.height,
+             box: f.parentNode.getBoundingClientRect().height };
+  });
+  await a.ctx.close();
+
+  // 7. Another device: the answers come from the page's database.
+  const w = await open(desk, {}, "db");
+  await tap(w.page, "alert-color", "accept");
+  await w.page.waitForTimeout(300);
+  const rows = await w.page.evaluate(() => window.__rows);
+  await w.ctx.close();
+  const b = await open(desk, rows, "db");
+  await b.page.waitForTimeout(400);
+  out.dbRestore = { look: await look(b.page), state: await state(b.page), rows: Object.keys(rows) };
+  await b.ctx.close();
+
+  // 8. At 390: no sideways scroll, and both frames fit the column.
+  const m = await open({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+  out.phone = await m.page.evaluate(() => {
+    const fr = {};
+    document.querySelectorAll(".rp-rc-frame").forEach((f) => {
+      const r = f.getBoundingClientRect(), col = f.closest(".rp-rc-fig").getBoundingClientRect();
+      fr[f.dataset.rcWidth] = { left: r.left, right: r.right, width: r.width, colLeft: col.left, colRight: col.right };
+    });
+    return { scrollWidth: document.documentElement.scrollWidth, frames: fr };
+  });
+  out.phoneLook = await look(m.page);
+  await m.ctx.close();
+  out.errors = errors;
+  await browser.close();
+  console.log(JSON.stringify(out));
+})().catch((e) => { console.log(JSON.stringify({ crash: String(e && e.stack || e) })); process.exit(1); });
+"""
+
+
+@unittest.skipUnless(NODE and playwright_dir(), "Playwright not found")
+class RefineBrowser(unittest.TestCase):
+    """The combined preview live in Chromium: Yes turns a change's layer on in both frames,
+    anything else leaves it off, the Original toggle, swaps, reloads, and the 390 fit (spec §4)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        tmp = Path(cls.tmp.name)
+        shutil.copytree(REFINE, tmp / "refine")
+        src, out = tmp / "refine" / "s.json", tmp / "page.html"
+        src.write_text((REFINE / "spec.json").read_text())
+        r = subprocess.run([sys.executable, str(BUILD), str(src), "--out", str(out)], capture_output=True, text=True,
+                           cwd=str(tmp / "refine"))
+        if r.returncode:
+            raise AssertionError(r.stdout + r.stderr)
+        install = re.search(r"^function install\(\{ seed, runtime \}\) \{.*?^\}$",
+                            (ROOT / "tests" / "test_answers_db.py").read_text(), re.S | re.M).group(0)
+        script = tmp / "drive.cjs"
+        script.write_text(REFINE_DRIVE.replace("/*INSTALL*/", install))
+        r = subprocess.run([NODE, str(script), playwright_dir(), str(RP / "launch.cjs"), str(out)],
+                           capture_output=True, text=True, timeout=300)
+        lines = r.stdout.strip().splitlines()
+        cls.res = json.loads(lines[-1]) if lines else {"crash": r.stderr}
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def setUp(self):
+        self.assertNotIn("crash", self.res, self.res.get("crash"))
+        self.assertEqual(self.res["errors"], [])
+
+    def both(self, look):
+        self.assertEqual(sorted(look), ["1280", "390"])
+        return [look["1280"], look["390"]]
+
+    def test_yes_turns_the_layer_on_in_both_frames(self):
+        for f in self.both(self.res["yes"]["look"]):
+            self.assertIn("bold-totals", f["rc"].split())
+            self.assertEqual(f["weight"], "700")
+        for f in self.both(self.res["start"]["look"]):
+            self.assertEqual(f["weight"], "400")
+        self.assertEqual(self.res["yes"]["state"], {"on": ["bold-totals"], "view": "picks"})
+
+    def test_no_and_pending_leave_it_off(self):
+        st = self.res["noRevise"]
+        for f in self.both(st["look"]):
+            self.assertEqual(f["rc"].split(), ["bold-totals"])      # tight-rows No, alert-color Revise
+            self.assertEqual(f["pad"], "12px")
+            self.assertEqual(f["alert"], "rgb(55, 65, 81)")
+            self.assertEqual(f["badge"], "inline")
+        self.assertEqual(st["state"], {"on": ["bold-totals"], "view": "picks"})
+
+    def test_undecided_cards_start_off_even_when_recommended(self):
+        st = self.res["start"]
+        for f in self.both(st["look"]):
+            self.assertEqual(f["rc"], "")
+            self.assertEqual(f["alert"], "rgb(55, 65, 81)")
+            self.assertEqual(f["icons"], ["!"])
+        self.assertEqual(st["state"], {"on": [], "view": "picks"})
+
+    def test_original_toggle_shows_no_layers_and_back(self):
+        orig = self.res["original"]
+        for f in self.both(orig["look"]):
+            self.assertEqual(f["rc"], "")
+            self.assertEqual((f["weight"], f["icons"], f["badge"]), ("400", ["!"], "inline"))
+        self.assertEqual(orig["state"]["view"], "original")
+        self.assertEqual(orig["pressed"], ["picks:false", "original:true"])
+        back = self.res["back"]
+        for f in self.both(back["look"]):
+            self.assertEqual(sorted(f["rc"].split()), ["alert-color", "bold-totals"])
+            self.assertEqual((f["weight"], f["icons"]), ("700", ["▲"]))
+        self.assertEqual(back["state"], {"on": ["bold-totals", "alert-color"], "view": "picks"})
+
+    def test_swap_replaces_the_element_while_on_and_restores_it_off(self):
+        for f in self.both(self.res["swapOn"]["look"]):
+            self.assertEqual(f["icons"], ["▲"])
+            self.assertEqual(f["badge"], "none")
+            self.assertEqual(f["alert"], "rgb(180, 35, 24)")
+            self.assertEqual(f["swapped"], 1)        # the template stays for the next time
+        for f in self.both(self.res["swapOff"]):
+            self.assertEqual(f["icons"], ["!"])
+            self.assertEqual(f["badge"], "inline")
+
+    def test_reload_restores_saved_answers_into_the_preview(self):
+        for key in ("pageReload", "dbRestore"):
+            look = self.res[key]["look"]
+            for f in self.both(look):
+                self.assertIn("alert-color", f["rc"].split(), key)
+                self.assertEqual(f["icons"], ["▲"], key)
+        self.assertEqual(self.res["pageReload"]["state"], {"on": ["bold-totals", "alert-color"], "view": "picks"})
+        self.assertEqual(self.res["dbRestore"]["state"], {"on": ["alert-color"], "view": "picks"})
+        self.assertIn("s1.alert-color", self.res["dbRestore"]["rows"])
+        # A frame that reloads on its own is painted again.
+        for f in self.both(self.res["frameReload"]):
+            self.assertEqual(sorted(f["rc"].split()), ["alert-color", "bold-totals"])
+            self.assertEqual(f["icons"], ["▲"])
+
+    def test_390_viewport_has_no_sideways_scroll_and_1280_frame_fits(self):
+        ph = self.res["phone"]
+        self.assertLessEqual(ph["scrollWidth"], 390)
+        for w, f in ph["frames"].items():
+            self.assertGreaterEqual(f["left"], f["colLeft"] - 0.5, w)
+            self.assertLessEqual(f["right"], f["colRight"] + 0.5, w)
+            self.assertLessEqual(f["right"], 390, w)
+        self.assertLess(ph["frames"]["1280"]["width"], 390)
+        # At 1440 the desktop frame is scaled to its column too, and its box is as tall as it is.
+        fit = self.res["fit1440"]
+        self.assertLessEqual(fit["frame"], fit["col"] + 0.5)
+        self.assertGreater(fit["h"], 50)
+        self.assertAlmostEqual(fit["box"], fit["h"] + 2, delta=2)
+
+    def test_frame_height_follows_its_page_down_and_back_up(self):
+        before, tight, back = self.res["heights"]
+        for i in range(2):
+            self.assertLess(tight[i], before[i])
+            self.assertEqual(back[i], before[i])
+
+    def test_each_frame_uses_its_own_width_layout(self):
+        for key in ("start", "back"):
+            look = self.res[key]["look"]
+            self.assertEqual(look["1280"]["h1"], "rgb(0, 128, 0)", key)
+            self.assertEqual(look["390"]["h1"], "rgb(200, 0, 0)", key)
+        self.assertEqual(self.res["phoneLook"]["390"]["h1"], "rgb(200, 0, 0)")
 
 
 

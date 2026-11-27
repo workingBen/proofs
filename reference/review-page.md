@@ -198,12 +198,21 @@ Each change:
 | `recommended` | `true` / `false` badge |
 | `location` | overrides the item's on this card |
 
-In the page, both frames are `<iframe class="rp-rc-frame" data-rc-width="1280|390"
-srcdoc="…">` holding the snapshot with one `<style data-rc-css>` (every change's
-scoped CSS) at the end of its `<head>`, and one `<template data-rc-swap="<id>"
-data-rc-target="<selector>">` per swap at the end of its `<body>`. A change is on
-while its id is in the frame's `<html data-rc>`. The preview has a
-`[data-rc-view="picks"|"original"]` toggle. Each change's JS item carries
+In the page, the snapshot is embedded once, as a JSON string in
+`<script type="application/json" id="rp-rc-base-<item id>">`, with one
+`<style data-rc-css>` (every change's scoped CSS) at the end of its `<head>` and one
+`<template data-rc-swap="<id>" data-rc-target="<selector>">` per swap at the end of
+its `<body>`. The engine gives it to both `<iframe class="rp-rc-frame"
+data-rc-width="1280|390">` frames as their `srcdoc`, so the frames are empty without
+JavaScript. After each frame's `load` (and again after any later load) the engine
+writes the Yes set to the frame's `<html data-rc>` (empty in the Original view), puts
+each on change's swaps in place (restoring the original element when it goes off),
+scales the frame to its column and marks it `data-rc-ready="1"`; it repaints on every
+answer change. Undecided and recommended changes start off. A change is on while its
+id is in the frame's `<html data-rc>`. The preview has a
+`[data-rc-view="picks"|"original"]` toggle, and `window.rpRefine.state()` returns
+`{on, view}`: the ids answered Yes, in change order, and `"picks"` or `"original"`.
+Each change's JS item carries
 `refine: <item id>` and `near_copy: false`: `--smoke` skips the mockup and near-copy
 checks for it.
 

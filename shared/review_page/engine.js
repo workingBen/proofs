@@ -650,7 +650,7 @@
         var read = one("[data-read]", card);
         if (read) { read.checked = !!r.r; card.classList.toggle("rp-is-read", !!r.r); }
       }
-      function paint() { all(".rp-item", root).forEach(paintItem); tally(); }
+      function paint() { all(".rp-item", root).forEach(paintItem); tally(); refineSync(); }
       root.__rpRefresh = paint;
       all(".rp-item", root).forEach(function (card) {
         var id = card.dataset.id;
@@ -912,6 +912,100 @@
     var root = rootOf(sec);
     if (root) SETUP[sec.kind](sec, root, secState(st, sec));
   });
+
+  /* ------------------------------------------------- the Refine preview (design-review)
+     Both frames get the page's one embedded snapshot as their srcdoc. A srcdoc load
+     replaces the frame's document, so a frame is painted only after its load event, and
+     again after any later load. Painting writes the Yes set (or nothing, in the Original
+     view) to the frame's <html data-rc>, and puts each on change's swaps in place. */
+  var rc = null;
+  function refineSync() { if (rc) rc.sync(); }
+  (function () {
+    var preview = one("[data-rc-preview]");
+    var baseEl = preview && document.getElementById("rp-rc-base-" + preview.dataset.rcPreview);
+    if (!baseEl) return;
+    var refine = preview.dataset.rcPreview;
+    var sec = S.sections.filter(function (s) {
+      return s.kind === "review" && s.items.some(function (i) { return i.refine === refine; });
+    })[0];
+    if (!sec) return;
+    var ids = sec.items.filter(function (i) { return i.refine === refine; }).map(function (i) { return i.id; });
+    var view = "picks";
+    var frames = all(".rp-rc-frame", preview);
+    function picks() {
+      var recs = secState(st, sec).items || {};
+      return ids.filter(function (id) { return (recs[id] || {}).s === "accept"; });
+    }
+    // Every swap in place is undone (last first), then the on changes' swaps are made in
+    // spec order, so two swaps on one element always come back to the original.
+    function swaps(f, d, on) {
+      var done = f.__rcSwaps || [];
+      for (var i = done.length - 1; i >= 0; i--) {
+        var s = done[i];
+        if (s.now[0] && s.now[0].parentNode) {
+          s.now[0].parentNode.insertBefore(s.orig, s.now[0]);
+          s.now.forEach(function (n) { if (n.parentNode) n.parentNode.removeChild(n); });
+        }
+      }
+      f.__rcSwaps = [];
+      all("template[data-rc-swap]", d).forEach(function (tpl) {
+        if (on.indexOf(tpl.dataset.rcSwap) < 0) return;
+        var targets;
+        try { targets = all(tpl.dataset.rcTarget, d); } catch (e) { return; }
+        targets.forEach(function (el) {
+          var frag = tpl.content.cloneNode(true), now = Array.prototype.slice.call(frag.childNodes);
+          if (!now.length) return;
+          el.parentNode.insertBefore(frag, el);
+          el.parentNode.removeChild(el);
+          f.__rcSwaps.push({ orig: el, now: now });
+        });
+      });
+    }
+    // Scale = the column's width / the frame's width (never above 1); the box takes the
+    // scaled size, so the page never scrolls sideways.
+    function fit(f) {
+      var d = f.__rcDoc, box = f.parentNode, fig = box.parentNode;
+      var w = +f.dataset.rcWidth, edge = box.offsetWidth - box.clientWidth;
+      var s = Math.min(1, Math.max(0, fig.clientWidth - edge) / w);
+      // The page's own height, not scrollHeight: that never drops below the frame's
+      // current height, so a frame would grow with a change and never shrink back.
+      var h = d && d.documentElement ? Math.ceil(d.documentElement.getBoundingClientRect().height) : 0;
+      f.style.height = h + "px";
+      f.style.transform = s < 1 ? "scale(" + s + ")" : "";
+      box.style.width = Math.floor(w * s) + "px";
+      box.style.height = Math.ceil(h * s) + "px";
+    }
+    function paint(f) {
+      var d = f.__rcDoc;
+      if (!d || f.contentDocument !== d) return;
+      var on = view === "picks" ? picks() : [];
+      d.documentElement.setAttribute("data-rc", on.join(" "));
+      swaps(f, d, on);
+      fit(f);
+      f.dataset.rcReady = "1";
+    }
+    function sync() {
+      all("[data-rc-view]", preview).forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.rcView === view)); });
+      frames.forEach(paint);
+    }
+    rc = { sync: sync };
+    frames.forEach(function (f) {
+      f.addEventListener("load", function () {
+        f.__rcDoc = f.contentDocument;
+        f.__rcSwaps = [];
+        paint(f);
+      });
+    });
+    all("[data-rc-view]", preview).forEach(function (b) {
+      b.addEventListener("click", function () { view = b.dataset.rcView; sync(); });
+    });
+    var fitAll = function () { frames.forEach(function (f) { if (f.__rcDoc) fit(f); }); };
+    window.addEventListener("resize", fitAll);
+    window.rpRefine = { state: function () { return { on: picks(), view: view }; } };
+    var base = JSON.parse(baseEl.textContent);
+    frames.forEach(function (f) { f.srcdoc = base; });
+    sync();
+  })();
 
   /* ------------------------------------------------- the page's database, when present
      Without the runtime (a local file, an older contract, a signed-out viewer) none of

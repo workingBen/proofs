@@ -115,7 +115,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/shared/capture/with_server.py --start "npm run dev
 python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py --smoke .proofs/pages/<review-name>.html
 ```
 
-   In Refine it checks that the base matches the before capture (`base differs from the page`), flags two changes that touch the same property on the same element, and measures every change on alone and all together for contrast, tap targets, mid-word breaks, sideways scroll and line length. There is no near-copy check. A problem line means revise or drop the change.
+   In Refine it checks that the base matches the before capture (`base differs from the page`), flags two changes that touch the same property on the same element, and measures every change on alone and all together for contrast, tap targets, mid-word breaks, sideways scroll, line length and edges. There is no near-copy check. A problem line means revise or drop the change.
 5. **Crops.** Cut each change's before and after at 1280 and 390:
 
 ```bash

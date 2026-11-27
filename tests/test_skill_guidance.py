@@ -1188,15 +1188,19 @@ class RefineGuidance(unittest.TestCase):
 
     def test_refine_flow_is_in_order(self):
         text = self.skill()
-        steps = ["`--snapshot`", "`changes`", "critic build", "review_page.py --smoke .proofs/pages/<review-name>.html",
-                 "--crops .proofs/pages/<review-name>.html --out .proofs/design-review/crops", "rebuild", "publish"]
-        start = text.index("### Refine mode")
-        pos = start
+        sec = text[text.index("### Refine mode"):text.index("### 4. Build the review page")]
+        steps = ["**Snapshot.**", "**Write the `changes`.**", "**Critic build.**", "**`--smoke`.**", "**Crops.**",
+                 "**Critic.**", "**Rebuild.**", "**Publish.**"]
+        pos = 0
         for step in steps:
             with self.subTest(step=step):
-                found = text.find(step, pos)
+                found = sec.find(step, pos)
                 self.assertNotEqual(found, -1, step)
                 pos = found
+        for cmd in ("--snapshot", "review_page.py --smoke .proofs/pages/<review-name>.html",
+                    "--crops .proofs/pages/<review-name>.html --out .proofs/design-review/crops"):
+            with self.subTest(cmd=cmd):
+                self.assertIn(cmd, sec)
         for word in ("`base`", "`crops`", "`targets`", "`css`", "`swaps`", "`removes`", "3 to 8", "`refine`"):
             with self.subTest(word=word):
                 self.assertIn(word, text)
@@ -1224,6 +1228,14 @@ class RefineGuidance(unittest.TestCase):
         self.assertIn("`gain` 3 or more, `keeps` 4 or more, and no failed design check", sec)
         self.assertIn("no worse on any of the six criteria", sec)
         self.assertIn("better on at least one", sec)
+
+    def test_rubric_grouping_and_fit_read_the_density_line(self):
+        text = self.rubric()
+        for key in ("grouping", "fit"):
+            sec = text[text.index(f"### `{key}`") + 5:]
+            sec = re.split(r"### |## ", sec)[0]
+            with self.subTest(key=key):
+                self.assertIn("`Density:` line", sec)
 
     def test_profile_has_a_density_line_asked_with_audience(self):
         text = self.profile()

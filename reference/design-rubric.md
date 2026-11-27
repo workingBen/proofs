@@ -40,7 +40,7 @@ The first screen is what the reader sees before scrolling: the top 800 px at 128
 
 ### `grouping`: related things together
 
-Things that belong together sit closer to each other than to anything else, so the reader sees the groups from spacing alone. Check the space between groups against the space inside them, and check that each label sits next to what it labels.
+Things that belong together sit closer to each other than to anything else, so the reader sees the groups from spacing alone. Check the space between groups against the space inside them, and check that each label sits next to what it labels. Judge against the profile's `Density:` line (`design-profile.md`): a `dense` page that loses density scores 2 or below.
 
 - **1**: the same spacing everywhere, so groups dissolve into a list; a caption closer to the wrong image; a button floating halfway between two blocks; boxes inside boxes inside boxes.
 - **3**: most groups read, but one element is ambiguous, or the gaps between sibling groups vary for no reason, or borders and cards do the grouping where space alone would (a profile may prefer open layouts).
@@ -48,7 +48,7 @@ Things that belong together sit closer to each other than to anything else, so t
 
 ### `fit`: fits the profile and the site
 
-Judge against the profile when there is one (its References, Rules and Audience; format: `design-profile.md`), and always against the site's own tokens and voice: its colors, fonts, type scale, radius, spacing, button and card styles, and light and dark themes. With no profile, judge on the site alone and say "no profile" in the reason line. **New colors are not a `fit` fault in themselves** (a Bold may use them): a color drawn from the site's own palette, its style guide or the profile's Love references fits. `fit` drops only for colors that clash with the brand or the profile, or that recolor a brand color.
+Judge against the profile when there is one (its References, Rules and Audience; format: `design-profile.md`), and always against the site's own tokens and voice: its colors, fonts, type scale, radius, spacing, button and card styles, and light and dark themes. Judge against the profile's `Density:` line too (`design-profile.md`): a `dense` page made airier is off-profile, and `fit` drops to 2 or below. With no profile, judge on the site alone and say "no profile" in the reason line. **New colors are not a `fit` fault in themselves** (a Bold may use them): a color drawn from the site's own palette, its style guide or the profile's Love references fits. `fit` drops only for colors that clash with the brand or the profile, or that recolor a brand color.
 
 - **1**: brings colors that clash with the brand or the profile, or that recolor a brand color; brings fonts or a button style the site does not use; breaks a stated profile rule (for example, body text under the size the Audience line asks for); reads like a template rather than this site; leans toward a "Not for us" reference.
 - **3**: uses the site's tokens, but one piece is off: a new radius, a type size off the site's scale, a shadow the site never uses, or a profile rule followed at 1280 and broken at 390.
@@ -96,7 +96,7 @@ Results first (`house-rules.md` rule 0): never skip the critic, the measured che
 
 ## Refine mode
 
-In Refine mode (`SKILL.md`, "Refine mode") the page is not redesigned: the original stays and the designer offers 3 to 8 small, separate changes, each a layer the reader can turn on or off. The critic scores each change from its before and after crops at 1280 and 390 (the same helper rules as above: fresh context, shots and inventory only, never the designer's reasoning), then the recommended changes together. The six criteria above still apply to the combination. There is no near-copy penalty and no "must beat the current page" rule for a change on its own: a change only has to help without hurting.
+In Refine mode (`SKILL.md`, "Refine mode") the page is not redesigned: the original stays and the designer offers 3 to 8 small, separate changes, each a layer the reader can turn on or off. The critic scores each change from its before and after crops at 1280 and 390 (the same helper rules as above: fresh context, crops and `removes` lines only, never the designer's reasoning), then the recommended changes together. The six criteria above still apply to the combination. There is no near-copy penalty and no "must beat the current page" rule for a change on its own: a change only has to help without hurting.
 
 ### `gain`: it improves what it says it fixes
 
@@ -108,11 +108,11 @@ Compare the change's before and after crop against the problem its `why_html` na
 
 ### `keeps`: it keeps what already works
 
-Judge against the before crop, the profile's `Density:` line and the inventory: density, grouping, readability, every element and every word, the brand untouched.
+Judge against the before crop, the profile's `Density:` line and the change's `removes` lines: density, grouping, readability, every element and every word, the brand untouched. **Padding added to a dense page, a lost element or a weaker read scores 2 or below.**
 
 - **1**: it removes or changes an element, a word or the brand, or it spreads a dense page out so the reader scrolls for what fit on one screen.
-- **3**: nothing is lost, but something that worked is a little weaker: a row a few pixels airier on a dense page, a group a little less tight, a read a little slower.
-- **5**: everything that worked still works exactly as it did: the same density, the same grouping, the same words and brand, and every element in place. Padding added to a dense page, a lost element or a weaker read scores 2 or below.
+- **3**: nothing is lost, but something that worked is a little weaker: a group a little less tight on a balanced page, a read a little slower.
+- **5**: everything that worked still works exactly as it did: the same density, the same grouping, the same words and brand, and every element in place.
 
 ### The bar and the set
 

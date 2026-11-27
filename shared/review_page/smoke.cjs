@@ -66,9 +66,12 @@ function added(d, base) {
 
 // Runs in a Refine frame. The first call (no `ids`) records, for every element, the computed
 // value of each property any change declares; a later call returns [index, property] for each
-// element whose value of a property the `ids` changes declare is not what it was, and
-// [index, "markup"] for each element a swap took out. Declared longhands come from the frame's
-// <style data-rc-css>, so a neighbor that only moves (its width, its top) is never counted.
+// element whose value of any of those properties is not what it was, and [index, "markup"] for
+// each element a swap took out. Every change is diffed on the union of all changes' declared
+// longhands (custom properties too), not only its own: a change that sets --accent changes the
+// color of whatever reads var(--accent), the property another change may set outright. Declared
+// longhands come from the frame's <style data-rc-css>, so a neighbor that only moves (its width,
+// its top) is not counted unless some change declares width or top itself.
 function styleDiff({ ids }) {
   const declared = {};
   const sheet = Array.from(document.styleSheets).find((sh) => sh.ownerNode && sh.ownerNode.hasAttribute("data-rc-css"));
@@ -90,12 +93,11 @@ function styleDiff({ ids }) {
     window.__rcBase = window.__rcEls.map((el) => { const cs = getComputedStyle(el); return props.map((p) => cs.getPropertyValue(p)); });
     return [];
   }
-  const mine = new Set(ids.flatMap((id) => [...(declared[id] || [])]));
   const out = [];
   window.__rcEls.forEach((el, i) => {
     if (!el.isConnected) { out.push([i, "markup"]); return; }
     const cs = getComputedStyle(el);
-    window.__rcProps.forEach((p, j) => { if (mine.has(p) && cs.getPropertyValue(p) !== window.__rcBase[i][j]) out.push([i, p]); });
+    window.__rcProps.forEach((p, j) => { if (cs.getPropertyValue(p) !== window.__rcBase[i][j]) out.push([i, p]); });
   });
   return out;
 }
@@ -204,22 +206,41 @@ async function refineChecks(browser, page, S, problems, notes) {
   }
   await page.evaluate(() => window.rpRefine.only(null));
 
-  // Overlaps: two changes that change the same property on the same element, at either width.
+  // Overlaps: two changes that change the same property on the same element, at either width,
+  // or one swaps an element (markup) the other changes in any way.
   const seen = new Set();
   for (let i = 0; i < changes.length; i++) {
     for (let j = i + 1; j < changes.length; j++) {
       const a = changes[i], b = changes[j];
       for (const w of [1280, 390]) {
-        const mine = new Set((touched[w + "|" + a.num] || []).map(([e, p]) => e + "|" + p));
-        const both = (touched[w + "|" + b.num] || []).filter(([e, p]) => mine.has(e + "|" + p));
+        const ta = touched[w + "|" + a.num] || [], tb = touched[w + "|" + b.num] || [];
+        const props = (t) => { const m = new Map(); for (const [e, p] of t) m.set(e, (m.get(e) || new Set()).add(p)); return m; };
+        const pa = props(ta), pb = props(tb);
+        const both = [];  // [element index, property, which side swaps it or null]
+        for (const [e, sa] of pa) {
+          const sb = pb.get(e);
+          if (!sb) continue;
+          if (sa.has("markup") || sb.has("markup")) {
+            const swapper = sa.has("markup") ? a : b, other = sa.has("markup") ? sb : sa;
+            for (const p of other) both.push([e, p, swapper]);  // "markup" in other: both swap it
+          } else {
+            for (const p of sa) if (sb.has(p)) both.push([e, p, null]);
+          }
+        }
         if (!both.length) continue;
         const names = await frames[w].evaluate(elementNames, { indices: both.map(([e]) => e), ids: [a.id, b.id] });
-        both.forEach(([, prop], k) => {
+        both.forEach(([, prop, swapper], k) => {
           const key = [a.num, b.num, names[k], prop].join("|");
           if (seen.has(key)) return;
           seen.add(key);
           out.overlaps.push({ a: a.num, b: b.num, element: names[k], property: prop });
-          problems.push(`${label}: changes ${a.num} and ${b.num} both change ${prop} on ${names[k]}`);
+          if (!swapper) problems.push(`${label}: changes ${a.num} and ${b.num} both change ${prop} on ${names[k]}`);
+          else {
+            const other = swapper === a ? b : a;
+            problems.push(prop === "markup"
+              ? `${label}: changes ${a.num} and ${b.num} both swap ${names[k]}`
+              : `${label}: change ${swapper.num} swaps ${names[k]}, which change ${other.num} also changes (${prop})`);
+          }
         });
       }
     }

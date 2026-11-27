@@ -218,14 +218,19 @@ never for a blank document's, and is re-fitted whenever its column or its page c
 Each change's JS item carries
 `refine: <item id>` and `near_copy: false`: `--smoke` skips the mockup and near-copy
 checks for it, and checks the Refine item instead. The preview's `data-rc-base` names the
-snapshot (relative to the working directory) so `--smoke` finds its before shots beside it:
-`<stem>-1280.png` and `<stem>-390.png` for `<stem>-snapshot.html` (the capture's naming),
-else `<stem>-default-<width>.png`; `--shots DIR` points elsewhere. Its `refine` key holds
+snapshot (relative to the working directory; only its file name when it is outside the
+project, and then `--smoke` needs `--shots DIR`) so `--smoke` finds its before shots beside
+it: the whole-page `<stem>-1280-full.png` and `<stem>-390-full.png` for
+`<stem>-snapshot.html` (the capture's naming), else `<stem>-default-<width>-full.png`. The
+base is shot full page the same way, so drift below the first screen counts. Its `refine` key holds
 `fidelity` (per width: `pixelRatio`, `before`), `overlaps` (`[{a, b, element, property}]`,
 change numbers) and `checks` (per state and width: `base`, a change number or `all`). Problem
 lines: `item home (Refine): base differs from the page at 390 (pixel ratio 0.031)` (over
 `FIDELITY.pixelRatio` in `shared/review_page/fidelity.cjs`, or no before shot at all),
-`item home (Refine): changes 2 and 5 both change font-weight on .total`, and the design
+`item home (Refine): changes 2 and 5 both change font-weight on .total` (each change is
+diffed on every property any change declares, so `--accent` in one and `color` in another
+meet on the element that reads it), `item home (Refine): change 3 swaps .status-icon, which
+change 4 also changes (color)`, and the design
 check, mid-word and sideways-scroll lines for `item home (Refine), change 3 on:` and
 `item home (Refine), all changes on:`. Those count only what the state adds to the page
 as it is; the page's own findings are notes (`item home (Refine), the page as it is: …`).
@@ -233,11 +238,12 @@ Measuring uses the test-only `window.rpRefine.only(ids)` (both frames show exact
 those changes; `null` goes back to the answers), never the reader's answers.
 
 After the picks are built, `review_page.py --match-preview PAGE --picks 1,3 --shots DIR`
-compares the new capture's shots in `DIR` (the before shot's name, `after-` for
-`before-`, or the one `*-<width>.png`) with the base shot with those changes on, at 1280
-and 390: exit 0 on a match, 1 with one line per width when the build is off by more than
-`FIDELITY.pixelRatio` or leaves more than `MISSED_PICKS` of the picks' changed pixels
-unlike the preview, 2 when it cannot measure.
+compares the new capture's whole-page shots in `DIR` (the before shot's name, `after-` for
+`before-`, or the one `*-<width>-full.png`) with the base shot with those changes on, at
+1280 and 390: exit 0 on a match, 1 with one line per width when the build is off by more
+than `FIDELITY.pixelRatio` or leaves more than `MISSED_PICKS` of the picks' changed pixels
+unlike the preview, 2 when it cannot measure (no shot of the build, a `--shots` folder that
+does not exist, or picks that change nothing visible at either width).
 
 ### `questions` mode
 

@@ -870,6 +870,13 @@ class Refine(unittest.TestCase):
             self.assertIn('<template data-rc-swap="alert-color" data-rc-target=".status-icon">'
                           '<i class="status-icon">▲</i></template>', doc)
 
+    def test_refine_base_outside_the_project_publishes_only_its_file_name(self):
+        # The tests run from the repo; the snapshot is in a temp folder, outside it.
+        text = self.html()
+        self.assertIn('data-rc-base="home-snapshot.html"', text)
+        self.assertNotIn(str(Path(self._tmp.name).resolve().parent), text)
+        self.assertNotIn('data-rc-base="..', text)
+
     def test_refine_embeds_the_snapshot_assets(self):
         for _, doc in self.frames(self.html()):
             self.assertNotIn("home-snapshot-assets/", doc)
@@ -2175,13 +2182,14 @@ class RefineBrowser(unittest.TestCase):
 
 
 # Shoots an HTML file the way the capture shoots a page (fidelity.cjs's SHOT_VIEWPORTS, the
-# capture's own 1280 and 390): one viewport PNG per width, named <out>-<width>.png.
+# capture's own 1280 and 390): per width, the first screen as <out>-<width>.png and the whole
+# page as <out>-<width>-full.png, at 1x when the capture would take it so (FULL_MAX_PX).
 SHOOT = r"""
 const path = require("path");
 const [pw, rp, file, out] = process.argv.slice(2);
 const { chromium } = require(pw);
 const { launchChromium } = require(path.join(rp, "launch.cjs"));
-const { SHOT_VIEWPORTS, SETTLE_MS } = require(path.join(rp, "fidelity.cjs"));
+const { SHOT_VIEWPORTS, SETTLE_MS, FULL_MAX_PX } = require(path.join(rp, "fidelity.cjs"));
 (async () => {
   const browser = await launchChromium(chromium, process.env);
   for (const w of Object.keys(SHOT_VIEWPORTS)) {
@@ -2191,6 +2199,10 @@ const { SHOT_VIEWPORTS, SETTLE_MS } = require(path.join(rp, "fidelity.cjs"));
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(SETTLE_MS);
     await page.screenshot({ path: out + "-" + w + ".png" });
+    const tall = await page.evaluate(() => document.documentElement.scrollHeight);
+    const dpr = SHOT_VIEWPORTS[w].deviceScaleFactor || 1;
+    await page.screenshot({ path: out + "-" + w + "-full.png", fullPage: true,
+      ...(dpr > 1 && tall * dpr > FULL_MAX_PX ? { scale: "css" } : {}) });
     await ctx.close();
   }
   await browser.close();
@@ -2220,8 +2232,8 @@ class RefineSmoke(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
 
     def before_shots(self):
-        """The capture's shots of the page the snapshot was taken from: home-1280.png and home-390.png
-        beside home-snapshot.html."""
+        """The capture's shots of the page the snapshot was taken from: home-1280-full.png and
+        home-390-full.png (and the first-screen shots) beside home-snapshot.html."""
         self.shoot(self.snap, self.dir / "before" / "home")
 
     def spec(self):
@@ -2244,31 +2256,50 @@ class RefineSmoke(unittest.TestCase):
         except ValueError:
             raise AssertionError(r.stdout + r.stderr)
 
+    def add_css(self, css, file=None):
+        f = file or self.snap
+        f.write_text(f.read_text().replace("</style>", css + "\n</style>", 1))
+
+    def make_tall(self):
+        """Content below the first screen at both widths: a spacer, then a dark block."""
+        self.add_css(".low { height: 200px; background: #334; }")
+        self.snap.write_text(self.snap.read_text().replace(
+            "</div></body>", '<div style="height:1400px"></div><div class="low"></div>\n</div></body>', 1))
+
     @staticmethod
     def refine_lines(res):
         return [p for p in res["problems"] if "(Refine)" in p]
 
     def test_fidelity_passes_the_exact_snapshot(self):
         self.before_shots()
+        self.assertIn('data-rc-base="before/home-snapshot.html"', self.build().read_text())
         res = self.smoke()
         self.assertEqual(self.refine_lines(res), [])
         fid = res["refine"]["fidelity"]
         self.assertEqual(sorted(fid), ["1280", "390"])
         for w in ("1280", "390"):
             self.assertLessEqual(fid[w]["pixelRatio"], 0.001, fid)
-            self.assertTrue(fid[w]["before"].endswith("home-%s.png" % w), fid)
+            self.assertTrue(fid[w]["before"].endswith("home-%s-full.png" % w), fid)
 
     def test_fidelity_flags_a_base_that_does_not_match_the_before_shot(self):
         self.before_shots()
-        # The base is a copy with one extra margin: everything under the heading moves down. This
-        # page is mostly white, so a shift moves few pixels: 40px measured 0.012 at 1280, 80px more.
-        self.snap.write_text(self.snap.read_text().replace("</style>", "h1 { margin-top: 80px; }\n</style>", 1))
+        # The base is a copy with one extra margin: everything under the heading moves down 25px.
+        self.add_css("h1 { margin-top: 25px; }")
         res = self.smoke()
         for w in ("1280", "390"):
             ratio = res["refine"]["fidelity"][w]["pixelRatio"]
-            self.assertGreater(ratio, 0.01)
+            self.assertGreater(ratio, 0.005)
             self.assertIn("item home (Refine): base differs from the page at %s (pixel ratio %.3f)" % (w, ratio),
                           res["problems"])
+
+    def test_fidelity_sees_drift_below_the_first_screen(self):
+        self.make_tall()
+        self.before_shots()
+        self.add_css(".low { margin-top: 25px; }")
+        res = self.smoke()
+        for w in ("1280", "390"):
+            self.assertTrue([p for p in res["problems"] if p.startswith(
+                "item home (Refine): base differs from the page at %s " % w)], res["problems"])
 
     def test_fidelity_without_a_before_shot_is_a_problem_not_a_pass(self):
         res = self.smoke()
@@ -2287,6 +2318,31 @@ class RefineSmoke(unittest.TestCase):
         self.assertIn("item home (Refine): changes 1 and 4 both change font-weight on .total", res["problems"])
         # Only what both change: the letter spacing is change 4's alone, and changes 2 and 3 touch other things.
         self.assertEqual([o for o in ov if (o["a"], o["b"]) != ("1", "4") or o["property"] != "font-weight"], [], ov)
+
+    def test_overlap_through_a_custom_property(self):
+        # Change 4 sets only --accent; the page's .alert reads it, and change 5 sets .alert's color.
+        self.add_css(".alert { color: var(--accent, #374151); }")
+        self.before_shots()
+        spec = self.spec()
+        spec["sections"][0]["items"][0]["changes"] += [
+            {"id": "accent", "label": "Accent", "why_html": "<p>a</p>", "targets": [".wrap"],
+             "css": ".wrap { --accent: #b42318; }"},
+            {"id": "alert-ink", "label": "Ink", "why_html": "<p>i</p>", "targets": [".alert"],
+             "css": ".alert { color: #000055; }"}]
+        res = self.smoke(spec)
+        self.assertIn({"a": "4", "b": "5", "element": ".alert", "property": "color"}, res["refine"]["overlaps"])
+        self.assertIn("item home (Refine): changes 4 and 5 both change color on .alert", res["problems"])
+
+    def test_overlap_of_a_swap_and_a_property_on_the_same_element(self):
+        self.before_shots()
+        spec = self.spec()
+        spec["sections"][0]["items"][0]["changes"].append(
+            {"id": "icon-blue", "label": "Blue icon", "why_html": "<p>b</p>", "targets": [".status-icon"],
+             "css": ".status-icon { color: #0000aa; }"})
+        res = self.smoke(spec)
+        self.assertIn({"a": "3", "b": "4", "element": ".status-icon", "property": "color"}, res["refine"]["overlaps"])
+        self.assertIn("item home (Refine): change 3 swaps .status-icon, which change 4 also changes (color)",
+                      res["problems"])
 
     def test_design_checks_run_on_each_change_alone_and_all_on(self):
         self.before_shots()
@@ -2339,6 +2395,47 @@ class RefineSmoke(unittest.TestCase):
         code, out = self.match(page, "1", nothing)
         self.assertEqual(code, 1, out)
         self.assertEqual(len([l for l in out.splitlines() if re.match(r"(1280|390): ", l)]), 2, out)
+
+    def test_match_preview_sees_a_pick_below_the_first_screen(self):
+        self.make_tall()
+        self.before_shots()
+        spec = self.spec()
+        spec["sections"][0]["items"][0]["changes"].append(
+            {"id": "low-red", "label": "Red block", "why_html": "<p>r</p>", "targets": [".low"],
+             "css": ".low { background: #a33; }"})
+        page = self.build(spec)
+        code, out = self.match(page, "4", self.dir / "before")   # the page as it was: change 4 not built
+        self.assertEqual(code, 1, out)
+        built = self.dir / "before" / "built.html"
+        built.write_text(self.snap.read_text())
+        self.add_css(".low { background: #a33; }", built)
+        after = self.tmp / "after"
+        after.mkdir()
+        self.shoot(built, after / "home")
+        code, out = self.match(page, "4", after)
+        self.assertEqual(code, 0, out)
+
+    def test_match_preview_cannot_measure_picks_that_change_nothing_visible(self):
+        self.before_shots()
+        spec = self.spec()
+        spec["sections"][0]["items"][0]["changes"].append(
+            {"id": "hand", "label": "Hand cursor", "why_html": "<p>h</p>", "targets": [".total"],
+             "css": ".total { cursor: pointer; }"})
+        code, out = self.match(self.build(spec), "4", self.dir / "before")
+        self.assertEqual(code, 2, out)
+        self.assertIn("change 4 changes nothing visible", out)
+
+    def test_match_preview_cannot_measure_without_the_build_shots(self):
+        self.before_shots()
+        page = self.build()
+        empty = self.tmp / "empty"
+        empty.mkdir()
+        code, out = self.match(page, "1", empty)
+        self.assertEqual(code, 2, out)
+        self.assertIn("no shot of the built page", out)
+        code, out = self.match(page, "1", self.tmp / "nowhere")
+        self.assertEqual(code, 2, out)
+        self.assertIn(str((self.tmp / "nowhere").resolve()), out)
 
     def test_match_preview_refuses_a_pick_the_page_does_not_have(self):
         self.before_shots()

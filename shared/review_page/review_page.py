@@ -1704,10 +1704,14 @@ def load_snapshot(it, base, cache):
     text = p.read_text()
     # Where the before shots are: --smoke looks beside the snapshot (fidelity.cjs shotNames).
     # Relative to the working directory, so the page names no folder above the project.
+    # A snapshot outside the project (a scratch folder under the home folder) gets only its file
+    # name, so the published page names no folder outside it; --smoke then needs --shots.
     try:
         it["_base_path"] = os.path.relpath(p, Path.cwd())
     except ValueError:  # another drive
-        it["_base_path"] = rel
+        it["_base_path"] = p.name
+    if it["_base_path"].startswith("..") or os.path.isabs(it["_base_path"]):
+        it["_base_path"] = p.name
     folder = p.parent / (p.stem + "-assets")
     tool = image_tool()
     if folder.is_dir():
@@ -2100,7 +2104,8 @@ def smoke(path, playwright=None, shots=None):
 def match_preview(page_path, picks, shots, playwright=None):
     """--match-preview: the built page's shots in `shots` against the Refine preview with the
     picked changes on (fidelity.cjs comparePicks). Prints one line per width; returns the exit
-    code: 0 on a match, 1 when a width differs or has no shot, 2 when it cannot be measured."""
+    code: 0 on a match, 1 when a width differs, 2 when it cannot be measured (no Playwright, no
+    shot of the build, or picks that change nothing visible)."""
     pw = find_playwright(playwright)
     if not pw:
         print("match-preview: Playwright not found. " + HOW_TO_PY, file=sys.stderr)
@@ -2121,7 +2126,10 @@ def match_preview(page_path, picks, shots, playwright=None):
         return 2
     for line in res["lines"]:
         print(line)
-    return 0 if res["match"] else 1
+    # A width that differs is a failure (1) even when the other could not be measured (2).
+    if res.get("differs"):
+        return 1
+    return 2 if res.get("cannot") else 0
 
 
 def answers(page_path, rows):

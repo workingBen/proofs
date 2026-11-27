@@ -33,14 +33,17 @@ const { decodePng } = require('./png.cjs');
 const CHANNEL_TOLERANCE = 16;
 
 // Thresholds, each with its reason.
-//   pixelRatio 0.01: at 1280 x 800 that is about 10,000 px, less than one line of 16 px body text
-//     set in the wrong font, so a lost web font, image or stylesheet fails, while a faithful copy
-//     (the capture fixture's snapshot measures 0 to a few thousandths) passes with room.
+//   pixelRatio 0.005: smoke and match-preview compare whole pages (the capture's -full.png), so
+//     on a 1280 x 2000 page that is about 12,800 px, under one line of 16 px body text set in the
+//     wrong font: a lost web font, image or stylesheet fails, and so does a block moved by 20 to
+//     30 px (the Refine fixture's 25 px margin above its table). An exact snapshot measures 0.000
+//     and CHANNEL_TOLERANCE absorbs antialiasing. Lowered from 0.01 when the compare became full
+//     page; Task 8's real pages are the recheck of how much a live page's noise needs.
 //   signature 0.95: a faithful copy has the same DOM, so the same boxes (1.00). signature.cjs's
 //     labeled set scores a page's own hero rebuilt as a mockup 0.92 to 0.97 and a recolor 1.00, so
 //     layout alone cannot see paint drift (pixelRatio carries that); 0.95 is there to catch the
 //     gross failures, such as a lost sheet that stacks a grid (0.31 in that set).
-const FIDELITY = { pixelRatio: 0.01, signature: 0.95 };
+const FIDELITY = { pixelRatio: 0.005, signature: 0.95 };
 
 // How many of the pixels the picks change (base against preview) a build may leave unbuilt
 // (preview against build), for --match-preview. The page-wide pixelRatio cannot see a pick that
@@ -59,6 +62,9 @@ const SHOT_VIEWPORTS = {
 };
 // How long a shot waits after load and fonts, for late images and short entrance transitions.
 const SETTLE_MS = 500;
+// The capture's FULL_MAX_PX: a full shot that would pass it at the device scale is taken at 1x
+// (scale: 'css'), and a base shot follows the same rule so the two are at the same scale.
+const FULL_MAX_PX = 16384;
 
 function readShot(png) {
   const img = decodePng(png);
@@ -127,7 +133,7 @@ function applyChanges(on) {
   });
 }
 
-// A viewport PNG of a base document (the review page's embedded snapshot, with its change CSS
+// A full-page PNG of a base document (the review page's embedded snapshot, with its change CSS
 // and swap templates) at one of SHOT_VIEWPORTS' widths, with the given changes on. Shot as a
 // page of its own, not through the review page's frame: the frame is scaled to fit its column,
 // and the before shot was taken at the capture's device scale with no frame around it.
@@ -139,19 +145,23 @@ async function renderBase(browser, doc, width, on = []) {
     await page.evaluate(applyChanges, on);
     await page.evaluate(() => document.fonts.ready.then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))));
     await page.waitForTimeout(SETTLE_MS);
-    return await page.screenshot();
+    // The whole page, as the capture's <name>-<state>-<width>-full.png.
+    const tall = await page.evaluate(() => document.documentElement.scrollHeight);
+    const dpr = SHOT_VIEWPORTS[width].deviceScaleFactor || 1;
+    return await page.screenshot({ fullPage: true, ...(dpr > 1 && tall * dpr > FULL_MAX_PX ? { scale: 'css' } : {}) });
   } finally {
     await ctx.close();
   }
 }
 
 // The before shot's file names for a snapshot, best first: the capture writes
-// <name>-<state>-snapshot.html beside <name>-<state>-<width>.png, so the snapshot's own stem
-// first, then <stem>-default-<width>.png for a snapshot named without its state.
+// <name>-<state>-snapshot.html beside <name>-<state>-<width>-full.png (the whole page; the
+// <width>.png beside it is only the first screen), so the snapshot's own stem first, then
+// <stem>-default-<width>-full.png for a snapshot named without its state.
 function shotNames(snapshotFile, width) {
   const stem = path.basename(snapshotFile).replace(/-snapshot\.html?$/i, '').replace(/\.html?$/i, '');
-  return [`${stem}-${width}.png`, `${stem}-default-${width}.png`];
+  return [`${stem}-${width}-full.png`, `${stem}-default-${width}-full.png`];
 }
 
 module.exports = { compareShots, comparePicks, diffMask, renderBase, shotNames, applyChanges,
-  FIDELITY, MISSED_PICKS, CHANNEL_TOLERANCE, SHOT_VIEWPORTS, SETTLE_MS };
+  FIDELITY, MISSED_PICKS, CHANNEL_TOLERANCE, SHOT_VIEWPORTS, SETTLE_MS, FULL_MAX_PX };

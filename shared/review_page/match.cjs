@@ -2,8 +2,9 @@
 // templates and the page is captured again, each of that capture's shots at 1280 and 390 is
 // compared with the base shot with the picked changes on, by fidelity.cjs comparePicks.
 // Usage: node match.cjs <playwright package dir> <page.html> <picks, such as 1,3> <shots dir>
-// Prints one JSON line: { match, lines: [...], widths: { 1280: {...}, 390: {...} } }, or
-// { error } when it cannot measure. Run through review_page.py --match-preview.
+// Prints one JSON line: { match, differs, cannot, lines: [...], widths: { 1280: {...}, 390: {...} } }, or
+// { error } when it cannot start. `cannot` (exit 2) is a width with no shot of the build, or
+// picks that change no pixel at either width: nothing to hold the build to is not a match. Run through review_page.py --match-preview.
 const fs = require("fs");
 const path = require("path");
 const { chromium } = require(process.argv[2]);
@@ -27,12 +28,12 @@ function fromPage(text) {
 
 // The capture's shot of the built page: the before shot's own name (the same page and state,
 // captured again into another folder), the same with "before-" made "after-" (--evidence),
-// else the one <name>-<width>.png in the folder that is not a full shot, a part or a logo.
+// else the one *-<width>-full.png in the folder. Whole pages, like the fidelity check.
 function buildShot(baseRel, w) {
   const names = shotNames(baseRel, w);
   const tried = [...names, ...names.filter((n) => n.startsWith("before-")).map((n) => "after-" + n.slice(7))];
   for (const n of tried) if (fs.existsSync(path.join(shots, n))) return { file: path.join(shots, n), tried };
-  const only = fs.readdirSync(shots).filter((n) => n.endsWith(`-${w}.png`) && !/-(full|logo|part-\d+)-/.test(n) && !/logo-\d+\.png$/.test(n));
+  const only = fs.readdirSync(shots).filter((n) => n.endsWith(`-${w}-full.png`));
   return { file: only.length === 1 ? path.join(shots, only[0]) : null, tried };
 }
 
@@ -47,14 +48,18 @@ function buildShot(baseRel, w) {
   }
   const on = info.changes.filter((c) => nums.includes(c.num));
   const which = `change${on.length > 1 ? "s" : ""} ${on.map((c) => c.num).join(", ")}`;
+  if (!fs.existsSync(shots) || !fs.statSync(shots).isDirectory()) {
+    console.log(JSON.stringify({ error: `the --shots folder ${shots} does not exist; capture the built page into it first` }));
+    return;
+  }
   const browser = await launchChromium(chromium, process.env);
-  const out = { match: true, lines: [], widths: {} };
+  const out = { match: true, differs: false, cannot: false, lines: [], widths: {} };
   for (const w of [1280, 390]) {
     const shot = buildShot(info.baseRel, w);
     if (!shot.file) {
-      out.match = false;
+      out.cannot = true;
       out.widths[w] = null;
-      out.lines.push(`${w}: no shot of the built page in ${shots} (looked for ${shot.tried.join(", ")}, or one *-${w}.png)`);
+      out.lines.push(`${w}: no shot of the built page in ${shots} (looked for ${shot.tried.join(", ")}, or one *-${w}-full.png); cannot measure`);
       continue;
     }
     const baseShot = await renderBase(browser, info.doc, w, []);
@@ -64,9 +69,15 @@ function buildShot(baseRel, w) {
     const bad = [];
     if (r.pixelRatio > FIDELITY.pixelRatio) bad.push(`the build differs from the preview of ${which} (pixel ratio ${r.pixelRatio.toFixed(3)}, over ${FIDELITY.pixelRatio})`);
     if (r.missed !== null && r.missed > MISSED_PICKS) bad.push(`${Math.round(r.missed * 100)}% of the pixels ${which} change are not as the preview shows them (over ${MISSED_PICKS * 100}%)`);
-    if (bad.length) { out.match = false; out.lines.push(`${w}: ${bad.join("; ")}`); }
+    if (bad.length) { out.match = false; out.differs = true; out.lines.push(`${w}: ${bad.join("; ")}`); }
     else out.lines.push(`${w}: match: the build matches the preview of ${which} (pixel ratio ${r.pixelRatio.toFixed(3)}${r.missed === null ? ", the picks change nothing at this width" : `, ${Math.round(r.missed * 100)}% of the picks' pixels off`})`);
   }
   await browser.close();
+  const measured = Object.values(out.widths).filter(Boolean);
+  if (measured.length && measured.every((r) => r.missed === null)) {
+    out.cannot = true;
+    out.lines.push(`${which} ${on.length > 1 ? "change" : "changes"} nothing visible at 1280 or 390, so the build cannot be held to them; check the build by eye`);
+  }
+  if (out.cannot && out.match) out.match = false;
   console.log(JSON.stringify(out));
 })().catch((e) => { console.log(JSON.stringify({ error: "match crashed: " + (e && e.message) })); process.exit(1); });

@@ -1,0 +1,2 @@
+/* Served with Access-Control-Allow-Origin: *, so a page reads its rules in-page; it names a local file. */
+.corsy { color: #654321; background: url(file:///etc/hosts); }

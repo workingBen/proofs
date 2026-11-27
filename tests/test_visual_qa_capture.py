@@ -148,6 +148,14 @@ class Quiet(http.server.SimpleHTTPRequestHandler):
             return
         super().do_GET()
 
+    def end_headers(self):
+        # Readable from any origin (a CDN sheet or sprite that allows CORS), so a page reads it
+        # in-page. The snapshot fetches a sprite with credentials, so the origin is echoed.
+        if self.path.endswith(("/cors-file.css", "/sprite-file.svg")):
+            self.send_header("Access-Control-Allow-Origin", self.headers.get("Origin") or "*")
+            self.send_header("Access-Control-Allow-Credentials", "true")
+        super().end_headers()
+
 
 @unittest.skipUnless(NODE and playwright_dir(), "Playwright not found: set PROOFS_PLAYWRIGHT or install it in ~/.cache/proofs-playwright")
 class PhoneWidth(unittest.TestCase):
@@ -1252,6 +1260,30 @@ const { chromium } = require(process.env.PROOFS_PLAYWRIGHT);
             self.assertIn("#123456", text)  # the sheet itself is still inlined
             self.assertIn('@import url("file:///etc/hosts")', text)  # kept as a reference, never read
             self.assertIn("file:///etc/hosts", res["external"])
+
+    @unittest.skipUnless(Path("/etc/hosts").is_file(), "needs a local file to name")
+    def test_a_file_page_never_reads_a_local_file_a_web_sheet_or_sprite_names(self):
+        # On a file: page, what a CORS-readable sheet from the web or a sprite fetched from the web
+        # names is checked against that sheet or sprite, not the page.
+        hosts = Path("/etc/hosts").read_bytes()
+        with tempfile.TemporaryDirectory() as tmp:
+            page = Path(tmp) / "page.html"
+            page.write_text('<!DOCTYPE html><html><head><meta charset="utf-8">'
+                            '<link rel="stylesheet" crossorigin="anonymous" href="%s/snapshot/cors-file.css"></head>'
+                            '<body><p class="corsy">x</p><svg width="10" height="10"><use href="%s/snapshot/sprite-file.svg#s"></use>'
+                            '</svg></body></html>' % (self.base, self.base))
+            out = Path(tmp) / "out"
+            out.mkdir()
+            res = self.probe(page.as_uri(), str(out))
+            text = (out / "x-snapshot.html").read_text()
+            self.assertIn("rgb(101, 67, 33)", text)   # the sheet was read in-page and inlined
+            self.assertIn("proofs-use-1", text)    # and the sprite's symbol copied in
+            for f in out.rglob("*"):
+                if f.is_file() and f.suffix != ".html":
+                    self.assertNotEqual(f.read_bytes(), hosts, f)
+            self.assertNotIn("data-proofs-from", text)
+            self.assertEqual(res["external"].count("file:///etc/hosts"), 1, res["external"])
+            self.assertEqual(text.count("file:///etc/hosts"), 2, text)   # both references kept as they were
 
     def test_a_file_page_still_copies_its_own_files(self):
         with tempfile.TemporaryDirectory() as tmp:

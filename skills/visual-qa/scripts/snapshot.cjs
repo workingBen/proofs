@@ -52,17 +52,21 @@ async function collectSnapshot() {
   const sheetToken = (href, media) => { sheets.push({ href, media: media || '' }); return `__PROOFS_SHEET_${sheets.length - 1}__`; };
   const base = document.baseURI;
   const resolve = (u, from) => { try { return new URL(u, from).href; } catch (_) { return null; } };
-  // ctx 'a': the token lands in an attribute; 's': in a <style> element's text.
-  const token = (abs, ctx) => {
+  // ctx 'a': the token lands in an attribute; 's': in a <style> element's text. Each URL carries
+  // the document that named it (`from`: the page, a sheet, a fetched sprite), which decides
+  // whether a file: URL may be read (snapshotPage, fileAllowed). One URL named from more than one
+  // place keeps a non-file referrer when it has one, so it is never read on another's behalf.
+  const token = (abs, ctx, from) => {
     const hash = abs.indexOf('#');
     const bare = hash >= 0 ? abs.slice(0, hash) : abs;
-    if (!seen.has(bare)) { seen.set(bare, urls.length); urls.push(bare); }
+    if (!seen.has(bare)) { seen.set(bare, urls.length); urls.push({ url: bare, from }); }
+    else if (!/^file:/i.test(from || '')) urls[seen.get(bare)].from = from;
     return `__PROOFS_ASSET_${ctx}_${seen.get(bare)}__${hash >= 0 ? abs.slice(hash) : ''}`;
   };
   const asset = (u, from, ctx) => {
     if (!u || /^(data|blob|about|javascript):/i.test(u.trim()) || u.trim().startsWith('#')) return null;
     const abs = resolve(u.trim(), from);
-    return abs && /^(https?|file):/i.test(abs) ? token(abs, ctx) : null;
+    return abs && /^(https?|file):/i.test(abs) ? token(abs, ctx, from) : null;
   };
   const rewriteCss = (text, from, ctx) => text.replace(/url\(\s*(['"]?)([^'")]*)\1\s*\)/gi,
     (m, q, u) => { const t = asset(u, from, ctx); return t ? `url("${t}")` : m; });
@@ -191,6 +195,8 @@ async function collectSnapshot() {
         const id = `proofs-use-${inlined.size + 1}`;
         const node = document.importNode(target, true);
         node.setAttribute('id', id);
+        // What the copied element names was named by the sprite, not the page (see token).
+        node.setAttribute('data-proofs-from', u.href);
         defs.push(node);
         inlined.set(abs, id);
       }
@@ -233,23 +239,25 @@ async function collectSnapshot() {
     return out;
   };
   for (const el of clone.querySelectorAll('*')) {
+    const holder = el.closest('[data-proofs-from]');
+    const from = holder ? holder.getAttribute('data-proofs-from') : base;
     for (const a of [...el.attributes]) {
       const name = a.name.toLowerCase();
       if (name.startsWith('on')) { el.removeAttribute(a.name); continue; }
       if (/^\s*javascript:/i.test(a.value)) { el.setAttribute(a.name, name === 'href' ? '#' : ''); continue; }
-      if (name === 'style' && /url\(/i.test(a.value)) el.setAttribute(a.name, rewriteCss(a.value, base, 'a'));
+      if (name === 'style' && /url\(/i.test(a.value)) el.setAttribute(a.name, rewriteCss(a.value, from, 'a'));
     }
     const tag = el.tagName.toLowerCase();
     const swap = (attr) => {
       const v = el.getAttribute(attr);
       if (v == null) return;
-      const t = asset(v, base, 'a');
+      const t = asset(v, from, 'a');
       if (t) el.setAttribute(attr, t);
     };
     const swapSet = (attr) => {
       const v = el.getAttribute(attr);
       if (v == null) return;
-      el.setAttribute(attr, parseSrcset(v).map(({ url, desc }) => (asset(url, base, 'a') || resolve(url, base) || url) + (desc ? ` ${desc}` : '')).join(', '));
+      el.setAttribute(attr, parseSrcset(v).map(({ url, desc }) => (asset(url, from, 'a') || resolve(url, from) || url) + (desc ? ` ${desc}` : '')).join(', '));
     };
     const absolute = (attr) => {
       const v = el.getAttribute(attr);
@@ -275,6 +283,7 @@ async function collectSnapshot() {
       absolute('src');
     } else if (['embed', 'audio', 'source', 'track'].includes(tag)) absolute('src');
   }
+  clone.querySelectorAll('[data-proofs-from]').forEach((el) => el.removeAttribute('data-proofs-from'));
   const head = clone.querySelector('head');
   if (head) {
     const meta = document.createElement('meta');
@@ -413,7 +422,8 @@ async function snapshotPage(page, outDir, name) {
   };
   const pageUrl = page.url();
   const paths = [];
-  for (const url of snap.urls) paths.push(await assetPath(url, pageUrl));
+  // Each against the document that named it (collectSnapshot's token), never just the page.
+  for (const u of snap.urls) paths.push(await assetPath(u.url, u.from || pageUrl));
   // Sheets from another origin: inlined like the page's own, since a published page loads
   // no stylesheet from another site but Google Fonts. One that cannot be fetched stays an
   // @import of its absolute URL and is listed in `external`.
@@ -428,7 +438,7 @@ async function snapshotPage(page, outDir, name) {
   const canvasPaths = snap.canvases.map((data, i) =>
     write(`canvas-${i + 1}.png`, Buffer.from(data.slice(data.indexOf(',') + 1), 'base64')));
   const html = snap.html
-    .replace(/__PROOFS_ASSET_([as])_(\d+)__/g, (m, ctx, i) => paths[i] || (ctx === 'a' ? escapeAttr(snap.urls[i]) : snap.urls[i]))
+    .replace(/__PROOFS_ASSET_([as])_(\d+)__/g, (m, ctx, i) => paths[i] || (ctx === 'a' ? escapeAttr(snap.urls[i].url) : snap.urls[i].url))
     .replace(/__PROOFS_CANVAS_(\d+)__/g, (m, i) => canvasPaths[i])
     // Each <style> with a sheet token: the @imports left unfetched go first, where @import must be.
     .replace(/(<style\b[^>]*>)([\s\S]*?)(<\/style>)/g, (m, open, body, close) => {

@@ -1,6 +1,6 @@
 # design-review: Refine and Redesign modes (Proofs 1.10.0)
 
-Status: draft for Ben's approval, 2026-11-26.
+Status: draft for the owner's approval, 2026-11-26.
 
 ## Intent
 
@@ -29,10 +29,10 @@ design-review a second mode for that case.
    by default. It says which mode it picked, and the reader can switch.
 2. In Refine, the reader sees each change on its own (a cropped before and
    after) and decides Yes or No. One full-page preview at the bottom updates as
-   they tap, so what they see before Send is exactly what gets built (Ben's
+   they tap, so what they see before Send is exactly what gets built (the owner's
    pick, `refine-combined`: "Live").
 3. Each change is a layer on one exact copy of the current page that can be
-   turned on and off (Ben's pick, `refine-build`: "Layers on one copy of your
+   turned on and off (the owner's pick, `refine-build`: "Layers on one copy of your
    page").
 4. The critic scores Refine changes on whether they *keep what works*, as well
    as whether they improve the page. There's no near-copy penalty in Refine.
@@ -64,7 +64,7 @@ design-review a second mode for that case.
 
 ## Approaches considered
 
-For the live preview, Ben was offered three ways to make each change
+For the live preview, the owner was offered three ways to make each change
 switchable:
 
 1. **Layers on one copy of the page (picked).** One exact copy of the current
@@ -77,7 +77,7 @@ switchable:
    only one per section, and every rewrite risks the drift seen on Host Headroom.
 3. **Prerender every combination.** Exact, but 2^N renders: 64 for six changes.
 
-For how the combined preview behaves, Ben picked **live** over "a second round
+For how the combined preview behaves, the owner picked **live** over "a second round
 after Send" (an extra trip every review) and over "all changes shown, fixed"
 (the reader never sees the exact mix they picked).
 
@@ -195,7 +195,7 @@ From the top:
 3. **The combined preview:** the base with every Yes layer on, in a desktop
    frame (1280, scaled to fit the column) and a phone frame (390). It updates
    the moment a card's answer changes. A small toggle flips the preview
-   between "with your picks" and "original", the same toggle Ben used in the
+   between "with your picks" and "original", the same toggle the owner used in the
    blind rating.
 4. The sticky bar as on every review page: tally, Copy, Send to Claude, and
    answers saved to the page's database.
@@ -291,7 +291,7 @@ Unchanged, apart from three things:
 - Works in an interactive session and in `claude -p`, with the house rules:
   one command per Bash call, stay in the project and plugin folders, and no
   ad hoc tools.
-- Phone first: Ben reviews from an iPhone. Crops and the combined preview
+- Phone first: the owner reviews from an iPhone. Crops and the combined preview
   must read at 390 without the page scrolling sideways.
 - American English. Every existing check keeps its strength ("No setting can
   weaken a check").
@@ -303,7 +303,7 @@ Unchanged, apart from three things:
 
 1. **Rerun the Host Headroom dashboard request in Refine.** The dashboard is
    a static HTML page the tool writes (`host-headroom --html OUT`), served
-   from a folder for the capture. Ben compares the
+   from a folder for the capture. the owner compares the
    original with the combined result of his own picks, using the toggle, and
    rates it Less, Equal or More. Pass: More, with no change he accepted that
    he later wants back out.
@@ -326,7 +326,7 @@ Unchanged, apart from three things:
   them.
 - How the desktop frame scales on a phone.
 
-## Calls I made (from the builder check), for Ben to check
+## Calls I made (from the builder check), for the owner to check
 
 1. Each preview frame shows the real layout at its own width, so frames are
    iframes, with container queries as the fallback (section 2).

@@ -18,7 +18,7 @@ Result: PASS, 34 of 34 checks (both-frame and single-frame toggles, data-rc c2 a
 
 ## Artifact and iPhone: pending controller
 
-To record: does it render, does the toggle work, are both widths correct (artifact, then Ben's iPhone).
+To record: does it render, does the toggle work, are both widths correct (artifact, then the owner's iPhone).
 A sandboxed artifact origin may block `contentDocument` access; the page reports that as `ERROR ...`.
 
 ## Decision

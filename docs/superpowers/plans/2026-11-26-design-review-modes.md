@@ -17,7 +17,7 @@
 - No new skill, and no new setting. The cap of **3 to 8 changes** per page is fixed (§3).
 - No existing check gets weaker. Contrast, tap targets (44 px), mid-word breaks, sideways scroll, line length, edges, brand kept and words unchanged all apply to every Refine state. The near-copy check doesn't run on Refine items, and only on them.
 - Existing presets, exports and spec fields don't change behavior. Every current test still passes.
-- Refine renders at 390 with no sideways page scroll (Ben reviews on an iPhone).
+- Refine renders at 390 with no sideways page scroll (the owner reviews on an iPhone).
 - House rules: one command per Bash call in skill text, nothing written outside `.proofs/` in a project, and no ad hoc tools.
 - **Run tests in the foreground, never in the background. No more than two test runs at once on this machine.**
 - The gate on the final head: the root suite `python3 -m unittest $(ls tests/test_*.py | sed 's#/#.#; s#\.py$##')`, the pr-qa and todos suites (`python3 -m unittest discover -s tests` inside each skill folder that has one), `bin/check-skills`, `bin/privacy-scan` and `bin/bump-version --check`.
@@ -44,7 +44,7 @@
 
 - [ ] **Step 1:** Write the spike page. It holds two `srcdoc` iframes, 1280 and 390 wide, the 1280 one scaled with `transform: scale()` to fit. The page inside has a media query at 600 px that changes a heading's color, and a style rule scoped under `html[data-rc~="c1"]`. A button on the outer page toggles `data-rc="c1"` on each frame's `contentDocument.documentElement`. A line of text on the outer page reports `getComputedStyle` of the heading inside each frame after the toggle.
 - [ ] **Step 2:** Open it via `file://` in headless Chromium (Playwright, through `shared/review_page/launch.cjs`). Expected: the 390 frame shows the phone color, the 1280 frame the desktop color, and the toggle changes both reports.
-- [ ] **Step 3:** Hand the page to the controller to publish as an artifact. The controller opens it and asks Ben to open it on his iPhone. The answers are recorded in the note: does it render, does the toggle work, are both widths correct.
+- [ ] **Step 3:** Hand the page to the controller to publish as an artifact. The controller opens it and asks the owner to open it on a phone. The answers are recorded in the note: does it render, does the toggle work, are both widths correct.
 - [ ] **Step 4:** Write the note: `iframe` if every check passes in both places, else `container-queries` with what failed. Commit both files.
 
 ### Task 2: Snapshot writer in the capture
@@ -198,8 +198,8 @@
 Run by the main session, not a subagent.
 
 - [ ] **Step 1:** Delete the Task 1 spike page, keep its note, and commit.
-- [ ] **Step 2:** Build the Host Headroom dashboard (`host-headroom --html OUT`, served from a folder). Run design-review on it with Ben's original "improve this" request through the feature branch's plugin, in Refine. Publish the review and have Ben pick.
-- [ ] **Step 3:** Build Ben's picks, then run `--match-preview`. Expected: exit 0.
-- [ ] **Step 4:** Ben rates the built result against the original with the toggle: Less, Equal or More. Pass is More (spec, How we'll know).
+- [ ] **Step 2:** Build the Host Headroom dashboard (`host-headroom --html OUT`, served from a folder). Run design-review on it with the owner's original "improve this" request through the feature branch's plugin, in Refine. Publish the review and have the owner pick.
+- [ ] **Step 3:** Build the owner's picks, then run `--match-preview`. Expected: exit 0.
+- [ ] **Step 4:** the owner rates the built result against the original with the toggle: Less, Equal or More. Pass is More (spec, How we'll know).
 - [ ] **Step 5:** On one bench page, an "improve this" request gets Refine and a "redesign this" request gets Redesign.
 - [ ] **Step 6:** Run the gate on the exact head, open the PR (the body lists every threshold with its reason, plus the acceptance results), merge with `gh pr merge --merge`, then `git push origin --delete <branch>`.

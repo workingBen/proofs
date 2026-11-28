@@ -17,13 +17,10 @@
   <a href="evals/"><img src="https://img.shields.io/badge/trigger_evals-108%2F108_clear_%C2%B7_42%2F42_ambiguous-2f6b3a" alt="Trigger evals: 108 of 108 on clear requests, 42 of 42 on ambiguous ones"></a>
 </p>
 
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/hero-dark.gif"><img src="assets/hero.gif" width="100%" alt="One design review, start to finish. Ask Claude for a design review; the review page shows the live retreat page beside three coded designs; tap the one you want, copy your decisions, paste them back to Claude; Claude builds it, and the real page wipes from a pale boxed card to a full-bleed sunset hero."></picture></p>
+<p align="center"><sub><b>One design review, start to finish,</b> on a real page: ask, see three coded designs beside your live page, tap one, paste it back, and Claude builds it.</sub></p>
+
 Stop reading walls of terminal text. Every skill here includes a page you can look at, click through and decide on, then hand back to Claude in one paste. Design reviews, visual QA, copy edits and decision pages for [Claude Code](https://claude.com/claude-code): Claude builds the review, you choose from real options, and Claude builds what you chose.
-
-<p align="center"><a href="assets/clips/proofs-tour.mp4"><img src="assets/clips/proofs-tour.gif" width="100%" alt="The 30-second Proofs tour: a design review shows the live page beside two coded options, each with a Pick this button; a before and after wipe; a page checked on a phone with its fixes; Tap. Paste. Done.; ending on the two install commands."></a></p>
-
-<p align="center"><sub>The 30-second tour. Every picture is a real page, before and after. <a href="assets/clips/proofs-tour.mp4">Full-size MP4</a> (1920x1080, silent).</sub></p>
-
-<p align="center"><a href="https://youtube.com/shorts/LGoRROsziv8">Watch the one-minute tour on YouTube</a></p>
 
 ## Install
 
@@ -61,6 +58,8 @@ Real pages, before and after one review. [See all of them, as sliders](https://w
 <!-- examples:grid:end -->
 
 **[Browse the site](https://workingben.github.io/proofs/)** for all 12 skills and 230+ features, each with a short write-up.
+
+**Prefer video?** [Watch the one-minute walkthrough on YouTube](https://youtu.be/Qztwm_b4WNo), or [the Short](https://youtube.com/shorts/LGoRROsziv8) on your phone.
 
 ## All 12 skills
 

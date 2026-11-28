@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Proofs hero stage</title>
+<!--
+  The README hero: one design review, start to finish, on a real page.
+  Everything is a pure function of t (seconds into the loop): seek(t) sets every
+  element, so record.cjs can step it frame by frame. Open it in a browser to watch
+  it loop; ?t=7.2 freezes one moment; ?theme=dark for the dark version.
+-->
+<style>
+@font-face{font-family:Serif;src:url(fonts/InstrumentSerif-normal-400.woff2)}
+@font-face{font-family:Serif;font-style:italic;src:url(fonts/InstrumentSerif-italic-400.woff2)}
+@font-face{font-family:Mono;src:url(fonts/JetBrainsMono-normal-400.woff2)}
+@font-face{font-family:Mono;font-weight:600;src:url(fonts/JetBrainsMono-normal-600.woff2)}
+:root{--bg:#f1ebe2;--ink:#1d1b17;--soft:#6b6458;--card:#fffdf9;--line:#ded6c9;--accent:#c2410c;--term:#1d1b17;--termink:#efe9df;--shadow:0 30px 70px rgba(60,40,20,.18),0 4px 14px rgba(60,40,20,.08)}
+.dark{--bg:#14130f;--ink:#f1ebe2;--soft:#a39b8d;--card:#201e19;--line:#38342c;--accent:#ea6a2c;--term:#0b0a08;--termink:#efe9df;--shadow:0 30px 70px rgba(0,0,0,.55),0 4px 14px rgba(0,0,0,.4)}
+*{box-sizing:border-box;margin:0}
+html,body{width:1600px;height:1000px;overflow:hidden;background:var(--bg);color:var(--ink);font-family:-apple-system,"Helvetica Neue",Arial,sans-serif}
+.abs{position:absolute}
+/* caption */
+#capw{left:0;right:0;top:22px;display:flex;justify-content:center;z-index:7}
+#cap{font:700 50px/1.15 -apple-system,"Helvetica Neue",Arial,sans-serif;letter-spacing:-.6px;padding:16px 34px;border-radius:22px;background:var(--card);color:var(--ink);box-shadow:0 10px 30px rgba(40,25,10,.18);border:1px solid var(--line)}
+#cap em{font-style:normal;color:var(--accent)}
+/* step tracker */
+#steps{left:0;right:0;bottom:30px;display:flex;justify-content:center;gap:14px}
+.st{display:flex;align-items:center;gap:10px;padding:10px 20px 10px 12px;border-radius:99px;border:2px solid var(--line);font:600 22px Mono;color:var(--soft);background:var(--card)}
+.st b{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:17px;border:2px solid var(--line)}
+.st.on{border-color:var(--accent);color:var(--ink)}
+.st.on b{background:var(--accent);border-color:var(--accent);color:#fff}
+/* window chrome */
+.win{background:var(--card);border-radius:16px;box-shadow:var(--shadow);overflow:hidden;border:1px solid var(--line)}
+.bar{height:44px;display:flex;align-items:center;gap:9px;padding:0 18px;border-bottom:1px solid var(--line);font:400 17px Mono;color:var(--soft)}
+.bar i{width:13px;height:13px;border-radius:50%;background:var(--line);display:inline-block}
+.bar span{margin-left:14px}
+/* terminal */
+#term{left:250px;top:300px;width:1100px;height:300px;background:var(--term);border-color:#000}
+#term .bar{border-color:#333;color:#8d877c}
+#term .bar i{background:#3a3731}
+#tbody{padding:30px 38px;font:400 30px/1.6 Mono;color:var(--termink);white-space:pre}
+#tbody .p{color:#ea6a2c;font-weight:600}
+#tbody .ok{color:#7fc48c}
+#tbody .dim{color:#8d877c}
+.caret{display:inline-block;width:16px;height:32px;background:var(--termink);vertical-align:-5px}
+/* review page */
+#rev{left:70px;top:160px;width:1460px;height:680px}
+#rhead{padding:20px 30px 6px;display:flex;align-items:baseline;gap:18px}
+#rhead h2{font:400 44px Serif}
+#rhead small{font:400 18px Mono;color:var(--soft)}
+#rgrid{display:grid;grid-template-columns:560px 1fr 1fr 1fr;gap:20px;padding:14px 30px}
+.lab{font:600 15px Mono;letter-spacing:1px;color:var(--soft);margin-bottom:8px;text-transform:uppercase}
+.opt{border:2px solid var(--line);border-radius:12px;padding:12px;background:var(--card);position:relative}
+.opt.sel{border-color:var(--accent);box-shadow:0 0 0 5px color-mix(in srgb,var(--accent) 22%,transparent)}
+.opt .nm{font:600 22px -apple-system,Arial;display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.opt .sc{font:600 15px Mono;color:#2f6b3a;background:#e3efe2;padding:3px 8px;border-radius:6px}
+.dark .opt .sc{background:#203626;color:#9fd2a8}
+.shot{height:205px;border-radius:8px;overflow:hidden;position:relative;background:#ccc}
+.shot img{width:100%;height:100%;object-fit:cover;object-position:top;display:block}
+.opt p{font-size:17px;color:var(--soft);margin:10px 0 12px;line-height:1.35;height:46px}
+.pick{display:block;text-align:center;font:600 19px -apple-system,Arial;padding:11px;border-radius:9px;border:2px solid var(--ink);color:var(--ink)}
+.opt.sel .pick{background:var(--accent);border-color:var(--accent);color:#fff}
+.check{right:-14px;top:-14px;width:38px;height:38px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:24px;font-weight:700}
+#live .shot{height:430px}
+#live .shot img{object-position:top}
+#rfoot{left:0;right:0;bottom:0;height:86px;background:#1d1b17;display:flex;align-items:center;gap:12px;padding:0 30px}
+#rfoot span{font:600 18px -apple-system,Arial;color:#efe9df;border:1px solid #4a463e;padding:11px 18px;border-radius:9px}
+#copy{margin-left:auto;background:#c2410c!important;border-color:#c2410c!important;font-size:20px!important;padding:13px 26px!important}
+/* mockup overlays built on the real photos */
+.ov{position:absolute;inset:0}
+.card{position:absolute;left:8%;top:16%;width:56%;padding:7% 6%;background:rgba(255,253,249,.94);border-radius:6px}
+.card i{display:block;height:9px;border-radius:3px;background:#2a2620;margin-bottom:6px}
+.card i.s{height:5px;background:#9a9286;width:80%}
+.card u{display:inline-block;width:42%;height:13px;border-radius:4px;background:#1f7a70;margin-top:6px}
+.big{position:absolute;left:0;right:0;top:30%;text-align:center;color:#fff;font:400 23px Serif;letter-spacing:1px;text-shadow:0 2px 10px rgba(0,0,0,.4)}
+/* big before/after browser */
+#brow{left:250px;top:140px;width:1100px;height:740px}
+#bimg{position:relative;height:696px;overflow:hidden}
+#bimg img{position:absolute;left:0;top:0;width:1100px;height:774px;object-fit:cover}
+#bclip{position:absolute;inset:0;overflow:hidden}
+#bline{position:absolute;top:0;bottom:0;width:4px;background:#fff;box-shadow:0 0 18px rgba(0,0,0,.45)}
+.tag{position:absolute;top:18px;font:600 18px Mono;letter-spacing:1px;padding:6px 12px;border-radius:6px;background:#1d1b17;color:#fff}
+#tagA{background:var(--accent)}
+/* cursor */
+#cur{left:0;top:0;width:44px;height:44px;z-index:9;filter:drop-shadow(0 3px 5px rgba(0,0,0,.35))}
+#ring{width:70px;height:70px;border-radius:50%;border:4px solid var(--accent);z-index:8}
+</style>
+</head>
+<body>
+<div id="capw" class="abs"><div id="cap"></div></div>
+
+<div id="term" class="abs win">
+  <div class="bar"><i></i><i></i><i></i><span>claude code · ~/sites/greensprings</span></div>
+  <div id="tbody"></div>
+</div>
+
+<div id="rev" class="abs win">
+  <div class="bar"><i></i><i></i><i></i><span>proofs · design-review · /retreats/digital-detox</span></div>
+  <div id="rhead"><h2>Retreat hero</h2><small>Section 1 of 1 · your live page beside three coded mockups</small></div>
+  <div id="rgrid">
+    <div id="live"><div class="lab">Before · live page</div><div class="shot"><img src="img/before.jpg" alt=""></div></div>
+    <div><div class="lab">Mockups · pick one</div>
+      <div class="opt" id="oA"><div class="nm">A · Careful <span class="sc">82</span></div>
+        <div class="shot"><img src="img/before.jpg" alt="" style="object-position:left top"></div>
+        <p>Same layout, calmer card, one clear button.</p><span class="pick">Pick this</span></div></div>
+    <div><div class="lab">&nbsp;</div>
+      <div class="opt" id="oB"><div class="nm">B · Step up <span class="sc">88</span></div>
+        <div class="shot"><img src="img/after.jpg" alt="" style="filter:saturate(.75) brightness(1.05)"><div class="ov"><div class="card" style="top:22%;left:20%;width:60%;background:rgba(255,253,249,.88)"><i></i><i class="s"></i><u style="background:#1d1b17"></u></div></div></div>
+        <p>Sunset photo full width, text in a card.</p><span class="pick">Pick this</span></div></div>
+    <div><div class="lab">&nbsp;</div>
+      <div class="opt" id="oC"><div class="nm">C · Bold <span class="sc">94</span></div>
+        <div class="shot"><img src="img/after.jpg" alt=""></div>
+        <p>Full-bleed sunset, the title on the photo.</p><span class="pick">Pick this</span>
+        <div class="check abs">✓</div></div></div>
+  </div>
+  <div id="rfoot" class="abs"><span>Keep original</span><span>Use selected</span><span>Approve with comment</span><span>Request revision</span><span id="copy">Copy my decisions</span></div>
+</div>
+
+<div id="brow" class="abs win">
+  <div class="bar"><i></i><i></i><i></i><span>greensprings.life/retreats/digital-detox</span></div>
+  <div id="bimg"><img src="img/after.jpg" alt=""><div id="bclip"><img src="img/before.jpg" alt=""></div><div id="bline"></div>
+    <span class="tag" id="tagA" style="left:18px">AFTER</span><span class="tag" id="tagB" style="right:18px">BEFORE</span></div>
+</div>
+
+<div id="ring" class="abs"></div>
+<svg id="cur" class="abs" viewBox="0 0 24 24"><path d="M4 2l15 11-6.5 1.2 3.8 7.3-2.9 1.5-3.8-7.4L4 20z" fill="#fff" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/></svg>
+
+<div id="steps" class="abs">
+  <div class="st"><b>1</b>See it</div><div class="st"><b>2</b>Pick it</div><div class="st"><b>3</b>Paste it</div><div class="st"><b>4</b>Shipped</div>
+</div>
+
+<script>
+const DURATION = 22;
+const $ = (id) => document.getElementById(id);
+const clamp = (x) => Math.max(0, Math.min(1, x));
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+const ease = (x) => x < .5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2;
+const lerp = (a, b, x) => a + (b - a) * x;
+const show = (el, o, dy = 0, sc = 1) => { el.style.opacity = o; el.style.transform = `translateY(${(1 - o) * dy}px) scale(${sc})`; el.style.visibility = o > 0.001 ? 'visible' : 'hidden'; };
+
+const CMD = '/proofs:design-review /retreats/digital-detox';
+const PASTE = 'Retreat hero → C (Bold), use selected';
+const CAPS = [
+  [0, 'Ask Claude for a <em>design review</em>.'],
+  [3.4, 'Your live page, beside <em>3 coded designs</em>.'],
+  [5.6, '<em>Tap</em> the one you want.'],
+  [7.8, '<em>Copy</em> your decisions.'],
+  [10.0, '<em>Paste</em> them back to Claude.'],
+  [11.4, 'Claude builds <em>the one you picked</em>.'],
+  [13.0, 'Your real page: before…'],
+  [15.2, '…and <em>after</em>. One review.'],
+  [18.6, 'Free skills for <em>Claude Code</em>.'],
+];
+// cursor path: [time, x, y] keyframes (eased between them)
+function center(el) { const r = el.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }
+let PICK, COPY;
+
+function term(t) {
+  const lines = [];
+  if (t < 10) {
+    const n = Math.round(CMD.length * seg(t, 0.5, 2.2));
+    let l = '<span class="p">&gt;</span> ' + CMD.slice(0, n);
+    if (t < 2.5) l += '<span class="caret"></span>';
+    lines.push(l);
+    if (t > 2.5) lines.push('<span class="dim">  Screenshotting the live page…</span>');
+    if (t > 2.9) lines.push('<span class="ok">  ✓</span> 3 mockups scored. Review page opened.');
+  } else {
+    lines.push('<span class="p">&gt;</span> ' + (t > 10.5 ? PASTE : '') + (t < 11.2 ? '<span class="caret"></span>' : ''));
+    if (t > 11.3) lines.push('<span class="dim">  Building option C…</span>');
+    if (t > 12.0) lines.push('<span class="ok">  ✓</span> Done. Hero rebuilt, checked at 3 sizes.');
+  }
+  $('tbody').innerHTML = lines.join('\n');
+}
+
+function seek(t) {
+  t = ((t % DURATION) + DURATION) % DURATION;
+  // caption: crossfade on each change
+  let ci = 0; CAPS.forEach((c, i) => { if (t >= c[0]) ci = i; });
+  const since = t - CAPS[ci][0], next = ci + 1 < CAPS.length ? CAPS[ci + 1][0] : DURATION - 0.5;
+  $('cap').innerHTML = CAPS[ci][1];
+  $('cap').style.opacity = Math.min(seg(since, 0, .35), 1 - seg(t, next - .3, next));
+
+  // terminal: 0-3.4 then 9.8-13
+  const tIn = Math.min(seg(t, 0, .4), 1 - seg(t, 3.2, 3.6)) || 0;
+  const tIn2 = Math.min(seg(t, 9.8, 10.2), 1 - seg(t, 12.7, 13.1));
+  show($('term'), Math.max(tIn, tIn2), 30);
+  term(t);
+
+  // review page: 3.4-10
+  const rv = Math.min(seg(t, 3.4, 3.9), 1 - seg(t, 9.5, 9.9));
+  show($('rev'), rv, 40);
+  ['oA', 'oB', 'oC'].forEach((id, i) => show($(id), ease(seg(t, 4.0 + i * .35, 4.5 + i * .35)), 30));
+  const picked = t >= 7.05 && t < 10;
+  $('oC').classList.toggle('sel', picked);
+  $('oC').querySelector('.check').style.opacity = picked ? ease(seg(t, 7.05, 7.3)) : 0;
+  $('oC').querySelector('.pick').textContent = picked ? 'Picked ✓' : 'Pick this';
+  const copied = t >= 8.95 && t < 10;
+  $('copy').textContent = copied ? 'Copied ✓' : 'Copy my decisions';
+
+  // cursor
+  const cur = $('cur');
+  const K = [[5.3, 1500, 950], [6.8, PICK[0], PICK[1]], [7.6, PICK[0], PICK[1]], [8.8, COPY[0], COPY[1]]];
+  let x = K[0][1], y = K[0][2];
+  for (let i = 0; i < K.length - 1; i++) if (t >= K[i][0]) { const f = ease(seg(t, K[i][0], K[i + 1][0])); x = lerp(K[i][1], K[i + 1][1], f); y = lerp(K[i][2], K[i + 1][2], f); }
+  const co = Math.min(seg(t, 5.3, 5.6), 1 - seg(t, 9.4, 9.7));
+  cur.style.opacity = co; cur.style.visibility = co > 0 ? 'visible' : 'hidden';
+  const press = (t > 6.95 && t < 7.1) || (t > 8.85 && t < 9.0);
+  cur.style.transform = `translate(${x - 8}px,${y - 4}px) scale(${press ? .85 : 1})`;
+  // click ring
+  const ring = $('ring');
+  let rp = -1, rc = null;
+  if (t >= 6.95 && t < 7.6) { rp = seg(t, 6.95, 7.6); rc = PICK; }
+  if (t >= 8.85 && t < 9.5) { rp = seg(t, 8.85, 9.5); rc = COPY; }
+  ring.style.opacity = rp < 0 ? 0 : 1 - rp;
+  if (rc) ring.style.transform = `translate(${rc[0] - 35}px,${rc[1] - 35}px) scale(${.4 + rp})`;
+
+  // big before/after: 13-21.4
+  const bv = Math.min(seg(t, 12.9, 13.4), 1 - seg(t, 21.2, 21.8));
+  show($('brow'), bv, 40);
+  const w = ease(seg(t, 14.2, 16.6));          // wipe left to right: after replaces before
+  const px = 1100 * w;
+  $('bclip').style.clipPath = `inset(0 0 0 ${px}px)`;
+  $('bline').style.left = (px - 2) + 'px';
+  $('bline').style.opacity = w > 0 && w < 1 ? 1 : 0;
+  $('tagB').style.opacity = 1 - seg(t, 15.8, 16.3);
+  $('tagA').style.opacity = seg(t, 15.0, 15.5);
+
+  // steps: fill one by one
+  const on = [3.4, 6.95, 10.0, 16.6];
+  document.querySelectorAll('.st').forEach((s, i) => s.classList.toggle('on', t >= on[i] && t < 21.6));
+}
+
+function setTheme() { if (new URLSearchParams(location.search).get('theme') === 'dark') document.documentElement.classList.add('dark'); }
+window.heroReady = (async () => {
+  setTheme();
+  await document.fonts.ready;
+  await Promise.all([...document.images].map((i) => i.complete ? 0 : new Promise((r, j) => { i.onload = r; i.onerror = () => j(new Error('image failed: ' + i.src)); })));
+  // measure click targets with nothing transformed
+  ['rev', 'oC'].forEach((id) => { $(id).style.transform = 'none'; $(id).style.opacity = 1; });
+  PICK = center($('oC').querySelector('.pick'));
+  COPY = center($('copy'));
+})();
+window.seek = seek;
+window.DURATION = DURATION;
+heroReady.then(() => {
+  const q = new URLSearchParams(location.search);
+  if (q.has('t')) { seek(parseFloat(q.get('t'))); return; }
+  if (q.has('record')) { seek(0); return; }
+  const t0 = performance.now(); const loop = () => { seek((performance.now() - t0) / 1000); requestAnimationFrame(loop); }; loop();
+});
+</script>
+</body>
+</html>

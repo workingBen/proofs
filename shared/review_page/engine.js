@@ -1134,6 +1134,71 @@
     sync();
   })();
 
+  /* ------------------------------------------------- the compare page (design-review)
+     A compare item holds two pages, the original and the built one, each embedded once.
+     Every width has a frame for each; one toggle shows one side in both widths. The hidden
+     side stays laid out (visibility, not display), so switching is instant. */
+  all("[data-cmp]").forEach(function (cmp) {
+    var id = cmp.dataset.cmp, docs = {};
+    var sides = ["original", "built"], view = "built";
+    for (var i = 0; i < sides.length; i++) {
+      var el = document.getElementById("rp-cmp-" + id + "-" + sides[i]);
+      if (!el) return;
+      docs[sides[i]] = JSON.parse(el.textContent);
+    }
+    var frames = all(".rp-cmp-frame", cmp), now = one("[data-cmp-now]", cmp);
+    // As the Refine preview fits its frames: scale = column / frame width (never above 1), the
+    // page measured at the capture's viewport height and never shorter, and the box takes the
+    // shown side's scaled size, so the review page never scrolls sideways.
+    function fit(box) {
+      var fig = box.parentNode, shown = 0, w = 0, s = 1;
+      all(".rp-cmp-frame", box).forEach(function (f) {
+        w = +f.dataset.cmpWidth;
+        s = Math.min(1, Math.max(0, fig.clientWidth - (box.offsetWidth - box.clientWidth)) / w);
+        var d = f.contentDocument, floor = +f.dataset.cmpHeight || 0, h = floor;
+        if (f.dataset.cmpReady === "1" && d && d.documentElement) {
+          f.style.height = floor + "px";
+          h = Math.max(floor, Math.ceil(d.documentElement.scrollHeight), Math.ceil(d.documentElement.getBoundingClientRect().height));
+        }
+        f.style.height = h + "px";
+        f.style.transform = s < 1 ? "scale(" + s + ")" : "";
+        if (f.dataset.cmpV === view) shown = h;
+      });
+      box.style.width = Math.floor(w * s) + "px";
+      box.style.height = Math.ceil(shown * s) + "px";
+    }
+    var boxes = all(".rp-cmp-box", cmp);
+    function fitAll() { boxes.forEach(fit); }
+    function sync() {
+      all("[data-cmp-view]", cmp).forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.cmpView === view)); });
+      frames.forEach(function (f) { f.hidden = f.dataset.cmpV !== view; });
+      if (now) now.textContent = view === "built" ? "With your picks" : "Original";
+      fitAll();
+    }
+    frames.forEach(function (f) {
+      f.addEventListener("load", function () {
+        var d = f.contentDocument;
+        // WebKit can fire a load for the initial about:blank: only the page's own load counts.
+        if (!d || !d.documentElement || d.URL !== "about:srcdoc") { delete f.dataset.cmpReady; return; }
+        if (+f.dataset.cmpHeight > 0) d.documentElement.style.setProperty("--rp-vh", +f.dataset.cmpHeight / 100 + "px");
+        f.dataset.cmpReady = "1";
+        fit(f.parentNode);
+        var RO = d.defaultView && d.defaultView.ResizeObserver;
+        if (RO) new RO(function () { fit(f.parentNode); }).observe(d.documentElement);
+      });
+      f.srcdoc = docs[f.dataset.cmpV];
+    });
+    all("[data-cmp-view]", cmp).forEach(function (b) {
+      b.addEventListener("click", function () { view = b.dataset.cmpView; sync(); });
+    });
+    if (window.ResizeObserver) {
+      var ro = new ResizeObserver(fitAll);
+      boxes.forEach(function (b) { ro.observe(b.parentNode); });
+    }
+    window.addEventListener("resize", fitAll);
+    sync();
+  });
+
   /* ------------------------------------------------- the page's database, when present
      Without the runtime (a local file, an older contract, a signed-out viewer) none of
      this runs and the page works from localStorage alone, as before. Copy never waits

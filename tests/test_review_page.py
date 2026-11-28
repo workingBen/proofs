@@ -4229,3 +4229,257 @@ class NearCopyMetric(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def compare_project(tmp):
+    """A project with a before snapshot (the Refine fixture's) and an after one with bold totals
+    and a script in it, plus the compare spec that rates one against the other."""
+    proj = Path(tmp) / "cmp"
+    shutil.copytree(REFINE, proj)
+    after = proj / "after"
+    after.mkdir()
+    shutil.copytree(proj / "before" / "home-snapshot-assets", after / "home-snapshot-assets")
+    text = (proj / "before" / "home-snapshot.html").read_text()
+    text = text.replace(".total { font-weight:400; }", ".total { font-weight:700; }", 1)
+    text = text.replace("</body>", '<script>document.title = "ran"</script>\n'
+                        '<div style="height:120vh" class="tall"></div></body>', 1)
+    (after / "home-snapshot.html").write_text(text)
+    spec = {"title": "Host Headroom — Your picks", "project": {"name": "Host Headroom", "session": "Picks"},
+            "sections": [{"title": "Rate it", "decisions": "compare", "items": [
+                {"kind": "compare", "id": "rating", "original": {"from": "before/home-snapshot.html"},
+                 "built": {"from": "after/home-snapshot.html"},
+                 "changed_html": "The totals are bold."}]}]}
+    return proj, spec
+
+
+class ComparePage(unittest.TestCase):
+    """design-review's rating step: the original and the built page, one toggle for both frames,
+    and the Less / Equal / More answer on the same page (FRICTION 19)."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.proj, self.spec = compare_project(self._tmp.name)
+
+    def build(self, spec=None, ok=True):
+        src, out = self.proj / "s.json", self.proj / ".proofs" / "pages" / "cmp.html"
+        src.write_text(json.dumps(spec or self.spec))
+        r = subprocess.run([sys.executable, str(BUILD), str(src), "--out", str(out)],
+                           capture_output=True, text=True, cwd=str(self.proj))
+        if ok:
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        return out, r
+
+    def test_the_page_holds_both_pages_without_scripts_and_four_still_frames(self):
+        out, _ = self.build()
+        text = out.read_text()
+        docs = dict(re.findall(r'<script type="application/json" id="rp-cmp-rating-(original|built)">(.*?)</script>', text, re.S))
+        self.assertEqual(sorted(docs), ["built", "original"])
+        built = json.loads(docs["built"])
+        self.assertNotIn("<script", built.lower())
+        self.assertIn("font-weight:700", built)
+        self.assertIn("data:image/", built)               # the snapshot's assets are embedded
+        self.assertIn("var(--rp-vh", built)               # 120vh no longer grows with the frame
+        self.assertNotIn("home-snapshot-assets/", built)
+        frames = re.findall(r'<iframe class="rp-cmp-frame"[^>]*>', text)
+        self.assertEqual(len(frames), 4)
+        self.assertEqual(sorted(re.search(r'data-cmp-v="(\w+)"', f).group(1) + re.search(r'data-cmp-width="(\d+)"', f).group(1)
+                                for f in frames), ["built1280", "built390", "original1280", "original390"])
+        for f in frames:
+            self.assertIn('tabindex="-1"', f)
+        # Starts on the picks; one toggle switches both widths.
+        self.assertIn('data-cmp-view="built" aria-pressed="true"', text)
+        self.assertIn('data-cmp-view="original" aria-pressed="false"', text)
+        self.assertEqual(len(re.findall(r'data-cmp-view="', text)), 2)
+        self.assertIn("What changed", text)
+        self.assertIn("The totals are bold.", text)
+        # The sticky bar links down to the answer, which sits under the long frames.
+        self.assertIn('<a class="rp-cmp-rate" href="#comment-rating">', text)
+        self.assertIn('id="comment-rating"', text)
+        css = (RP / "style.css").read_text()
+        self.assertRegex(css, r"\.rp-cmp-frame \{[^}]*pointer-events:none")
+        self.assertRegex(css, r"\.rp-cmp-bar \{[^}]*position:sticky")
+        # The answer buttons: Less, Equal, More.
+        for choice, label in (("less", "Less"), ("equal", "Equal"), ("more", "More")):
+            self.assertRegex(text, r'data-item="rating" data-choice="%s"[^>]*>[^<]*%s' % (choice, label))
+        # The rating's fingerprint follows the two pages: a new build never pre-fills an old answer.
+        rev1 = json.loads(re.search(r'<script type="application/json" id="rp-spec">(.*?)</script>', text, re.S).group(1))
+        (self.proj / "after" / "home-snapshot.html").write_text(
+            (self.proj / "after" / "home-snapshot.html").read_text().replace("font-weight:700", "font-weight:600"))
+        text2 = self.build()[0].read_text()
+        rev2 = json.loads(re.search(r'<script type="application/json" id="rp-spec">(.*?)</script>', text2, re.S).group(1))
+        pick = lambda s: [i["rev"] for x in s["sections"] for i in x["items"]][0]
+        self.assertNotEqual(pick(rev1), pick(rev2))
+
+    def test_a_built_folder_is_read_as_its_index_page(self):
+        site = self.proj / "built-b"
+        site.mkdir()
+        (site / "index.html").write_text('<!doctype html><html><head><link rel="stylesheet" href="site.css">'
+                                         '<script src="app.js"></script></head><body onload="x()"><h1>Hi</h1></body></html>')
+        spec = json.loads(json.dumps(self.spec))
+        spec["sections"][0]["items"][0]["built"] = {"from": "built-b"}
+        out, r = self.build(spec)
+        built = json.loads(re.search(r'id="rp-cmp-rating-built">(.*?)</script>', out.read_text(), re.S).group(1))
+        self.assertIn("<h1>Hi</h1>", built)
+        self.assertNotIn("<script", built.lower())
+        self.assertNotIn("onload", built.lower())
+        # A file the frame cannot load from a published page is named, not silently missing.
+        self.assertIn("site.css", r.stderr)
+        self.assertIn("capture it with --snapshot", r.stderr)
+
+    def test_spec_errors(self):
+        cases = [
+            ({"built": None}, "needs built"),
+            ({"original": {"from": "before/nowhere.html"}}, "not found"),
+            ({"changed_html": ""}, "needs changed_html"),
+        ]
+        for patch, want in cases:
+            spec = json.loads(json.dumps(self.spec))
+            it = spec["sections"][0]["items"][0]
+            for k, v in patch.items():
+                if v is None:
+                    it.pop(k)
+                else:
+                    it[k] = v
+            _, r = self.build(spec, ok=False)
+            self.assertEqual(r.returncode, 1, (patch, r.stderr))
+            self.assertIn(want, r.stderr, patch)
+        spec = json.loads(json.dumps(self.spec))
+        spec["sections"][0]["decisions"] = "design-review"
+        _, r = self.build(spec, ok=False)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn('needs the "compare" decisions preset', r.stderr)
+
+
+COMPARE_DRIVE = r"""
+const { chromium } = require(process.argv[2]);
+const { launchChromium } = require(process.argv[3]);
+const file = "file://" + process.argv[4];
+(async () => {
+  const browser = await launchChromium(chromium, process.env);
+  const errors = [], out = {};
+  const ready = (page) => page.waitForFunction(() => {
+    const f = document.querySelectorAll(".rp-cmp-frame");
+    return f.length === 4 && Array.prototype.every.call(f, (x) => x.dataset.cmpReady === "1");
+  }, null, { timeout: 15000 });
+  const look = (page) => page.evaluate(() => {
+    const r = {};
+    document.querySelectorAll(".rp-cmp-frame").forEach((f) => {
+      const d = f.contentDocument, box = f.getBoundingClientRect();
+      r[f.dataset.cmpV + f.dataset.cmpWidth] = {
+        shown: getComputedStyle(f).visibility !== "hidden" && box.height > 0,
+        weight: getComputedStyle(d.querySelector(".total")).fontWeight,
+        scripts: d.querySelectorAll("script").length, title: d.title,
+        pointer: getComputedStyle(f).pointerEvents,
+        tall: Math.round(d.querySelector(".tall") ? d.querySelector(".tall").getBoundingClientRect().height : 0) };
+    });
+    r.pressed = Array.prototype.map.call(document.querySelectorAll("[data-cmp-view]"),
+      (b) => b.dataset.cmpView + ":" + b.getAttribute("aria-pressed"));
+    r.now = document.querySelector("[data-cmp-now]").textContent;
+    return r;
+  });
+  for (const [name, vp] of [["desk", { width: 1440, height: 900 }], ["phone", { width: 390, height: 844 }]]) {
+    const ctx = await browser.newContext({ viewport: vp, deviceScaleFactor: 1 });
+    const page = await ctx.newPage();
+    page.on("pageerror", (e) => errors.push(e.message));
+    await page.goto(file);
+    await ready(page);
+    const r = { start: await look(page) };
+    await page.locator('[data-cmp-view="original"]').click();
+    await page.waitForTimeout(80);
+    r.original = await look(page);
+    await page.locator('[data-cmp-view="built"]').click();
+    await page.waitForTimeout(80);
+    r.back = await look(page);
+    r.sideways = await page.evaluate(() => document.scrollingElement.scrollWidth - innerWidth);
+    r.taps = await page.evaluate(() => Array.prototype.map.call(
+      document.querySelectorAll('[data-cmp-view], .rp-cmp-rate, [data-item="rating"][data-choice]'),
+      (b) => { const x = b.getBoundingClientRect(); return [b.textContent.trim(), Math.round(x.width), Math.round(x.height)]; }));
+    r.bar = await page.evaluate(() => getComputedStyle(document.querySelector(".rp-cmp-bar")).position);
+    if (name === "desk") {
+      await page.locator('[data-item="rating"][data-choice="more"]').click();
+      await page.locator('textarea[data-comment="rating"]').fill("the totals read faster");
+      await page.waitForTimeout(80);
+      r.export = await page.evaluate(() => window.rpExport());
+    }
+    out[name] = r;
+    await ctx.close();
+  }
+  await browser.close();
+  out.errors = errors;
+  console.log(JSON.stringify(out));
+})().catch((e) => { console.log(JSON.stringify({ crash: String(e && e.stack || e) })); process.exit(1); });
+"""
+
+
+@unittest.skipUnless(NODE and playwright_dir(), "Playwright not found")
+class CompareBrowser(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        proj, spec = compare_project(cls.tmp.name)
+        src, out = proj / "s.json", proj / "cmp.html"
+        src.write_text(json.dumps(spec))
+        r = subprocess.run([sys.executable, str(BUILD), str(src), "--out", str(out)], capture_output=True, text=True,
+                           cwd=str(proj))
+        if r.returncode:
+            raise AssertionError(r.stdout + r.stderr)
+        cls.page, cls.proj = out, proj
+        script = Path(cls.tmp.name) / "drive.cjs"
+        script.write_text(COMPARE_DRIVE)
+        r = subprocess.run([NODE, str(script), playwright_dir(), str(RP / "launch.cjs"), str(out)],
+                           capture_output=True, text=True, timeout=300)
+        lines = r.stdout.strip().splitlines()
+        cls.res = json.loads(lines[-1]) if lines else {"crash": r.stderr}
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def setUp(self):
+        self.assertNotIn("crash", self.res, self.res.get("crash"))
+        self.assertEqual(self.res["errors"], [])
+
+    def test_it_starts_on_the_picks_and_one_toggle_switches_both_widths(self):
+        for name in ("desk", "phone"):
+            r = self.res[name]
+            for state, shown, hidden in (("start", "built", "original"), ("original", "original", "built"),
+                                         ("back", "built", "original")):
+                for w in ("1280", "390"):
+                    self.assertTrue(r[state][shown + w]["shown"], (name, state, w))
+                    self.assertFalse(r[state][hidden + w]["shown"], (name, state, w))
+            self.assertEqual(r["start"]["pressed"], ["original:false", "built:true"])
+            self.assertEqual(r["original"]["pressed"], ["original:true", "built:false"])
+            self.assertEqual(r["original"]["now"], "Original")
+            self.assertEqual(r["start"]["now"], "With your picks")
+            self.assertEqual(r["start"]["built1280"]["weight"], "700")
+            self.assertEqual(r["start"]["original1280"]["weight"], "400")
+
+    def test_frames_run_no_scripts_take_no_taps_and_keep_vh_bounded(self):
+        f = self.res["desk"]["start"]
+        for k in ("built1280", "built390", "original1280", "original390"):
+            self.assertEqual(f[k]["scripts"], 0, k)
+            self.assertEqual(f[k]["pointer"], "none", k)
+        self.assertNotEqual(f["built1280"]["title"], "ran")
+        self.assertEqual(f["built1280"]["tall"], 960)    # 120vh of the 800 px capture viewport
+        self.assertEqual(f["built390"]["tall"], round(844 * 1.2))
+
+    def test_phone_fit_tap_targets_and_sticky_toggle(self):
+        for name in ("desk", "phone"):
+            r = self.res[name]
+            self.assertLessEqual(r["sideways"], 0, name)
+            self.assertEqual(r["bar"], "sticky", name)
+            self.assertEqual(len(r["taps"]), 6, r["taps"])
+            for label, w, h in r["taps"]:
+                self.assertGreaterEqual(h, 44, (name, label))
+                self.assertGreaterEqual(w, 44, (name, label))
+
+    def test_the_rating_is_answered_on_the_page(self):
+        self.assertIn("1. ", self.res["desk"]["export"])
+        self.assertIn("— MORE — COMMENT: the totals read faster", self.res["desk"]["export"])
+
+    def test_smoke_passes_on_the_compare_page(self):
+        r = subprocess.run([sys.executable, str(BUILD), "--smoke", str(self.page)], capture_output=True, text=True,
+                           cwd=str(self.proj), timeout=300)
+        res = json.loads(r.stdout)
+        self.assertEqual(res.get("problems"), [], res)

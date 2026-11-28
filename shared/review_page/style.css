@@ -121,6 +121,31 @@ picture.rp-pic { display:contents; }
 /* A picture of the page, never a page to use: a tap on a link in it would navigate the frame
    (or, with target="_top", the review page) away. The view toggle sits outside the frame. */
 .rp-rc-frame { position:absolute; top:0; left:0; display:block; border:0; background:#fff; transform-origin:0 0; pointer-events:none; }
+/* The compare item (design-review's rating step): one sticky toggle over both frames. */
+.rp-cmp-changed { margin:0 0 12px; font-size:18px; }
+.rp-cmp-bar { position:sticky; top:0; z-index:5; background:var(--rp-card); padding:10px 0; margin:0 0 16px;
+  border-bottom:1px solid var(--rp-rule); }
+.rp-cmp-toggle { display:flex; width:100%; max-width:520px; border:2px solid var(--rp-accent); border-radius:12px;
+  overflow:hidden; background:var(--rp-card); }
+.rp-cmp-toggle button { flex:1 1 50%; min-height:52px; font:inherit; font-size:18px; font-weight:700; border:0;
+  background:transparent; color:var(--rp-ink); cursor:pointer; padding:8px 12px; }
+.rp-cmp-toggle button[aria-pressed="true"] { background:var(--rp-accent); color:var(--rp-accent-ink); }
+.rp-cmp-toggle button:focus-visible { outline:3px solid var(--rp-ink); outline-offset:-5px; }
+.rp-cmp-now { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:4px 12px;
+  margin:6px 0 0; font-size:16px; color:var(--rp-soft); }
+.rp-cmp-rate { display:inline-flex; align-items:center; min-height:44px; padding:0 4px; font-weight:700; color:var(--rp-link); }
+.rp-cmp-frames { display:grid; gap:24px; }
+.rp-cmp-fig { margin:0; min-width:0; }
+.rp-cmp-fig[data-cmp-fig="390"] { max-width:392px; }
+.rp-cmp-fig figcaption { font-size:17px; font-weight:700; margin-bottom:6px; }
+.rp-cmp-box { position:relative; max-width:100%; overflow:hidden; border:1px solid var(--rp-rule); border-radius:8px; background:#fff; }
+/* A picture of the page, never a page to use (as the Refine frames). The hidden side stays laid out. */
+.rp-cmp-frame { position:absolute; top:0; left:0; display:block; border:0; background:#fff; transform-origin:0 0; pointer-events:none; }
+.rp-cmp-frame[hidden] { display:block; visibility:hidden; }
+.rp-cmp-foot { margin:16px 0 0; font-size:16px; color:var(--rp-soft); }
+.rp-btn.rp-st-less[aria-pressed="true"] { background:var(--rp-deny); }
+.rp-btn.rp-st-equal[aria-pressed="true"] { background:var(--rp-comment); }
+.rp-btn.rp-st-more[aria-pressed="true"] { background:var(--rp-accept); }
 .rp-scores-label { font-weight:600; color:var(--rp-ink, inherit); }
 .rp-unscored { color:var(--rp-faint); }
 .rp-judged { font-size:14px; color:var(--rp-soft); margin:8px 0; }

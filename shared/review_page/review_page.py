@@ -117,6 +117,15 @@ PRESETS = {
             {"state": "deny", "label": "✕ No", "export": "NO"},
             {"state": "revise", "label": "↻ Revise", "export": "REVISE", "comment": "required"},
         ]},
+    # design-review's rating step (a "compare" item): the original page and the built one, and
+    # whether the reader likes the build less, the same or more. The note box is always open.
+    "compare": {
+        "variant_word": "Option", "pending": "PENDING", "mark_read": False, "comment_always": True,
+        "buttons": [
+            {"state": "less", "label": "Less", "export": "LESS", "comment": "optional"},
+            {"state": "equal", "label": "Equal", "export": "EQUAL", "comment": "optional"},
+            {"state": "more", "label": "More", "export": "MORE", "comment": "optional"},
+        ]},
 }
 CATEGORY_COLORS = ["#2563eb", "#b45309", "#047857", "#9333ea", "#be123c", "#0e7490", "#4d7c0f", "#c2410c"]
 MODES = ("review", "questions", "log", "session", "settings")
@@ -126,7 +135,8 @@ DEFAULT_OUT_MODES = ("log", "session", "settings")
 # page takes it from its decisions preset (a custom set with no preset shows the
 # wordmark alone), the other modes from their kind of page.
 PRESET_SKILLS = {"copy-edit": "article-copy-edit", "design-review": "design-review",
-                 "style-guide": "style-guide", "photo-picker": "photo-picker", "refine": "design-review"}
+                 "style-guide": "style-guide", "photo-picker": "photo-picker", "refine": "design-review",
+                 "compare": "design-review"}
 
 
 class SpecError(Exception):
@@ -671,6 +681,8 @@ def render_review(sec, ctx):
             out.append(h)
             items.extend(js_items)
             continue
+        if it.get("kind") == "compare":
+            compare_entry(it, sec, ctx)
         ctx.n += 1
         it.setdefault("num", str(ctx.n))
         it["id"] = str(it.get("id") or it["num"])
@@ -2094,6 +2106,100 @@ def refine_entry(it, sec, ctx):
            # What its removes lines name, for --smoke's hidden-element and changed-word lines.
            "removes": [r["element"] for r in c.get("removes") or []]} for c in it["changes"]]
     return render_refine(it, ctx), js
+
+
+# ------------------------------------------------------------------ compare
+#
+# design-review's rating step (reference/review-page.md, "Compare items"): after the picks are
+# built, one item of "kind": "compare" shows the original page and the built one in still frames
+# at 1280 and 390, with one toggle that switches both, and asks whether the reader likes the
+# build less, the same or more. The answer is an ordinary item answer (Copy, the page's database,
+# Send to Claude). Each page is embedded once, as a JSON string, scripts and on* handlers removed.
+
+COMPARE_SIDES = (("original", "Original"), ("built", "With your picks"))
+COMPARE_LABEL = "With your picks, do you like the page less, the same or more than the original?"
+SCRIPT_TAG = re.compile(r"<script\b[^>]*>.*?</script\s*>|<script\b[^>]*/?>", re.S | re.I)
+ON_ATTR = re.compile(r"""\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)""", re.I)
+LOCAL_LOAD = re.compile(r"""<(?:link|img|source|video|audio|iframe|embed|image|object)\b[^<>]*?\s(?:src|href|srcset|poster|data)=["']?\s*([^"'\s<>,]+)""", re.I)
+
+
+def without_scripts(doc):
+    """doc with every <script> and every on* attribute removed: the frames show the page, they never run it."""
+    doc = SCRIPT_TAG.sub("", doc)
+    return re.sub(r"<[A-Za-z][^<>]*>", lambda m: ON_ATTR.sub("", m.group(0)), doc)
+
+
+def compare_doc(it, side, base, cache):
+    """One side of a compare item as its frames show it: a capture snapshot with its assets
+    embedded (as a Refine base is), or a built folder's index.html, with no scripts, every vh
+    as a multiple of --rp-vh and no nested srcdoc."""
+    src = it.get(side)
+    if not (isinstance(src, dict) and isinstance(src.get("from"), str) and src["from"].strip()):
+        raise SpecError('item %s needs %s: {"from": "<a capture snapshot, an HTML file or a built folder>"}'
+                        % (it["id"], side))
+    rel = src["from"]
+    for folder in (base, Path.cwd()):
+        if (folder / rel).is_dir():
+            rel = str(Path(rel) / "index.html")
+            break
+    doc = load_snapshot({"id": it["id"], "base": {"from": rel}}, base, cache)
+    doc = strip_nested_srcdoc(vh_to_var(without_scripts(doc)))
+    near = [u for u in dict.fromkeys(html.unescape(m.group(1)) for m in LOCAL_LOAD.finditer(doc))
+            if not re.match(r"(?i)(data:|https?:|//|#|about:|mailto:|tel:|javascript:)", u)]
+    if near:
+        print("warning: item %s: %s refers to %d file%s beside it (%s%s), which its frame cannot load; "
+              "capture it with --snapshot and compare the snapshots"
+              % (it["id"], side, len(near), "" if len(near) == 1 else "s", ", ".join(near[:3]),
+                 ", ..." if len(near) > 3 else ""), file=sys.stderr)
+    far = external_loads(doc)
+    if far:
+        print("warning: item %s: %s still loads %d file%s from another site (%s), which will not load in a "
+              "published page" % (it["id"], side, len(far), "" if len(far) == 1 else "s", ", ".join(far[:3])),
+              file=sys.stderr)
+    return doc
+
+
+def compare_entry(it, sec, ctx):
+    """Validate a compare item and write its body (the toggle, both pages, four frames). It is
+    then numbered, answered and exported like any review item."""
+    it["id"] = str(it.get("id") or "compare")
+    if sec.get("_preset") != "compare":
+        raise SpecError('item %s: a compare item needs the "compare" decisions preset (its section has %r)'
+                        % (it["id"], sec.get("_preset")))
+    if not (isinstance(it.get("changed_html"), str) and it["changed_html"].strip()):
+        raise SpecError("item %s needs changed_html: one line saying what changed, in plain words" % it["id"])
+    if it.get("body_html"):
+        raise SpecError("item %s: a compare item writes its own body; leave out body_html" % it["id"])
+    it.setdefault("label", COMPARE_LABEL)
+    cache, base = {}, ctx.spec.get("_base") or Path.cwd()
+    docs = {side: compare_doc(it, side, base, cache) for side, _ in COMPARE_SIDES}
+    iid = esc(it["id"])
+    h = ['<div class="rp-cmp" data-cmp="%s">' % iid,
+         '<p class="rp-cmp-changed"><b>What changed:</b> %s</p>' % it["changed_html"],
+         '<div class="rp-cmp-bar"><div class="rp-cmp-toggle" role="group" aria-label="Which version to show">']
+    for side, label in COMPARE_SIDES:
+        h.append('<button type="button" data-cmp-view="%s" aria-pressed="%s">%s</button>'
+                 % (side, "true" if side == "built" else "false", label))
+    # The answer sits under the frames, which are long on a phone; the bar it scrolls with links to it.
+    h.append('</div><p class="rp-cmp-now" aria-live="polite">Showing: <span data-cmp-now>With your picks</span>'
+             '<a class="rp-cmp-rate" href="#comment-%s">Rate it below</a></p></div>' % iid)
+    # Each page once, as a JSON string the engine gives its two frames as their srcdoc; every
+    # "<" is escaped, so a "</script>" in the page's text cannot end it.
+    for side, _ in COMPARE_SIDES:
+        h.append('<script type="application/json" id="rp-cmp-%s-%s">%s</script>'
+                 % (iid, side, json.dumps(docs[side], ensure_ascii=False).replace("<", "\\u003c")))
+    h.append('<div class="rp-cmp-frames">')
+    for width, caption in REFINE_WIDTHS:
+        h.append('<figure class="rp-cmp-fig" data-cmp-fig="%d"><figcaption>%s</figcaption><div class="rp-cmp-box">'
+                 % (width, caption))
+        for side, label in COMPARE_SIDES:
+            h.append('<iframe class="rp-cmp-frame" data-cmp-v="%s" data-cmp-width="%d" data-cmp-height="%d" width="%d" '
+                     'title="%s, %s" tabindex="-1"%s></iframe>'
+                     % (side, width, REFINE_VIEWPORT_H[width], width, label, caption, "" if side == "built" else " hidden"))
+        h.append("</div></figure>")
+    h.append('</div><p class="rp-cmp-foot">These are pictures of the page, so nothing in them can be tapped. '
+             'On a phone, pinch to zoom in on the desktop view.</p></div>')
+    it["body_html"] = "\n".join(h)
 
 
 # -------------------------------------------------------------------- check

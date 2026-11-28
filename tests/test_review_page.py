@@ -4311,6 +4311,47 @@ class ComparePage(unittest.TestCase):
         pick = lambda s: [i["rev"] for x in s["sections"] for i in x["items"]][0]
         self.assertNotEqual(pick(rev1), pick(rev2))
 
+    def test_script_vectors_are_removed_by_a_real_parse(self):
+        bad = ['<img alt="a>b" onerror=alert(1)>', "<svg/onload=alert(1)>", '<a href="javascript:alert(1)">x</a>',
+               '<a href=" JaVa\tScript:alert(1)">x</a>', "<meta http-equiv=refresh content=\"0;url=http://x\">",
+               "<form action='vbscript:x'><button formaction=javascript:x>b</button></form>",
+               "<p>a<script>var s = '</p>';</script>b</p>"]
+        for src in bad:
+            out = review_page.without_scripts(src)
+            self.assertNotRegex(out, r"(?i)[\s/\"']on[a-z]+\s*=", src)
+            self.assertNotRegex(out, r"(?i)(javascript|vbscript):", src)
+            self.assertNotRegex(out, r"(?i)http-equiv", src)
+            self.assertNotIn("<script", out.lower(), src)
+        self.assertIn('alt="a&gt;b"', review_page.without_scripts(bad[0]))       # the rest of the tag stays
+        # Everything else is left byte for byte.
+        keep = '<div class="a" data-x=\'1\'>ok &amp; &nbsp; <br/><a href="/x?a=1&b=2" style="color:red">y</a></div>'
+        self.assertEqual(review_page.without_scripts(keep), keep)
+        # And it holds through the build: the embedded pages carry none of it.
+        after = self.proj / "after" / "home-snapshot.html"
+        after.write_text(after.read_text().replace("</body>", "".join(bad[:4]) + "</body>", 1))
+        out, _ = self.build()
+        built = json.loads(re.search(r'id="rp-cmp-rating-built">(.*?)</script>', out.read_text(), re.S).group(1))
+        self.assertNotRegex(built, r"(?i)[\s/\"']on[a-z]+\s*=")
+        self.assertNotRegex(built, r"(?i)javascript:|http-equiv")
+
+    def test_the_frames_are_sandboxed_without_scripts(self):
+        text = self.build()[0].read_text()
+        frames = re.findall(r'<iframe class="rp-cmp-frame"[^>]*>', text)
+        self.assertEqual(len(frames), 4)
+        for f in frames:
+            self.assertIn('sandbox="allow-same-origin"', f)
+            self.assertNotIn("allow-scripts", f)
+
+    def test_a_local_path_in_a_page_is_warned_about_not_rewritten(self):
+        after = self.proj / "after" / "home-snapshot.html"
+        after.write_text(after.read_text().replace(
+            "</body>", '<p>file://%s/someone/site/a.png %s/dev/app</p></body>' % ("/Us" + "ers", "/ho" + "me"), 1))
+        out, r = self.build()
+        self.assertIn("local path", r.stderr)
+        self.assertIn("file://", r.stderr)
+        built = json.loads(re.search(r'id="rp-cmp-rating-built">(.*?)</script>', out.read_text(), re.S).group(1))
+        self.assertIn("someone/site/a.png", built)
+
     def test_a_built_folder_is_read_as_its_index_page(self):
         site = self.proj / "built-b"
         site.mkdir()

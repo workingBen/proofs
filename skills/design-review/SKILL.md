@@ -38,7 +38,7 @@ Confirm the live route, and which specific section(s) are in scope. A whole-page
 - **Redesign mode.** Pick **Redesign** when the request says redesign, new layout, rethink or "show me something different"; when there is no current page (a new page); or when the section in scope is broken. Redesign is the Careful, Step up and Bold options of step 3.
 - A bug-sized fix stays the one-option item it is, in either mode.
 
-**State the mode in one line**, in chat and in `intro_html`: "Refine: your page works, so these are small changes you can take or leave. Say 'redesign' for full alternatives." The reader switches by saying so, and the next round uses the other mode. In `claude -p`, state the line and go on.
+**State the mode in one line**, in chat and in `intro_html`: "Refine: your page works, so these are small changes you can take or leave. Say 'redesign' for full alternatives." For Redesign: "Redesign: you asked for something different, so these are full alternatives (Careful, Step up, Bold). Say 'refine' for small changes on your current page instead." The reader switches by saying so, and the next round uses the other mode. In `claude -p`, state the line and go on.
 
 ### 2. Capture "before": always from the running app
 

@@ -23,6 +23,7 @@ needed for --check, --smoke, --match-preview and --crops, Playwright only for --
 import argparse
 import base64
 import html
+from html.parser import HTMLParser
 import hashlib
 import json
 import mimetypes
@@ -2067,7 +2068,7 @@ def render_refine(it, ctx) -> str:
     for width, caption in REFINE_WIDTHS:
         p.append('<figure class="rp-rc-fig" data-rc-fig="%d"><figcaption>%s</figcaption><div class="rp-rc-box">'
                  '<iframe class="rp-rc-frame" data-rc-width="%d" data-rc-height="%d" width="%d" '
-                 'title="The page with your picks, %s"></iframe></div></figure>'
+                 'title="The page with your picks, %s" sandbox="allow-same-origin"></iframe></div></figure>'
                  % (width, caption, width, REFINE_VIEWPORT_H[width], width, caption))
     p.append("</div></div>")
     return "\n".join(h + ["\n".join(p)])
@@ -2118,15 +2119,94 @@ def refine_entry(it, sec, ctx):
 
 COMPARE_SIDES = (("original", "Original"), ("built", "With your picks"))
 COMPARE_LABEL = "With your picks, do you like the page less, the same or more than the original?"
-SCRIPT_TAG = re.compile(r"<script\b[^>]*>.*?</script\s*>|<script\b[^>]*/?>", re.S | re.I)
-ON_ATTR = re.compile(r"""\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)""", re.I)
 LOCAL_LOAD = re.compile(r"""<(?:link|img|source|video|audio|iframe|embed|image|object)\b[^<>]*?\s(?:src|href|srcset|poster|data)=["']?\s*([^"'\s<>,]+)""", re.I)
 
 
+URL_ATTRS = ("href", "src", "action", "formaction", "xlink:href")
+UNSAFE_URL = re.compile(r"^(?:javascript|vbscript):", re.I)
+HOME_PATH = re.compile(r"file://|(?<![\w.])/(?:Users|home)/[A-Za-z0-9._-]+")
+
+
+class _ScriptStripper(HTMLParser):
+    """Finds the spans of a document to cut or rewrite: each <script> element, each <meta
+    http-equiv=refresh>, and in any other tag every on* attribute and every javascript: or
+    vbscript: URL. It is a real tokenizer, so a ">" inside a quoted value or a "/" in place of a
+    space before an attribute cannot hide anything. The rest of the document is left as it was."""
+
+    def __init__(self, doc):
+        super().__init__(convert_charrefs=False)
+        self.doc, self.edits, self.script_from = doc, [], None
+        self.starts = [0]
+        for m in re.finditer("\n", doc):
+            self.starts.append(m.end())
+
+    def _here(self):
+        line, col = self.getpos()
+        return self.starts[line - 1] + col
+
+    def _tag_end(self, at):
+        # The ">" that ends the tag starting at `at`, quoted values skipped.
+        m = re.compile(r"""<[^\s>/]*(?:"[^"]*"|'[^']*'|[^>"'])*>""", re.S).match(self.doc, at)
+        return m.end() if m else len(self.doc)
+
+    def _clean(self, tag, attrs, raw):
+        keep, changed = [], False
+        for name, value in attrs:
+            if name.startswith("on") or (name in URL_ATTRS and value is not None
+                                         and UNSAFE_URL.match(re.sub(r"[\s\x00-\x1f]", "", value))):
+                changed = True
+                continue
+            keep.append((name, value))
+        if not changed:
+            return None
+        parts = [name if value is None else '%s="%s"' % (name, html.escape(value, quote=True)) for name, value in keep]
+        return "<" + " ".join([tag] + parts) + ("/>" if raw.endswith("/>") else ">")
+
+    def handle_starttag(self, tag, attrs, selfclosing=False):
+        raw = self.get_starttag_text()
+        at = self._here()
+        if self.script_from is not None:
+            return
+        if tag == "script":
+            if selfclosing:
+                self.edits.append((at, at + len(raw), ""))
+            else:
+                self.script_from = at
+            return
+        if tag == "meta" and any(n == "http-equiv" and (v or "").strip().lower() == "refresh" for n, v in attrs):
+            self.edits.append((at, at + len(raw), ""))
+            return
+        new = self._clean(tag, attrs, raw)
+        if new is not None:
+            self.edits.append((at, at + len(raw), new))
+
+    def handle_startendtag(self, tag, attrs):
+        self.handle_starttag(tag, attrs, selfclosing=True)
+
+    def handle_endtag(self, tag):
+        if tag == "script" and self.script_from is not None:
+            self.edits.append((self.script_from, self._tag_end(self._here()), ""))
+            self.script_from = None
+
+    def finish(self):
+        self.close()
+        if self.script_from is not None:      # a <script> never closed runs to the end of the page
+            self.edits.append((self.script_from, len(self.doc), ""))
+        out, last = [], 0
+        for start, end, text in sorted(self.edits):
+            out.append(self.doc[last:start])
+            out.append(text)
+            last = end
+        out.append(self.doc[last:])
+        return "".join(out)
+
+
 def without_scripts(doc):
-    """doc with every <script> and every on* attribute removed: the frames show the page, they never run it."""
-    doc = SCRIPT_TAG.sub("", doc)
-    return re.sub(r"<[A-Za-z][^<>]*>", lambda m: ON_ATTR.sub("", m.group(0)), doc)
+    """doc with every <script>, every on* attribute, every javascript:/vbscript: URL and every
+    meta refresh removed: the frames show the page, they never run it."""
+    p = _ScriptStripper(doc)
+    p.feed(doc)
+    return p.finish()
 
 
 def compare_doc(it, side, base, cache):
@@ -2151,6 +2231,11 @@ def compare_doc(it, side, base, cache):
               "capture it with --snapshot and compare the snapshots"
               % (it["id"], side, len(near), "" if len(near) == 1 else "s", ", ".join(near[:3]),
                  ", ..." if len(near) > 3 else ""), file=sys.stderr)
+    private = sorted(set(HOME_PATH.findall(doc)))
+    if private:
+        print("warning: item %s: %s contains a local path (%s%s), which would be public in a published page; "
+              "check it and remove it" % (it["id"], side, ", ".join(private[:3]), ", ..." if len(private) > 3 else ""),
+              file=sys.stderr)
     far = external_loads(doc)
     if far:
         print("warning: item %s: %s still loads %d file%s from another site (%s), which will not load in a "
@@ -2194,7 +2279,7 @@ def compare_entry(it, sec, ctx):
                  % (width, caption))
         for side, label in COMPARE_SIDES:
             h.append('<iframe class="rp-cmp-frame" data-cmp-v="%s" data-cmp-width="%d" data-cmp-height="%d" width="%d" '
-                     'title="%s, %s" tabindex="-1"%s></iframe>'
+                     'title="%s, %s" tabindex="-1" sandbox="allow-same-origin"%s></iframe>'
                      % (side, width, REFINE_VIEWPORT_H[width], width, label, caption, "" if side == "built" else " hidden"))
         h.append("</div></figure>")
     h.append('</div><p class="rp-cmp-foot">These are pictures of the page, so nothing in them can be tapped. '

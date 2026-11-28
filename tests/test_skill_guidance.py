@@ -1184,7 +1184,12 @@ class RefineGuidance(unittest.TestCase):
     def test_refine_capture_takes_the_snapshot(self):
         text = self.skill()
         self.assertIn("--out .proofs/capture/before --sizes 390,1280 --snapshot", text)
-        self.assertIn("<name>-snapshot.html", text)
+        # Task 8: the capture writes <name>-<state>-snapshot.html, and the docs said <name>-snapshot.html.
+        self.assertIn("<name>-<state>-snapshot.html", text)
+        self.assertIn("<name>-default-snapshot.html", text)
+        self.assertNotRegex(text, r"<name>-snapshot\.html")
+        ref = " ".join((REPO / "reference" / "review-page.md").read_text().split())
+        self.assertNotRegex(ref, r"<name>-snapshot\.html")
 
     def test_refine_flow_is_in_order(self):
         text = self.skill()
@@ -1265,3 +1270,68 @@ class RefineGuidance(unittest.TestCase):
         for word in ("`dense`", "`balanced`", "`airy`"):
             self.assertIn(word, text)
         self.assertIn("**Density**, asked next to Audience.", text)
+
+
+class AcceptanceRunGuidance(unittest.TestCase):
+    """What the Refine acceptance run on a real page (Task 8) found a real user would hit."""
+
+    def skill(self, name="design-review"):
+        return " ".join((REPO / "skills" / name / "SKILL.md").read_text().split())
+
+    def ref(self):
+        return " ".join((REPO / "reference" / "review-page.md").read_text().split())
+
+    def test_url_is_the_server_root(self):
+        self.assertIn("**`--url` is the server's root**", self.skill())
+
+    def test_every_capture_exit_code_and_a_finding_is_exit_0(self):
+        text = self.skill()
+        self.assertIn("**0 means the capture ran, with findings or without:**", text)
+        for code in ("1: the pages file", "2: Playwright", "3: the server never answered", "4: the server exited early",
+                     "5: another run holds the lock", "6: a page answered HTTP 400"):
+            self.assertIn(code, text)
+
+    def test_server_log_never_goes_into_the_served_folder(self):
+        self.assertIn("never into `--cwd`", self.skill())
+        self.assertNotIn("<base-dir>/.proofs/server.log", self.skill("pr-qa"))
+
+    def test_whole_page_scope_for_found_by_the_capture(self):
+        self.assertIn("**When the whole page is in scope**", self.skill())
+        self.assertIn('"Found by the capture" holds only the rows none of them fixes', self.skill())
+
+    def test_a_capture_items_fix_clears_the_floor_or_says_why_not(self):
+        text = self.skill()
+        self.assertIn("**The fix must clear the target the row measures**", text)
+        self.assertIn("14 px to 15 px under a 16 px floor", text)
+
+    def test_critic_fallback_when_no_helper_can_start(self):
+        text = self.skill()
+        self.assertIn("**When the setting is `helper` but no fresh helper can start**", text)
+        self.assertIn("**score in a separated pass.**", text)
+        self.assertIn("Set `judged_by` to `self`, and say so on the page", text)
+
+    def test_build_may_replace_a_property_and_capture_yes_is_proved_by_the_measure(self):
+        text = self.skill()
+        self.assertIn("**Building a change can mean replacing a property, not only adding a rule.**", text)
+        self.assertIn("**A `YES` on a \"Found by the capture\" item has no preview to match:**", text)
+        self.assertIn("quote the measure", text)
+
+    def test_several_builds_get_their_own_after_folders(self):
+        text = self.skill()
+        self.assertIn("`.proofs/capture/after-a`, `.proofs/capture/after-b`", text)
+
+    def test_crops_never_cut_words_and_take_context(self):
+        text, ref = self.skill(), self.ref()
+        self.assertIn("it never cuts a word", text)
+        self.assertIn("`context`", text)
+        self.assertIn("never cuts a word", ref)
+        self.assertIn("| `context` |", ref)
+
+    def test_the_rating_is_a_compare_page_in_the_refine_flow(self):
+        text, ref = self.skill(), self.ref()
+        self.assertIn("9. **Rating.**", text)
+        self.assertIn('"decisions": "compare"', text)
+        self.assertIn('"kind": "compare"', text)
+        self.assertIn("--out .proofs/pages/<review-name>-compare.html", text)
+        self.assertIn("### Compare items", ref)
+        self.assertIn("| `compare` |", ref)

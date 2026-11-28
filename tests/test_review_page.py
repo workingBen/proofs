@@ -2722,6 +2722,31 @@ class RefineCrops(unittest.TestCase):
         self.assertNotIn("crash", res, res.get("crash"))
         return res
 
+    def test_settle_waits_in_a_sandboxed_frame(self):
+        """The review page's frames are sandboxed without allow-scripts, so a callback queued inside
+        one (requestAnimationFrame, setTimeout) never runs: an evaluate that waited on one died with
+        "Execution context was destroyed". settle must come back, and the frame must stay usable."""
+        script = self.tmp / "settle.cjs"
+        script.write_text(
+            'const { launchChromium } = require(process.argv[3] + "/launch.cjs");\n'
+            'const { settle } = require(process.argv[3] + "/crops.cjs");\n'
+            '(async () => {\n'
+            '  const { chromium } = require(process.argv[2]);\n'
+            '  const browser = await launchChromium(chromium, process.env);\n'
+            '  try {\n'
+            '    const page = await browser.newPage();\n'
+            '    await page.setContent(\'<iframe sandbox="allow-same-origin" srcdoc="<p>hi</p>"></iframe>\');\n'
+            '    const frame = await (await page.$("iframe")).contentFrame();\n'
+            '    await frame.waitForSelector("p");\n'
+            '    await settle(frame);\n'
+            '    console.log(JSON.stringify({ ok: await frame.evaluate(() => document.body.textContent) }));\n'
+            '  } catch (e) { console.log(JSON.stringify({ crash: e.message })); } finally { await browser.close(); }\n'
+            '})();\n')
+        r = subprocess.run([NODE, str(script), playwright_dir(), str(RP)], capture_output=True, text=True, timeout=120)
+        res = json.loads(r.stdout.strip().splitlines()[-1])
+        self.assertNotIn("crash", res, res.get("crash"))
+        self.assertEqual(res["ok"], "hi")
+
     @staticmethod
     def crop_constants():
         r = subprocess.run([NODE, "-e", "const c = require(process.argv[1]); "

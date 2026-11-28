@@ -111,8 +111,14 @@ function removeDropped(outDir, ids) {
   }
 }
 
+// Fonts loaded in the frame, then two paints. The frames are sandboxed without allow-scripts, so
+// a callback queued inside one (requestAnimationFrame, setTimeout) never runs and Playwright
+// reports "Execution context was destroyed" for the evaluate waiting on it. Only a promise that
+// is already settled comes back from the frame; the paints are waited out in the review page,
+// which draws the frames.
 async function settle(frame) {
-  await frame.evaluate(() => document.fonts.ready.then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))));
+  await frame.evaluate(() => document.fonts.ready.then(() => true));
+  await frame.page().evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
 }
 
 // Both frames show exactly `ids` (the engine's test-only rpRefine.only), laid out and painted.
@@ -272,4 +278,4 @@ if (require.main === module) {
     .catch((e) => { console.log(JSON.stringify({ error: "crops crashed: " + (e && e.message) })); process.exit(1); });
 }
 
-module.exports = { CROP_MARGIN, CROP_SCALE, measureTargets, cropBox, snapToLines };
+module.exports = { CROP_MARGIN, CROP_SCALE, measureTargets, cropBox, snapToLines, settle };

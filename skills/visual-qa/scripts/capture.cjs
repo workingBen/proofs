@@ -19,7 +19,8 @@
 //
 // --sizes picks viewports by label (default: all of 1440, 1280, 390), or adds a desktop width
 // such as 1040 (400 to 2560), for a shot just above a breakpoint.
-// PROOFS_BASE_URL, when set, replaces "base" (so it runs unchanged after with_server.py --).
+// PROOFS_BASE_URL, when set, replaces "base" (so it runs unchanged after with_server.py --),
+// unless "base" is on the same server (same origin): then "base" is kept (chooseBase).
 // --evidence <label> prefixes every file the run writes with "<label>-" (a before and an
 // after run can share one --out) and also writes <out>/<label>.json in the shape pr-qa reads.
 // Before the shots and the measures, each page is scrolled to the bottom in steps and back to
@@ -129,6 +130,20 @@ function resolveViewports(sizes) {
 
 // Base and path with exactly one slash between them, whatever either looks like. A path that
 // is a whole URL is used as is; one that starts with "?" or "#" goes straight onto the base.
+// PROOFS_BASE_URL (set by with_server.py from its --url) points the capture at the server that
+// helper started. When the pages file's own base is on that same server (same origin), the
+// pages file's base wins: it was written for these paths, and --url may name a page rather than
+// the root (Task 8: --url .../index.html plus the path "/index.html" made a 404). On another
+// origin (another port), PROOFS_BASE_URL wins, as before.
+function chooseBase(envBase, cfgBase) {
+  if (!envBase) return cfgBase;
+  if (!cfgBase) return envBase;
+  try {
+    if (new URL(envBase).origin === new URL(cfgBase).origin) return cfgBase;
+  } catch (_) { /* a base that does not parse: keep the env one, as before */ }
+  return envBase;
+}
+
 function joinUrl(base, p) {
   const pathPart = p == null ? '' : String(p);
   if (/^[a-z][a-z0-9+.-]*:/i.test(pathPart)) return pathPart;
@@ -982,7 +997,7 @@ async function main() {
       + `or a desktop width from ${EXTRA_MIN} to ${EXTRA_MAX}`);
     process.exit(1);
   }
-  const base = process.env.PROOFS_BASE_URL || cfg.base;
+  const base = chooseBase(process.env.PROOFS_BASE_URL, cfg.base);
   fs.mkdirSync(out, { recursive: true });
   const outParts = path.resolve(out).split(path.sep);
   if (outParts.includes('.proofs')) {
@@ -1152,6 +1167,19 @@ async function main() {
       + 'shrinking everything; the other phone numbers were measured at that wider layout.',
   };
   if (seen.size) lines.push('', ...[...seen].map((s) => `- ${WORDS[s]}`));
+  // The table counts every entry; measures.json keeps the first 25 (or 15) of a long list, in
+  // page order. Say so where it happens (Task 8: "text below floor: 53" and 25 entries).
+  const CAPPED = [['text below floor', 'smallText', 'smallTextCount'], ['small tap targets', 'smallTaps', 'smallTapCount'],
+    ['off-center rows', 'offCenter', 'offCenterCount'], ['off-center columns', 'offColumns', 'offColumnCount'],
+    ['sections without headings', 'untitled', 'untitledCount']];
+  const capped = [];
+  for (const r of results.filter((x) => !x.error && x.measures)) {
+    for (const [name, list, count] of CAPPED) {
+      const n = r.measures[count], kept = (r.measures[list] || []).length;
+      if (n > kept) capped.push(`- ${r.page} ${r.state} at ${r.viewport}: ${name} counts ${n}; measures.json "${list}" lists only the first ${kept}, in page order`);
+    }
+  }
+  if (capped.length) lines.push('', 'capped lists: a count in the table is every entry found, and a long list is cut in measures.json:', ...capped);
   const offRows = results.filter((r) => !r.error && r.measures.offCenterCount);
   if (offRows.length) {
     lines.push('', 'off-center: a row inside a centered column (text-align: center) whose content sits to one side, '
@@ -1272,4 +1300,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { joinUrl, readPagesFile, PagesFileError, resolveTargets, resolveViewports, decodePng, VIEWPORTS };
+module.exports = { chooseBase, joinUrl, readPagesFile, PagesFileError, resolveTargets, resolveViewports, decodePng, VIEWPORTS };

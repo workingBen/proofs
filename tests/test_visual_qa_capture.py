@@ -197,6 +197,19 @@ class PhoneWidth(unittest.TestCase):
             # The 390 media query only matches if the page was laid out at 390 CSS px.
             self.assertEqual(tuple(rows[10][770 * bpp:770 * bpp + 3]), (0, 0xaa, 0))
 
+    def test_a_finding_exits_0_and_a_capped_list_says_so(self):
+        # Task 8: "text below floor: 53" in summary.md, but measures.json listed 25 entries
+        # with nothing saying why. And a finding is not a failed run: the capture exits 0
+        # (capture() asserts it), so the exit codes in design-review's SKILL.md hold.
+        with tempfile.TemporaryDirectory() as tmp:
+            r, out = self.capture(tmp, "small-text-many.html", "--sizes", "1280")
+            m = self.result(out)["measures"]
+            self.assertEqual(m["smallTextCount"], 30)
+            self.assertEqual(len(m["smallText"]), 25)
+            summary = (out / "summary.md").read_text()
+            self.assertIn("text below floor: 30", summary)
+            self.assertIn("lists only the first 25", summary)
+
     def test_clipped_overflow_is_caught(self):
         with tempfile.TemporaryDirectory() as tmp:
             r, out = self.capture(tmp, "wide-nav.html", "--sizes", "390")
@@ -642,6 +655,26 @@ class CaptureOptions(unittest.TestCase):
             subprocess.run([NODE, str(CAPTURE), str(tmp / "pages.json"), "--out", str(tmp / "out"), "--sizes", "390"],
                            cwd=tmp, env=env, capture_output=True, text=True, timeout=60)
             self.assertEqual(log.read_text().split(), ["http://127.0.0.1:4567/p"])
+
+    def test_a_pages_file_base_on_the_same_server_keeps_its_own_path(self):
+        # Task 8: with_server.py --url http://localhost:3311/index.html replaced the pages
+        # file's base outright, and "/index.html" was joined onto it (a 404). On the same
+        # server (same origin), the pages file's base is the one written for these paths.
+        cases = [
+            ("http://localhost:3311/index.html", "http://localhost:3311", "http://localhost:3311"),
+            ("http://localhost:3311/", "http://localhost:3311/app", "http://localhost:3311/app"),
+            ("http://127.0.0.1:4567", "http://localhost:9", "http://127.0.0.1:4567"),
+            ("http://localhost:3311/", None, "http://localhost:3311/"),
+            (None, "http://localhost:9", "http://localhost:9"),
+        ]
+        js = ("const c=require(process.argv[1]);const a=process.argv[2]||undefined,b=process.argv[3]||undefined;"
+              "process.stdout.write(String(c.chooseBase(a,b)))")
+        for env, cfg, want in cases:
+            with self.subTest(env=env, cfg=cfg):
+                r = subprocess.run([NODE, "-e", js, str(CAPTURE), env or "", cfg or ""],
+                                   capture_output=True, text=True, timeout=60)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertEqual(r.stdout, want)
 
     def join(self, base, path):
         js = "process.stdout.write(require(process.argv[1]).joinUrl(process.argv[2], process.argv[3]))"

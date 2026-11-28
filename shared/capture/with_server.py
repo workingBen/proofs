@@ -36,7 +36,11 @@ This helper owns the server for exactly as long as the capture runs:
 Ready means any HTTP response below 500 (redirects count, and are not followed). Connection
 errors and 5xx mean not ready yet. The capture gets PROOFS_BASE_URL=<url> in its environment
 and runs in the current folder; the server runs in --cwd. --log and --pidfile default to
-.proofs/server.log and .proofs/server.pid under --cwd (else the current folder).
+.proofs/server.log and .proofs/server.pid under the current folder (the project), never under
+--cwd: --cwd is often the folder being served, and a log written there is served with it.
+A relative --log or --pidfile is read from the current folder too. When --url names a file
+(its last part has a dot, such as /index.html), the capture's PROOFS_BASE_URL is that file's
+folder, since the pages file's paths are joined onto it.
 
 Exit codes: the capture's own code when the server came up; 3 the server never answered below
 500 within --timeout; 4 the server exited before answering; 5 another run still held the
@@ -60,6 +64,7 @@ import sys
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 EXIT_NOT_READY = 3
@@ -425,8 +430,8 @@ def _parse(argv):
     p.add_argument("--timeout", type=float, default=None,
                    help="seconds to wait for the server (default: the PROOFS_SERVER_TIMEOUT setting, 120)")
     p.add_argument("--grace", type=float, default=5.0, help="seconds between SIGTERM and SIGKILL (default 5)")
-    p.add_argument("--log", default=os.path.join(".proofs", "server.log"), help="server output (default .proofs/server.log)")
-    p.add_argument("--pidfile", default=os.path.join(".proofs", "server.pid"), help="default .proofs/server.pid")
+    p.add_argument("--log", default=os.path.join(".proofs", "server.log"), help="server output (default .proofs/server.log in the current folder, never under --cwd)")
+    p.add_argument("--pidfile", default=os.path.join(".proofs", "server.pid"), help="default .proofs/server.pid in the current folder")
     if "--" in argv:
         i = argv.index("--")
         args, capture = p.parse_args(argv[:i]), argv[i + 1:]
@@ -442,9 +447,25 @@ def _parse(argv):
             args.timeout = float(settings.get("PROOFS_SERVER_TIMEOUT", cwd=base))
         except settings.SettingsFileError as e:  # one line naming the file, not a traceback
             p.exit(2, "with_server.py: %s\n" % e)
-    args.log = os.path.join(base, os.path.expanduser(args.log))
-    args.pidfile = os.path.join(base, os.path.expanduser(args.pidfile))
+    # The project is the current folder; --cwd may be the folder being served (Task 8: a
+    # built static folder served its own .proofs/server.log).
+    here = os.getcwd()
+    args.log = os.path.join(here, os.path.expanduser(args.log))
+    args.pidfile = os.path.join(here, os.path.expanduser(args.pidfile))
     return args, capture
+
+
+def base_url(url):
+    """The capture's PROOFS_BASE_URL for --url: the URL itself, or its folder when it names a file.
+
+    The pages file's paths are joined onto the base, so a base of .../index.html made
+    .../index.html/index.html (Task 8: a 404 and exit 6)."""
+    parts = urllib.parse.urlsplit(url)
+    last = parts.path.rsplit("/", 1)[-1]
+    if "." not in last:
+        return url
+    folder = parts.path[: len(parts.path) - len(last)] or "/"
+    return urllib.parse.urlunsplit((parts.scheme, parts.netloc, folder, "", ""))
 
 
 def _spawn(state, key, after, *popen_args, **kwargs):
@@ -479,7 +500,7 @@ def _run(args, capture, state):
     for path in (args.log, args.pidfile):
         os.makedirs(os.path.dirname(path), exist_ok=True)
     if ".proofs" in os.path.normpath(args.log).split(os.sep) or ".proofs" in os.path.normpath(args.pidfile).split(os.sep):
-        _keep_proofs_out_of_git(args.cwd)
+        _keep_proofs_out_of_git(os.getcwd())
     state["lock"] = _take_lock(args.pidfile + ".lock", time.monotonic() + args.timeout)
     if state["lock"] is None:
         say("server: another run still holds %s.lock after %gs" % (args.pidfile, args.timeout), err=True)
@@ -520,7 +541,10 @@ def _run(args, capture, state):
                 "helper cannot stop it; run the server in the foreground", err=True)
         say("server: ready after %.1fs (HTTP %d)" % (time.monotonic() - t0, status))
 
-    env = dict(os.environ, PROOFS_BASE_URL=args.url)
+    base = base_url(args.url)
+    if base != args.url:
+        say("server: --url names a file, so the capture's base is its folder, %s (the pages file's paths are joined onto it)" % base)
+    env = dict(os.environ, PROOFS_BASE_URL=base)
     out_r, out_w = os.pipe()
     err_r, err_w = os.pipe()
     try:

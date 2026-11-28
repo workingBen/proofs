@@ -532,10 +532,61 @@
     return { tone: "ok", clear: false, text: SENT_MSG, wait: SEND_STALE_MS - age };
   }
 
+
+  // Keyboard read-through for the log and session pages: r marks the highlighted entry read,
+  // j / k move the highlight over the unread entries, u undoes the last r. The logic is
+  // pure over an env of callbacks so the tests can drive it under plain node; the page
+  // wires it to the DOM below. Marking read is a click on the entry's own tick box, so it
+  // saves, folds, scrolls and exports exactly as a tap does.
+  var READ_KEY_MODES = ["log", "session"];
+  function readKeys(env) {
+    var undo = [], cur = null;
+    function unread() { return env.entries().filter(function (e) { return !env.isRead(e); }); }
+    function show(e) { if (cur !== e) { cur = e; env.highlight(e); } }
+    // After a tick the page has folded the entry: highlight the next unread one after it, else
+    // the first one above (the same pick the engine's own scroll makes).
+    function after(e, all) {
+      var at = all.indexOf(e), un = function (c) { return !env.isRead(c); };
+      return all.slice(at + 1).filter(un)[0] || all.slice(0, at).filter(un)[0] || null;
+    }
+    return {
+      current: function () { return cur; },
+      sync: function () { var list = unread(); if (!cur || env.isRead(cur)) show(env.visibleUnread() || list[0] || null); },
+      see: function (e) { show(e); },
+      key: function (ev) {
+        if (ev.metaKey || ev.ctrlKey || ev.altKey) return false;
+        if (env.typing(ev.target)) return false;
+        var k = String(ev.key || "").toLowerCase(), list = unread(), e;
+        if (k === "r") {
+          e = cur && !env.isRead(cur) ? cur : (env.visibleUnread() || list[0]);
+          if (!e || !env.setRead(e, true)) return false;
+          undo.push(e);
+          show(after(e, env.entries()));
+          return true;
+        }
+        if (k === "j" || k === "k") {
+          var i = list.indexOf(cur);
+          e = k === "j" ? (list[i + 1] || list[i] || list[0]) : (list[i - 1] || list[0]);
+          if (!e) return false;
+          show(e); env.reveal(e);
+          return true;
+        }
+        if (k === "u") {
+          var last = undo.pop();
+          if (!last || !env.setRead(last, false)) return false;
+          show(last); env.reveal(last);
+          return true;
+        }
+        return false;
+      }
+    };
+  }
+
   if (typeof module !== "undefined" && module.exports) {
     module.exports = { exportText: exportText, answeredCount: answeredCount, answerDocs: answerDocs, applyAnswerDocs: applyAnswerDocs,
                        docIdFor: docIdFor, DB_COLLECTION: DB_COLLECTION, sendText: sendText, pickupNote: pickupNote,
-                       settingCheck: settingCheck, sweepStale: sweepStale, earlierLine: earlierLine };
+                       settingCheck: settingCheck, sweepStale: sweepStale, earlierLine: earlierLine,
+                       readKeys: readKeys, READ_KEY_MODES: READ_KEY_MODES };
   }
   if (typeof document === "undefined") return;
 
@@ -999,6 +1050,55 @@
     var root = rootOf(sec);
     if (root) SETUP[sec.kind](sec, root, secState(st, sec));
   });
+
+  /* ------------------------------------------------- keyboard read-through (log, session) */
+  if (READ_KEY_MODES.indexOf(S.mode) >= 0 && one("[data-entry]")) (function () {
+    function entries() { return all("[data-entry]"); }
+    function tickOf(e) { return one("input[data-tick]", e); }
+    function barsBottom() {
+      var h = 0;
+      all(".rp-topbars").forEach(function (b) { h = Math.max(h, Math.max(0, b.getBoundingClientRect().top) + b.offsetHeight); });
+      return h;
+    }
+    function isRead(e) { var t = tickOf(e); return e.classList.contains("rp-is-read") || !!(t && t.checked); }
+    var keys = readKeys({
+      entries: entries,
+      isRead: isRead,
+      visibleUnread: function () {
+        var y = barsBottom() + 2, list = entries().filter(function (e) { return !isRead(e); });
+        for (var i = 0; i < list.length; i++) { if (list[i].getBoundingClientRect().bottom > y) return list[i]; }
+        return list[0] || null;
+      },
+      typing: function (t) {
+        var tag = ((t && t.tagName) || "").toLowerCase();
+        return tag === "input" || tag === "textarea" || tag === "select" || !!(t && t.isContentEditable);
+      },
+      // A click on the tick box fires the engine's own change handler (state, save, fold, scroll).
+      setRead: function (e, on) {
+        var t = tickOf(e);
+        if (!t || t.checked === on) return false;
+        t.click();
+        return true;
+      },
+      highlight: function (e) {
+        all(".rp-cur").forEach(function (c) { c.classList.remove("rp-cur"); });
+        if (e) e.classList.add("rp-cur");
+      },
+      reveal: function (e) {
+        var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        window.scrollTo({ top: window.scrollY + e.getBoundingClientRect().top - barsBottom() - 6, behavior: reduce ? "instant" : "smooth" });
+      }
+    });
+    document.addEventListener("keydown", function (ev) { if (keys.key(ev)) ev.preventDefault(); });
+    var timer;
+    window.addEventListener("scroll", function () { clearTimeout(timer); timer = setTimeout(keys.sync, 150); }, { passive: true });
+    keys.sync();
+    var chip = document.createElement("div");
+    chip.className = "rp-keys";
+    chip.setAttribute("aria-hidden", "true");
+    chip.innerHTML = "<kbd>r</kbd> mark read <kbd>j</kbd><kbd>k</kbd> next / back <kbd>u</kbd> undo";
+    document.body.appendChild(chip);
+  })();
 
   /* ------------------------------------------------- the Refine preview (design-review)
      Both frames get the page's one embedded snapshot as their srcdoc. A srcdoc load

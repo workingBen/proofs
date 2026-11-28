@@ -583,3 +583,11 @@ body.rp-mode-questions, :root[data-theme] body.rp-mode-questions {
   .rp-set-seg-stack { flex-direction:column; }
   .rp-set-seg-stack .rp-set-seg-b { flex:none; text-align:left; padding:6px 14px; }
 }
+
+/* Keyboard read-through (log and session pages): highlighted entry and the key hint chip. */
+.rp-entry.rp-cur { outline:3px solid var(--rp-accent); outline-offset:4px; }
+.rp-keys { position:fixed; right:14px; bottom:14px; z-index:50; background:var(--rp-ink); color:var(--rp-bg); font:600 13px/1.4 var(--rp-sans);
+  padding:8px 12px; border-radius:10px; box-shadow:0 6px 18px rgba(0,0,0,.25); opacity:.92; pointer-events:none; }
+.rp-keys kbd { display:inline-block; min-width:18px; text-align:center; background:var(--rp-soft); color:var(--rp-bg); border-radius:5px; padding:0 5px; margin:0 2px; font:700 12px var(--rp-mono); }
+@media (hover:none) { .rp-keys { display:none; } }
+@media print { .rp-keys { display:none; } }

@@ -1,8 +1,10 @@
 // Refine's change crops (spec §4, "One card per change"): for each change, its before and after
 // at 1280 and 390, cut from the built review page's own frames (each laid out at its real width)
 // with that one change off, then on, and every other change off. A crop is the union of the
-// boxes of the elements the change's `targets` select, measured in the frame with the change off
-// and on (so an element it hides or swaps counts), plus CROP_MARGIN, kept inside the page.
+// boxes of the elements the change's `targets` select (and its optional `context` selectors: the
+// neighbors it is judged against), measured in the frame with the change off and on (so an element
+// it hides or swaps counts), plus CROP_MARGIN, kept inside the page, then grown until no line of
+// text crosses its edge, with the change off and on (snapToLines): a crop never cuts a word.
 // Usage: node crops.cjs <playwright package dir> <page.html> <out dir>
 // Writes <out>/<change id>-<before|after>-<1280|390>.png and <out>/crops.json,
 // { <change id>: { key, "1280": {x, y, w, h}, "390": {note} } }: CSS pixels in the frame's page, or
@@ -29,6 +31,35 @@ const WIDTHS = [1280, 390];
 // The review page is opened wide enough, and its column let out, for both frames to sit at
 // scale 1, so a crop is the frame's own pixels rather than a scaled-down copy.
 const PAGE_VIEWPORT = { width: 1600, height: 900 };
+
+// Runs in a frame: `box` grown until every fragment of visible text it touches is wholly inside it
+// (one rect per line a text node runs over), kept inside `limit` ({w, h}). Task 8: a crop of an
+// inline target plus the margin cut the label beside it mid-word.
+function snapToLines([box, limit]) {
+  const frags = [], walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+    if (!n.textContent.trim()) continue;
+    const range = document.createRange();
+    range.selectNodeContents(n);
+    for (const r of range.getClientRects()) {
+      if (r.width > 0 && r.height > 0) frags.push([r.left + scrollX, r.top + scrollY, r.right + scrollX, r.bottom + scrollY]);
+    }
+  }
+  let [x0, y0, x1, y1] = [box.x, box.y, box.x + box.w, box.y + box.h];
+  for (let pass = 0, grew = true; grew && pass < 50; pass++) {
+    grew = false;
+    for (const [a, b, c, d] of frags) {
+      if (c <= x0 || a >= x1 || d <= y0 || b >= y1) continue;    // does not touch the box
+      if (a >= x0 && b >= y0 && c <= x1 && d <= y1) continue;     // wholly inside
+      const n = [Math.min(x0, a), Math.min(y0, b), Math.max(x1, c), Math.max(y1, d)];
+      if (n[0] < x0 || n[1] < y0 || n[2] > x1 || n[3] > y1) { [x0, y0, x1, y1] = n; grew = true; }
+    }
+    x0 = Math.max(0, x0); y0 = Math.max(0, y0); x1 = Math.min(limit.w, x1); y1 = Math.min(limit.h, y1);
+  }
+  x0 = Math.max(0, Math.floor(x0)); y0 = Math.max(0, Math.floor(y0));
+  x1 = Math.min(Math.floor(limit.w), Math.ceil(x1)); y1 = Math.min(Math.floor(limit.h), Math.ceil(y1));
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
 
 // Runs in a frame: the union of the boxes of every element `selectors` select that has a size,
 // in the frame page's coordinates, and that page's size; box is null when none is shown.
@@ -64,6 +95,20 @@ function cropBox(off, on, margin = CROP_MARGIN) {
   const y1 = Math.min(Math.floor(h), Math.ceil(Math.max(...boxes.map((b) => b.y1)) + margin));
   if (x1 <= x0 || y1 <= y0) return null;
   return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+
+// The crop PNGs a previous run wrote for changes that are no longer on the page (crops.json names
+// them), so a dropped change leaves nothing behind (Task 8). Only files of that exact name go.
+function removeDropped(outDir, ids) {
+  let old = {};
+  try { old = JSON.parse(fs.readFileSync(path.join(outDir, "crops.json"), "utf8")); } catch (_) { return; }
+  if (!old || typeof old !== "object") return;
+  for (const id of Object.keys(old)) {
+    if (ids.includes(id) || !/^[a-z0-9-]+$/.test(id)) continue;
+    for (const state of ["before", "after"]) for (const w of WIDTHS) {
+      try { fs.unlinkSync(path.join(outDir, `${id}-${state}-${w}.png`)); } catch (_) { /* not there */ }
+    }
+  }
 }
 
 async function settle(frame) {
@@ -112,12 +157,14 @@ async function main(pw, pagePath, outDir, setArg) {
       const unknown = setNums.filter((n) => !info.changes.some((c) => c.num === n));
       if (!setNums.length || unknown.length) return { error: `--set: no change ${unknown.join(", ") || "given"} on this page (its changes are ${info.changes.map((c) => c.num).join(", ")})` };
     }
-    // Each change card carries its targets (data-rc-targets, a JSON list of selectors).
-    const targets = {}, keys = {};
-    for (const [id, t, key] of await page.evaluate(() => Array.from(
+    // Each change card carries its targets (data-rc-targets, a JSON list of selectors) and, when
+    // the change is judged against its neighbors, their selectors (data-rc-context).
+    const targets = {}, context = {}, keys = {};
+    for (const [id, t, cx, key] of await page.evaluate(() => Array.from(
       document.querySelectorAll("[data-rc-change][data-rc-targets]"),
-      (el) => [el.dataset.rcChange, JSON.parse(el.dataset.rcTargets), el.dataset.rcKey]))) {
+      (el) => [el.dataset.rcChange, JSON.parse(el.dataset.rcTargets), JSON.parse(el.dataset.rcContext || "[]"), el.dataset.rcKey]))) {
       targets[id] = t;
+      context[id] = cx;
       keys[id] = key;
     }
     // Let the column out so both frames fit at scale 1; hide the page's fixed and sticky bars,
@@ -148,17 +195,35 @@ async function main(pw, pagePath, outDir, setArg) {
     }
 
     fs.mkdirSync(outDir, { recursive: true });
+    removeDropped(outDir, info.changes.map((c) => c.id));
     const crops = {}, notes = [];
     for (const c of info.changes) {
       const sels = targets[c.id] || [];
       const m = { off: {}, on: {} };
       for (const [state, ids] of [["off", []], ["on", [c.id]]]) {
         await show(page, frames, ids);
-        for (const w of WIDTHS) m[state][w] = await frames[w].evaluate(measureTargets, sels);
+        for (const w of WIDTHS) m[state][w] = await frames[w].evaluate(measureTargets, sels.concat(context[c.id] || []));
       }
       crops[c.id] = { key: keys[c.id] };
+      const boxes = {};
+      for (const w of WIDTHS) boxes[w] = cropBox(m.off[w], m.on[w]);
+      // Grow each box to whole lines of text in both states, until neither grows it again.
+      for (let round = 0; round < 4; round++) {
+        let grew = false;
+        for (const ids of [[], [c.id]]) {
+          await show(page, frames, ids);
+          for (const w of WIDTHS) {
+            const b = boxes[w];
+            if (!b) continue;
+            const limit = { w: Math.min(m.off[w].page.w, m.on[w].page.w), h: Math.min(m.off[w].page.h, m.on[w].page.h) };
+            const n = await frames[w].evaluate(snapToLines, [b, limit]);
+            if (n.x !== b.x || n.y !== b.y || n.w !== b.w || n.h !== b.h) { boxes[w] = n; grew = true; }
+          }
+        }
+        if (!grew) break;
+      }
       for (const w of WIDTHS) {
-        const box = cropBox(m.off[w], m.on[w]);
+        const box = boxes[w];
         if (box) crops[c.id][w] = box;
         else {
           const note = `Change ${c.num}: ${sels.join(", ")} ${sels.length > 1 ? "are" : "is"} not shown at ${w} px wide ` +
@@ -207,4 +272,4 @@ if (require.main === module) {
     .catch((e) => { console.log(JSON.stringify({ error: "crops crashed: " + (e && e.message) })); process.exit(1); });
 }
 
-module.exports = { CROP_MARGIN, CROP_SCALE, measureTargets, cropBox };
+module.exports = { CROP_MARGIN, CROP_SCALE, measureTargets, cropBox, snapToLines };

@@ -2639,7 +2639,7 @@ function bbox(d, scale) {
   const browser = await launchChromium(chromium, process.env);
   const out = {};
   for (const w of [1280, 390]) {
-    const boxes = [], heights = [];
+    const boxes = [], heights = [], lines = [];
     for (const on of [[], [id]]) {
       const ctx = await browser.newContext({ viewport: { width: w, height: 800 } });
       const p = await ctx.newPage();
@@ -2650,11 +2650,24 @@ function bbox(d, scale) {
         return [r.left + scrollX, r.top + scrollY, r.right + scrollX, r.bottom + scrollY];
       })).filter((b) => b[2] > b[0] && b[3] > b[1]), targets));
       heights.push(await p.evaluate(() => document.documentElement.getBoundingClientRect().height));
+      // Every fragment of visible text (one rect per line a text node runs over).
+      lines.push(...await p.evaluate(() => {
+        const out = [], walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+        for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+          if (!n.textContent.trim()) continue;
+          const range = document.createRange();
+          range.selectNodeContents(n);
+          for (const r of range.getClientRects()) {
+            if (r.width > 0 && r.height > 0) out.push([r.left + scrollX, r.top + scrollY, r.right + scrollX, r.bottom + scrollY]);
+          }
+        }
+        return out;
+      }));
       await ctx.close();
     }
     const dpr = SHOT_VIEWPORTS[w].deviceScaleFactor || 1;
     const moved = bbox(diffMask(await renderBase(browser, doc, w, []), await renderBase(browser, doc, w, [id])), dpr);
-    const r = { targets: boxes, height: Math.min(...heights), moved, crops: null };
+    const r = { targets: boxes, height: Math.min(...heights), moved, crops: null, lines };
     const before = path.join(crops, `${id}-before-${w}.png`), after = path.join(crops, `${id}-after-${w}.png`);
     if (fs.existsSync(before) && fs.existsSync(after)) {
       const d = diffMask(before, after);
@@ -2744,10 +2757,86 @@ class RefineCrops(unittest.TestCase):
             self.assertLessEqual(got[1], want[1] + 1e-6, (w, box, want))
             self.assertGreaterEqual(got[2], want[2] - 1e-6, (w, box, want))
             self.assertGreaterEqual(got[3], want[3] - 1e-6, (w, box, want))
-            self.assertLessEqual(box["w"], want[2] - want[0] + 2, (w, box, want))
-            self.assertLessEqual(box["h"], want[3] - want[1] + 2, (w, box, want))
+            # It may grow past that only to take in a whole line of text it would otherwise cut
+            # (test_a_crop_never_slices_a_line_of_text), never past the page.
+            self.assertLessEqual(box["x"] + box["w"], int(w), (w, box))
+            self.assertLessEqual(box["y"] + box["h"], res[w]["height"] + 1, (w, box))
             for k in "xywh":
                 self.assertIsInstance(box[k], int)
+
+    def assert_no_line_cut(self, box, lines, where):
+        """No fragment of text crosses the crop's edge: each is wholly inside or wholly outside."""
+        x0, y0, x1, y1 = box["x"], box["y"], box["x"] + box["w"], box["y"] + box["h"]
+        for l in lines:
+            if l[2] <= x0 or l[0] >= x1 or l[3] <= y0 or l[1] >= y1:
+                continue
+            inside = l[0] >= x0 - 0.5 and l[1] >= y0 - 0.5 and l[2] <= x1 + 0.5 and l[3] <= y1 + 0.5
+            self.assertTrue(inside, "%s: the crop %r cuts the text at %r" % (where, box, l))
+
+    def test_a_crop_never_slices_a_line_of_text(self):
+        # Task 8: crops were the targets' boxes plus 24 px, so an inline target's crop cut the
+        # label beside it mid-word. Every fragment of text the crop touches is now wholly in it.
+        self.snap.write_text(self.snap.read_text().replace(
+            "<table", '<p class="lede">Every host here reports its <em class="peak">peak load</em> over the last day, '
+            'and this sentence runs on well past the crop so that it wraps across lines on a phone.</p>\n<table', 1))
+        spec = self.spec()
+        spec["sections"][0]["items"][0]["changes"].append(
+            {"id": "peak-ink", "label": "Darker peak", "why_html": "<p>p</p>", "targets": [".peak"],
+             "css": ".peak { color: #b42318; }"})
+        page = self.build(spec)
+        boxes, _ = self.crops(page)
+        for change in spec["sections"][0]["items"][0]["changes"]:
+            res = self.measure(page, change)
+            for w in ("1280", "390"):
+                self.assertTrue(res[w]["lines"])
+                self.assert_no_line_cut(boxes[change["id"]][w], res[w]["lines"], "%s at %s" % (change["id"], w))
+        # The inline target's crop takes in the whole lines it sits on, not just its own words.
+        res = self.measure(page, spec["sections"][0]["items"][0]["changes"][-1])
+        box = boxes["peak-ink"]["1280"]
+        self.assertLess(box["x"], min(t[0] for t in res["1280"]["targets"]) - 100, box)
+
+    def test_context_selectors_widen_a_crop_to_what_the_change_is_judged_against(self):
+        # Task 8: a verdict line judged against the tiles beside it had a crop of the verdict alone.
+        spec = self.spec()
+        item = spec["sections"][0]["items"][0]
+        plain = self.build(spec)
+        key_before = re.search(r'data-rc-change="bold-totals"[^>]*data-rc-key="([0-9a-f]+)"', plain.read_text()).group(1)
+        item["changes"][0]["context"] = [".rows"]
+        page = self.build(spec)
+        text = page.read_text()
+        self.assertIn('data-rc-context="%s"' % html.escape(json.dumps([".rows"])), text)
+        key_after = re.search(r'data-rc-change="bold-totals"[^>]*data-rc-key="([0-9a-f]+)"', text).group(1)
+        self.assertNotEqual(key_before, key_after, "a new context must make the old crops stale")
+        boxes, _ = self.crops(page)
+        rows = self.measure(page, dict(item["changes"][0], targets=[".rows"]))
+        for w in ("1280", "390"):
+            box, t = boxes["bold-totals"][w], rows[w]["targets"]
+            self.assertLessEqual(box["x"], min(b[0] for b in t), w)
+            self.assertLessEqual(box["y"], min(b[1] for b in t), w)
+            self.assertGreaterEqual(box["x"] + box["w"], min(int(w), max(b[2] for b in t)) - 1, w)
+            self.assertGreaterEqual(box["y"] + box["h"], max(b[3] for b in t) - 1, w)
+        for bad in ([], "rows", [""], [3]):
+            item["changes"][0]["context"] = bad
+            src = self.dir / "s.json"
+            src.write_text(json.dumps(spec))
+            r = subprocess.run([sys.executable, str(BUILD), str(src), "--out", str(self.tmp / "bad.html")],
+                               capture_output=True, text=True, cwd=str(self.dir))
+            self.assertEqual(r.returncode, 1, (bad, r.stderr))
+            self.assertIn("context must be a non-empty list of selectors", r.stderr)
+
+    def test_crops_of_a_dropped_change_are_removed(self):
+        # Task 8: crops.json was right, but the PNGs of a change dropped since stayed in the folder.
+        spec = self.spec()
+        self.crops(self.build(spec))
+        self.assertTrue((self.out / "tight-rows-before-1280.png").is_file())
+        (self.out / "notes.txt").write_text("not ours")
+        spec["sections"][0]["items"][0]["changes"] = [c for c in spec["sections"][0]["items"][0]["changes"]
+                                                      if c["id"] != "tight-rows"]
+        boxes, _ = self.crops(self.build(spec))
+        self.assertNotIn("tight-rows", boxes)
+        self.assertEqual(sorted(p.name for p in self.out.glob("tight-rows-*")), [])
+        self.assertTrue((self.out / "bold-totals-before-1280.png").is_file())
+        self.assertTrue((self.out / "notes.txt").is_file(), "removed a file --crops did not write")
 
     def test_crops_before_and_after_differ_only_inside_the_box(self):
         _, scale = self.crop_constants()

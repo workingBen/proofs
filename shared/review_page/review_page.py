@@ -1684,6 +1684,10 @@ def check_refine_fields(it) -> None:
         t = c.get("targets")
         if not (isinstance(t, list) and t and all(isinstance(s, str) and s.strip() for s in t)):
             raise SpecError("%s: targets must be a non-empty list of selectors, got %r" % (where, t))
+        cx = c.get("context")
+        if cx is not None and not (isinstance(cx, list) and cx and all(isinstance(x, str) and x.strip() for x in cx)):
+            raise SpecError("%s: context must be a non-empty list of selectors (the neighbors its crops show), got %r"
+                            % (where, cx))
         if "</style" in c["css"].lower():
             raise SpecError("%s: css must not contain </style>" % where)
         for sw in c.get("swaps") or []:
@@ -1916,9 +1920,13 @@ def external_loads(doc):
 
 
 def change_key(c):
-    """A short hash of what a change's crops show (its targets, css and swaps). --crops stores it
-    in crops.json; a build shows a change's crops only while it still matches."""
-    what = json.dumps([c["targets"], c["css"], c.get("swaps") or []], sort_keys=True, ensure_ascii=False)
+    """A short hash of what a change's crops show (its targets, css, swaps and, when set, its
+    context). --crops stores it in crops.json; a build shows a change's crops only while it still
+    matches. A change with no context hashes as it did before context existed."""
+    parts = [c["targets"], c["css"], c.get("swaps") or []]
+    if c.get("context"):
+        parts.append(c["context"])
+    what = json.dumps(parts, sort_keys=True, ensure_ascii=False)
     return hashlib.sha1(what.encode()).hexdigest()[:12]
 
 
@@ -2020,8 +2028,11 @@ def render_refine(it, ctx) -> str:
                             "recommended": c.get("recommended"), "body_html": "\n".join(body)}, dec, ctx.colors)
         # data-rc-targets: what --crops (crops.cjs) cuts the change's crops to; data-rc-key: what
         # it stores with them, so a later build knows they still show this change.
+        # data-rc-context: the neighbors the crops also take in, when the change has them.
+        ctx_attr = 'data-rc-context="%s" ' % esc(json.dumps(c["context"])) if c.get("context") else ""
         h.append(card.replace('<article class="rp-item" ', '<article class="rp-item" data-rc-change="%s" '
-                              'data-rc-targets="%s" data-rc-key="%s" ' % (esc(c["id"]), esc(json.dumps(c["targets"])), change_key(c)), 1))
+                              'data-rc-targets="%s" %sdata-rc-key="%s" ' % (esc(c["id"]), esc(json.dumps(c["targets"])),
+                                                                         ctx_attr, change_key(c)), 1))
     p = ['<div class="rp-rc-preview" data-rc-preview="%s" data-rc-base="%s">' % (esc(iid), esc(it["_base_path"])),
          '<div class="rp-rc-head"><h3 class="rp-rc-title">Your picks together</h3>'
          '<div class="rp-rc-view" role="group" aria-label="Show the preview">'

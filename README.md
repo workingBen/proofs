@@ -11,7 +11,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Claude_Code-plugin-c2410c" alt="Claude Code plugin">
-  <img src="https://img.shields.io/badge/skills-12-1d1b17" alt="12 skills">
+  <img src="https://img.shields.io/badge/skills-13-1d1b17" alt="13 skills">
   <img src="https://img.shields.io/badge/license-MIT-6b6458" alt="MIT license">
   <a href="https://github.com/workingBen/proofs/actions/workflows/tests.yml"><img src="https://github.com/workingBen/proofs/actions/workflows/tests.yml/badge.svg" alt="tests"></a>
   <a href="evals/"><img src="https://img.shields.io/badge/trigger_evals-108%2F108_clear_%C2%B7_42%2F42_ambiguous-2f6b3a" alt="Trigger evals: 108 of 108 on clear requests, 42 of 42 on ambiguous ones"></a>
@@ -57,11 +57,11 @@ Real pages, before and after one review. [See all of them, as sliders](https://w
 </details>
 <!-- examples:grid:end -->
 
-**[Browse the site](https://workingben.github.io/proofs/)** for all 12 skills and 230+ features, each with a short write-up.
+**[Browse the site](https://workingben.github.io/proofs/)** for the skill pages and 230+ features, each with a short write-up.
 
 **Prefer video?** [Watch the one-minute walkthrough on YouTube](https://youtu.be/Qztwm_b4WNo), or [the Short](https://youtube.com/shorts/LGoRROsziv8) on your phone.
 
-## All 12 skills
+## All 13 skills
 
 Grouped by what you're doing. Each name opens that skill's page, with screenshots and a live example.
 
@@ -85,6 +85,10 @@ Grouped by what you're doing. Each name opens that skill's page, with screenshot
 - [**review-cycle**](https://workingben.github.io/proofs/review-cycle.html): Report bugs and ideas as they come; each is fixed, reviewed or saved for later.
 - [**todos**](https://workingben.github.io/proofs/todos.html): Your to-do list as a tickable page. Done items are checked before they are archived.
 - [**changelog**](https://workingben.github.io/proofs/changelog.html): A "What's new" page split by month, updated at the end of every session that ships something.
+
+**Set up**
+
+- [**settings**](#settings): Every Proofs setting on one page with real controls; Claude saves what you change.
 
 ## How every skill works
 

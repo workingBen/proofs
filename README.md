@@ -67,7 +67,7 @@ Grouped by what you're doing. Each name opens that skill's page, with screenshot
 
 **See it and decide**
 
-- [**design-review**](https://workingben.github.io/proofs/design-review.html) · *Start here*: Your live page next to three scored mockups per section (one for a small fix). You pick, Claude builds it.
+- [**design-review**](https://workingben.github.io/proofs/design-review.html) · *Start here*: Your live page next to three scored mockups per section (one for a small fix), or, when the page already works, small changes you take or leave one by one on a live preview. You pick, Claude builds it.
 - [**pr-qa**](https://workingben.github.io/proofs/pr-qa.html) · *Critical for UI changes*: Before and after screenshots of each open pull request, with one decision per PR.
 - [**questions**](https://workingben.github.io/proofs/questions.html): Claude's questions on a page, with real buttons, its pick marked and one Copy.
 - [**article-copy-edit**](https://workingben.github.io/proofs/article-copy-edit.html): Line edits shown on your real article, with a claims check first.
@@ -115,7 +115,7 @@ Both are good tools, and neither replaces our visual communication skills.
 
 <img src="docs/cards/design-review.jpg" width="100%" alt="A live retreat page wiping into the mockup that shipped.">
 
-Claude puts a real screenshot of your page next to working mockups for each section: three for a redesign (Careful, Step up and Bold), one for a bug-sized fix. You pick one, and Claude builds it.
+Claude puts a real screenshot of your page next to working mockups for each section: three for a redesign (Careful, Step up and Bold), one for a bug-sized fix. You pick one, and Claude builds it. When your page already works and you ask to improve it, Refine mode keeps it as it is and offers 3 to 8 small changes instead, each with a cropped before and after, and one preview that updates as you tap Yes or No.
 
 - A real screenshot as the Before
 - Mockups drawn in your site's own fonts, colors and spacing, and your optional design profile

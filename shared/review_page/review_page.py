@@ -6,6 +6,10 @@ Usage:
   review_page.py SPEC.json                                session/log: to .proofs/pages/SPEC.html
   review_page.py --check PAGE.html                        node --check + structure
   review_page.py --smoke PAGE.html [--playwright DIR]     click through in Chromium
+       [--shots DIR]                                      (a Refine page: where its before shots are)
+  review_page.py --match-preview PAGE.html --picks 1,3 --shots DIR
+                                                          the built page against the Refine preview
+  review_page.py --crops PAGE.html --out DIR              each Refine change's before and after crops
 
 Five modes share one engine: "review" (decision buttons per item: design-review,
 article-copy-edit, photo-picker, style-guide), "questions" (a standalone questions
@@ -13,11 +17,13 @@ or QA checklist page), "session" (working-log's session page: questions, checks,
 log and decided on one URL), "log" (a log-only page) and "settings" (the settings
 page, from `shared/settings.py --spec`). The spec format is documented
 in reference/review-page.md at the plugin root. Python 3 stdlib only; node is
-needed for --check and --smoke, Playwright only for --smoke.
+needed for --check, --smoke, --match-preview and --crops, Playwright only for --smoke,
+--match-preview and --crops.
 """
 import argparse
 import base64
 import html
+from html.parser import HTMLParser
 import hashlib
 import json
 import mimetypes
@@ -53,6 +59,8 @@ SEND_MSG_HTML = '<div class="rp-send-msg" data-send-msg role="status" aria-live=
 CAPABILITIES = {"db": {}, "comments": {}}
 STYLE = HERE / "style.css"
 SMOKE = HERE / "smoke.cjs"
+MATCH = HERE / "match.cjs"
+CROPS = HERE / "crops.cjs"
 
 # Decision sets. Each button: state, label, label_variant (used when the item has
 # variants), export, export_variant ({sel} = selected variant text), comment
@@ -101,6 +109,24 @@ PRESETS = {
              "export_variant": "ACCEPT (Record for Later: {sel})", "comment": "optional",
              "meaning": "Record the rule; the retrofit becomes a to-do."},
         ]},
+    # design-review's Refine mode: one card per change of a `refine` item, then a
+    # "Combined: 1, 3" line naming the Yes changes (render_refine, engine.js).
+    "refine": {
+        "variant_word": "Change", "pending": "PENDING", "mark_read": False,
+        "buttons": [
+            {"state": "accept", "label": "✓ Yes", "export": "YES"},
+            {"state": "deny", "label": "✕ No", "export": "NO"},
+            {"state": "revise", "label": "↻ Revise", "export": "REVISE", "comment": "required"},
+        ]},
+    # design-review's rating step (a "compare" item): the original page and the built one, and
+    # whether the reader likes the build less, the same or more. The note box is always open.
+    "compare": {
+        "variant_word": "Option", "pending": "PENDING", "mark_read": False, "comment_always": True,
+        "buttons": [
+            {"state": "less", "label": "Less", "export": "LESS", "comment": "optional"},
+            {"state": "equal", "label": "Equal", "export": "EQUAL", "comment": "optional"},
+            {"state": "more", "label": "More", "export": "MORE", "comment": "optional"},
+        ]},
 }
 CATEGORY_COLORS = ["#2563eb", "#b45309", "#047857", "#9333ea", "#be123c", "#0e7490", "#4d7c0f", "#c2410c"]
 MODES = ("review", "questions", "log", "session", "settings")
@@ -110,7 +136,8 @@ DEFAULT_OUT_MODES = ("log", "session", "settings")
 # page takes it from its decisions preset (a custom set with no preset shows the
 # wordmark alone), the other modes from their kind of page.
 PRESET_SKILLS = {"copy-edit": "article-copy-edit", "design-review": "design-review",
-                 "style-guide": "style-guide", "photo-picker": "photo-picker"}
+                 "style-guide": "style-guide", "photo-picker": "photo-picker", "refine": "design-review",
+                 "compare": "design-review"}
 
 
 class SpecError(Exception):
@@ -479,7 +506,7 @@ def sections_of(spec):
 class Ctx:
     def __init__(self, spec, secs):
         self.spec, self.n, self.seen, self.anchors = spec, 0, set(), set()
-        self.cats = []
+        self.cats, self.refine = [], None
         for sec in secs:
             if sec["kind"] == "review":
                 raw = sec.get("decisions", spec.get("decisions", "copy-edit"))
@@ -650,6 +677,13 @@ def render_review(sec, ctx):
     dec, out, items = sec["_dec"], [], []
     word = dec.get("variant_word", "Option")
     for it in sec["items"]:
+        if it.get("kind") == "refine":
+            h, js_items = refine_entry(it, sec, ctx)
+            out.append(h)
+            items.extend(js_items)
+            continue
+        if it.get("kind") == "compare":
+            compare_entry(it, sec, ctx)
         ctx.n += 1
         it.setdefault("num", str(ctx.n))
         it["id"] = str(it.get("id") or it["num"])
@@ -701,6 +735,19 @@ def item_rev(it, rnd):
         return str(it["rev"])
     what = {"label": it.get("label"), "body": it.get("body_html") or "", "round": rnd,
             "variants": [[v.get("key"), v.get("name") or "", v.get("html") or ""] for v in it.get("variants") or []]}
+    return hashlib.sha1(json.dumps(what, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:10]
+
+
+def refine_rev(it, c, rnd):
+    """A Refine change's fingerprint, the same mechanism as item_rev: what the reader decides
+    on (label, why, targets, css, swaps, removes) and the round. A change revised under the
+    same id gets a new rev, so round 1's answer shows read-only and never pre-fills it.
+    Scores, crops and the rest are commentary and stay out. `rev` on the change pins it."""
+    if c.get("rev"):
+        return str(c["rev"])
+    what = {"label": c.get("label"), "why": c.get("why_html") or "", "targets": c.get("targets"),
+            "css": c.get("css") or "", "swaps": c.get("swaps") or [], "removes": c.get("removes") or [],
+            "round": rnd}
     return hashlib.sha1(json.dumps(what, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:10]
 
 
@@ -1422,6 +1469,824 @@ def review_item(it, dec, colors):
     return "\n".join(h)
 
 
+# ------------------------------------------------------------------- refine
+#
+# design-review's Refine mode (reference/review-page.md, "Refine items"): one item of
+# "kind": "refine" holds a base (the capture's static snapshot of the page) and 1 to 8
+# changes. Each change is its own card, decision and export line; the combined preview
+# shows the base in two iframes (1280 and 390), each carrying every change's CSS scoped
+# under html[data-rc~="<id>"], so a change applies only while the engine has its id in
+# the frame's data-rc.
+
+REFINE_MAX = 8
+REFINE_ID = re.compile(r"[a-z0-9-]+\Z")
+REFINE_SCORES = (("gain", "Gain"), ("keeps", "Keeps"))
+REFINE_WIDTHS = ((1280, "Desktop, 1280 px"), (390, "Phone, 390 px"))
+# The capture's viewport height at each width (capture.cjs VIEWPORTS, fidelity.cjs
+# SHOT_VIEWPORTS; a test keeps the three the same). Each frame is never shorter, is measured at
+# that height, and gives 1vh as a hundredth of it (--rp-vh), so the page lays out as in the
+# before shot (engine.js fit).
+REFINE_VIEWPORT_H = {1280: 800, 390: 844}
+# A number with a viewport-height unit in CSS: 100vh, -10svh, .5dvh, 1e2lvh. Not inside a
+# name (.h-100vh, .min-h-\[100vh\]) or right after a quote. vmin and vmax are not rewritten.
+VH_UNIT = re.compile(r"(?<![\w.\\\[\]#'\"-])(-?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)([sld]?vh)(?![\w-])")
+# Where the snapshot still asks another site for a file: a published artifact loads none of
+# them (its CSP allows Google Fonts stylesheets only), so each is a builder warning. A link's
+# href is left out (a plain <a> loads nothing), and so is any <link> but a stylesheet (a
+# canonical or icon link changes nothing a reader sees).
+EXTERNAL_LOAD = (
+    re.compile(r"""<link\b(?=[^<>]*\srel=["']?[^"'<>]*\bstylesheet\b)[^<>]*?\shref=["']?(https?://[^"'\s<>]+)""", re.I),
+    re.compile(r"""<(?:img|source|video|audio|iframe|embed|track|input|image|object)\b[^<>]*?\s(?:src|srcset|poster|xlink:href|href|data)=["']?\s*(https?://[^"'\s<>,]+)""", re.I),
+    re.compile(r"""(?:@import\s+(?:url\()?|url\()\s*["']?(https?://[^"'\s)<>]+)""", re.I),
+)
+# At-rules whose blocks hold style rules, which get scoped; any other block at-rule
+# (@font-face, @keyframes, @page, @property, @counter-style) passes through as written.
+# @scope is refused: its inner selectors match from the scope root, so a prefix above it
+# would not decide whether the change is on.
+CSS_NESTED_AT = ("media", "supports", "container", "layer", "document", "starting-style")
+HIDES = re.compile(r"display\s*:\s*none", re.I)
+# Types mimetypes may not know, for the snapshot's fonts and images.
+SNAPSHOT_MIME = {".woff2": "font/woff2", ".woff": "font/woff", ".ttf": "font/ttf", ".otf": "font/otf",
+                 ".svg": "image/svg+xml", ".webp": "image/webp", ".avif": "image/avif", ".ico": "image/x-icon"}
+
+
+def _css_skip(css, i):
+    """The index past a string, comment or backslash escape (Tailwind's .md\\:flex, .a\\,b) that
+    starts at i, or i itself when none does."""
+    c = css[i]
+    if c == "\\":
+        return min(i + 2, len(css))
+    if c in "\"'":
+        j = i + 1
+        while j < len(css) and css[j] != c:
+            j += 2 if css[j] == "\\" else 1
+        return min(j + 1, len(css))
+    if css.startswith("/*", i):
+        j = css.find("*/", i + 2)
+        return len(css) if j < 0 else j + 2
+    return i
+
+
+def _css_scan(css, i, stops):
+    """The index of the first character in stops outside strings, comments, () and [], or len(css)."""
+    depth = 0
+    while i < len(css):
+        j = _css_skip(css, i)
+        if j != i:
+            i = j
+            continue
+        c = css[i]
+        if c in "([":
+            depth += 1
+        elif c in ")]":
+            depth = max(0, depth - 1)
+        elif depth == 0 and c in stops:
+            return i
+        i += 1
+    return i
+
+
+def _css_block_end(css, i):
+    """css[i] is "{": the index of the "}" that closes it, or -1 when nothing does."""
+    depth = 0
+    while i < len(css):
+        j = _css_skip(css, i)
+        if j != i:
+            i = j
+            continue
+        if css[i] == "{":
+            depth += 1
+        elif css[i] == "}":
+            depth -= 1
+            if not depth:
+                return i
+        i += 1
+    return -1
+
+
+def _css_uncomment(css):
+    out, i = [], 0
+    while i < len(css):
+        j = _css_skip(css, i)
+        if j == i:
+            out.append(css[i])
+            i += 1
+        else:
+            if not css.startswith("/*", i):
+                out.append(css[i:j])
+            i = j
+    return "".join(out)
+
+
+def _css_prelude(head):
+    """A rule's prelude with comments dropped and each whitespace run made one space, except
+    inside strings and escapes ([title="a  b"] keeps both spaces)."""
+    out, i = "", 0
+    while i < len(head):
+        j = _css_skip(head, i)
+        if j != i:
+            out += " " if head.startswith("/*", i) and not out.endswith(" ") else (
+                "" if head.startswith("/*", i) else head[i:j])
+            i = j
+        elif head[i].isspace():
+            out += "" if out.endswith(" ") else " "
+            i += 1
+        else:
+            out += head[i]
+            i += 1
+    return out.strip()
+
+
+def _css_split(prelude):
+    """A selector list's parts, split on the commas outside :is(), [attr] and strings."""
+    parts, i = [], 0
+    while True:
+        j = _css_scan(prelude, i, ",")
+        parts.append(prelude[i:j].strip())
+        if j >= len(prelude):
+            return parts
+        i = j + 1
+
+
+def _scope_selector(sel, attr):
+    """html and :root are the frame's own root, so the attribute goes on them, not above them.
+    Known limit: only a leading html or :root is seen. One inside a pseudo-class
+    (:is(html.dark) .a, :not(:root) .b) gets the plain prefix, and so never matches."""
+    m = re.match(r"(?i)(html|:root)(?![\w-])", sel)
+    return "html" + attr + sel[m.end():] if m else "html%s %s" % (attr, sel)
+
+
+def _scope_rules(css, attr, where):
+    rules, i, n = [], 0, len(css)
+    while True:
+        while i < n and (css[i].isspace() or css.startswith("/*", i)):
+            i = _css_skip(css, i) if css.startswith("/*", i) else i + 1
+        if i >= n:
+            return rules
+        end = _css_scan(css, i, "{;}")
+        head = css[i:end]
+        if end < n and css[end] == ";" and head.lstrip().startswith("@"):
+            rules.append(head.strip() + ";")  # @import, @charset, @layer a, b;
+            i = end + 1
+            continue
+        if end >= n or css[end] != "{":
+            raise SpecError("%s: css must be rules (selector { ... }); this has no block of its own: %r"
+                            % (where, head.strip()[:60] or css[end:end + 1]))
+        close = _css_block_end(css, end)
+        if close < 0:
+            raise SpecError("%s: css has a { that is never closed, after %r" % (where, head.strip()[:60]))
+        prelude, body = _css_prelude(head), css[end + 1:close]
+        if prelude.startswith("@"):
+            name = re.match(r"@([\w-]*)", prelude).group(1).lower()
+            if name == "scope":
+                raise SpecError("%s: css cannot use @scope (its rules match from the scope root, so the "
+                                "change could not be turned off); write the selectors out instead" % where)
+            if name in CSS_NESTED_AT:
+                rules.append("%s { %s }" % (prelude, "\n".join(_scope_rules(body, attr, where))))
+            else:
+                rules.append(css[i:close + 1].strip())
+        else:
+            sels = _css_split(prelude)
+            if not all(sels):
+                raise SpecError("%s: css has an empty selector in %r" % (where, prelude[:60]))
+            rules.append("%s {%s}" % (", ".join(_scope_selector(s, attr) for s in sels), body))
+        i = close + 1
+
+
+def scope_css(css: str, change_id: str) -> str:
+    """Prefix every selector of css with html[data-rc~="<change_id>"], so the rules apply only
+    while the change is on: each part of a selector list, the rules inside @media, @supports,
+    @container and @layer blocks; @font-face, @keyframes and statements pass through."""
+    return "\n".join(_scope_rules(css, '[data-rc~="%s"]' % change_id, "change %s" % change_id))
+
+
+def _score_pairs(sc, dims):
+    return " · ".join("%s <b>%d</b>" % (lab, sc[k]) for k, lab in dims if k in sc)
+
+
+def check_refine_fields(it) -> None:
+    """Validate a refine item: base, 1 to 8 changes, their fields, and the scores (SpecError, one line)."""
+    iid = it["id"]
+    base = it.get("base")
+    if not (isinstance(base, dict) and isinstance(base.get("from"), str) and base["from"]):
+        raise SpecError('item %s: base must be {"from": "<the capture\'s -snapshot.html>"}, got %r' % (iid, base))
+    changes = it.get("changes")
+    count = len(changes) if isinstance(changes, list) else 0
+    if not 1 <= count <= REFINE_MAX:
+        raise SpecError("item %s: %d changes; a Refine item holds 1 to %d (more than %d says the page wants "
+                        "a Redesign)" % (iid, count, REFINE_MAX, REFINE_MAX))
+    jb = it.get("judged_by")
+    if jb is not None and (not isinstance(jb, str) or jb not in JUDGED_BY):
+        raise SpecError("item %s: judged_by %r must be helper or self" % (iid, jb))
+    check_scores("item %s, current page" % iid, it.get("before_scores"))
+    check_scores("item %s, your picks together" % iid, it.get("set_scores"))
+    for key in ("location", "crops"):
+        if it.get(key) is not None and not (isinstance(it[key], str) and it[key]):
+            raise SpecError("item %s: %s must be a string" % (iid, key))
+    for c in changes:
+        if not isinstance(c, dict):
+            raise SpecError("item %s: every change must be an object" % iid)
+        cid = c.get("id")
+        if not isinstance(cid, str) or not REFINE_ID.match(cid):
+            raise SpecError("item %s: change id %r must be lowercase letters, digits and hyphens ([a-z0-9-]+)"
+                            % (iid, cid))
+        where = "change %s" % cid
+        for key, what in (("label", "a label"), ("why_html", "why_html"), ("css", "css")):
+            if not (isinstance(c.get(key), str) and c[key].strip()):
+                raise SpecError("%s needs %s" % (where, what))
+        t = c.get("targets")
+        if not (isinstance(t, list) and t and all(isinstance(s, str) and s.strip() for s in t)):
+            raise SpecError("%s: targets must be a non-empty list of selectors, got %r" % (where, t))
+        cx = c.get("context")
+        if cx is not None and not (isinstance(cx, list) and cx and all(isinstance(x, str) and x.strip() for x in cx)):
+            raise SpecError("%s: context must be a non-empty list of selectors (the neighbors its crops show), got %r"
+                            % (where, cx))
+        if "</style" in c["css"].lower():
+            raise SpecError("%s: css must not contain </style>" % where)
+        for sw in c.get("swaps") or []:
+            if not (isinstance(sw, dict) and isinstance(sw.get("selector"), str) and sw["selector"].strip()
+                    and isinstance(sw.get("html"), str)):
+                raise SpecError("%s: every swap needs a selector and html" % where)
+            if "</template" in sw["html"].lower():
+                raise SpecError("%s: a swap's html must not contain </template>" % where)
+        removes = c.get("removes")
+        if removes is not None and not isinstance(removes, list):
+            raise SpecError("%s: removes must be a list" % where)
+        for r in removes or []:
+            if not (isinstance(r, dict) and str(r.get("element") or "").strip() and str(r.get("reason") or "").strip()):
+                raise SpecError("%s: every removes line needs an element and a reason" % where)
+        if HIDES.search(_css_uncomment(c["css"])) and not removes:
+            raise SpecError("%s hides an element (display: none) but has no removes line saying what and why" % where)
+        if c.get("swaps") and not removes:
+            raise SpecError("%s swaps an element but has no removes line saying what it replaces and why" % where)
+        sc = c.get("scores")
+        if sc is not None:
+            if not isinstance(sc, dict):
+                raise SpecError("%s: scores must be an object" % where)
+            for k, val in sc.items():
+                if k not in dict(REFINE_SCORES):
+                    raise SpecError("%s: unknown score %r (use gain, keeps)" % (where, k))
+                if isinstance(val, bool) or not isinstance(val, int) or not 1 <= val <= 5:
+                    raise SpecError("%s: score %s must be a whole number from 1 to 5, got %r" % (where, k, val))
+        if c.get("recommended") is not None and not isinstance(c["recommended"], bool):
+            raise SpecError("%s: recommended must be true or false" % where)
+        scope_css(c["css"], cid)  # a css error is a spec error now, not a broken frame later
+    if jb or any(c.get("scores") for c in changes):
+        for c in changes:
+            if c.get("recommended") and not c.get("scores"):
+                raise SpecError("item %s: change %s is recommended but has no scores" % (iid, c["id"]))
+
+
+# PNG chunks that tell the browser how to color the pixels. Lossless WebP keeps the pixel
+# values but none of these the same way: in Chrome, a gAMA PNG through ImageMagick changed
+# 99.8% of its pixels and an ICC (iCCP) one through cwebp 48%. A PNG carrying one, or 16 bits
+# a channel (ImageMagick rounds them), goes into the base as it is.
+PNG_COLOR_CHUNKS = (b"gAMA", b"cHRM", b"iCCP", b"cICP", b"mDCV", b"cLLI")
+
+
+def png_is_plain(data):
+    """True for an 8-bit PNG with none of PNG_COLOR_CHUNKS before its pixels."""
+    if data[:8] != b"\x89PNG\r\n\x1a\n" or len(data) < 33 or data[24] != 8:
+        return False
+    pos = 8
+    while pos + 8 <= len(data):
+        kind = data[pos + 4:pos + 8]
+        if kind in PNG_COLOR_CHUNKS:
+            return False
+        if kind == b"IDAT":
+            return True
+        pos += 12 + int.from_bytes(data[pos:pos + 4], "big")
+    return False
+
+
+def snapshot_asset(path, tool, cache):
+    """A data URI for one file of the snapshot's assets folder, made once per page. A plain
+    PNG (png_is_plain) becomes lossless WebP when that is smaller: never lossy, and never
+    resized, because the base must render pixel for pixel like the page (an image's natural
+    size is layout)."""
+    if path not in cache:
+        mime = SNAPSHOT_MIME.get(path.suffix.lower())
+        data = None
+        if path.suffix.lower() == ".png" and tool is not None and png_is_plain(path.read_bytes()):
+            data = encode_webp(path, 100, None, True, tool)
+            if data is not None and len(data) >= path.stat().st_size:
+                data = None
+        cache[path] = data_uri(path, data, "image/webp") if data is not None else data_uri(path, mime=mime)
+    return cache[path]
+
+
+def load_snapshot(it, base, cache):
+    """The base snapshot's HTML with every reference into its sibling assets folder
+    (<name>-snapshot-assets/<file>, a relative path) replaced by that file's data URI."""
+    rel = it["base"]["from"]
+    p, tried = find_file(rel, base)
+    if p is None:
+        raise SpecError("item %s: base: %s not found (tried %s)" % (it["id"], rel, " and ".join(map(str, tried))))
+    text = p.read_text()
+    # Where the before shots are: --smoke looks beside the snapshot (fidelity.cjs shotNames).
+    # Relative to the working directory, so the page names no folder above the project.
+    # A snapshot outside the project (a scratch folder under the home folder) gets only its file
+    # name, so the published page names no folder outside it; --smoke then needs --shots.
+    try:
+        it["_base_path"] = os.path.relpath(p, Path.cwd())
+    except ValueError:  # another drive
+        it["_base_path"] = p.name
+    if it["_base_path"].startswith("..") or os.path.isabs(it["_base_path"]):
+        it["_base_path"] = p.name
+    folder = p.parent / (p.stem + "-assets")
+    tool = image_tool()
+    if folder.is_dir():
+        for f in sorted(folder.iterdir(), key=lambda f: -len(f.name)):
+            ref = "%s/%s" % (folder.name, f.name)
+            if f.is_file() and ref in text:
+                uri = snapshot_asset(f, tool, cache)
+                text = text.replace("./" + ref, uri).replace(ref, uri)
+    left = re.search(r"%s/[^\s\"')]*" % re.escape(folder.name), text)
+    if left:
+        raise SpecError("item %s: base refers to %s, which is not in %s" % (it["id"], left.group(0), folder))
+    return text
+
+
+def refine_base(it, base, cache):
+    """The snapshot as each frame shows it: every change's scoped CSS in one <style data-rc-css>
+    at the end of its <head>, and each swap as a <template> at the end of its <body>."""
+    doc = load_snapshot(it, base, cache)
+    css = "\n".join("/* %s */\n%s" % (c["id"], scope_css(c["css"], c["id"])) for c in it["changes"])
+    style = "<style data-rc-css>\n%s\n</style>\n" % css
+    head = re.search(r"</head\s*>", doc, re.I)
+    if head:
+        doc = doc[:head.start()] + style + doc[head.start():]
+    else:
+        body = re.search(r"<body\b", doc, re.I)
+        at = body.start() if body else 0
+        doc = doc[:at] + style + doc[at:]
+    tpl = "".join('<template data-rc-swap="%s" data-rc-target="%s">%s</template>\n'
+                  % (esc(c["id"]), esc(sw["selector"]), sw["html"])
+                  for c in it["changes"] for sw in c.get("swaps") or [])
+    if tpl:
+        ends = list(re.finditer(r"</body\s*>", doc, re.I))
+        at = ends[-1].start() if ends else len(doc)
+        doc = doc[:at] + tpl + doc[at:]
+    return strip_nested_srcdoc(vh_to_var(doc))
+
+
+def _vh_value(css):
+    """css (a declaration's value) with each viewport-height length as a multiple of --rp-vh,
+    falling back to the unit itself, so the base opened as its own page lays out as before.
+    Quoted strings, url(...) bodies (a data: URI's base64 can hold "12vh") and comments stay."""
+    out, plain, i, n = [], [], 0, len(css)
+
+    def flush():
+        if plain:
+            out.append(VH_UNIT.sub(lambda m: "calc(%s * var(--rp-vh, 1%s))" % (m.group(1), m.group(2)), "".join(plain)))
+            plain.clear()
+    while i < n:
+        c = css[i]
+        if c in "\"'" or css.startswith("/*", i):
+            j = _css_skip(css, i)
+        elif c == "\\":  # an escape stays in the run, so the unit regex sees what is around it
+            plain.append(css[i:i + 2])
+            i += 2
+            continue
+        elif css[i:i + 4].lower() == "url(" and not (i and (css[i - 1].isalnum() or css[i - 1] in "-_")):
+            j = i + 4
+            while j < n and css[j] != ")":
+                j = _css_skip(css, j) if css[j] in "\"'\\" else j + 1
+            j = min(j + 1, n)
+        else:
+            plain.append(c)
+            i += 1
+            continue
+        flush()
+        out.append(css[i:j])
+        i = j
+    flush()
+    return "".join(out)
+
+
+def _vh_decl(seg):
+    """One declaration (prop: value): only the value is rewritten."""
+    k = _css_scan(seg, 0, ":")
+    return seg if k >= len(seg) or seg.lstrip().startswith("@") else seg[:k + 1] + _vh_value(seg[k + 1:])
+
+
+def _vh_css(css, declarations=False):
+    """css with each viewport-height length in its declarations' values as a multiple of --rp-vh
+    (_vh_value). Selectors and at-rule preludes are never touched (an escaped Tailwind class such
+    as .max-h-\\[min\\(50vh\\2c 400px\\)\\], or @media (min-height: 50vh), where var() is not allowed),
+    nor anything inside @property (its initial-value must stay a computationally independent
+    length). declarations: css is a style attribute's value, a list of declarations."""
+    out, i, n = [], 0, len(css)
+    stack = [True] if declarations else []   # per open block: whether its declarations are rewritten
+    while i < n:
+        j = _css_scan(css, i, "{;}")
+        seg, ch = css[i:j], css[j] if j < n else ""
+        if ch == "{":
+            prelude = _css_prelude(_css_uncomment(seg)).lower()
+            stack.append(not prelude.startswith("@property") and (stack[-1] if stack else True))
+            out.append(seg + ch)
+        else:
+            out.append(_vh_decl(seg) if stack and stack[-1] else seg)
+            out.append(ch)
+            if ch == "}" and stack and not (declarations and len(stack) == 1):
+                stack.pop()
+        i = j + 1
+    return "".join(out)
+
+
+def vh_to_var(doc):
+    """The base with every vh, svh, lvh and dvh in its <style> elements and style attributes
+    written as calc(N * var(--rp-vh, 1vh)). Inside a frame, 100vh is the frame's own height,
+    and the frame takes the page's height: a min-height: 100vh hero with content below it grew
+    without bound (21,192 to 81,980 px in 1.5 s). The engine and fidelity.cjs renderBase set
+    --rp-vh to the capture's viewport height / 100 at each width. Only declarations' values are
+    rewritten (_vh_css). Known limits: vmin and vmax are not rewritten, and max-height,
+    min-height, orientation and aspect-ratio media queries still see the frame's full height."""
+    doc = re.sub(r"(<style\b[^>]*>)(.*?)(</style\s*>)", lambda m: m.group(1) + _vh_css(m.group(2)) + m.group(3),
+                 doc, flags=re.S | re.I)
+    def attr(m):
+        q, raw = m.group(2)[0], m.group(2)[1:-1]
+        val = html.unescape(raw)  # &quot; inside a value is a CSS string's quote
+        new = _vh_css(val, declarations=True)
+        if new == val:
+            return m.group(0)
+        return m.group(1) + q + new.replace("&", "&amp;").replace(q, "&quot;" if q == '"' else "&#39;") + q
+    return re.sub(r"""(<[A-Za-z][^<>]*?\sstyle=)("[^"]*"|'[^']*')""", attr, doc)
+
+
+def strip_nested_srcdoc(doc):
+    """No srcdoc on an <iframe> inside the base: its HTML would bypass the snapshot's script
+    and on* stripping, and it is same-origin with the review page. (snapshot.cjs drops it too;
+    this covers a snapshot taken before it did.)"""
+    return re.sub(r"""(<iframe\b[^<>]*?)\ssrcdoc=("[^"]*"|'[^']*'|[^\s>]+)""", r"\1", doc, flags=re.I)
+
+
+def external_loads(doc):
+    """The http(s) files the base would still fetch from another site, in order, once each."""
+    seen = []
+    for rx in EXTERNAL_LOAD:
+        for m in rx.finditer(doc):
+            u = html.unescape(m.group(1))
+            if u not in seen:
+                seen.append(u)
+    return seen
+
+
+def change_key(c):
+    """A short hash of what a change's crops show (its targets, css, swaps and, when set, its
+    context). --crops stores it in crops.json; a build shows a change's crops only while it still
+    matches. A change with no context hashes as it did before context existed."""
+    parts = [c["targets"], c["css"], c.get("swaps") or []]
+    if c.get("context"):
+        parts.append(c["context"])
+    what = json.dumps(parts, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha1(what.encode()).hexdigest()[:12]
+
+
+def load_crops(it, spec):
+    """The item's `crops` folder (crops.cjs output, relative to the spec's folder, then the working
+    directory) as it["_crops"]: {change id: {width: {"before", "after", "w", "h"} | {"note"}}},
+    each crop PNG embedded as an asset the way the spec's own screenshots are. A folder with no
+    crops.json yet (--crops not run) leaves the cards' slots empty. A change whose targets, css or
+    swaps changed since (change_key) gets no crops and a warning on stderr: never stale ones."""
+    rel = it.get("crops")
+    if not rel:
+        return
+    p, _ = find_file(str(Path(rel) / "crops.json"), spec.get("_base") or Path.cwd())
+    if p is None:
+        return
+    try:
+        data = json.loads(p.read_text())
+    except ValueError as e:
+        raise SpecError("item %s: crops: %s is not valid JSON (%s)" % (it["id"], p, e))
+    if not isinstance(data, dict):
+        raise SpecError("item %s: crops: %s must map change ids to their crops" % (it["id"], p))
+    report = spec.setdefault("_image_report", {"converted": 0, "before": 0, "after": 0, "fallback": 0,
+                                                "missing_tool": False, "settings": image_settings(spec)})
+    assets, tool = spec.setdefault("_assets", {}), image_tool()
+    out = {}
+    for c in it["changes"]:
+        per = data.get(c["id"])
+        if not isinstance(per, dict):
+            continue
+        if per.get("key") != change_key(c):
+            print("warning: item %s: change %s changed since its crops were made, so its card shows none; "
+                  "run --crops again" % (it["id"], c["id"]), file=sys.stderr)
+            continue
+        for width, _ in REFINE_WIDTHS:
+            box = per.get(str(width))
+            if not isinstance(box, dict):
+                continue
+            taller = box.get("taller") if isinstance(box.get("taller"), int) and box["taller"] > 0 else None
+            if isinstance(box.get("note"), str):
+                out.setdefault(c["id"], {})[str(width)] = {"note": box["note"], "taller": taller}
+                continue
+            files = [p.parent / ("%s-%s-%d.png" % (c["id"], s, width)) for s in ("before", "after")]
+            if not (all(f.is_file() for f in files) and isinstance(box.get("w"), int) and isinstance(box.get("h"), int)):
+                continue
+            names = []
+            for f in files:
+                name = "rp-rc-crop-%d" % len(assets)
+                while name in assets:
+                    name += "x"
+                assets[name] = embed_asset(f, report["settings"], tool, report)
+                names.append(name)
+            out.setdefault(c["id"], {})[str(width)] = {"before": names[0], "after": names[1], "w": box["w"], "h": box["h"],
+                                                       "taller": taller}
+    it["_crops"] = out
+
+
+def crop_figures(c, crops):
+    """A change card's crops: before and after at each width, or that width's note, and a line
+    when the change makes the page taller there (a crop shows only its targets)."""
+    out = []
+    for width, _ in REFINE_WIDTHS:
+        cw = (crops or {}).get(str(width))
+        if not cw:
+            continue
+        if cw.get("taller"):
+            out.append('<p class="rp-rc-crop-note" data-rc-taller="%d">Makes the page %d px taller at %d px.</p>'
+                       % (width, cw["taller"], width))
+        if "note" in cw:
+            out.append('<p class="rp-rc-crop-note" data-rc-crop-w="%d">%s</p>' % (width, esc(cw["note"])))
+            continue
+        for state, word in (("before", "Before"), ("after", "After")):
+            out.append('<figure class="rp-rc-crop" data-rc-crop-w="%d"><img src="{{asset:%s}}" alt="%s: %s, %d px" '
+                       'width="%d" height="%d"><figcaption>%s, %d px</figcaption></figure>'
+                       % (width, cw[state], word, esc(c["label"]), width, cw["w"], cw["h"], word, width))
+    return "".join(out)
+
+
+def render_refine(it, ctx) -> str:
+    """The change cards, then the combined preview: both frames of the base, the current
+    page's scores and the recommended set's, and the picks/original toggle."""
+    dec, iid = it["_dec"], it["id"]
+    scored = bool(it.get("judged_by")) or any(c.get("scores") for c in it["changes"])
+    h = []
+    for c in it["changes"]:
+        body = ['<div class="rp-rc-why">%s</div>' % c["why_html"]]
+        if c.get("removes"):
+            body.append('<ul class="rp-rc-removes">%s</ul>' % "".join(
+                '<li class="rp-rc-remove"><b>Removes</b> %s — %s</li>' % (esc(r["element"]), esc(r["reason"]))
+                for r in c["removes"]))
+        # The change's before and after crops at 1280 and 390, when the item names `crops`.
+        body.append('<div class="rp-rc-crops" data-rc-crops="%s">%s</div>'
+                    % (esc(c["id"]), crop_figures(c, (it.get("_crops") or {}).get(c["id"]))))
+        if c.get("scores"):
+            body.append('<div class="rp-scores">%s</div>' % _score_pairs(c["scores"], REFINE_SCORES))
+        elif scored:
+            body.append('<div class="rp-scores rp-unscored">Not scored</div>')
+        card = review_item({"id": c["id"], "num": c["_num"], "label": c["label"],
+                            "location": c.get("location") or it.get("location"),
+                            "recommended": c.get("recommended"), "body_html": "\n".join(body)}, dec, ctx.colors)
+        # data-rc-targets: what --crops (crops.cjs) cuts the change's crops to; data-rc-key: what
+        # it stores with them, so a later build knows they still show this change.
+        # data-rc-context: the neighbors the crops also take in, when the change has them.
+        ctx_attr = 'data-rc-context="%s" ' % esc(json.dumps(c["context"])) if c.get("context") else ""
+        h.append(card.replace('<article class="rp-item" ', '<article class="rp-item" data-rc-change="%s" '
+                              'data-rc-targets="%s" %sdata-rc-key="%s" ' % (esc(c["id"]), esc(json.dumps(c["targets"])),
+                                                                         ctx_attr, change_key(c)), 1))
+    p = ['<div class="rp-rc-preview" data-rc-preview="%s" data-rc-base="%s">' % (esc(iid), esc(it["_base_path"])),
+         '<div class="rp-rc-head"><h3 class="rp-rc-title">Your picks together</h3>'
+         '<div class="rp-rc-view" role="group" aria-label="Show the preview">'
+         '<button type="button" class="rp-chip-btn" data-rc-view="picks" aria-pressed="true">With your picks</button>'
+         '<button type="button" class="rp-chip-btn" data-rc-view="original" aria-pressed="false">Original</button>'
+         '</div></div>',
+         '<p class="rp-rc-note">Each change you answer Yes turns on here.</p>']
+    for key, label, cls in (("before_scores", "Current page", "rp-before-scores"),
+                            ("set_scores", "Your picks together (recommended)", "rp-set-scores")):
+        if it.get(key):
+            p.append('<div class="rp-scores %s"><span class="rp-scores-label">%s</span> %s</div>'
+                     % (cls, label, _score_pairs(it[key], SCORE_DIMS)))
+    if it.get("judged_by"):
+        p.append('<div class="rp-judged">%s</div>' % JUDGED_BY[it["judged_by"]])
+    # The snapshot is on the page once, as a JSON string the engine gives both frames as
+    # their srcdoc. Every "<" is escaped, so a "</script>" in the page's text cannot end it.
+    p.append('<script type="application/json" id="rp-rc-base-%s">%s</script>'
+             % (esc(iid), json.dumps(it["_doc"], ensure_ascii=False).replace("<", "\\u003c")))
+    p.append('<div class="rp-rc-frames">')
+    for width, caption in REFINE_WIDTHS:
+        p.append('<figure class="rp-rc-fig" data-rc-fig="%d"><figcaption>%s</figcaption><div class="rp-rc-box">'
+                 '<iframe class="rp-rc-frame" data-rc-width="%d" data-rc-height="%d" width="%d" '
+                 'title="The page with your picks, %s" sandbox="allow-same-origin"></iframe></div></figure>'
+                 % (width, caption, width, REFINE_VIEWPORT_H[width], width, caption))
+    p.append("</div></div>")
+    return "\n".join(h + ["\n".join(p)])
+
+
+def refine_entry(it, sec, ctx):
+    """Validate, number and render one refine item: (html, one JS item per change)."""
+    it["id"] = str(it.get("id") or "refine")
+    if sec.get("_preset") != "refine":
+        raise SpecError('item %s: a refine item needs the "refine" decisions preset (its section has %r)'
+                        % (it["id"], sec.get("_preset")))
+    if ctx.refine is not None:
+        raise SpecError("item %s: one refine item per page (item %s is one already)" % (it["id"], ctx.refine))
+    ctx.refine = it["id"]
+    check_refine_fields(it)
+    ctx.claim(it["id"], "item")
+    for c in it["changes"]:
+        ctx.claim(c["id"], "change")
+        ctx.n += 1
+        c["_num"] = str(ctx.n)
+    it["_dec"] = sec["_dec"]
+    it["_doc"] = refine_base(it, ctx.spec.get("_base") or Path.cwd(), {})
+    far = external_loads(it["_doc"])
+    if far:
+        print("warning: item %s: the base still loads %d file%s from another site (%s%s), which will not load "
+              "in a published page; capture again so the snapshot inlines %s"
+              % (it["id"], len(far), "" if len(far) == 1 else "s", ", ".join(far[:3]), ", ..." if len(far) > 3 else "",
+                 "it" if len(far) == 1 else "them"), file=sys.stderr)
+    load_crops(it, ctx.spec)
+    rnd = item_round(it, ctx.spec)
+    js = [{"id": c["id"], "num": c["_num"], "label": c["label"], "category": None, "variants": [],
+           "rev": refine_rev(it, c, rnd), "round": rnd,
+           "selected": None, "before_font_sizes": [], "before_sections": None,
+           # Measured inside the frames, never as mockups: no near-copy check (spec §3).
+           "design_review": False, "near_copy": False, "refine": it["id"],
+           # What its removes lines name, for --smoke's hidden-element and changed-word lines.
+           "removes": [r["element"] for r in c.get("removes") or []]} for c in it["changes"]]
+    return render_refine(it, ctx), js
+
+
+# ------------------------------------------------------------------ compare
+#
+# design-review's rating step (reference/review-page.md, "Compare items"): after the picks are
+# built, one item of "kind": "compare" shows the original page and the built one in still frames
+# at 1280 and 390, with one toggle that switches both, and asks whether the reader likes the
+# build less, the same or more. The answer is an ordinary item answer (Copy, the page's database,
+# Send to Claude). Each page is embedded once, as a JSON string, scripts and on* handlers removed.
+
+COMPARE_SIDES = (("original", "Original"), ("built", "With your picks"))
+COMPARE_LABEL = "With your picks, do you like the page less, the same or more than the original?"
+LOCAL_LOAD = re.compile(r"""<(?:link|img|source|video|audio|iframe|embed|image|object)\b[^<>]*?\s(?:src|href|srcset|poster|data)=["']?\s*([^"'\s<>,]+)""", re.I)
+
+
+URL_ATTRS = ("href", "src", "action", "formaction", "xlink:href")
+UNSAFE_URL = re.compile(r"^(?:javascript|vbscript):", re.I)
+HOME_PATH = re.compile(r"file://|(?<![\w.])/(?:Users|home)/[A-Za-z0-9._-]+")
+
+
+class _ScriptStripper(HTMLParser):
+    """Finds the spans of a document to cut or rewrite: each <script> element, each <meta
+    http-equiv=refresh>, and in any other tag every on* attribute and every javascript: or
+    vbscript: URL. It is a real tokenizer, so a ">" inside a quoted value or a "/" in place of a
+    space before an attribute cannot hide anything. The rest of the document is left as it was."""
+
+    def __init__(self, doc):
+        super().__init__(convert_charrefs=False)
+        self.doc, self.edits, self.script_from = doc, [], None
+        self.starts = [0]
+        for m in re.finditer("\n", doc):
+            self.starts.append(m.end())
+
+    def _here(self):
+        line, col = self.getpos()
+        return self.starts[line - 1] + col
+
+    def _tag_end(self, at):
+        # The ">" that ends the tag starting at `at`, quoted values skipped.
+        m = re.compile(r"""<[^\s>/]*(?:"[^"]*"|'[^']*'|[^>"'])*>""", re.S).match(self.doc, at)
+        return m.end() if m else len(self.doc)
+
+    def _clean(self, tag, attrs, raw):
+        keep, changed = [], False
+        for name, value in attrs:
+            if name.startswith("on") or (name in URL_ATTRS and value is not None
+                                         and UNSAFE_URL.match(re.sub(r"[\s\x00-\x1f]", "", value))):
+                changed = True
+                continue
+            keep.append((name, value))
+        if not changed:
+            return None
+        parts = [name if value is None else '%s="%s"' % (name, html.escape(value, quote=True)) for name, value in keep]
+        return "<" + " ".join([tag] + parts) + ("/>" if raw.endswith("/>") else ">")
+
+    def handle_starttag(self, tag, attrs, selfclosing=False):
+        raw = self.get_starttag_text()
+        at = self._here()
+        if self.script_from is not None:
+            return
+        if tag == "script":
+            if selfclosing:
+                self.edits.append((at, at + len(raw), ""))
+            else:
+                self.script_from = at
+            return
+        if tag == "meta" and any(n == "http-equiv" and (v or "").strip().lower() == "refresh" for n, v in attrs):
+            self.edits.append((at, at + len(raw), ""))
+            return
+        new = self._clean(tag, attrs, raw)
+        if new is not None:
+            self.edits.append((at, at + len(raw), new))
+
+    def handle_startendtag(self, tag, attrs):
+        self.handle_starttag(tag, attrs, selfclosing=True)
+
+    def handle_endtag(self, tag):
+        if tag == "script" and self.script_from is not None:
+            self.edits.append((self.script_from, self._tag_end(self._here()), ""))
+            self.script_from = None
+
+    def finish(self):
+        self.close()
+        if self.script_from is not None:      # a <script> never closed runs to the end of the page
+            self.edits.append((self.script_from, len(self.doc), ""))
+        out, last = [], 0
+        for start, end, text in sorted(self.edits):
+            out.append(self.doc[last:start])
+            out.append(text)
+            last = end
+        out.append(self.doc[last:])
+        return "".join(out)
+
+
+def without_scripts(doc):
+    """doc with every <script>, every on* attribute, every javascript:/vbscript: URL and every
+    meta refresh removed: the frames show the page, they never run it."""
+    p = _ScriptStripper(doc)
+    p.feed(doc)
+    return p.finish()
+
+
+def compare_doc(it, side, base, cache):
+    """One side of a compare item as its frames show it: a capture snapshot with its assets
+    embedded (as a Refine base is), or a built folder's index.html, with no scripts, every vh
+    as a multiple of --rp-vh and no nested srcdoc."""
+    src = it.get(side)
+    if not (isinstance(src, dict) and isinstance(src.get("from"), str) and src["from"].strip()):
+        raise SpecError('item %s needs %s: {"from": "<a capture snapshot, an HTML file or a built folder>"}'
+                        % (it["id"], side))
+    rel = src["from"]
+    for folder in (base, Path.cwd()):
+        if (folder / rel).is_dir():
+            rel = str(Path(rel) / "index.html")
+            break
+    doc = load_snapshot({"id": it["id"], "base": {"from": rel}}, base, cache)
+    doc = strip_nested_srcdoc(vh_to_var(without_scripts(doc)))
+    near = [u for u in dict.fromkeys(html.unescape(m.group(1)) for m in LOCAL_LOAD.finditer(doc))
+            if not re.match(r"(?i)(data:|https?:|//|#|about:|mailto:|tel:|javascript:)", u)]
+    if near:
+        print("warning: item %s: %s refers to %d file%s beside it (%s%s), which its frame cannot load; "
+              "capture it with --snapshot and compare the snapshots"
+              % (it["id"], side, len(near), "" if len(near) == 1 else "s", ", ".join(near[:3]),
+                 ", ..." if len(near) > 3 else ""), file=sys.stderr)
+    private = sorted(set(HOME_PATH.findall(doc)))
+    if private:
+        print("warning: item %s: %s contains a local path (%s%s), which would be public in a published page; "
+              "check it and remove it" % (it["id"], side, ", ".join(private[:3]), ", ..." if len(private) > 3 else ""),
+              file=sys.stderr)
+    far = external_loads(doc)
+    if far:
+        print("warning: item %s: %s still loads %d file%s from another site (%s), which will not load in a "
+              "published page" % (it["id"], side, len(far), "" if len(far) == 1 else "s", ", ".join(far[:3])),
+              file=sys.stderr)
+    return doc
+
+
+def compare_entry(it, sec, ctx):
+    """Validate a compare item and write its body (the toggle, both pages, four frames). It is
+    then numbered, answered and exported like any review item."""
+    it["id"] = str(it.get("id") or "compare")
+    if sec.get("_preset") != "compare":
+        raise SpecError('item %s: a compare item needs the "compare" decisions preset (its section has %r)'
+                        % (it["id"], sec.get("_preset")))
+    if not (isinstance(it.get("changed_html"), str) and it["changed_html"].strip()):
+        raise SpecError("item %s needs changed_html: one line saying what changed, in plain words" % it["id"])
+    if it.get("body_html"):
+        raise SpecError("item %s: a compare item writes its own body; leave out body_html" % it["id"])
+    it.setdefault("label", COMPARE_LABEL)
+    cache, base = {}, ctx.spec.get("_base") or Path.cwd()
+    docs = {side: compare_doc(it, side, base, cache) for side, _ in COMPARE_SIDES}
+    iid = esc(it["id"])
+    h = ['<div class="rp-cmp" data-cmp="%s">' % iid,
+         '<p class="rp-cmp-changed"><b>What changed:</b> %s</p>' % it["changed_html"],
+         '<div class="rp-cmp-bar"><div class="rp-cmp-toggle" role="group" aria-label="Which version to show">']
+    for side, label in COMPARE_SIDES:
+        h.append('<button type="button" data-cmp-view="%s" aria-pressed="%s">%s</button>'
+                 % (side, "true" if side == "built" else "false", label))
+    # The answer sits under the frames, which are long on a phone; the bar it scrolls with links to it.
+    h.append('</div><p class="rp-cmp-now" aria-live="polite">Showing: <span data-cmp-now>With your picks</span>'
+             '<a class="rp-cmp-rate" href="#comment-%s">Rate it below</a></p></div>' % iid)
+    # Each page once, as a JSON string the engine gives its two frames as their srcdoc; every
+    # "<" is escaped, so a "</script>" in the page's text cannot end it.
+    for side, _ in COMPARE_SIDES:
+        h.append('<script type="application/json" id="rp-cmp-%s-%s">%s</script>'
+                 % (iid, side, json.dumps(docs[side], ensure_ascii=False).replace("<", "\\u003c")))
+    h.append('<div class="rp-cmp-frames">')
+    for width, caption in REFINE_WIDTHS:
+        h.append('<figure class="rp-cmp-fig" data-cmp-fig="%d"><figcaption>%s</figcaption><div class="rp-cmp-box">'
+                 % (width, caption))
+        for side, label in COMPARE_SIDES:
+            h.append('<iframe class="rp-cmp-frame" data-cmp-v="%s" data-cmp-width="%d" data-cmp-height="%d" width="%d" '
+                     'title="%s, %s" tabindex="-1" sandbox="allow-same-origin"%s></iframe>'
+                     % (side, width, REFINE_VIEWPORT_H[width], width, label, caption, "" if side == "built" else " hidden"))
+        h.append("</div></figure>")
+    h.append('</div><p class="rp-cmp-foot">These are pictures of the page, so nothing in them can be tapped. '
+             'On a phone, pinch to zoom in on the desktop view.</p></div>')
+    it["body_html"] = "\n".join(h)
+
+
 # -------------------------------------------------------------------- check
 
 SCRIPT_RX = re.compile(r"<script(?![^>]*\bsrc=)(?![^>]*application/json)[^>]*>(.*?)</script>", re.S | re.I)
@@ -1477,6 +2342,12 @@ def check(path):
             spec = json.loads(m.group(1))
         except ValueError as e:
             errs.append("rp-spec is not valid JSON: %s" % e)
+    for rid, base in re.findall(r'<script type="application/json" id="(rp-rc-base-[^"]+)">(.*?)</script>', text, re.S):
+        try:
+            if not isinstance(json.loads(base), str):
+                raise ValueError("not a string")
+        except ValueError as e:
+            errs.append("%s is not valid JSON: %s" % (rid, e))
     title = re.search(r"<title>(.*?)</title>", text, re.S)
     if not title or not title.group(1).strip():
         errs.append("page has no <title>")
@@ -1678,18 +2549,111 @@ def find_playwright(arg):
     return None
 
 
-def smoke(path, playwright=None):
-    """Click through the page in headless Chromium. Returns (ok, result dict)."""
+def smoke(path, playwright=None, shots=None):
+    """Click through the page in headless Chromium. Returns (ok, result dict). shots: the folder
+    a Refine page's before shots are in, when not beside its base snapshot."""
     pw = find_playwright(playwright)
     if not pw:
         return None, {"error": "Playwright not found. " + HOW_TO_PY}
-    r = subprocess.run([shutil.which("node"), str(SMOKE), pw, str(Path(path).resolve())],
-                       capture_output=True, text=True, timeout=180)
+    node = shutil.which("node")
+    if not node:
+        print("smoke: node is not installed; it is needed to run %s" % SMOKE.name, file=sys.stderr)
+        return None, None
+    try:
+        r = subprocess.run([node, str(SMOKE), pw, str(Path(path).resolve())]
+                           + ([str(Path(shots).resolve())] if shots else []),
+                           capture_output=True, text=True, timeout=HELPER_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        print("smoke: %s did not finish in %d seconds and was stopped" % (SMOKE.name, HELPER_TIMEOUT), file=sys.stderr)
+        return None, None
     try:
         res = json.loads(r.stdout.strip().splitlines()[-1])
     except (ValueError, IndexError):
         return False, {"error": (r.stdout + r.stderr).strip()[-2000:]}
     return not res.get("problems"), res
+
+
+HELPER_TIMEOUT = 600
+
+
+def run_helper(cmd, script, args):
+    """Run one of the node helpers (match.cjs, crops.cjs), which prints one JSON line. The
+    result, or None after printing why on stderr: node not installed, the run over
+    HELPER_TIMEOUT seconds, output that is not that line, or the helper's own { error }."""
+    node = shutil.which("node")
+    if not node:
+        print("%s: node is not installed; it is needed to run %s" % (cmd, script.name), file=sys.stderr)
+        return None
+    try:
+        r = subprocess.run([node, str(script)] + [str(a) for a in args], capture_output=True, text=True,
+                           timeout=HELPER_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        print("%s: %s did not finish in %d seconds and was stopped" % (cmd, script.name, HELPER_TIMEOUT),
+              file=sys.stderr)
+        return None
+    try:
+        res = json.loads(r.stdout.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        print("%s: %s" % (cmd, (r.stdout + r.stderr).strip()[-2000:]), file=sys.stderr)
+        return None
+    if res.get("error"):
+        print("%s: %s" % (cmd, res["error"]), file=sys.stderr)
+        return None
+    return res
+
+
+def match_preview(page_path, picks, shots, playwright=None):
+    """--match-preview: the built page's shots in `shots` against the Refine preview with the
+    picked changes on (fidelity.cjs comparePicks). Prints one line per width; returns the exit
+    code: 0 on a match, 1 when a width differs, 2 when it cannot be measured (no Playwright, no
+    shot of the build, or picks that change nothing visible)."""
+    pw = find_playwright(playwright)
+    if not pw:
+        print("match-preview: Playwright not found. " + HOW_TO_PY, file=sys.stderr)
+        return 2
+    nums = [n.strip() for n in str(picks).split(",") if n.strip()]
+    if not nums:
+        print("match-preview: --picks needs the numbers of the changes answered Yes, such as 1,3", file=sys.stderr)
+        return 2
+    res = run_helper("match-preview", MATCH, [pw, Path(page_path).resolve(), ",".join(nums), Path(shots).resolve()])
+    if res is None:
+        return 2
+    for line in res["lines"]:
+        print(line)
+    # A width that differs is a failure (1) even when the other could not be measured (2).
+    if res.get("differs"):
+        return 1
+    return 2 if res.get("cannot") else 0
+
+
+def crops(page_path, out, playwright=None, set_picks=None):
+    """--crops: each Refine change's before and after at 1280 and 390, cut from PAGE's frames
+    (crops.cjs), into the folder `out`. A width where no target is shown gets a note, printed
+    here and kept in crops.json, instead of a crop, and so does a change that makes the page
+    taller. With set_picks (--set 1,3, the recommended changes), also set-1280.png and
+    set-390.png: the whole base with those on together, for the critic. Returns the exit code:
+    0 when written, 2 when it cannot run (no Playwright or node, PAGE has no Refine preview, a
+    --set number it does not have, or it timed out)."""
+    pw = find_playwright(playwright)
+    if not pw:
+        print("crops: Playwright not found. " + HOW_TO_PY, file=sys.stderr)
+        return 2
+    nums = [n.strip() for n in str(set_picks or "").split(",") if n.strip()]
+    if set_picks is not None and not nums:
+        print("crops: --set needs the numbers of the recommended changes, such as 1,3", file=sys.stderr)
+        return 2
+    res = run_helper("crops", CROPS, [pw, Path(page_path).resolve(), Path(out).resolve()] + ([",".join(nums)] if nums else []))
+    if res is None:
+        return 2
+    n = sum(1 for per in res["crops"].values() for w, box in per.items() if w != "key" and "note" not in box)
+    print("wrote %d crops of %d changes to %s" % (n * 2, len(res["crops"]), out))
+    if res.get("set"):
+        print("wrote %s with change%s %s on together, for the critic" % (
+            " and ".join(str(Path(out) / res["set"]["files"][w]) for w in ("1280", "390")),
+            "s" if len(res["set"]["changes"]) > 1 else "", ", ".join(res["set"]["changes"])))
+    for note in res["notes"]:
+        print("note: " + note)
+    return 0
 
 
 def answers(page_path, rows):
@@ -1712,14 +2676,33 @@ def main(argv=None):
     ap.add_argument("--check", metavar="PAGE", help="check a built page")
     ap.add_argument("--smoke", metavar="PAGE", help="click through a built page in headless Chromium")
     ap.add_argument("--playwright", help="folder of an installed playwright package")
+    ap.add_argument("--match-preview", metavar="PAGE", help="compare the built page's shots (--shots) with "
+                    "PAGE's Refine preview with the picked changes (--picks) on")
+    ap.add_argument("--picks", help="with --match-preview: the numbers of the changes answered Yes, such as 1,3")
+    ap.add_argument("--shots", metavar="DIR", help="with --match-preview: the folder of the capture of the built "
+                    "page; with --smoke: where a Refine page's before shots are, when not beside its base")
+    ap.add_argument("--crops", metavar="PAGE", help="write PAGE's Refine change crops (before and after at 1280 "
+                    "and 390) and crops.json to the folder --out names")
+    ap.add_argument("--set", metavar="NUMS", help="with --crops: also shoot the whole page with these changes "
+                    "(the recommended set, such as 1,3) on together, as set-1280.png and set-390.png")
     ap.add_argument("--answers", metavar="PAGE", help="print PAGE's answers from its database rows (--rows) "
                     "as the same text its Copy button makes")
     ap.add_argument("--rows", metavar="PATH", help="with --answers: the out_dir ArtifactData list wrote, or a JSON file")
     a = ap.parse_args(argv)
+    if a.set is not None and not a.crops:
+        ap.error("--set goes with --crops PAGE --out DIR")
     if a.answers:
         if not a.rows:
             ap.error("--answers needs --rows (the folder ArtifactData list wrote with out_dir)")
         return answers(a.answers, a.rows)
+    if a.crops:
+        if not a.out:
+            ap.error("--crops needs --out DIR (the folder for the crops, such as .proofs/design-review/crops)")
+        return crops(a.crops, a.out, a.playwright, a.set)
+    if a.match_preview:
+        if not (a.picks and a.shots):
+            ap.error("--match-preview needs --picks (such as 1,3) and --shots (the capture's folder)")
+        return match_preview(a.match_preview, a.picks, a.shots, a.playwright)
     if a.check or a.smoke:
         target = a.check or a.smoke
         errs = check(target)
@@ -1730,7 +2713,9 @@ def main(argv=None):
         if errs:
             return 1
         if a.smoke:
-            ok, res = smoke(target, a.playwright)
+            ok, res = smoke(target, a.playwright, a.shots)
+            if res is None:  # node missing or the run timed out: said on stderr, in one line
+                return 2
             print(json.dumps(res, indent=2, ensure_ascii=False))
             if ok is None:
                 return 2

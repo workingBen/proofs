@@ -4,7 +4,10 @@ The export tests run the page's own engine under plain node (no DOM), so they ne
 node but not a browser. The click-through test needs Playwright: set
 PROOFS_PLAYWRIGHT to an installed playwright package folder, or it is skipped.
 """
+import base64
 import contextlib
+import html
+import io
 import json
 import os
 import re
@@ -726,6 +729,466 @@ class BuildAndCheck(unittest.TestCase):
         self.assertIn("✓ Use Edit", text)
 
 
+REFINE = ROOT / "tests" / "fixtures" / "review_page" / "refine"
+RC = 'html[data-rc~="x"] '
+
+
+class Refine(unittest.TestCase):
+    """design-review's Refine mode: one `refine` item, a base snapshot and a list of changes,
+    each its own card and export line, then a `Combined:` line (spec §3 and §4)."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.dir = Path(self._tmp.name) / "refine"
+        shutil.copytree(REFINE, self.dir)
+        self.driver = Path(self._tmp.name) / "driver.cjs"
+        self.driver.write_text(DRIVER)
+
+    def spec(self):
+        return json.loads((REFINE / "spec.json").read_text())
+
+    @staticmethod
+    def item(spec):
+        return spec["sections"][0]["items"][0]
+
+    def load(self, spec):
+        p = self.dir / "s.json"
+        p.write_text(json.dumps(spec))
+        return review_page.load_spec(p)
+
+    def html(self, spec=None):
+        return review_page.page(self.load(spec or self.spec()))
+
+    def error(self, spec):
+        with self.assertRaises(review_page.SpecError) as cm:
+            self.html(spec)
+        return str(cm.exception)
+
+    def built(self, spec=None):
+        out = Path(self._tmp.name) / "page.html"
+        out.write_text(self.html(spec))
+        return out
+
+    def export(self, state, spec=None):
+        r = subprocess.run([NODE, str(self.driver), str(self.built(spec)), json.dumps({"items": state})],
+                           capture_output=True, text=True, env=dict(os.environ, TZ="UTC"))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return r.stdout
+
+    def frames(self, text):
+        """Each frame's width and the document the engine gives it: the page's one embedded
+        copy of the snapshot (the frames carry no srcdoc of their own)."""
+        widths = re.findall(r'<iframe class="rp-rc-frame" data-rc-width="(\d+)"', text)
+        m = re.search(r'<script type="application/json" id="rp-rc-base-home">(.*?)</script>', text, re.S)
+        self.assertTrue(m, "no embedded snapshot")
+        return [(w, json.loads(m.group(1))) for w in widths]
+
+    def card(self, text, cid):
+        m = re.search(r'<article class="rp-item"[^>]*data-rc-change="%s".*?</article>' % re.escape(cid), text, re.S)
+        self.assertTrue(m, "no card for change %s" % cid)
+        return m.group(0)
+
+    def change_revs(self, spec):
+        text = self.html(spec)
+        js = json.loads(re.search(r'id="rp-spec">(.*?)</script>', text, re.S).group(1))
+        return {it["id"]: (it.get("rev"), it.get("round")) for s in js["sections"] if s["kind"] == "review"
+                for it in s["items"] if it.get("refine")}
+
+    def test_refine_changes_carry_a_round_fingerprint_like_items(self):
+        base = self.change_revs(self.spec())
+        cid = next(iter(base))
+        self.assertTrue(all(r[0] for r in base.values()), "every change needs a rev")
+        # A republish of the same round, with commentary changed, keeps every answer.
+        s = self.spec()
+        self.item(s)["changes"][0]["scores"] = {"gain": 5, "keeps": 5}
+        self.assertEqual(self.change_revs(s)[cid], base[cid])
+        # A change revised in round 2 under the same id does not keep round 1's rev.
+        s = self.spec()
+        self.item(s)["changes"][0]["css"] = self.item(s)["changes"][0]["css"] + " /* round 2 */ "
+        self.assertNotEqual(self.change_revs(s)[cid][0], base[cid][0])
+        s = self.spec()
+        self.item(s)["changes"][0]["why_html"] = "<p>Rewritten after round 1</p>"
+        self.assertNotEqual(self.change_revs(s)[cid][0], base[cid][0])
+        # A new round changes every change's rev, and a change left alone keeps its other id's.
+        s = self.spec()
+        s["project"] = dict(s.get("project") or {}, round=2)
+        r2 = self.change_revs(s)
+        self.assertTrue(all(r2[k][0] != base[k][0] and r2[k][1] == "2" for k in base))
+        # A pinned rev wins.
+        s = self.spec()
+        self.item(s)["changes"][0]["rev"] = "typo-fix"
+        self.assertEqual(self.change_revs(s)[cid][0], "typo-fix")
+
+    @unittest.skipUnless(NODE, "node is not installed")
+    def test_refine_export_lists_each_change_and_the_combined_line(self):
+        text = self.export({"bold-totals": {"s": "accept"}, "tight-rows": {"s": "deny"}, "alert-color": {"s": "accept"}})
+        self.assertEqual(text, "[Host Headroom dashboard — Design Review (Refine)]\n"
+                               "1. Bolder totals — YES\n"
+                               "2. Tighter row spacing — NO\n"
+                               "3. Status color on the alert column — YES\n"
+                               "Combined: 1, 3")
+        text = self.export({"alert-color": {"s": "revise", "c": "amber,\nnot red"}})
+        self.assertEqual(text, "[Host Headroom dashboard — Design Review (Refine)]\n"
+                               "1. Bolder totals — PENDING\n"
+                               "2. Tighter row spacing — PENDING\n"
+                               "3. Status color on the alert column — REVISE — COMMENT: amber, not red\n"
+                               "Combined: none")
+
+    def test_refine_preset_buttons_and_skill(self):
+        self.assertEqual(review_page.PRESETS["refine"]["buttons"], [
+            {"state": "accept", "label": "✓ Yes", "export": "YES"},
+            {"state": "deny", "label": "✕ No", "export": "NO"},
+            {"state": "revise", "label": "↻ Revise", "export": "REVISE", "comment": "required"}])
+        self.assertEqual(review_page.PRESETS["refine"]["pending"], "PENDING")
+        self.assertEqual(review_page.PRESET_SKILLS["refine"], "design-review")
+        text = self.html()
+        self.assertIn('<span class="rp-sk" aria-hidden="true">design-review</span>', text)
+        card = self.card(text, "tight-rows")
+        for label in ("✓ Yes", "✕ No", "↻ Revise"):
+            self.assertIn(">%s</button>" % label, card)
+
+    def test_refine_scopes_every_selector_of_a_comma_list(self):
+        scope = review_page.scope_css
+        self.assertEqual(scope(".a, .b > c { color: red }", "x"), RC + ".a, " + RC + ".b > c { color: red }")
+        media = scope("@media (max-width: 600px) { .a, .b { margin: 0 } .c { padding: 0 } }", "x")
+        self.assertEqual(media, "@media (max-width: 600px) { " + RC + ".a, " + RC + ".b { margin: 0 }\n"
+                                + RC + ".c { padding: 0 } }")
+        for verbatim in ("@font-face { font-family: X; src: url(a.woff2) format(\"woff2\") }",
+                         "@keyframes spin { from { opacity: 0 } to { opacity: 1 } }",
+                         "@import url(\"x.css\");"):
+            self.assertEqual(scope(verbatim, "x"), verbatim)
+        # A comma inside :is(), an attribute value or a string is not a selector list.
+        self.assertEqual(scope(':is(.a, .b) [title="p, q"] { content: "}, {" }', "x"),
+                         RC + ':is(.a, .b) [title="p, q"] { content: "}, {" }')
+        # html and :root are the frame's own root: the attribute goes on them, not above them.
+        self.assertEqual(scope("html.dark .a, :root { --gap: 4px }", "x"),
+                         'html[data-rc~="x"].dark .a, html[data-rc~="x"] { --gap: 4px }')
+        self.assertEqual(scope("/* note */ .a { color: red } /* end */", "x"), RC + ".a { color: red }")
+        with self.assertRaises(review_page.SpecError):
+            scope(".a { color: red", "x")
+
+    def test_refine_scope_css_keeps_escaped_selectors_whole(self):
+        # Tailwind-style escapes: an escaped comma is not a list, an escaped quote opens no string.
+        scope = review_page.scope_css
+        self.assertEqual(scope(".a\\,b { color: red }", "x"), RC + ".a\\,b { color: red }")
+        self.assertEqual(scope('.x\\:\\"q { color: red }', "x"), RC + '.x\\:\\"q { color: red }')
+        self.assertEqual(scope(".md\\:flex, .w-1\\/2 { display: flex }", "x"),
+                         RC + ".md\\:flex, " + RC + ".w-1\\/2 { display: flex }")
+
+    def test_refine_scope_css_leaves_whitespace_in_strings_alone(self):
+        self.assertEqual(review_page.scope_css('.a  /* c */  [title="a  b"]\n.c { color: red }', "x"),
+                         RC + '.a [title="a  b"] .c { color: red }')
+
+    def test_refine_scope_css_scopes_starting_style_and_refuses_scope(self):
+        self.assertEqual(review_page.scope_css("@starting-style { .a { opacity: 0 } }", "x"),
+                         "@starting-style { " + RC + ".a { opacity: 0 } }")
+        with self.assertRaises(review_page.SpecError) as cm:
+            review_page.scope_css("@scope (.card) { .a { color: red } }", "x")
+        self.assertIn("cannot use @scope", str(cm.exception))
+
+    def test_refine_css_goes_in_one_style_inside_the_snapshot(self):
+        frames = self.frames(self.html())
+        self.assertEqual([w for w, _ in frames], ["1280", "390"])
+        for _, doc in frames:
+            self.assertEqual(doc.count("<style data-rc-css>"), 1)
+            css = doc[doc.index("<style data-rc-css>"):]
+            css = css[:css.index("</style>")]
+            self.assertIn('html[data-rc~="bold-totals"] .total { font-weight: 700; }', css)
+            self.assertIn('html[data-rc~="alert-color"] .badge { display: none; }', css)
+            # After the page's own sheet, so an equal rule still wins, and in its <head>.
+            self.assertLess(doc.index(".total { font-weight:400; }"), doc.index("<style data-rc-css>"))
+            self.assertLess(doc.index("<style data-rc-css>"), doc.index("</head>"))
+            self.assertIn('<template data-rc-swap="alert-color" data-rc-target=".status-icon">'
+                          '<i class="status-icon">▲</i></template>', doc)
+
+    def test_refine_base_outside_the_project_publishes_only_its_file_name(self):
+        # The tests run from the repo; the snapshot is in a temp folder, outside it.
+        text = self.html()
+        self.assertIn('data-rc-base="home-snapshot.html"', text)
+        self.assertNotIn(str(Path(self._tmp.name).resolve().parent), text)
+        self.assertNotIn('data-rc-base="..', text)
+
+    def test_refine_embeds_the_snapshot_assets(self):
+        for _, doc in self.frames(self.html()):
+            self.assertNotIn("home-snapshot-assets/", doc)
+            self.assertIn('url("data:image/svg+xml;base64,', doc)
+            self.assertRegex(doc, r'<img class="photo" src="data:image/(png|webp|jpeg);base64,')
+
+    def test_refine_embeds_color_managed_pngs_untouched(self):
+        """Lossless WebP keeps the pixel values but not a PNG's gAMA (ImageMagick rewrites the
+        values, Chrome then draws them differently) or its ICC profile (cwebp drops it): measured
+        in Chrome, 99.8% and 48% of pixels changed. Such a PNG goes in as it is, so the base
+        still matches the page pixel for pixel."""
+        import struct
+        import zlib
+        def chunk(k, b):
+            return struct.pack(">I", len(b)) + k + b + struct.pack(">I", zlib.crc32(k + b) & 0xFFFFFFFF)
+        rows = b"".join(b"\0" + bytes((x * 37 + y * 11) % 256 for x in range(8 * 3)) for y in range(8))
+        ihdr = chunk(b"IHDR", struct.pack(">IIBBBBB", 8, 8, 8, 2, 0, 0, 0))
+        tail = chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b"")
+        sig = b"\x89PNG\r\n\x1a\n"
+        assets = self.dir / "before" / "home-snapshot-assets"
+        for extra in (chunk(b"gAMA", struct.pack(">I", 100000)), chunk(b"iCCP", b"p\0\0" + zlib.compress(b"x" * 64))):
+            png = sig + ihdr + extra + tail
+            (assets / "3f2a9c81d0-photo.png").write_bytes(png)
+            with mock.patch.object(review_page, "image_tool", return_value=("magick", "/bin/false")), \
+                    mock.patch.object(review_page, "encode_webp", return_value=b"RIFF") as enc:
+                for _, doc in self.frames(self.html()):
+                    self.assertIn('src="data:image/png;base64,%s"' % base64.b64encode(png).decode(), doc)
+            enc.assert_not_called()
+        # A plain 8-bit PNG still becomes lossless WebP when that is smaller.
+        (assets / "3f2a9c81d0-photo.png").write_bytes(sig + ihdr + tail)
+        with mock.patch.object(review_page, "image_tool", return_value=("magick", "/bin/false")), \
+                mock.patch.object(review_page, "encode_webp", return_value=b"RIFF") as enc:
+            doc = self.frames(self.html())[0][1]
+        self.assertIn('src="data:image/webp;base64,UklGRg=="', doc)
+        enc.assert_called_once()
+
+    @unittest.skipUnless(NODE, "node is not installed")
+    def test_refine_srcdoc_survives_quotes_and_script_text(self):
+        page = self.built()
+        self.assertEqual(review_page.check(page), [])
+        text = page.read_text()
+        self.assertNotIn("srcdoc=", text)
+        raw = re.search(r'<script type="application/json" id="rp-rc-base-home">(.*?)</script>', text, re.S).group(1)
+        self.assertNotIn("<", raw)
+        self.assertEqual(len(review_page.SCRIPT_RX.findall(text)), 1)
+        for _, doc in self.frames(text):
+            self.assertIn('print("&lt;/script&gt;") # it\'s "quoted"</pre>', doc)
+            self.assertIn('title="a &quot;quoted&quot; title with </script> in it"', doc)
+
+    @unittest.skipUnless(NODE, "node is not installed")
+    def test_refine_snapshot_is_embedded_once(self):
+        page = self.built()
+        text = page.read_text()
+        # Text only the snapshot has, and one of its inlined assets: each once on the page.
+        self.assertEqual(text.count("web-2"), 1)
+        self.assertEqual(text.count("print("), 1)
+        self.assertEqual(text.count('url(\\"data:image/svg+xml;base64,'), 1)
+        self.assertEqual(review_page.check(page), [])
+        # A page whose embedded snapshot is not JSON fails the check.
+        page.write_text(text.replace('id="rp-rc-base-home">"', 'id="rp-rc-base-home">{', 1))
+        self.assertIn("rp-rc-base-home is not valid JSON", "\n".join(review_page.check(page)))
+
+    def test_refine_rejects_more_than_eight_changes(self):
+        spec = self.spec()
+        base = self.item(spec)["changes"][1]
+        self.item(spec)["changes"] = [dict(base, id="c%d" % i) for i in range(9)]
+        msg = self.error(spec)
+        self.assertIn("9 changes", msg)
+        self.assertIn("1 to 8", msg)
+
+    def test_refine_rejects_fewer_than_one(self):
+        spec = self.spec()
+        self.item(spec)["changes"] = []
+        msg = self.error(spec)
+        self.assertIn("0 changes", msg)
+        self.assertIn("1 to 8", msg)
+
+    def test_refine_rejects_duplicate_change_ids(self):
+        spec = self.spec()
+        self.item(spec)["changes"][2]["id"] = "bold-totals"
+        self.assertIn("unique on the page (got 'bold-totals')", self.error(spec))
+        spec = self.spec()
+        self.item(spec)["changes"][2]["id"] = "home"
+        self.assertIn("unique on the page (got 'home')", self.error(spec))
+        spec = self.spec()
+        self.item(spec)["changes"][2]["id"] = "Alert_Color"
+        self.assertIn("[a-z0-9-]+", self.error(spec))
+
+    def test_refine_rejects_a_change_with_no_targets(self):
+        for targets in (None, [], [""], ".total"):
+            spec = self.spec()
+            ch = self.item(spec)["changes"][0]
+            if targets is None:
+                ch.pop("targets")
+            else:
+                ch["targets"] = targets
+            self.assertIn("change bold-totals: targets", self.error(spec), targets)
+
+    def test_refine_rejects_scores_out_of_range(self):
+        for scores, word in (({"gain": 6, "keeps": 4}, "gain must be a whole number from 1 to 5"),
+                             ({"gain": 0, "keeps": 4}, "gain must be a whole number from 1 to 5"),
+                             ({"gain": 3, "keeps": True}, "keeps must be a whole number from 1 to 5"),
+                             ({"gain": 3, "hierarchy": 4}, "unknown score 'hierarchy' (use gain, keeps)")):
+            spec = self.spec()
+            self.item(spec)["changes"][0]["scores"] = scores
+            self.assertIn(word, self.error(spec))
+
+    def test_refine_rejects_missing_fields_and_bad_shapes(self):
+        cases = (("label", None, "change bold-totals needs a label"),
+                 ("why_html", None, "change bold-totals needs why_html"),
+                 ("css", None, "change bold-totals needs css"),
+                 ("css", ".a { color: red } </style>", "</style>"),
+                 ("swaps", [{"selector": ".a"}], "every swap needs a selector and html"),
+                 ("swaps", [{"selector": ".a", "html": "<p></template></p>"}], "</template>"),
+                 ("removes", [{"element": "badge"}], "every removes line needs an element and a reason"))
+        for key, value, word in cases:
+            spec = self.spec()
+            ch = self.item(spec)["changes"][0]
+            if value is None:
+                ch.pop(key)
+            else:
+                ch[key] = value
+            self.assertIn(word, self.error(spec), key)
+
+    def test_refine_hiding_an_element_needs_a_removes_line(self):
+        spec = self.spec()
+        self.item(spec)["changes"][2].pop("removes")
+        self.assertIn("change alert-color hides an element (display: none) but has no removes line", self.error(spec))
+
+    def test_refine_a_swap_needs_a_removes_line(self):
+        spec = self.spec()
+        self.item(spec)["changes"][1]["swaps"] = [{"selector": ".badge", "html": "<span class=\"badge\">NEW</span>"}]
+        self.assertIn("change tight-rows swaps an element but has no removes line", self.error(spec))
+
+    def test_refine_display_none_in_a_comment_needs_no_removes_line(self):
+        spec = self.spec()
+        self.item(spec)["changes"][1]["css"] = ".rows td { padding: 6px 8px; } /* not display: none */"
+        self.assertIn("Tighter row spacing", self.html(spec))
+
+    def test_refine_base_must_name_a_snapshot_that_exists(self):
+        spec = self.spec()
+        self.item(spec)["base"] = "before/home-snapshot.html"
+        self.assertIn('base must be {"from": ', self.error(spec))
+        spec = self.spec()
+        self.item(spec)["base"] = {"from": "before/nope-snapshot.html"}
+        msg = self.error(spec)
+        self.assertIn("nope-snapshot.html not found (tried ", msg)
+
+    def test_refine_needs_the_refine_preset_and_one_item_per_page(self):
+        spec = self.spec()
+        spec["decisions"] = "design-review"
+        self.assertIn('a refine item needs the "refine" decisions preset', self.error(spec))
+        spec = self.spec()
+        second = json.loads(json.dumps(self.item(spec)))
+        second["id"] = "home-2"
+        for ch in second["changes"]:
+            ch["id"] += "-2"
+        spec["sections"][0]["items"].append(second)
+        self.assertIn("one refine item per page", self.error(spec))
+
+    def test_refine_recommending_an_unscored_change_is_an_error_when_judged(self):
+        spec = self.spec()
+        self.item(spec)["changes"][0].pop("scores")
+        self.assertIn("change bold-totals is recommended but has no scores", self.error(spec))
+        # Unjudged and nothing scored: recommending is fine, and no score rows show.
+        spec = self.spec()
+        it = self.item(spec)
+        it.pop("judged_by")
+        for ch in it["changes"]:
+            ch.pop("scores")
+        text = self.html(spec)
+        self.assertNotIn("Not scored", text)
+        # Judged: an unscored change that is not recommended says "Not scored".
+        spec = self.spec()
+        self.item(spec)["changes"][1].pop("scores")
+        self.assertIn("Not scored", self.card(self.html(spec), "tight-rows"))
+
+    def test_refine_card_shows_label_why_location_scores_badge_and_a_crops_slot(self):
+        text = self.html()
+        card = self.card(text, "bold-totals")
+        self.assertIn('<span class="rp-num">1</span><h3 class="rp-label">Bolder totals</h3>', card)
+        self.assertIn('<span class="rp-loc">Hosts table</span>', card)
+        self.assertIn("at regular weight they read like the host names", card)
+        self.assertIn("Gain <b>4</b> · Keeps <b>5</b>", card)
+        self.assertIn('<span class="rp-badge rp-rec">Recommended</span>', card)
+        self.assertIn('data-rc-crops="bold-totals"', card)
+        # A change with no location of its own names the item's section.
+        self.assertIn('<span class="rp-loc">Dashboard</span>', self.card(text, "tight-rows"))
+        self.assertIn('<span class="rp-badge rp-notrec">Not recommended</span>', self.card(text, "tight-rows"))
+
+    def test_refine_combined_preview_follows_the_cards(self):
+        text = self.html()
+        prev = text.index('data-rc-preview="home"')
+        self.assertLess(text.index('data-rc-change="alert-color"'), prev)
+        self.assertLess(prev, text.index('data-rc-width="1280"'))
+        self.assertIn('data-rc-view="picks" aria-pressed="true">With your picks</button>', text)
+        self.assertIn('data-rc-view="original" aria-pressed="false">Original</button>', text)
+        self.assertIn("Judged by a separate helper", text[prev:])
+
+    def test_refine_items_get_no_near_copy_check(self):
+        text = self.html()
+        js = json.loads(re.search(r'<script type="application/json" id="rp-spec">(.*?)</script>', text, re.S).group(1))
+        items = js["sections"][0]["items"]
+        self.assertEqual([i["id"] for i in items], ["bold-totals", "tight-rows", "alert-color"])
+        self.assertEqual([i["num"] for i in items], ["1", "2", "3"])
+        for i in items:
+            self.assertEqual(i["refine"], "home")
+            self.assertIs(i["near_copy"], False)
+            self.assertIs(i["design_review"], False)
+            self.assertIsNone(i["before_sections"])
+        self.assertIn("if (it.refine) continue;", (RP / "smoke.cjs").read_text())
+
+    def test_refine_set_scores_use_the_six_criteria_and_show_against_the_current_page(self):
+        spec = self.spec()
+        self.item(spec)["set_scores"] = {"hierarchy": 9}
+        self.assertIn("item home, your picks together: score hierarchy must be a whole number from 1 to 5",
+                      self.error(spec))
+        spec = self.spec()
+        self.item(spec)["set_scores"] = {"gain": 4}
+        self.assertIn("unknown score 'gain'", self.error(spec))
+        text = self.html()
+        prev = text[text.index('data-rc-preview="home"'):]
+        cur = prev.index('<span class="rp-scores-label">Current page</span> Hierarchy <b>3</b>')
+        picks = prev.index('<span class="rp-scores-label">Your picks together (recommended)</span> Hierarchy <b>4</b>')
+        self.assertLess(cur, picks)
+
+    def test_refine_removes_lines_show_on_the_card(self):
+        card = self.card(self.html(), "alert-color")
+        self.assertIn('<li class="rp-rc-remove"><b>Removes</b> new badge — It repeats what the alert color now says.</li>',
+                      card)
+        self.assertRegex((RP / "style.css").read_text(), r"\.rp-rc-remove \{[^}]*color:var\(--rp-deny\)")
+
+    @unittest.skipUnless(NODE, "node is not installed")
+    def test_capture_findings_number_on_after_the_changes(self):
+        spec = self.spec()
+        spec["sections"].append({"title": "Found by the capture", "decisions": "design-review", "items": [
+            {"label": "Totals column out of line at 1280", "category": "capture",
+             "body_html": "<p>off-center columns</p>"},
+            {"label": "Host name breaks mid-word at 390", "category": "capture", "body_html": "<p>mid-word</p>"}]})
+        text = self.export({"bold-totals": {"s": "accept"}, "4": {"s": "accept"}, "5": {"s": "deny"}}, spec)
+        self.assertEqual(text, "[Host Headroom dashboard — Design Review (Refine)]\n"
+                               "1. Bolder totals — YES\n"
+                               "2. Tighter row spacing — PENDING\n"
+                               "3. Status color on the alert column — PENDING\n"
+                               "Combined: 1\n"
+                               "4. Totals column out of line at 1280 — ACCEPT (Use Proposed)\n"
+                               "5. Host name breaks mid-word at 390 — DENY")
+        self.assertEqual(review_page.check(self.built(spec)), [])
+
+    @unittest.skipUnless(NODE, "node is not installed")
+    def test_existing_presets_unchanged(self):
+        # Pinned before Refine was added: the other presets' exports must not move a byte.
+        pinned = {
+            "design-review": [
+                ({"1": {"s": "accept-comment", "v": "A", "c": "a\nb"}, "2": {"s": "revise", "r": True, "c": "x"}},
+                 "[Articles Index — Design Review]\n1. Article card layout — ACCEPT WITH COMMENT (Use Selected: "
+                 "Variant A) — COMMENT: a b\n2. Read More button placement — REVISE — READ — COMMENT: x"),
+                ({"1": {"s": "deny", "r": True}},
+                 "[Articles Index — Design Review]\n1. Article card layout — DENY — READ\n"
+                 "2. Read More button placement — PENDING"),
+                ({"2": {"s": "accept"}},
+                 "[Articles Index — Design Review]\n1. Article card layout — PENDING\n"
+                 "2. Read More button placement — ACCEPT (Use Proposed)")],
+            "copy-edit": [({"1": {"s": "deny"}, "2": {"s": "revise", "c": "z"}},
+                           "[Pricing Page — Copy-Edit Review]\n1. Intro — first sentence — DENY (Keep Original)\n"
+                           "2. New — Introduction to the Method — REVISE — COMMENT: z")],
+            "photo-picker": [({"1": {"s": "deny"}, "2": {"s": "revise", "c": "z"}},
+                              "[How-To Guides — Photo Picker]\n1. Article One — Introduction section — DENY (Keep None)\n"
+                              "2. Article Two — Proofing Basket — REVISE — COMMENT: z")],
+            "style-guide": [({"1": {"s": "deny"}, "2": {"s": "revise", "c": "z"}},
+                             "[Style Guide Audit — 2026-01-15]\n1. Body text size on disclaimer notes — DENY\n"
+                             "2. H2 size on plain articles vs templated ones — REVISE — COMMENT: z")]}
+        for name, cases in pinned.items():
+            page = build(name, self._tmp.name)
+            for state, want in cases:
+                r = subprocess.run([NODE, str(self.driver), str(page), json.dumps({"items": state})],
+                                   capture_output=True, text=True, env=dict(os.environ, TZ="UTC"))
+                self.assertEqual(r.stdout, want, name)
+
+
 MAGICK = shutil.which("magick")
 WEBP = MAGICK or shutil.which("cwebp")
 
@@ -1433,6 +1896,1301 @@ const { launchChromium } = require(process.argv[3]);
             self.assertNotIn("UNANSWERED", res["export"])
             self.assertNotIn("note:", res["export"])
 
+
+
+# Drives the Refine preview in real Chromium. The db runtime mock is the one the answers-db
+# tests use (tests/test_answers_db.py's install()), spliced in by RefineBrowser.
+REFINE_DRIVE = r"""
+const { chromium } = require(process.argv[2]);
+const { launchChromium } = require(process.argv[3]);
+const file = "file://" + process.argv[4];
+/*INSTALL*/
+(async () => {
+  const browser = await launchChromium(chromium, process.env);
+  const errors = [];
+  const out = {};
+  async function open(opts, seed, runtime, shared) {
+    const ctx = shared || await browser.newContext(opts);
+    const page = await ctx.newPage();
+    page.on("pageerror", (e) => errors.push(e.message));
+    if (runtime) await page.addInitScript(install, { seed, runtime });
+    await page.goto(file);
+    await ready(page);
+    return { ctx, page };
+  }
+  // Both frames loaded and painted: the engine marks each frame once its layers are set.
+  const ready = (page) => page.waitForFunction(() => {
+    const f = document.querySelectorAll(".rp-rc-frame");
+    return f.length === 2 && Array.prototype.every.call(f, (x) => x.dataset.rcReady === "1");
+  }, null, { timeout: 15000 });
+  // What each frame shows right now, keyed by its width.
+  const look = (page) => page.evaluate(() => {
+    const r = {};
+    document.querySelectorAll(".rp-rc-frame").forEach((f) => {
+      const d = f.contentDocument, cs = (sel, prop) => getComputedStyle(d.querySelector(sel))[prop];
+      r[f.dataset.rcWidth] = {
+        rc: d.documentElement.getAttribute("data-rc"),
+        weight: cs(".total", "fontWeight"), alert: cs(".alert", "color"), badge: cs(".badge", "display"),
+        pad: cs(".rows td", "paddingTop"), h1: cs("h1", "color"),
+        icons: Array.prototype.map.call(d.querySelectorAll(".status-icon"), (i) => i.textContent),
+        swapped: d.querySelectorAll("template[data-rc-swap]").length };
+    });
+    return r;
+  });
+  const tap = async (page, id, choice) => {
+    await page.locator('[data-item="' + id + '"][data-choice="' + choice + '"]').click();
+    await page.waitForTimeout(50);
+  };
+  const state = (page) => page.evaluate(() => window.rpRefine.state());
+  const desk = { viewport: { width: 1440, height: 900 } };
+
+  // 1. Undecided: every layer off, recommended ones too.
+  const a = await open(desk);
+  out.start = { look: await look(a.page), state: await state(a.page) };
+  // 2. Yes on a change: on in both frames. No and Revise: off.
+  await tap(a.page, "bold-totals", "accept");
+  out.yes = { look: await look(a.page), state: await state(a.page) };
+  // The frame's height follows its page both ways: tighter rows, then back.
+  const tall = () => a.page.evaluate(() => Array.prototype.map.call(document.querySelectorAll(".rp-rc-frame"),
+    (f) => parseFloat(f.style.height)));
+  out.heights = [await tall()];
+  await tap(a.page, "tight-rows", "accept");
+  out.heights.push(await tall());
+  await tap(a.page, "tight-rows", "deny");
+  out.heights.push(await tall());
+  await tap(a.page, "alert-color", "revise");
+  out.noRevise = { look: await look(a.page), state: await state(a.page) };
+  // 3. The swap: on with Yes, restored with No.
+  await tap(a.page, "alert-color", "accept");
+  out.swapOn = { look: await look(a.page), state: await state(a.page) };
+  await tap(a.page, "alert-color", "deny");
+  out.swapOff = await look(a.page);
+  await tap(a.page, "alert-color", "accept");
+  // 4. Original and back.
+  await a.page.locator('[data-rc-view="original"]').click();
+  out.original = { look: await look(a.page), state: await state(a.page),
+                   pressed: await a.page.evaluate(() => Array.prototype.map.call(
+                     document.querySelectorAll("[data-rc-view]"), (b) => b.dataset.rcView + ":" + b.getAttribute("aria-pressed"))) };
+  await a.page.locator('[data-rc-view="picks"]').click();
+  out.back = { look: await look(a.page), state: await state(a.page) };
+  // 5. A frame that reloads gets its layers again.
+  await a.page.evaluate(() => new Promise((res) => {
+    const f = document.querySelector('.rp-rc-frame[data-rc-width="390"]');
+    f.addEventListener("load", () => setTimeout(res, 50), { once: true });
+    f.srcdoc = f.srcdoc;
+  }));
+  out.frameReload = await look(a.page);
+  // A load of a document that is not the snapshot does not mark the frame ready.
+  out.blank = await a.page.evaluate(() => new Promise((res) => {
+    const f = document.querySelector('.rp-rc-frame[data-rc-width="390"]'), base = f.srcdoc;
+    delete f.dataset.rcReady;
+    f.addEventListener("load", () => setTimeout(() => {
+      const other = { ready: f.dataset.rcReady || null, rc: f.contentDocument.documentElement.getAttribute("data-rc") };
+      f.addEventListener("load", () => setTimeout(() => res({ other, after: f.dataset.rcReady || null }), 50), { once: true });
+      f.srcdoc = base;
+    }, 50), { once: true });
+    f.srcdoc = "<!doctype html><p>not the snapshot</p>";
+  }));
+  // Content that grows after load, with no window resize: the frame and its box follow.
+  out.late = await a.page.evaluate(() => new Promise((res) => {
+    const f = document.querySelector('.rp-rc-frame[data-rc-width="1280"]'), box = f.parentNode;
+    const before = { h: parseFloat(f.style.height), box: parseFloat(box.style.height) };
+    const tall = f.contentDocument.createElement("div");
+    tall.style.height = "600px";
+    f.contentDocument.body.appendChild(tall);
+    setTimeout(() => {
+      const after = { h: parseFloat(f.style.height), box: parseFloat(box.style.height) };
+      tall.remove();
+      res({ before, after });
+    }, 200);
+  }));
+  await a.page.waitForTimeout(200);
+  // 6. The page reloads: saved answers come back into the preview.
+  await a.page.reload();
+  await ready(a.page);
+  out.pageReload = { look: await look(a.page), state: await state(a.page) };
+  // The desktop frame scaled to its column.
+  out.fit1440 = await a.page.evaluate(() => {
+    const f = document.querySelector('.rp-rc-frame[data-rc-width="1280"]'), fig = f.closest(".rp-rc-fig");
+    const r = f.getBoundingClientRect();
+    return { frame: r.width, col: fig.getBoundingClientRect().width, h: r.height,
+             box: f.parentNode.getBoundingClientRect().height };
+  });
+  await a.ctx.close();
+
+  // WebKit fires a load for the frame's initial about:blank after the engine is listening:
+  // dispatched here before the snapshot arrives, it must not mark the frame ready.
+  const early = await browser.newContext(desk);
+  const ep = await early.newPage();
+  await ep.addInitScript(() => {
+    // The engine attaches its load listener, then sets srcdoc: fire the blank load in between.
+    const d = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, "srcdoc");
+    window.__early = [];
+    Object.defineProperty(HTMLIFrameElement.prototype, "srcdoc", { configurable: true, get: d.get,
+      set(v) {
+        if (this.classList.contains("rp-rc-frame") && !this.__blankFired) {
+          this.__blankFired = true;
+          const url = this.contentDocument && this.contentDocument.URL;
+          this.dispatchEvent(new Event("load"));
+          window.__early.push({ url, ready: this.dataset.rcReady || null });
+        }
+        d.set.call(this, v);
+      } });
+  });
+  await ep.goto(file);
+  await ready(ep);
+  out.early = { before: await ep.evaluate(() => window.__early), look: await look(ep) };
+  await early.close();
+
+  // 7. Another device: the answers come from the page's database.
+  const w = await open(desk, {}, "db");
+  await tap(w.page, "alert-color", "accept");
+  await w.page.waitForTimeout(300);
+  const rows = await w.page.evaluate(() => window.__rows);
+  await w.ctx.close();
+  const b = await open(desk, rows, "db");
+  await b.page.waitForTimeout(400);
+  out.dbRestore = { look: await look(b.page), state: await state(b.page), rows: Object.keys(rows) };
+  await b.ctx.close();
+
+  // 8. At 390: no sideways scroll, and both frames fit the column.
+  const m = await open({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+  out.phone = await m.page.evaluate(() => {
+    const fr = {};
+    document.querySelectorAll(".rp-rc-frame").forEach((f) => {
+      const r = f.getBoundingClientRect(), col = f.closest(".rp-rc-fig").getBoundingClientRect();
+      fr[f.dataset.rcWidth] = { left: r.left, right: r.right, width: r.width, colLeft: col.left, colRight: col.right };
+    });
+    return { scrollWidth: document.documentElement.scrollWidth, frames: fr };
+  });
+  out.phoneLook = await look(m.page);
+  await m.ctx.close();
+  out.errors = errors;
+  await browser.close();
+  console.log(JSON.stringify(out));
+})().catch((e) => { console.log(JSON.stringify({ crash: String(e && e.stack || e) })); process.exit(1); });
+"""
+
+
+@unittest.skipUnless(NODE and playwright_dir(), "Playwright not found")
+class RefineBrowser(unittest.TestCase):
+    """The combined preview live in Chromium: Yes turns a change's layer on in both frames,
+    anything else leaves it off, the Original toggle, swaps, reloads, and the 390 fit (spec §4)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        tmp = Path(cls.tmp.name)
+        shutil.copytree(REFINE, tmp / "refine")
+        # Taller than the frames' floor (the capture's 800 and 844 px viewports), so the height
+        # tests see the frame follow its page.
+        snap = tmp / "refine" / "before" / "home-snapshot.html"
+        snap.write_text(snap.read_text().replace("</div></body>", '<div style="height:1200px"></div>\n</div></body>', 1))
+        src, out = tmp / "refine" / "s.json", tmp / "page.html"
+        src.write_text((REFINE / "spec.json").read_text())
+        r = subprocess.run([sys.executable, str(BUILD), str(src), "--out", str(out)], capture_output=True, text=True,
+                           cwd=str(tmp / "refine"))
+        if r.returncode:
+            raise AssertionError(r.stdout + r.stderr)
+        install = re.search(r"^function install\(\{ seed, runtime \}\) \{.*?^\}$",
+                            (ROOT / "tests" / "test_answers_db.py").read_text(), re.S | re.M).group(0)
+        script = tmp / "drive.cjs"
+        script.write_text(REFINE_DRIVE.replace("/*INSTALL*/", install))
+        r = subprocess.run([NODE, str(script), playwright_dir(), str(RP / "launch.cjs"), str(out)],
+                           capture_output=True, text=True, timeout=300)
+        lines = r.stdout.strip().splitlines()
+        cls.res = json.loads(lines[-1]) if lines else {"crash": r.stderr}
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def setUp(self):
+        self.assertNotIn("crash", self.res, self.res.get("crash"))
+        self.assertEqual(self.res["errors"], [])
+
+    def both(self, look):
+        self.assertEqual(sorted(look), ["1280", "390"])
+        return [look["1280"], look["390"]]
+
+    def test_yes_turns_the_layer_on_in_both_frames(self):
+        for f in self.both(self.res["yes"]["look"]):
+            self.assertIn("bold-totals", f["rc"].split())
+            self.assertEqual(f["weight"], "700")
+        for f in self.both(self.res["start"]["look"]):
+            self.assertEqual(f["weight"], "400")
+        self.assertEqual(self.res["yes"]["state"], {"on": ["bold-totals"], "view": "picks"})
+
+    def test_no_and_pending_leave_it_off(self):
+        st = self.res["noRevise"]
+        for f in self.both(st["look"]):
+            self.assertEqual(f["rc"].split(), ["bold-totals"])      # tight-rows No, alert-color Revise
+            self.assertEqual(f["pad"], "12px")
+            self.assertEqual(f["alert"], "rgb(55, 65, 81)")
+            self.assertEqual(f["badge"], "inline")
+        self.assertEqual(st["state"], {"on": ["bold-totals"], "view": "picks"})
+
+    def test_undecided_cards_start_off_even_when_recommended(self):
+        st = self.res["start"]
+        for f in self.both(st["look"]):
+            self.assertEqual(f["rc"], "")
+            self.assertEqual(f["alert"], "rgb(55, 65, 81)")
+            self.assertEqual(f["icons"], ["!"])
+        self.assertEqual(st["state"], {"on": [], "view": "picks"})
+
+    def test_original_toggle_shows_no_layers_and_back(self):
+        orig = self.res["original"]
+        for f in self.both(orig["look"]):
+            self.assertEqual(f["rc"], "")
+            self.assertEqual((f["weight"], f["icons"], f["badge"]), ("400", ["!"], "inline"))
+        self.assertEqual(orig["state"]["view"], "original")
+        self.assertEqual(orig["pressed"], ["picks:false", "original:true"])
+        back = self.res["back"]
+        for f in self.both(back["look"]):
+            self.assertEqual(sorted(f["rc"].split()), ["alert-color", "bold-totals"])
+            self.assertEqual((f["weight"], f["icons"]), ("700", ["▲"]))
+        self.assertEqual(back["state"], {"on": ["bold-totals", "alert-color"], "view": "picks"})
+
+    def test_swap_replaces_the_element_while_on_and_restores_it_off(self):
+        for f in self.both(self.res["swapOn"]["look"]):
+            self.assertEqual(f["icons"], ["▲"])
+            self.assertEqual(f["badge"], "none")
+            self.assertEqual(f["alert"], "rgb(180, 35, 24)")
+            self.assertEqual(f["swapped"], 1)        # the template stays for the next time
+        for f in self.both(self.res["swapOff"]):
+            self.assertEqual(f["icons"], ["!"])
+            self.assertEqual(f["badge"], "inline")
+
+    def test_reload_restores_saved_answers_into_the_preview(self):
+        for key in ("pageReload", "dbRestore"):
+            look = self.res[key]["look"]
+            for f in self.both(look):
+                self.assertIn("alert-color", f["rc"].split(), key)
+                self.assertEqual(f["icons"], ["▲"], key)
+        self.assertEqual(self.res["pageReload"]["state"], {"on": ["bold-totals", "alert-color"], "view": "picks"})
+        self.assertEqual(self.res["dbRestore"]["state"], {"on": ["alert-color"], "view": "picks"})
+        self.assertIn("s1.alert-color", self.res["dbRestore"]["rows"])
+        # A frame that reloads on its own is painted again.
+        for f in self.both(self.res["frameReload"]):
+            self.assertEqual(sorted(f["rc"].split()), ["alert-color", "bold-totals"])
+            self.assertEqual(f["icons"], ["▲"])
+
+    def test_390_viewport_has_no_sideways_scroll_and_1280_frame_fits(self):
+        ph = self.res["phone"]
+        self.assertLessEqual(ph["scrollWidth"], 390)
+        for w, f in ph["frames"].items():
+            self.assertGreaterEqual(f["left"], f["colLeft"] - 0.5, w)
+            self.assertLessEqual(f["right"], f["colRight"] + 0.5, w)
+            self.assertLessEqual(f["right"], 390, w)
+        self.assertLess(ph["frames"]["1280"]["width"], 390)
+        # At 1440 the desktop frame is scaled to its column too, and its box is as tall as it is.
+        fit = self.res["fit1440"]
+        self.assertLessEqual(fit["frame"], fit["col"] + 0.5)
+        self.assertGreater(fit["h"], 50)
+        self.assertAlmostEqual(fit["box"], fit["h"] + 2, delta=2)
+
+    def test_frame_height_follows_its_page_down_and_back_up(self):
+        before, tight, back = self.res["heights"]
+        for i in range(2):
+            self.assertLess(tight[i], before[i])
+            self.assertEqual(back[i], before[i])
+
+    def test_a_blank_document_load_does_not_mark_the_frame_ready(self):
+        b = self.res["blank"]
+        self.assertEqual(b["other"], {"ready": None, "rc": None})
+        self.assertEqual(b["after"], "1")
+        early = self.res["early"]
+        self.assertEqual(early["before"], [{"url": "about:blank", "ready": None}] * 2)
+        for f in self.both(early["look"]):
+            self.assertEqual(f["icons"], ["!"])   # and the snapshot still painted once it loaded
+
+    def test_frame_height_follows_late_content_without_a_window_resize(self):
+        late = self.res["late"]
+        self.assertGreaterEqual(late["after"]["h"], late["before"]["h"] + 590)
+        self.assertGreater(late["after"]["box"], late["before"]["box"])
+
+    def test_each_frame_uses_its_own_width_layout(self):
+        for key in ("start", "back"):
+            look = self.res[key]["look"]
+            self.assertEqual(look["1280"]["h1"], "rgb(0, 128, 0)", key)
+            self.assertEqual(look["390"]["h1"], "rgb(200, 0, 0)", key)
+        self.assertEqual(self.res["phoneLook"]["390"]["h1"], "rgb(200, 0, 0)")
+
+
+# Shoots an HTML file the way the capture shoots a page (fidelity.cjs's SHOT_VIEWPORTS, the
+# capture's own 1280 and 390): per width, the first screen as <out>-<width>.png and the whole
+# page as <out>-<width>-full.png, at 1x when the capture would take it so (FULL_MAX_PX).
+SHOOT = r"""
+const path = require("path");
+const [pw, rp, file, out] = process.argv.slice(2);
+const { chromium } = require(pw);
+const { launchChromium } = require(path.join(rp, "launch.cjs"));
+const { SHOT_VIEWPORTS, SETTLE_MS, FULL_MAX_PX } = require(path.join(rp, "fidelity.cjs"));
+(async () => {
+  const browser = await launchChromium(chromium, process.env);
+  for (const w of Object.keys(SHOT_VIEWPORTS)) {
+    const ctx = await browser.newContext(SHOT_VIEWPORTS[w]);
+    const page = await ctx.newPage();
+    await page.goto("file://" + path.resolve(file));
+    await page.evaluate(() => document.fonts.ready);
+    await page.waitForTimeout(SETTLE_MS);
+    await page.screenshot({ path: out + "-" + w + ".png" });
+    const tall = await page.evaluate(() => document.documentElement.scrollHeight);
+    const dpr = SHOT_VIEWPORTS[w].deviceScaleFactor || 1;
+    await page.screenshot({ path: out + "-" + w + "-full.png", fullPage: true,
+      ...(dpr > 1 && tall * dpr > FULL_MAX_PX ? { scale: "css" } : {}) });
+    await ctx.close();
+  }
+  await browser.close();
+})().catch((e) => { console.error(e.stack || String(e)); process.exit(1); });
+"""
+
+
+@unittest.skipUnless(NODE and playwright_dir(), "Playwright not found")
+class RefineSmoke(unittest.TestCase):
+    """--smoke on a Refine page: the base against the before shots (fidelity), overlapping
+    changes, the design checks with each change on alone and all on, and --match-preview (spec
+    §2, §3 and §7)."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.tmp = Path(self._tmp.name)
+        self.dir = self.tmp / "refine"
+        shutil.copytree(REFINE, self.dir)
+        self.snap = self.dir / "before" / "home-snapshot.html"
+        self.shoot_js = self.tmp / "shoot.cjs"
+        self.shoot_js.write_text(SHOOT)
+
+    def shoot(self, html_file, out_stem):
+        r = subprocess.run([NODE, str(self.shoot_js), playwright_dir(), str(RP), str(html_file), str(out_stem)],
+                           capture_output=True, text=True, timeout=120)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def before_shots(self):
+        """The capture's shots of the page the snapshot was taken from: home-1280-full.png and
+        home-390-full.png (and the first-screen shots) beside home-snapshot.html."""
+        self.shoot(self.snap, self.dir / "before" / "home")
+
+    def spec(self):
+        return json.loads((REFINE / "spec.json").read_text())
+
+    def build(self, spec=None):
+        src, out = self.dir / "s.json", self.tmp / "page.html"
+        src.write_text(json.dumps(spec or self.spec()))
+        r = subprocess.run([sys.executable, str(BUILD), str(src), "--out", str(out), "--no-check"],
+                           capture_output=True, text=True, cwd=str(self.dir))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        return out
+
+    def smoke(self, spec=None):
+        page = self.build(spec)
+        r = subprocess.run([sys.executable, str(BUILD), "--smoke", str(page)], capture_output=True, text=True,
+                           cwd=str(self.dir), timeout=300)
+        try:
+            return json.loads(r.stdout)
+        except ValueError:
+            raise AssertionError(r.stdout + r.stderr)
+
+    def add_css(self, css, file=None):
+        f = file or self.snap
+        f.write_text(f.read_text().replace("</style>", css + "\n</style>", 1))
+
+    def make_tall(self):
+        """Content below the first screen at both widths: a spacer, then a dark block."""
+        self.add_css(".low { height: 200px; background: #334; }")
+        self.snap.write_text(self.snap.read_text().replace(
+            "</div></body>", '<div style="height:1400px"></div><div class="low"></div>\n</div></body>', 1))
+
+    @staticmethod
+    def refine_lines(res):
+        return [p for p in res["problems"] if "(Refine)" in p]
+
+    def test_fidelity_passes_the_exact_snapshot(self):
+        self.before_shots()
+        self.assertIn('data-rc-base="before/home-snapshot.html"', self.build().read_text())
+        res = self.smoke()
+        self.assertEqual(self.refine_lines(res), [])
+        fid = res["refine"]["fidelity"]
+        self.assertEqual(sorted(fid), ["1280", "390"])
+        for w in ("1280", "390"):
+            self.assertLessEqual(fid[w]["pixelRatio"], 0.001, fid)
+            self.assertTrue(fid[w]["before"].endswith("home-%s-full.png" % w), fid)
+
+    def test_fidelity_flags_a_base_that_does_not_match_the_before_shot(self):
+        self.before_shots()
+        # The base is a copy with one extra margin: everything under the heading moves down 25px.
+        self.add_css("h1 { margin-top: 25px; }")
+        res = self.smoke()
+        for w in ("1280", "390"):
+            ratio = res["refine"]["fidelity"][w]["pixelRatio"]
+            self.assertGreater(ratio, 0.005)
+            self.assertIn("item home (Refine): base differs from the page at %s (pixel ratio %.3f)" % (w, ratio),
+                          res["problems"])
+
+    def test_fidelity_sees_drift_below_the_first_screen(self):
+        self.make_tall()
+        self.before_shots()
+        self.add_css(".low { margin-top: 25px; }")
+        res = self.smoke()
+        for w in ("1280", "390"):
+            self.assertTrue([p for p in res["problems"] if p.startswith(
+                "item home (Refine): base differs from the page at %s " % w)], res["problems"])
+
+    def test_fidelity_without_a_before_shot_is_a_problem_not_a_pass(self):
+        res = self.smoke()
+        self.assertTrue(any(p.startswith("item home (Refine): no before shot at 1280") and p.endswith(
+            "pass --shots DIR with the folder of the before shots") for p in res["problems"]), res["problems"])
+
+    def test_overlap_names_both_changes_the_element_and_the_property(self):
+        self.before_shots()
+        spec = self.spec()
+        changes = spec["sections"][0]["items"][0]["changes"]
+        changes.append({"id": "heavy-totals", "label": "Heavier totals", "why_html": "<p>w</p>",
+                        "targets": [".total"], "css": ".total { font-weight: 800; letter-spacing: 1px; }"})
+        res = self.smoke(spec)
+        ov = res["refine"]["overlaps"]
+        self.assertIn({"a": "1", "b": "4", "element": ".total", "property": "font-weight"}, ov)
+        self.assertIn("item home (Refine): changes 1 and 4 both change font-weight on .total", res["problems"])
+        # Only what both change: the letter spacing is change 4's alone, and changes 2 and 3 touch other things.
+        self.assertEqual([o for o in ov if (o["a"], o["b"]) != ("1", "4") or o["property"] != "font-weight"], [], ov)
+
+    def test_overlap_through_a_custom_property(self):
+        # Change 4 sets only --accent; the page's .alert reads it, and change 5 sets .alert's color.
+        self.add_css(".alert { color: var(--accent, #374151); }")
+        self.before_shots()
+        spec = self.spec()
+        spec["sections"][0]["items"][0]["changes"] += [
+            {"id": "accent", "label": "Accent", "why_html": "<p>a</p>", "targets": [".wrap"],
+             "css": ".wrap { --accent: #b42318; }"},
+            {"id": "alert-ink", "label": "Ink", "why_html": "<p>i</p>", "targets": [".alert"],
+             "css": ".alert { color: #000055; }"}]
+        res = self.smoke(spec)
+        self.assertIn({"a": "4", "b": "5", "element": ".alert", "property": "color"}, res["refine"]["overlaps"])
+        self.assertIn("item home (Refine): changes 4 and 5 both change color on .alert", res["problems"])
+
+    def test_overlap_of_a_swap_and_a_property_on_the_same_element(self):
+        self.before_shots()
+        spec = self.spec()
+        spec["sections"][0]["items"][0]["changes"].append(
+            {"id": "icon-blue", "label": "Blue icon", "why_html": "<p>b</p>", "targets": [".status-icon"],
+             "css": ".status-icon { color: #0000aa; }"})
+        res = self.smoke(spec)
+        self.assertIn({"a": "3", "b": "4", "element": ".status-icon", "property": "color"}, res["refine"]["overlaps"])
+        self.assertIn("item home (Refine): change 3 swaps .status-icon, which change 4 also changes (color)",
+                      res["problems"])
+
+    def test_no_overlap_from_a_reflow_onto_a_layout_property(self):
+        # Change 4's bigger type makes the header and table taller; change 5 declares a height,
+        # on the logo only. Neither declares height on the header, so they do not overlap there.
+        self.before_shots()
+        spec = self.spec()
+        spec["sections"][0]["items"][0]["changes"] += [
+            {"id": "big-type", "label": "Bigger type", "why_html": "<p>t</p>", "targets": [".wrap"],
+             "css": ".wrap { font-size: 20px; }"},
+            {"id": "tall-logo", "label": "Taller logo", "why_html": "<p>l</p>", "targets": [".logo"],
+             "css": ".logo { height: 30px; }"}]
+        res = self.smoke(spec)
+        self.assertEqual([o for o in res["refine"]["overlaps"] if {o["a"], o["b"]} & {"4", "5"}], [],
+                         res["refine"]["overlaps"])
+
+    def test_no_overlap_from_a_property_inherited_into_a_swap(self):
+        # Change 4's font size reaches the swapped .status-icon only by inheritance.
+        self.before_shots()
+        spec = self.spec()
+        spec["sections"][0]["items"][0]["changes"].append(
+            {"id": "big-type", "label": "Bigger type", "why_html": "<p>t</p>", "targets": [".wrap"],
+             "css": ".wrap { font-size: 20px; }"})
+        res = self.smoke(spec)
+        self.assertEqual([o for o in res["refine"]["overlaps"] if (o["a"], o["b"]) == ("3", "4")], [],
+                         res["refine"]["overlaps"])
+        self.assertFalse([p for p in res["problems"] if "swaps" in p], res["problems"])
+
+    def test_design_checks_run_on_each_change_alone_and_all_on(self):
+        self.before_shots()
+        spec = self.spec()
+        changes = spec["sections"][0]["items"][0]["changes"]
+        changes[2]["css"] = ".alert { color: #d0d0d0; } .badge { display: none; }"
+        res = self.smoke(spec)
+        for state in ("change 3 on", "all changes on"):
+            for w in (1280, 390):
+                line = r"item home \(Refine\), %s: \d+ text elements below AA contrast at %dpx" % (state, w)
+                self.assertTrue([p for p in res["problems"] if re.fullmatch(line, p)], res["problems"])
+        # The other changes keep contrast: no line for them, and none for the page as it is.
+        self.assertFalse([p for p in res["problems"] if "change 1 on" in p or "change 2 on" in p], res["problems"])
+        states = {(c["state"], c["width"]) for c in res["refine"]["checks"]}
+        self.assertEqual(states, {(s, w) for s in ("base", "1", "2", "3", "all") for w in (1280, 390)})
+
+    def test_no_near_copy_line_for_refine_items(self):
+        self.before_shots()
+        res = self.smoke()
+        self.assertEqual(res["near_copies"], [])
+        self.assertEqual(res["layout_scores"], [])
+        self.assertFalse([t for t in res["problems"] + res["notes"] if "near-copies" in t])
+
+    def match(self, page, picks, shots):
+        r = subprocess.run([sys.executable, str(BUILD), "--match-preview", str(page), "--picks", picks,
+                            "--shots", str(shots)], capture_output=True, text=True, cwd=str(self.dir), timeout=300)
+        return r.returncode, r.stdout + r.stderr
+
+    def test_match_preview_passes_identical_and_fails_a_different_build(self):
+        self.before_shots()
+        page = self.build()
+        after = self.tmp / "after"
+        after.mkdir()
+        # The real page with change 1 built: its CSS in the page's own sheet, not scoped.
+        built = self.dir / "before" / "built.html"
+        built.write_text(self.snap.read_text().replace("</style>", ".total { font-weight: 700; }\n</style>", 1))
+        self.shoot(built, after / "home")
+        code, out = self.match(page, "1", after)
+        self.assertEqual(code, 0, out)
+        self.assertIn("match", out)
+        # The same build against picks 1 and 3: change 3 was never built.
+        code, out = self.match(page, "1,3", after)
+        self.assertEqual(code, 1, out)
+        for w in ("1280", "390"):
+            self.assertTrue(re.search(r"^%s: .*changes 1, 3" % w, out, re.M), out)
+        # A build that missed its one pick fails too, though it changes only a few pixels of the page.
+        nothing = self.tmp / "nothing"
+        nothing.mkdir()
+        self.shoot(self.snap, nothing / "home")
+        code, out = self.match(page, "1", nothing)
+        self.assertEqual(code, 1, out)
+        self.assertEqual(len([l for l in out.splitlines() if re.match(r"(1280|390): ", l)]), 2, out)
+
+    def test_match_preview_sees_a_pick_below_the_first_screen(self):
+        self.make_tall()
+        self.before_shots()
+        spec = self.spec()
+        spec["sections"][0]["items"][0]["changes"].append(
+            {"id": "low-red", "label": "Red block", "why_html": "<p>r</p>", "targets": [".low"],
+             "css": ".low { background: #a33; }"})
+        page = self.build(spec)
+        code, out = self.match(page, "4", self.dir / "before")   # the page as it was: change 4 not built
+        self.assertEqual(code, 1, out)
+        built = self.dir / "before" / "built.html"
+        built.write_text(self.snap.read_text())
+        self.add_css(".low { background: #a33; }", built)
+        after = self.tmp / "after"
+        after.mkdir()
+        self.shoot(built, after / "home")
+        code, out = self.match(page, "4", after)
+        self.assertEqual(code, 0, out)
+
+    def test_match_preview_cannot_measure_picks_that_change_nothing_visible(self):
+        self.before_shots()
+        spec = self.spec()
+        spec["sections"][0]["items"][0]["changes"].append(
+            {"id": "hand", "label": "Hand cursor", "why_html": "<p>h</p>", "targets": [".total"],
+             "css": ".total { cursor: pointer; }"})
+        code, out = self.match(self.build(spec), "4", self.dir / "before")
+        self.assertEqual(code, 2, out)
+        self.assertIn("change 4 changes nothing visible", out)
+
+    def test_match_preview_cannot_measure_without_the_build_shots(self):
+        self.before_shots()
+        page = self.build()
+        empty = self.tmp / "empty"
+        empty.mkdir()
+        code, out = self.match(page, "1", empty)
+        self.assertEqual(code, 2, out)
+        self.assertIn("no shot of the built page", out)
+        code, out = self.match(page, "1", self.tmp / "nowhere")
+        self.assertEqual(code, 2, out)
+        self.assertIn(str((self.tmp / "nowhere").resolve()), out)
+
+    def test_match_preview_refuses_a_pick_the_page_does_not_have(self):
+        self.before_shots()
+        code, out = self.match(self.build(), "9", self.dir / "before")
+        self.assertEqual(code, 2, out)
+        self.assertIn("9", out)
+
+    def viewport_page(self, name):
+        """A Refine page on before/<name>-snapshot.html, one change, with its before shots."""
+        self.snap = self.dir / "before" / ("%s-snapshot.html" % name)
+        self.shoot(self.snap, self.dir / "before" / name)
+        spec = self.spec()
+        item = spec["sections"][0]["items"][0]
+        item["base"] = {"from": "before/%s-snapshot.html" % name}
+        item["changes"] = [{"id": "bold-totals", "label": "Bolder totals", "why_html": "<p>b</p>",
+                            "targets": [".total"], "css": ".total { font-weight: 700; }"}]
+        return spec
+
+    def test_a_100vh_hero_keeps_its_height_in_the_frames(self):
+        # Inside a frame 100vh is the frame, and the frame took the page's height, so a
+        # min-height: 100vh hero with content below grew without bound. The builder writes vh as
+        # --rp-vh, which each frame and renderBase set to the capture's viewport / 100.
+        res = self.smoke(self.viewport_page("hero"))
+        self.assertEqual(self.refine_lines(res), [])
+        for w, vh in (("1280", 800), ("390", 844)):
+            h = res["refine"]["heights"][w]
+            self.assertIsNotNone(h["before"], h)
+            self.assertGreater(h["before"], vh + 900)                    # the hero, then the rest
+            self.assertLessEqual(abs(h["frame"] - h["before"]), 2, (w, h))
+            self.assertLessEqual(res["refine"]["fidelity"][w]["pixelRatio"], 0.001, res["refine"]["fidelity"])
+
+    def test_an_app_shell_is_as_tall_as_the_capture_viewport(self):
+        # html, body { height: 100% } with the body scrolling: the frame used to stay at the
+        # iframe's default 150 px. It is measured at the capture's viewport height instead.
+        res = self.smoke(self.viewport_page("shell"))
+        self.assertEqual(self.refine_lines(res), [])
+        for w, vh in (("1280", 800), ("390", 844)):
+            self.assertEqual(res["refine"]["heights"][w], {"frame": vh, "before": vh}, w)
+
+    def test_a_frame_that_does_not_match_the_before_height_is_a_problem(self):
+        self.before_shots()
+        self.make_tall()   # the base is now 1600 px taller than the page the before shots show
+        res = self.smoke()
+        for w in ("1280", "390"):
+            h = res["refine"]["heights"][w]
+            self.assertIn("item home (Refine): the %s frame lays the page out %d px tall, but the before shot is %d px; "
+                          "the preview does not show the page as it is" % (w, round(h["frame"]), h["before"]), res["problems"])
+
+    def test_hidden_or_reworded_without_removes_is_a_problem_and_with_removes_a_note(self):
+        self.add_css(".code { color: #999; }")    # the page's own failure, made worse by change 8
+        self.before_shots()
+        spec = self.spec()
+        spec["sections"][0]["items"][0]["changes"] += [
+            {"id": "ghost-brand", "label": "g", "why_html": "<p>g</p>", "targets": [".brand"], "css": ".brand { visibility: hidden; }"},
+            {"id": "faded-photo", "label": "f", "why_html": "<p>f</p>", "targets": [".photo"], "css": ".photo { opacity: 0; }"},
+            # Both .alert cells, and the icon inside one, which inherits the transform.
+            {"id": "loud-alert", "label": "l", "why_html": "<p>l</p>", "targets": [".alert"], "css": ".alert { text-transform: uppercase; }"},
+            {"id": "missing", "label": "m", "why_html": "<p>m</p>", "targets": [".nope", "a[["], "css": ".nope { color: #000; }"},
+            {"id": "paler-code", "label": "p", "why_html": "<p>p</p>", "targets": [".code"], "css": ".code { color: #c8c8c8; }"}]
+        res = self.smoke(spec)
+        probs = self.refine_lines(res)
+        for w in (1280, 390):
+            self.assertIn("item home (Refine): change 4 hides 1 element at %dpx (.brand) with no removes line saying what and why" % w, probs)
+            self.assertIn("item home (Refine): change 5 hides 1 element at %dpx (.photo) with no removes line saying what and why" % w, probs)
+            self.assertTrue([p for p in probs if p.startswith("item home (Refine): change 6 changes words in 3 elements at %dpx (.alert, .alert, .status-icon)" % w)
+                             and p.endswith("with no removes line saying what and why")], probs)
+            # Change 3 hides the two badges and swaps out the icon, and says so: notes, not problems.
+            self.assertFalse([p for p in probs if "change 3 hides" in p or "change 3 changes words" in p], probs)
+            self.assertTrue([n for n in res["notes"] if n.startswith("item home (Refine): change 3 hides 3 elements at %dpx (.badge, .status-icon, .badge)" % w)
+                             and "check its removes lines (new badge; ! status icon) cover them" in n], res["notes"])
+            self.assertTrue([n for n in res["notes"] if n.startswith("item home (Refine), change 8 on: makes 1 text element already "
+                             "below AA contrast worse at %dpx" % w)], res["notes"])
+        self.assertIn("item home (Refine): change 7: target .nope matches nothing", probs)
+        self.assertIn("item home (Refine): change 7: target a[[ is not a valid selector", probs)
+        self.assertFalse([p for p in probs if "change 1 " in p or "change 2 " in p], probs)
+
+    def test_match_preview_says_when_a_mismatch_is_mostly_text(self):
+        # The build shows other numbers than the before did (a page on live data): most of what
+        # differs, outside the picked change, is text, and the line says so.
+        digits = '<p class="data" style="font:14px/1.4 ui-monospace, monospace">%s</p>'
+        self.snap.write_text(self.snap.read_text().replace("</div></body>", digits % ("1234567890 " * 60) + "\n</div></body>", 1))
+        page = self.build()
+        built = self.dir / "before" / "built.html"
+        built.write_text(self.snap.read_text().replace("1234567890 " * 60, "9876543210 " * 60)
+                         .replace("</style>", ".total { font-weight: 700; }\n</style>", 1))
+        after = self.tmp / "after"
+        after.mkdir()
+        self.shoot(built, after / "home")
+        code, out = self.match(page, "1", after)
+        self.assertEqual(code, 1, out)
+        for w in ("1280", "390"):
+            self.assertTrue(re.search(r"^%s: .*\d+%% of the differing pixels outside the picks are text, as when the page shows "
+                                      r"other data than the before did" % w, out, re.M), out)
+        # A real miss (change 1 never built) is not called data.
+        self.shoot(self.snap, self.dir / "before" / "home")
+        code, out = self.match(page, "1", self.dir / "before")
+        self.assertEqual(code, 1, out)
+        self.assertNotIn("are text", out)
+
+    def test_shot_viewports_are_the_captures(self):
+        r = subprocess.run([NODE, "-e", "const c = require(process.argv[1]); const f = require(process.argv[2]);"
+                            "console.log(JSON.stringify([c.VIEWPORTS, f.SHOT_VIEWPORTS]))",
+                            str(ROOT / "skills" / "visual-qa" / "scripts" / "capture.cjs"), str(RP / "fidelity.cjs")],
+                           capture_output=True, text=True)
+        cap, shot = json.loads(r.stdout)
+        for vp in cap:
+            if vp["label"] in shot:
+                want = {k: v for k, v in vp.items() if k not in ("label", "width", "height")}
+                want["viewport"] = {"width": vp["width"], "height": vp["height"]}
+                self.assertEqual(shot[vp["label"]], want)
+        self.assertEqual(sorted(shot), ["1280", "390"])
+        # The frames' floors and --rp-vh come from the builder's copy of the same heights.
+        self.assertEqual({int(k): v["viewport"]["height"] for k, v in shot.items()}, review_page.REFINE_VIEWPORT_H)
+
+
+# Measures a change outside the review page, for RefineCrops: the base rendered as its own page
+# at each width with the change off and on (fidelity.cjs applyChanges, as the engine paints it):
+# each target's box, the page's height, the bounding box of the pixels the change moves
+# (renderBase, diffMask), and the two crops crops.cjs wrote.
+CROP_MEASURE = r"""
+const fs = require("fs");
+const path = require("path");
+const [pw, rp, page, id, targetsArg, crops] = process.argv.slice(2);
+const { chromium } = require(pw);
+const { launchChromium } = require(path.join(rp, "launch.cjs"));
+const { renderBase, applyChanges, diffMask, SHOT_VIEWPORTS } = require(path.join(rp, "fidelity.cjs"));
+const targets = JSON.parse(targetsArg);
+const text = fs.readFileSync(page, "utf8");
+const doc = JSON.parse(text.match(/<script type="application\/json" id="rp-rc-base-[^"]*">([\s\S]*?)<\/script>/)[1]);
+function bbox(d, scale) {
+  let x0 = Infinity, y0 = Infinity, x1 = -1, y1 = -1;
+  for (let y = 0; y < d.height; y++) for (let x = 0; x < d.width; x++) {
+    if (!d.mask[y * d.width + x]) continue;
+    x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x + 1); y1 = Math.max(y1, y + 1);
+  }
+  return x1 < 0 ? null : [x0 / scale, y0 / scale, x1 / scale, y1 / scale];
+}
+(async () => {
+  const browser = await launchChromium(chromium, process.env);
+  const out = {};
+  for (const w of [1280, 390]) {
+    const boxes = [], heights = [], lines = [];
+    for (const on of [[], [id]]) {
+      const ctx = await browser.newContext({ viewport: { width: w, height: 800 } });
+      const p = await ctx.newPage();
+      await p.setContent(doc, { waitUntil: "load" });
+      await p.evaluate(applyChanges, on);
+      boxes.push(...await p.evaluate((sels) => sels.flatMap((s) => Array.from(document.querySelectorAll(s)).map((e) => {
+        const r = e.getBoundingClientRect();
+        return [r.left + scrollX, r.top + scrollY, r.right + scrollX, r.bottom + scrollY];
+      })).filter((b) => b[2] > b[0] && b[3] > b[1]), targets));
+      heights.push(await p.evaluate(() => document.documentElement.getBoundingClientRect().height));
+      // Every fragment of visible text (one rect per line a text node runs over).
+      lines.push(...await p.evaluate(() => {
+        const out = [], walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+        for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+          if (!n.textContent.trim()) continue;
+          const range = document.createRange();
+          range.selectNodeContents(n);
+          for (const r of range.getClientRects()) {
+            if (r.width > 0 && r.height > 0) out.push([r.left + scrollX, r.top + scrollY, r.right + scrollX, r.bottom + scrollY]);
+          }
+        }
+        return out;
+      }));
+      await ctx.close();
+    }
+    const dpr = SHOT_VIEWPORTS[w].deviceScaleFactor || 1;
+    const moved = bbox(diffMask(await renderBase(browser, doc, w, []), await renderBase(browser, doc, w, [id])), dpr);
+    const r = { targets: boxes, height: Math.min(...heights), moved, crops: null, lines };
+    const before = path.join(crops, `${id}-before-${w}.png`), after = path.join(crops, `${id}-after-${w}.png`);
+    if (fs.existsSync(before) && fs.existsSync(after)) {
+      const d = diffMask(before, after);
+      r.crops = { width: d.width, height: d.height, differ: d.count };
+    }
+    out[w] = r;
+  }
+  await browser.close();
+  console.log(JSON.stringify(out));
+})().catch((e) => { console.log(JSON.stringify({ crash: String(e && e.stack || e) })); process.exit(1); });
+"""
+
+
+@unittest.skipUnless(NODE and playwright_dir(), "Playwright not found")
+class RefineCrops(unittest.TestCase):
+    """--crops: each change's before and after at 1280 and 390, cut from the built page's frames
+    to the union of its targets plus the margin, and the next build showing them on its card
+    (spec §4, "One card per change")."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.tmp = Path(self._tmp.name)
+        self.dir = self.tmp / "refine"
+        shutil.copytree(REFINE, self.dir)
+        self.snap = self.dir / "before" / "home-snapshot.html"
+        self.out = self.dir / ".proofs" / "design-review" / "crops"
+
+    def spec(self):
+        return json.loads((REFINE / "spec.json").read_text())
+
+    def build(self, spec=None):
+        src, out = self.dir / "s.json", self.tmp / "page.html"
+        src.write_text(json.dumps(spec or self.spec()))
+        r = subprocess.run([sys.executable, str(BUILD), str(src), "--out", str(out)],
+                           capture_output=True, text=True, cwd=str(self.dir))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        return out
+
+    def crops(self, page):
+        r = subprocess.run([sys.executable, str(BUILD), "--crops", str(page), "--out", str(self.out)],
+                           capture_output=True, text=True, cwd=str(self.dir), timeout=300)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        return json.loads((self.out / "crops.json").read_text()), r.stdout
+
+    def measure(self, page, change):
+        script = self.tmp / "measure.cjs"
+        script.write_text(CROP_MEASURE)
+        r = subprocess.run([NODE, str(script), playwright_dir(), str(RP), str(page), change["id"],
+                            json.dumps(change["targets"]), str(self.out)], capture_output=True, text=True, timeout=300)
+        res = json.loads(r.stdout.strip().splitlines()[-1])
+        self.assertNotIn("crash", res, res.get("crash"))
+        return res
+
+    def test_settle_waits_in_a_sandboxed_frame(self):
+        """The review page's frames are sandboxed without allow-scripts, so a callback queued inside
+        one (requestAnimationFrame, setTimeout) never runs: an evaluate that waited on one died with
+        "Execution context was destroyed". settle must come back, and the frame must stay usable."""
+        script = self.tmp / "settle.cjs"
+        script.write_text(
+            'const { launchChromium } = require(process.argv[3] + "/launch.cjs");\n'
+            'const { settle } = require(process.argv[3] + "/crops.cjs");\n'
+            '(async () => {\n'
+            '  const { chromium } = require(process.argv[2]);\n'
+            '  const browser = await launchChromium(chromium, process.env);\n'
+            '  try {\n'
+            '    const page = await browser.newPage();\n'
+            '    await page.setContent(\'<iframe sandbox="allow-same-origin" srcdoc="<p>hi</p>"></iframe>\');\n'
+            '    const frame = await (await page.$("iframe")).contentFrame();\n'
+            '    await frame.waitForSelector("p");\n'
+            '    await settle(frame);\n'
+            '    console.log(JSON.stringify({ ok: await frame.evaluate(() => document.body.textContent) }));\n'
+            '  } catch (e) { console.log(JSON.stringify({ crash: e.message })); } finally { await browser.close(); }\n'
+            '})();\n')
+        r = subprocess.run([NODE, str(script), playwright_dir(), str(RP)], capture_output=True, text=True, timeout=120)
+        res = json.loads(r.stdout.strip().splitlines()[-1])
+        self.assertNotIn("crash", res, res.get("crash"))
+        self.assertEqual(res["ok"], "hi")
+
+    @staticmethod
+    def crop_constants():
+        r = subprocess.run([NODE, "-e", "const c = require(process.argv[1]); "
+                            "console.log(JSON.stringify([c.CROP_MARGIN, c.CROP_SCALE]))", str(RP / "crops.cjs")],
+                           capture_output=True, text=True)
+        return json.loads(r.stdout)
+
+    @staticmethod
+    def card(text, cid):
+        """The inside of change cid's crops slot (figures and notes, no inner div)."""
+        m = re.search(r'<div class="rp-rc-crops" data-rc-crops="%s">(.*?)</div>' % cid, text, re.S)
+        return m.group(1) if m else None
+
+    def test_crops_cover_the_union_of_targets_plus_margin(self):
+        margin, _ = self.crop_constants()
+        self.assertGreater(margin, 0)
+        spec = self.spec()
+        page = self.build(spec)
+        boxes, _ = self.crops(page)
+        changes = spec["sections"][0]["items"][0]["changes"]
+        self.assertEqual(sorted(boxes), sorted(c["id"] for c in changes))
+        # alert-color: two targets, and .badge is hidden while it is on, so the union spans both states.
+        change = [c for c in changes if c["id"] == "alert-color"][0]
+        res = self.measure(page, change)
+        for w in ("1280", "390"):
+            box, t = boxes["alert-color"][w], res[w]["targets"]
+            self.assertTrue(t)
+            want = [max(0, min(b[0] for b in t) - margin), max(0, min(b[1] for b in t) - margin),
+                    min(int(w), max(b[2] for b in t) + margin), min(res[w]["height"], max(b[3] for b in t) + margin)]
+            got = [box["x"], box["y"], box["x"] + box["w"], box["y"] + box["h"]]
+            # Contains every target plus the margin (a pixel for rounding), and no more than that.
+            self.assertLessEqual(got[0], want[0] + 1e-6, (w, box, want))
+            self.assertLessEqual(got[1], want[1] + 1e-6, (w, box, want))
+            self.assertGreaterEqual(got[2], want[2] - 1e-6, (w, box, want))
+            self.assertGreaterEqual(got[3], want[3] - 1e-6, (w, box, want))
+            # It may grow past that only to take in a whole line of text it would otherwise cut
+            # (test_a_crop_never_slices_a_line_of_text), never past the page.
+            self.assertLessEqual(box["x"] + box["w"], int(w), (w, box))
+            self.assertLessEqual(box["y"] + box["h"], res[w]["height"] + 1, (w, box))
+            for k in "xywh":
+                self.assertIsInstance(box[k], int)
+
+    def assert_no_line_cut(self, box, lines, where):
+        """No fragment of text crosses the crop's edge: each is wholly inside or wholly outside."""
+        x0, y0, x1, y1 = box["x"], box["y"], box["x"] + box["w"], box["y"] + box["h"]
+        for l in lines:
+            if l[2] <= x0 or l[0] >= x1 or l[3] <= y0 or l[1] >= y1:
+                continue
+            inside = l[0] >= x0 - 0.5 and l[1] >= y0 - 0.5 and l[2] <= x1 + 0.5 and l[3] <= y1 + 0.5
+            self.assertTrue(inside, "%s: the crop %r cuts the text at %r" % (where, box, l))
+
+    def test_a_crop_never_slices_a_line_of_text(self):
+        # Task 8: crops were the targets' boxes plus 24 px, so an inline target's crop cut the
+        # label beside it mid-word. Every fragment of text the crop touches is now wholly in it.
+        self.snap.write_text(self.snap.read_text().replace(
+            "<table", '<p class="lede">Every host here reports its <em class="peak">peak load</em> over the last day, '
+            'and this sentence runs on well past the crop so that it wraps across lines on a phone.</p>\n<table', 1))
+        spec = self.spec()
+        spec["sections"][0]["items"][0]["changes"].append(
+            {"id": "peak-ink", "label": "Darker peak", "why_html": "<p>p</p>", "targets": [".peak"],
+             "css": ".peak { color: #b42318; }"})
+        page = self.build(spec)
+        boxes, _ = self.crops(page)
+        for change in spec["sections"][0]["items"][0]["changes"]:
+            res = self.measure(page, change)
+            for w in ("1280", "390"):
+                self.assertTrue(res[w]["lines"])
+                self.assert_no_line_cut(boxes[change["id"]][w], res[w]["lines"], "%s at %s" % (change["id"], w))
+        # The inline target's crop takes in the whole lines it sits on, not just its own words.
+        res = self.measure(page, spec["sections"][0]["items"][0]["changes"][-1])
+        box = boxes["peak-ink"]["1280"]
+        self.assertLess(box["x"], min(t[0] for t in res["1280"]["targets"]) - 100, box)
+
+    def test_context_selectors_widen_a_crop_to_what_the_change_is_judged_against(self):
+        # Task 8: a verdict line judged against the tiles beside it had a crop of the verdict alone.
+        spec = self.spec()
+        item = spec["sections"][0]["items"][0]
+        plain = self.build(spec)
+        key_before = re.search(r'data-rc-change="bold-totals"[^>]*data-rc-key="([0-9a-f]+)"', plain.read_text()).group(1)
+        item["changes"][0]["context"] = [".rows"]
+        page = self.build(spec)
+        text = page.read_text()
+        self.assertIn('data-rc-context="%s"' % html.escape(json.dumps([".rows"])), text)
+        key_after = re.search(r'data-rc-change="bold-totals"[^>]*data-rc-key="([0-9a-f]+)"', text).group(1)
+        self.assertNotEqual(key_before, key_after, "a new context must make the old crops stale")
+        boxes, _ = self.crops(page)
+        rows = self.measure(page, dict(item["changes"][0], targets=[".rows"]))
+        for w in ("1280", "390"):
+            box, t = boxes["bold-totals"][w], rows[w]["targets"]
+            self.assertLessEqual(box["x"], min(b[0] for b in t), w)
+            self.assertLessEqual(box["y"], min(b[1] for b in t), w)
+            self.assertGreaterEqual(box["x"] + box["w"], min(int(w), max(b[2] for b in t)) - 1, w)
+            self.assertGreaterEqual(box["y"] + box["h"], max(b[3] for b in t) - 1, w)
+        for bad in ([], "rows", [""], [3]):
+            item["changes"][0]["context"] = bad
+            src = self.dir / "s.json"
+            src.write_text(json.dumps(spec))
+            r = subprocess.run([sys.executable, str(BUILD), str(src), "--out", str(self.tmp / "bad.html")],
+                               capture_output=True, text=True, cwd=str(self.dir))
+            self.assertEqual(r.returncode, 1, (bad, r.stderr))
+            self.assertIn("context must be a non-empty list of selectors", r.stderr)
+
+    def test_crops_of_a_dropped_change_are_removed(self):
+        # Task 8: crops.json was right, but the PNGs of a change dropped since stayed in the folder.
+        spec = self.spec()
+        self.crops(self.build(spec))
+        self.assertTrue((self.out / "tight-rows-before-1280.png").is_file())
+        (self.out / "notes.txt").write_text("not ours")
+        spec["sections"][0]["items"][0]["changes"] = [c for c in spec["sections"][0]["items"][0]["changes"]
+                                                      if c["id"] != "tight-rows"]
+        boxes, _ = self.crops(self.build(spec))
+        self.assertNotIn("tight-rows", boxes)
+        self.assertEqual(sorted(p.name for p in self.out.glob("tight-rows-*")), [])
+        self.assertTrue((self.out / "bold-totals-before-1280.png").is_file())
+        self.assertTrue((self.out / "notes.txt").is_file(), "removed a file --crops did not write")
+
+    def test_crops_before_and_after_differ_only_inside_the_box(self):
+        _, scale = self.crop_constants()
+        spec = self.spec()
+        # A change that moves nothing but its targets' pixels. (Bolder totals also widen their
+        # column, which shifts the table's other columns: the crop is cut to the targets, as
+        # spec §4 says, so that reflow is outside it.)
+        change = {"id": "alert-ink", "label": "Darker alert text", "why_html": "<p>i</p>", "targets": [".alert"],
+                  "css": ".alert { color: #b42318; }"}
+        spec["sections"][0]["items"][0]["changes"].append(change)
+        page = self.build(spec)
+        # Every file and folder but --out, what is in it, and the folders it sits in.
+        files = lambda: {p for p in self.tmp.rglob("*")
+                         if self.out not in p.parents and p != self.out and p not in self.out.parents}
+        before = files()
+        boxes, _ = self.crops(page)
+        self.assertEqual(files() - before, set(), "--crops wrote outside its --out folder")
+        res = self.measure(page, change)
+        for w in ("1280", "390"):
+            box, r = boxes["alert-ink"][w], res[w]
+            # Every pixel the change moves, on the page as its own page, is inside the box.
+            self.assertIsNotNone(r["moved"], w)
+            x0, y0, x1, y1 = r["moved"]
+            self.assertGreaterEqual(x0, box["x"], (w, r["moved"], box))
+            self.assertGreaterEqual(y0, box["y"], (w, r["moved"], box))
+            self.assertLessEqual(x1, box["x"] + box["w"], (w, r["moved"], box))
+            self.assertLessEqual(y1, box["y"] + box["h"], (w, r["moved"], box))
+            # Both crops are that box, at the crop scale, and they show the change.
+            self.assertEqual((r["crops"]["width"], r["crops"]["height"]), (box["w"] * scale, box["h"] * scale), w)
+            self.assertGreater(r["crops"]["differ"], 0, w)
+        for c in spec["sections"][0]["items"][0]["changes"]:
+            for state in ("before", "after"):
+                for w in ("1280", "390"):
+                    self.assertTrue((self.out / ("%s-%s-%s.png" % (c["id"], state, w))).is_file())
+        # Nothing but the crops and crops.json in the folder (nothing outside it: checked above).
+        self.assertEqual(sorted(p.name for p in self.out.iterdir() if not p.name.endswith(".png")), ["crops.json"])
+
+    def test_a_card_shows_four_crops_when_crops_is_set(self):
+        spec = self.spec()
+        boxes, _ = self.crops(self.build(spec))
+        # Without `crops` the slot stays empty; a folder that is not there yet changes nothing.
+        self.assertEqual(self.card(self.build(spec).read_text(), "bold-totals"), "")
+        spec["sections"][0]["items"][0]["crops"] = ".proofs/design-review/nowhere"
+        self.assertEqual(self.card(self.build(spec).read_text(), "bold-totals"), "")
+        spec["sections"][0]["items"][0]["crops"] = ".proofs/design-review/crops"
+        text = self.build(spec).read_text()
+        for c in spec["sections"][0]["items"][0]["changes"]:
+            inner = self.card(text, c["id"])
+            self.assertTrue(inner, c["id"])
+            imgs = re.findall(r"<img\b[^>]*>", inner)
+            self.assertEqual(len(imgs), 4, inner[:400])
+            alts = sorted(re.search(r'alt="([^"]*)"', i).group(1) for i in imgs)
+            self.assertEqual(alts, sorted("%s: %s, %s px" % (s, html.escape(c["label"]), w)
+                                          for s in ("Before", "After") for w in ("1280", "390")))
+            for i in imgs:   # each shown at its box's size, never wider than the column
+                w = re.search(r'alt="[^"]*, (\d+) px"', i).group(1)
+                self.assertIn('width="%d" height="%d"' % (boxes[c["id"]][w]["w"], boxes[c["id"]][w]["h"]), i)
+        self.assertNotIn("{{asset:", text)
+        self.assertNotIn(str(self.out), text)
+
+    def test_a_target_hidden_at_390_gives_a_note_not_a_crash(self):
+        self.snap.write_text(self.snap.read_text().replace(
+            "</style>", "@media (max-width: 600px) { .photo { display: none; } }\n</style>", 1))
+        spec = self.spec()
+        spec["sections"][0]["items"][0]["changes"].append(
+            {"id": "photo-ring", "label": "Ring on the photo", "why_html": "<p>r</p>", "targets": [".photo"],
+             "css": ".photo { outline: 3px solid #b42318; }"})
+        boxes, stdout = self.crops(self.build(spec))
+        self.assertEqual(sorted(boxes["photo-ring"]["1280"]), ["h", "w", "x", "y"])
+        note = boxes["photo-ring"]["390"]["note"]
+        self.assertIn(".photo", note)
+        self.assertIn("390", note)
+        self.assertIn(note, stdout)
+        self.assertTrue((self.out / "photo-ring-after-1280.png").is_file())
+        self.assertFalse((self.out / "photo-ring-before-390.png").exists())
+        self.assertFalse((self.out / "photo-ring-after-390.png").exists())
+        # The other changes still get all four.
+        self.assertEqual(sorted(boxes["bold-totals"]), ["1280", "390", "key"])
+        spec["sections"][0]["items"][0]["crops"] = ".proofs/design-review/crops"
+        inner = self.card(self.build(spec).read_text(), "photo-ring")
+        self.assertEqual(len(re.findall(r"<img\b", inner)), 2, inner[:400])
+        self.assertIn(html.escape(note), inner)
+
+    def test_crops_of_a_change_edited_since_are_not_shown(self):
+        spec = self.spec()
+        self.crops(self.build(spec))
+        item = spec["sections"][0]["items"][0]
+        item["crops"] = ".proofs/design-review/crops"
+        item["changes"][0]["css"] = ".total { font-weight: 800; }"
+        src, out = self.dir / "s.json", self.tmp / "page.html"
+        src.write_text(json.dumps(spec))
+        r = subprocess.run([sys.executable, str(BUILD), str(src), "--out", str(out)],
+                           capture_output=True, text=True, cwd=str(self.dir))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("change bold-totals changed since its crops were made", r.stderr)
+        text = out.read_text()
+        self.assertEqual(self.card(text, "bold-totals"), "")
+        # The changes left as they were keep theirs, and only the edited one is warned about.
+        self.assertEqual(len(re.findall(r"<img\b", self.card(text, "tight-rows"))), 4)
+        self.assertEqual(r.stderr.count("changed since its crops were made"), 1, r.stderr)
+
+    def test_set_shoots_the_recommended_changes_together_for_the_critic(self):
+        page = self.build()
+        r = subprocess.run([sys.executable, str(BUILD), "--crops", str(page), "--out", str(self.out), "--set", "1,3"],
+                           capture_output=True, text=True, cwd=str(self.dir), timeout=300)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("with changes 1, 3 on together, for the critic", r.stdout)
+        for w in ("1280", "390"):
+            self.assertTrue((self.out / ("set-%s.png" % w)).is_file(), w)
+        # The whole page as the capture shoots it: renderBase's own shot of the base with them on.
+        script = self.tmp / "set.cjs"
+        script.write_text(r"""
+const fs = require("fs"), path = require("path");
+const [pw, rp, page, out] = process.argv.slice(2);
+const { chromium } = require(pw);
+const { launchChromium } = require(path.join(rp, "launch.cjs"));
+const { renderBase, diffMask } = require(path.join(rp, "fidelity.cjs"));
+const doc = JSON.parse(fs.readFileSync(page, "utf8").match(/<script type="application\/json" id="rp-rc-base-[^"]*">([\s\S]*?)<\/script>/)[1]);
+(async () => {
+  const browser = await launchChromium(chromium, process.env);
+  const res = {};
+  for (const w of [1280, 390]) {
+    const on = diffMask(await renderBase(browser, doc, w, ["bold-totals", "alert-color"]), path.join(out, `set-${w}.png`));
+    const off = diffMask(await renderBase(browser, doc, w, []), path.join(out, `set-${w}.png`));
+    res[w] = { on: on.count, off: off.count };
+  }
+  await browser.close();
+  console.log(JSON.stringify(res));
+})();
+""")
+        m = subprocess.run([NODE, str(script), playwright_dir(), str(RP), str(page), str(self.out)], capture_output=True,
+                           text=True, timeout=300)
+        res = json.loads(m.stdout)
+        for w in ("1280", "390"):
+            self.assertEqual(res[w]["on"], 0, res)
+            self.assertGreater(res[w]["off"], 0, res)
+        bad = subprocess.run([sys.executable, str(BUILD), "--crops", str(page), "--out", str(self.out), "--set", "9"],
+                             capture_output=True, text=True, cwd=str(self.dir), timeout=300)
+        self.assertEqual(bad.returncode, 2, bad.stdout + bad.stderr)
+        self.assertIn("--set: no change 9", bad.stderr)
+
+    def test_a_change_that_makes_the_page_taller_says_so(self):
+        # Taller than the frames' floor, so the extra row height shows in the page's height.
+        self.snap.write_text(self.snap.read_text().replace("</div></body>", '<div style="height:1200px"></div>\n</div></body>', 1))
+        spec = self.spec()
+        spec["sections"][0]["items"][0]["changes"].append(
+            {"id": "roomy-rows", "label": "Roomier rows", "why_html": "<p>r</p>", "targets": [".rows td"],
+             "css": ".rows td { padding: 30px 8px; }"})
+        boxes, stdout = self.crops(self.build(spec))
+        for w in ("1280", "390"):
+            taller = boxes["roomy-rows"][w]["taller"]
+            self.assertGreater(taller, 40, boxes["roomy-rows"])
+            self.assertIn("note: Change 4 makes the page %d px taller at %s." % (taller, w), stdout)
+            self.assertNotIn("taller", boxes["bold-totals"][w])
+        spec["sections"][0]["items"][0]["crops"] = ".proofs/design-review/crops"
+        inner = self.card(self.build(spec).read_text(), "roomy-rows")
+        self.assertIn("Makes the page %d px taller at 390 px." % boxes["roomy-rows"]["390"]["taller"], inner)
+
+    def test_crops_needs_a_refine_page_and_an_out_folder(self):
+        r = subprocess.run([sys.executable, str(BUILD), "--crops", str(self.build())], capture_output=True, text=True,
+                           cwd=str(self.dir))
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("--out", r.stderr)
+        plain = build("design-review", self.tmp)
+        r = subprocess.run([sys.executable, str(BUILD), "--crops", str(plain), "--out", str(self.out)],
+                           capture_output=True, text=True, cwd=str(self.dir), timeout=300)
+        self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+        self.assertIn("no Refine preview", r.stderr)
+        self.assertFalse(self.out.exists())
+
+
+class HelperErrors(unittest.TestCase):
+    """--crops and --match-preview without node, or with a helper that never finishes: one line
+    on stderr and exit 2, never a traceback."""
+
+    def run_both(self):
+        out = []
+        for name, call in (("crops", lambda: review_page.crops("page.html", "out", "pw")),
+                           ("match-preview", lambda: review_page.match_preview("page.html", "1", "shots", "pw"))):
+            err = io.StringIO()
+            with mock.patch.object(review_page, "find_playwright", return_value="pw"), \
+                    contextlib.redirect_stderr(err):
+                code = call()
+            out.append((name, code, err.getvalue()))
+        return out
+
+    def test_no_node(self):
+        with mock.patch.object(review_page.shutil, "which", return_value=None):
+            for name, code, err in self.run_both():
+                self.assertEqual(code, 2, name)
+                self.assertTrue(err.startswith(name + ": node is not installed"), err)
+
+    def test_timeout(self):
+        def slow(cmd, **kw):
+            raise subprocess.TimeoutExpired(cmd, kw.get("timeout"))
+        with mock.patch.object(review_page.shutil, "which", return_value="/usr/bin/node"), \
+                mock.patch.object(review_page.subprocess, "run", side_effect=slow):
+            for name, code, err in self.run_both():
+                self.assertEqual(code, 2, name)
+                self.assertIn("did not finish in %d seconds" % review_page.HELPER_TIMEOUT, err)
+                self.assertTrue(err.startswith(name + ": "), err)
+
+    def test_smoke_timeout_and_no_node(self):
+        def slow(cmd, **kw):
+            raise subprocess.TimeoutExpired(cmd, kw.get("timeout"))
+        for which, run, want in (("/usr/bin/node", slow, "did not finish in %d seconds" % review_page.HELPER_TIMEOUT),
+                                 (None, None, "node is not installed")):
+            err, out = io.StringIO(), io.StringIO()
+            with mock.patch.object(review_page, "find_playwright", return_value="pw"), \
+                    mock.patch.object(review_page.shutil, "which", return_value=which), \
+                    mock.patch.object(review_page.subprocess, "run", side_effect=run), \
+                    mock.patch.object(review_page, "check", return_value=[]), \
+                    mock.patch.object(review_page, "warnings", return_value=[]), \
+                    contextlib.redirect_stderr(err), contextlib.redirect_stdout(out):
+                code = review_page.main(["--smoke", "page.html"])
+            self.assertEqual(code, 2)
+            self.assertEqual(len(err.getvalue().strip().splitlines()), 1, err.getvalue())
+            self.assertTrue(err.getvalue().startswith("smoke: "), err.getvalue())
+            self.assertIn(want, err.getvalue())
+            self.assertEqual(out.getvalue(), "")
+
+
+class RefineBaseRewrites(unittest.TestCase):
+    """What the builder does to a Refine base before the frames get it: viewport-height units
+    as --rp-vh, no nested srcdoc, a warning for files from another site, the frames' heights."""
+
+    def test_vh_units_in_styles_and_style_attributes_become_rp_vh(self):
+        doc = ('<style>.hero{min-height:100vh}.a{height:calc(50dvh - 2rem);margin-top:-10svh}'
+               '.h-100vh{top:.5lvh}.min-h-\\[100vh\\]{x:1}</style>'
+               '<div style="height: 30vh" title="100vh"><p>a 100vh page</p></div>')
+        out = review_page.vh_to_var(doc)
+        self.assertIn("min-height:calc(100 * var(--rp-vh, 1vh))", out)
+        self.assertIn("height:calc(calc(50 * var(--rp-vh, 1dvh)) - 2rem)", out)
+        self.assertIn("margin-top:calc(-10 * var(--rp-vh, 1svh))", out)
+        self.assertIn(".h-100vh{top:calc(.5 * var(--rp-vh, 1lvh))}", out)   # the class name kept
+        self.assertIn(".min-h-\\[100vh\\]", out)
+        self.assertIn('style="height: calc(30 * var(--rp-vh, 1vh))"', out)
+        self.assertIn('title="100vh"', out)                                  # not a style
+        self.assertIn("<p>a 100vh page</p>", out)                            # nor the page's words
+        self.assertNotIn("vh}", out.replace("1vh))}", ""))
+
+    def test_vh_rewrite_leaves_urls_strings_and_media_queries_alone(self):
+        css = ('@font-face{src:url(data:font/woff2;base64,AAAA/12vh+BBBB)}'
+               '.a::after{content:"fits 100vh"}.b{background:url("x 3vh.png")}'
+               '@media (min-height: 50vh) and (orientation: portrait) { .h{height:100vh} }'
+               '@supports (height: 1dvh) { .i{height:50dvh} }/* 100vh */')
+        out = review_page._vh_css(css)
+        for kept in ("url(data:font/woff2;base64,AAAA/12vh+BBBB)", 'content:"fits 100vh"', 'url("x 3vh.png")',
+                     "@media (min-height: 50vh) and (orientation: portrait) {", "@supports (height: 1dvh) {", "/* 100vh */"):
+            self.assertIn(kept, out)
+        self.assertIn(".h{height:calc(100 * var(--rp-vh, 1vh))}", out)
+        self.assertIn(".i{height:calc(50 * var(--rp-vh, 1dvh))}", out)
+        doc = ('<style>.h{height:100vh}.f{src:url(data:font/woff2;base64,AAAA/12vh+BBBB)}</style>'
+               '<p style="height:10vh; background:url(&quot;data:image/png;base64,QQ12vhQQ&quot;)">a</p>')
+        out = review_page.vh_to_var(doc)
+        self.assertIn(".h{height:calc(100 * var(--rp-vh, 1vh))}", out)
+        self.assertIn("AAAA/12vh+BBBB", out)
+        self.assertIn('style="height:calc(10 * var(--rp-vh, 1vh)); background:url(&quot;data:image/png;base64,QQ12vhQQ&quot;)"', out)
+
+    def test_vh_rewrite_never_touches_a_selector_or_property_registration(self):
+        css = ('.max-h-\\[min\\(50vh\\2c 400px\\)\\]{max-height:min(50vh,400px)}.x\\31 0vh{height:10vh}'
+               '@property --h{syntax:"<length>";inherits:false;initial-value:100vh}.a:hover{top:2vh}')
+        out = review_page._vh_css(css)
+        self.assertIn(".max-h-\\[min\\(50vh\\2c 400px\\)\\]{max-height:min(calc(50 * var(--rp-vh, 1vh)),400px)}", out)
+        self.assertIn(".x\\31 0vh{height:calc(10 * var(--rp-vh, 1vh))}", out)
+        self.assertIn("initial-value:100vh}", out)
+        self.assertIn(".a:hover{top:calc(2 * var(--rp-vh, 1vh))}", out)
+
+    def test_nested_iframe_srcdoc_is_dropped(self):
+        doc = '<p>x</p><iframe src="https://e.example/a" srcdoc="&lt;script&gt;parent.x=1&lt;/script&gt;" width="9"></iframe>'
+        out = review_page.strip_nested_srcdoc(doc)
+        self.assertNotIn("srcdoc", out)
+        self.assertIn('<iframe src="https://e.example/a" width="9"></iframe>', out)
+
+    def test_external_loads_name_what_a_published_page_cannot_load(self):
+        doc = ('<link rel="stylesheet" href="https://cdn.example/a.css"><link rel="canonical" href="https://x.example/">'
+               '<style>@import url("https://cdn.example/b.css"); .x{background:url(https://img.example/c.png)}</style>'
+               '<img src="https://img.example/d.png"><a href="https://x.example/page">link</a><img src="data:image/png;base64,AA">')
+        self.assertEqual(review_page.external_loads(doc), ["https://cdn.example/a.css", "https://img.example/d.png",
+                                                           "https://cdn.example/b.css", "https://img.example/c.png"])
+
+    def build(self, tmp, edit=None):
+        shutil.copytree(REFINE, tmp / "refine")
+        snap = tmp / "refine" / "before" / "home-snapshot.html"
+        if edit:
+            snap.write_text(edit(snap.read_text()))
+        src, out = tmp / "refine" / "s.json", tmp / "page.html"
+        src.write_text((REFINE / "spec.json").read_text())
+        r = subprocess.run([sys.executable, str(BUILD), str(src), "--out", str(out), "--no-check"],
+                           capture_output=True, text=True, cwd=str(tmp / "refine"))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        return out.read_text(), r.stderr
+
+    def test_build_warns_about_files_from_another_site(self):
+        with tempfile.TemporaryDirectory() as t:
+            _, err = self.build(Path(t))
+            self.assertNotIn("another site", err)
+        with tempfile.TemporaryDirectory() as t:
+            _, err = self.build(Path(t), lambda h: h.replace("</head>", '<link rel="stylesheet" href="https://cdn.example/far.css"></head>', 1))
+            self.assertIn("warning: item home: the base still loads 1 file from another site (https://cdn.example/far.css), "
+                          "which will not load in a published page", err)
+
+    def test_frames_carry_the_capture_viewport_height_and_take_no_taps(self):
+        with tempfile.TemporaryDirectory() as t:
+            text, _ = self.build(Path(t))
+        self.assertIn('data-rc-width="1280" data-rc-height="800"', text)
+        self.assertIn('data-rc-width="390" data-rc-height="844"', text)
+        css = (RP / "style.css").read_text()
+        rule = re.search(r"\.rp-rc-frame \{[^}]*\}", css).group(0)
+        self.assertIn("pointer-events:none", rule)
+        self.assertEqual(review_page.REFINE_VIEWPORT_H, {1280: 800, 390: 844})
+
+    def test_change_js_items_carry_their_removes(self):
+        with tempfile.TemporaryDirectory() as t:
+            text, _ = self.build(Path(t))
+        spec = json.loads(re.search(r'<script type="application/json" id="rp-spec">(.*?)</script>', text, re.S).group(1))
+        items = {i["id"]: i for sec in spec["sections"] for i in sec["items"]}
+        self.assertEqual(items["bold-totals"]["removes"], [])
+        self.assertEqual(items["alert-color"]["removes"], ["new badge", "! status icon"])
+
+    def test_a_card_says_when_its_change_makes_the_page_taller(self):
+        html_ = review_page.crop_figures({"label": "L"}, {"390": {"note": "n", "taller": 140}})
+        self.assertIn("Makes the page 140 px taller at 390 px.", html_)
+
+    def test_set_goes_with_crops(self):
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err), self.assertRaises(SystemExit):
+            review_page.main(["--smoke", "page.html", "--set", "1,3"])
+        self.assertIn("--set goes with --crops", err.getvalue())
 
 
 READ_JUMP = r"""
@@ -2496,3 +4254,298 @@ class NearCopyMetric(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def compare_project(tmp):
+    """A project with a before snapshot (the Refine fixture's) and an after one with bold totals
+    and a script in it, plus the compare spec that rates one against the other."""
+    proj = Path(tmp) / "cmp"
+    shutil.copytree(REFINE, proj)
+    after = proj / "after"
+    after.mkdir()
+    shutil.copytree(proj / "before" / "home-snapshot-assets", after / "home-snapshot-assets")
+    text = (proj / "before" / "home-snapshot.html").read_text()
+    text = text.replace(".total { font-weight:400; }", ".total { font-weight:700; }", 1)
+    text = text.replace("</body>", '<script>document.title = "ran"</script>\n'
+                        '<div style="height:120vh" class="tall"></div></body>', 1)
+    (after / "home-snapshot.html").write_text(text)
+    spec = {"title": "Host Headroom — Your picks", "project": {"name": "Host Headroom", "session": "Picks"},
+            "sections": [{"title": "Rate it", "decisions": "compare", "items": [
+                {"kind": "compare", "id": "rating", "original": {"from": "before/home-snapshot.html"},
+                 "built": {"from": "after/home-snapshot.html"},
+                 "changed_html": "The totals are bold."}]}]}
+    return proj, spec
+
+
+class ComparePage(unittest.TestCase):
+    """design-review's rating step: the original and the built page, one toggle for both frames,
+    and the Less / Equal / More answer on the same page (FRICTION 19)."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.proj, self.spec = compare_project(self._tmp.name)
+
+    def build(self, spec=None, ok=True):
+        src, out = self.proj / "s.json", self.proj / ".proofs" / "pages" / "cmp.html"
+        src.write_text(json.dumps(spec or self.spec))
+        r = subprocess.run([sys.executable, str(BUILD), str(src), "--out", str(out)],
+                           capture_output=True, text=True, cwd=str(self.proj))
+        if ok:
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        return out, r
+
+    def test_the_page_holds_both_pages_without_scripts_and_four_still_frames(self):
+        out, _ = self.build()
+        text = out.read_text()
+        docs = dict(re.findall(r'<script type="application/json" id="rp-cmp-rating-(original|built)">(.*?)</script>', text, re.S))
+        self.assertEqual(sorted(docs), ["built", "original"])
+        built = json.loads(docs["built"])
+        self.assertNotIn("<script", built.lower())
+        self.assertIn("font-weight:700", built)
+        self.assertIn("data:image/", built)               # the snapshot's assets are embedded
+        self.assertIn("var(--rp-vh", built)               # 120vh no longer grows with the frame
+        self.assertNotIn("home-snapshot-assets/", built)
+        frames = re.findall(r'<iframe class="rp-cmp-frame"[^>]*>', text)
+        self.assertEqual(len(frames), 4)
+        self.assertEqual(sorted(re.search(r'data-cmp-v="(\w+)"', f).group(1) + re.search(r'data-cmp-width="(\d+)"', f).group(1)
+                                for f in frames), ["built1280", "built390", "original1280", "original390"])
+        for f in frames:
+            self.assertIn('tabindex="-1"', f)
+        # Starts on the picks; one toggle switches both widths.
+        self.assertIn('data-cmp-view="built" aria-pressed="true"', text)
+        self.assertIn('data-cmp-view="original" aria-pressed="false"', text)
+        self.assertEqual(len(re.findall(r'data-cmp-view="', text)), 2)
+        self.assertIn("What changed", text)
+        self.assertIn("The totals are bold.", text)
+        # The sticky bar links down to the answer, which sits under the long frames.
+        self.assertIn('<a class="rp-cmp-rate" href="#comment-rating">', text)
+        self.assertIn('id="comment-rating"', text)
+        css = (RP / "style.css").read_text()
+        self.assertRegex(css, r"\.rp-cmp-frame \{[^}]*pointer-events:none")
+        self.assertRegex(css, r"\.rp-cmp-bar \{[^}]*position:sticky")
+        # The answer buttons: Less, Equal, More.
+        for choice, label in (("less", "Less"), ("equal", "Equal"), ("more", "More")):
+            self.assertRegex(text, r'data-item="rating" data-choice="%s"[^>]*>[^<]*%s' % (choice, label))
+        # The rating's fingerprint follows the two pages: a new build never pre-fills an old answer.
+        rev1 = json.loads(re.search(r'<script type="application/json" id="rp-spec">(.*?)</script>', text, re.S).group(1))
+        (self.proj / "after" / "home-snapshot.html").write_text(
+            (self.proj / "after" / "home-snapshot.html").read_text().replace("font-weight:700", "font-weight:600"))
+        text2 = self.build()[0].read_text()
+        rev2 = json.loads(re.search(r'<script type="application/json" id="rp-spec">(.*?)</script>', text2, re.S).group(1))
+        pick = lambda s: [i["rev"] for x in s["sections"] for i in x["items"]][0]
+        self.assertNotEqual(pick(rev1), pick(rev2))
+
+    def test_script_vectors_are_removed_by_a_real_parse(self):
+        bad = ['<img alt="a>b" onerror=alert(1)>', "<svg/onload=alert(1)>", '<a href="javascript:alert(1)">x</a>',
+               '<a href=" JaVa\tScript:alert(1)">x</a>', "<meta http-equiv=refresh content=\"0;url=http://x\">",
+               "<form action='vbscript:x'><button formaction=javascript:x>b</button></form>",
+               "<p>a<script>var s = '</p>';</script>b</p>"]
+        for src in bad:
+            out = review_page.without_scripts(src)
+            self.assertNotRegex(out, r"(?i)[\s/\"']on[a-z]+\s*=", src)
+            self.assertNotRegex(out, r"(?i)(javascript|vbscript):", src)
+            self.assertNotRegex(out, r"(?i)http-equiv", src)
+            self.assertNotIn("<script", out.lower(), src)
+        self.assertIn('alt="a&gt;b"', review_page.without_scripts(bad[0]))       # the rest of the tag stays
+        # Everything else is left byte for byte.
+        keep = '<div class="a" data-x=\'1\'>ok &amp; &nbsp; <br/><a href="/x?a=1&b=2" style="color:red">y</a></div>'
+        self.assertEqual(review_page.without_scripts(keep), keep)
+        # And it holds through the build: the embedded pages carry none of it.
+        after = self.proj / "after" / "home-snapshot.html"
+        after.write_text(after.read_text().replace("</body>", "".join(bad[:4]) + "</body>", 1))
+        out, _ = self.build()
+        built = json.loads(re.search(r'id="rp-cmp-rating-built">(.*?)</script>', out.read_text(), re.S).group(1))
+        self.assertNotRegex(built, r"(?i)[\s/\"']on[a-z]+\s*=")
+        self.assertNotRegex(built, r"(?i)javascript:|http-equiv")
+
+    def test_the_frames_are_sandboxed_without_scripts(self):
+        text = self.build()[0].read_text()
+        frames = re.findall(r'<iframe class="rp-cmp-frame"[^>]*>', text)
+        self.assertEqual(len(frames), 4)
+        for f in frames:
+            self.assertIn('sandbox="allow-same-origin"', f)
+            self.assertNotIn("allow-scripts", f)
+
+    def test_a_local_path_in_a_page_is_warned_about_not_rewritten(self):
+        after = self.proj / "after" / "home-snapshot.html"
+        after.write_text(after.read_text().replace(
+            "</body>", '<p>file://%s/someone/site/a.png %s/dev/app</p></body>' % ("/Us" + "ers", "/ho" + "me"), 1))
+        out, r = self.build()
+        self.assertIn("local path", r.stderr)
+        self.assertIn("file://", r.stderr)
+        built = json.loads(re.search(r'id="rp-cmp-rating-built">(.*?)</script>', out.read_text(), re.S).group(1))
+        self.assertIn("someone/site/a.png", built)
+
+    def test_a_built_folder_is_read_as_its_index_page(self):
+        site = self.proj / "built-b"
+        site.mkdir()
+        (site / "index.html").write_text('<!doctype html><html><head><link rel="stylesheet" href="site.css">'
+                                         '<script src="app.js"></script></head><body onload="x()"><h1>Hi</h1></body></html>')
+        spec = json.loads(json.dumps(self.spec))
+        spec["sections"][0]["items"][0]["built"] = {"from": "built-b"}
+        out, r = self.build(spec)
+        built = json.loads(re.search(r'id="rp-cmp-rating-built">(.*?)</script>', out.read_text(), re.S).group(1))
+        self.assertIn("<h1>Hi</h1>", built)
+        self.assertNotIn("<script", built.lower())
+        self.assertNotIn("onload", built.lower())
+        # A file the frame cannot load from a published page is named, not silently missing.
+        self.assertIn("site.css", r.stderr)
+        self.assertIn("capture it with --snapshot", r.stderr)
+
+    def test_spec_errors(self):
+        cases = [
+            ({"built": None}, "needs built"),
+            ({"original": {"from": "before/nowhere.html"}}, "not found"),
+            ({"changed_html": ""}, "needs changed_html"),
+        ]
+        for patch, want in cases:
+            spec = json.loads(json.dumps(self.spec))
+            it = spec["sections"][0]["items"][0]
+            for k, v in patch.items():
+                if v is None:
+                    it.pop(k)
+                else:
+                    it[k] = v
+            _, r = self.build(spec, ok=False)
+            self.assertEqual(r.returncode, 1, (patch, r.stderr))
+            self.assertIn(want, r.stderr, patch)
+        spec = json.loads(json.dumps(self.spec))
+        spec["sections"][0]["decisions"] = "design-review"
+        _, r = self.build(spec, ok=False)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn('needs the "compare" decisions preset', r.stderr)
+
+
+COMPARE_DRIVE = r"""
+const { chromium } = require(process.argv[2]);
+const { launchChromium } = require(process.argv[3]);
+const file = "file://" + process.argv[4];
+(async () => {
+  const browser = await launchChromium(chromium, process.env);
+  const errors = [], out = {};
+  const ready = (page) => page.waitForFunction(() => {
+    const f = document.querySelectorAll(".rp-cmp-frame");
+    return f.length === 4 && Array.prototype.every.call(f, (x) => x.dataset.cmpReady === "1");
+  }, null, { timeout: 15000 });
+  const look = (page) => page.evaluate(() => {
+    const r = {};
+    document.querySelectorAll(".rp-cmp-frame").forEach((f) => {
+      const d = f.contentDocument, box = f.getBoundingClientRect();
+      r[f.dataset.cmpV + f.dataset.cmpWidth] = {
+        shown: getComputedStyle(f).visibility !== "hidden" && box.height > 0,
+        weight: getComputedStyle(d.querySelector(".total")).fontWeight,
+        scripts: d.querySelectorAll("script").length, title: d.title,
+        pointer: getComputedStyle(f).pointerEvents,
+        tall: Math.round(d.querySelector(".tall") ? d.querySelector(".tall").getBoundingClientRect().height : 0) };
+    });
+    r.pressed = Array.prototype.map.call(document.querySelectorAll("[data-cmp-view]"),
+      (b) => b.dataset.cmpView + ":" + b.getAttribute("aria-pressed"));
+    r.now = document.querySelector("[data-cmp-now]").textContent;
+    return r;
+  });
+  for (const [name, vp] of [["desk", { width: 1440, height: 900 }], ["phone", { width: 390, height: 844 }]]) {
+    const ctx = await browser.newContext({ viewport: vp, deviceScaleFactor: 1 });
+    const page = await ctx.newPage();
+    page.on("pageerror", (e) => errors.push(e.message));
+    await page.goto(file);
+    await ready(page);
+    const r = { start: await look(page) };
+    await page.locator('[data-cmp-view="original"]').click();
+    await page.waitForTimeout(80);
+    r.original = await look(page);
+    await page.locator('[data-cmp-view="built"]').click();
+    await page.waitForTimeout(80);
+    r.back = await look(page);
+    r.sideways = await page.evaluate(() => document.scrollingElement.scrollWidth - innerWidth);
+    r.taps = await page.evaluate(() => Array.prototype.map.call(
+      document.querySelectorAll('[data-cmp-view], .rp-cmp-rate, [data-item="rating"][data-choice]'),
+      (b) => { const x = b.getBoundingClientRect(); return [b.textContent.trim(), Math.round(x.width), Math.round(x.height)]; }));
+    r.bar = await page.evaluate(() => getComputedStyle(document.querySelector(".rp-cmp-bar")).position);
+    if (name === "desk") {
+      await page.locator('[data-item="rating"][data-choice="more"]').click();
+      await page.locator('textarea[data-comment="rating"]').fill("the totals read faster");
+      await page.waitForTimeout(80);
+      r.export = await page.evaluate(() => window.rpExport());
+    }
+    out[name] = r;
+    await ctx.close();
+  }
+  await browser.close();
+  out.errors = errors;
+  console.log(JSON.stringify(out));
+})().catch((e) => { console.log(JSON.stringify({ crash: String(e && e.stack || e) })); process.exit(1); });
+"""
+
+
+@unittest.skipUnless(NODE and playwright_dir(), "Playwright not found")
+class CompareBrowser(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        proj, spec = compare_project(cls.tmp.name)
+        src, out = proj / "s.json", proj / "cmp.html"
+        src.write_text(json.dumps(spec))
+        r = subprocess.run([sys.executable, str(BUILD), str(src), "--out", str(out)], capture_output=True, text=True,
+                           cwd=str(proj))
+        if r.returncode:
+            raise AssertionError(r.stdout + r.stderr)
+        cls.page, cls.proj = out, proj
+        script = Path(cls.tmp.name) / "drive.cjs"
+        script.write_text(COMPARE_DRIVE)
+        r = subprocess.run([NODE, str(script), playwright_dir(), str(RP / "launch.cjs"), str(out)],
+                           capture_output=True, text=True, timeout=300)
+        lines = r.stdout.strip().splitlines()
+        cls.res = json.loads(lines[-1]) if lines else {"crash": r.stderr}
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def setUp(self):
+        self.assertNotIn("crash", self.res, self.res.get("crash"))
+        self.assertEqual(self.res["errors"], [])
+
+    def test_it_starts_on_the_picks_and_one_toggle_switches_both_widths(self):
+        for name in ("desk", "phone"):
+            r = self.res[name]
+            for state, shown, hidden in (("start", "built", "original"), ("original", "original", "built"),
+                                         ("back", "built", "original")):
+                for w in ("1280", "390"):
+                    self.assertTrue(r[state][shown + w]["shown"], (name, state, w))
+                    self.assertFalse(r[state][hidden + w]["shown"], (name, state, w))
+            self.assertEqual(r["start"]["pressed"], ["original:false", "built:true"])
+            self.assertEqual(r["original"]["pressed"], ["original:true", "built:false"])
+            self.assertEqual(r["original"]["now"], "Original")
+            self.assertEqual(r["start"]["now"], "With your picks")
+            self.assertEqual(r["start"]["built1280"]["weight"], "700")
+            self.assertEqual(r["start"]["original1280"]["weight"], "400")
+
+    def test_frames_run_no_scripts_take_no_taps_and_keep_vh_bounded(self):
+        f = self.res["desk"]["start"]
+        for k in ("built1280", "built390", "original1280", "original390"):
+            self.assertEqual(f[k]["scripts"], 0, k)
+            self.assertEqual(f[k]["pointer"], "none", k)
+        self.assertNotEqual(f["built1280"]["title"], "ran")
+        self.assertEqual(f["built1280"]["tall"], 960)    # 120vh of the 800 px capture viewport
+        self.assertEqual(f["built390"]["tall"], round(844 * 1.2))
+
+    def test_phone_fit_tap_targets_and_sticky_toggle(self):
+        for name in ("desk", "phone"):
+            r = self.res[name]
+            self.assertLessEqual(r["sideways"], 0, name)
+            self.assertEqual(r["bar"], "sticky", name)
+            self.assertEqual(len(r["taps"]), 6, r["taps"])
+            for label, w, h in r["taps"]:
+                self.assertGreaterEqual(h, 44, (name, label))
+                self.assertGreaterEqual(w, 44, (name, label))
+
+    def test_the_rating_is_answered_on_the_page(self):
+        self.assertIn("1. ", self.res["desk"]["export"])
+        self.assertIn("— MORE — COMMENT: the totals read faster", self.res["desk"]["export"])
+
+    def test_smoke_passes_on_the_compare_page(self):
+        r = subprocess.run([sys.executable, str(BUILD), "--smoke", str(self.page)], capture_output=True, text=True,
+                           cwd=str(self.proj), timeout=300)
+        res = json.loads(r.stdout)
+        self.assertEqual(res.get("problems"), [], res)

@@ -1,7 +1,9 @@
 import functools
+import html.parser
 import http.server
 import json
 import os
+import re
 import shutil
 import struct
 import subprocess
@@ -15,6 +17,8 @@ ROOT = Path(__file__).resolve().parent.parent
 CAPTURE = ROOT / "skills" / "visual-qa" / "scripts" / "capture.cjs"
 NODE = shutil.which("node")
 FIXTURES = ROOT / "tests" / "fixtures" / "capture"
+SNAPSHOT = ROOT / "skills" / "visual-qa" / "scripts" / "snapshot.cjs"
+FIDELITY_JS = ROOT / "shared" / "review_page" / "fidelity.cjs"
 FINDINGS = ROOT / "skills" / "pr-qa" / "scripts" / "pr_qa_findings.py"
 FLAG = "--disable-features=MacAppCodeSignClone"
 
@@ -136,6 +140,22 @@ class Quiet(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
+    def do_GET(self):
+        # A stylesheet a browser loads but a plain fetch cannot get, as from a server that checks
+        # how it is asked: the snapshot's node-side fetch of it fails, so it stays external.
+        if self.path.endswith("/browser-only.css") and self.headers.get("Sec-Fetch-Dest") != "style":
+            self.send_error(403)
+            return
+        super().do_GET()
+
+    def end_headers(self):
+        # Readable from any origin (a CDN sheet or sprite that allows CORS), so a page reads it
+        # in-page. The snapshot fetches a sprite with credentials, so the origin is echoed.
+        if self.path.endswith(("/cors-file.css", "/sprite-file.svg")):
+            self.send_header("Access-Control-Allow-Origin", self.headers.get("Origin") or "*")
+            self.send_header("Access-Control-Allow-Credentials", "true")
+        super().end_headers()
+
 
 @unittest.skipUnless(NODE and playwright_dir(), "Playwright not found: set PROOFS_PLAYWRIGHT or install it in ~/.cache/proofs-playwright")
 class PhoneWidth(unittest.TestCase):
@@ -176,6 +196,19 @@ class PhoneWidth(unittest.TestCase):
             self.assertEqual(width, 780)
             # The 390 media query only matches if the page was laid out at 390 CSS px.
             self.assertEqual(tuple(rows[10][770 * bpp:770 * bpp + 3]), (0, 0xaa, 0))
+
+    def test_a_finding_exits_0_and_a_capped_list_says_so(self):
+        # Task 8: "text below floor: 53" in summary.md, but measures.json listed 25 entries
+        # with nothing saying why. And a finding is not a failed run: the capture exits 0
+        # (capture() asserts it), so the exit codes in design-review's SKILL.md hold.
+        with tempfile.TemporaryDirectory() as tmp:
+            r, out = self.capture(tmp, "small-text-many.html", "--sizes", "1280")
+            m = self.result(out)["measures"]
+            self.assertEqual(m["smallTextCount"], 30)
+            self.assertEqual(len(m["smallText"]), 25)
+            summary = (out / "summary.md").read_text()
+            self.assertIn("text below floor: 30", summary)
+            self.assertIn("lists only the first 25", summary)
 
     def test_clipped_overflow_is_caught(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -623,6 +656,26 @@ class CaptureOptions(unittest.TestCase):
                            cwd=tmp, env=env, capture_output=True, text=True, timeout=60)
             self.assertEqual(log.read_text().split(), ["http://127.0.0.1:4567/p"])
 
+    def test_a_pages_file_base_on_the_same_server_keeps_its_own_path(self):
+        # Task 8: with_server.py --url http://localhost:3311/index.html replaced the pages
+        # file's base outright, and "/index.html" was joined onto it (a 404). On the same
+        # server (same origin), the pages file's base is the one written for these paths.
+        cases = [
+            ("http://localhost:3311/index.html", "http://localhost:3311", "http://localhost:3311"),
+            ("http://localhost:3311/", "http://localhost:3311/app", "http://localhost:3311/app"),
+            ("http://127.0.0.1:4567", "http://localhost:9", "http://127.0.0.1:4567"),
+            ("http://localhost:3311/", None, "http://localhost:3311/"),
+            (None, "http://localhost:9", "http://localhost:9"),
+        ]
+        js = ("const c=require(process.argv[1]);const a=process.argv[2]||undefined,b=process.argv[3]||undefined;"
+              "process.stdout.write(String(c.chooseBase(a,b)))")
+        for env, cfg, want in cases:
+            with self.subTest(env=env, cfg=cfg):
+                r = subprocess.run([NODE, "-e", js, str(CAPTURE), env or "", cfg or ""],
+                                   capture_output=True, text=True, timeout=60)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertEqual(r.stdout, want)
+
     def join(self, base, path):
         js = "process.stdout.write(require(process.argv[1]).joinUrl(process.argv[2], process.argv[3]))"
         r = subprocess.run([NODE, "-e", js, str(CAPTURE), base, path], capture_output=True, text=True, timeout=60)
@@ -1038,6 +1091,360 @@ class LogoCrop(unittest.TestCase):
         logo = self.logo("logo-img.html", "390")
         self.assertEqual(logo["file"], "t-logo-390.png")
         self.assertAlmostEqual(logo["png_width"], 240, delta=2)  # the phone shoots at 2x
+
+
+# Opens a snapshot by file:// at the capture's 1280 viewport, screenshots it and compares it with
+# the capture's own 1280 shot through the shared fidelity helper.
+SNAPSHOT_SHOT = r"""
+const path = require('path');
+const [root, html, shot, captured, width] = process.argv.slice(1);  // node -e: no script path in argv
+const { launchChromium } = require(path.join(root, 'shared', 'review_page', 'launch.cjs'));
+const { compareShots, FIDELITY } = require(path.join(root, 'shared', 'review_page', 'fidelity.cjs'));
+const { chromium } = require(process.env.PROOFS_PLAYWRIGHT);
+(async () => {
+  const browser = await launchChromium(chromium, process.env);
+  const phone = width === '390';  // the capture's own viewports
+  const page = await (await browser.newContext(phone
+    ? { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 }
+    : { viewport: { width: 1280, height: 800 } })).newPage();
+  await page.goto('file://' + html, { waitUntil: 'networkidle' });
+  await page.evaluate(() => document.fonts.ready);
+  const probe = await page.evaluate(() => { const s = getComputedStyle(document.getElementById('probe')); return { color: s.color, background: s.backgroundColor }; });
+  const fontLoaded = await page.evaluate(() => [...document.fonts].some((f) => f.family.includes('Fixture Jost') && f.status === 'loaded'));
+  await page.screenshot({ path: shot });
+  await browser.close();
+  const res = await compareShots(captured, shot);
+  process.stdout.write(JSON.stringify({ ...res, fontLoaded, probe, FIDELITY }));
+})().catch((e) => { console.error(e.stack); process.exit(1); });
+"""
+
+
+class Tags(html.parser.HTMLParser):
+    """Every start tag as (tag, attrs dict), and the text inside each <style>."""
+
+    def __init__(self, text):
+        super().__init__(convert_charrefs=True)
+        self.tags, self.styles, self._in_style = [], [], False
+        self.feed(text)
+
+    def handle_starttag(self, tag, attrs):
+        self.tags.append((tag, dict(attrs)))
+        if tag == "style":
+            self._in_style = True
+            self.styles.append("")
+
+    def handle_endtag(self, tag):
+        if tag == "style":
+            self._in_style = False
+
+    def handle_data(self, data):
+        if self._in_style:
+            self.styles[-1] += data
+
+    def find(self, tag, **attrs):
+        return [a for t, a in self.tags if t == tag and all(a.get(k) == v for k, v in attrs.items())]
+
+
+@unittest.skipUnless(NODE and playwright_dir(), "Playwright not found: set PROOFS_PLAYWRIGHT or install it in ~/.cache/proofs-playwright")
+class Snapshot(unittest.TestCase):
+    """Task 2 (1.11.0): --snapshot writes a standalone copy of the rendered page at 1280, the base Refine builds on."""
+
+    capture = PhoneWidth.capture
+
+    @classmethod
+    def setUpClass(cls):
+        PhoneWidth.__dict__["setUpClass"].__func__(cls)
+        cls.tmp = tempfile.TemporaryDirectory()
+        cfg = Path(cls.tmp.name) / "pages.json"
+        cfg.write_text(json.dumps({"base": cls.base, "pages": [{"name": "t", "path": "/snapshot/index.html"}]}))
+        cls.out = Path(cls.tmp.name) / "out"
+        env = dict(os.environ, PROOFS_PLAYWRIGHT=playwright_dir())
+        cls.captured = subprocess.run([NODE, str(CAPTURE), str(cfg), "--out", str(cls.out), "--sizes", "1280,390", "--snapshot"],
+                                 env=env, capture_output=True, text=True, timeout=180)
+        measures = cls.out / "measures.json"
+        cls.data = json.loads(measures.read_text()) if measures.is_file() else {"results": [{}]}
+        cls.html_file = cls.out / "t-default-snapshot.html"
+        cls.html = cls.html_file.read_text() if cls.html_file.is_file() else ""
+        cls.parsed = Tags(cls.html)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+        PhoneWidth.__dict__["tearDownClass"].__func__(cls)
+
+    def setUp(self):
+        self.assertEqual(self.captured.returncode, 0, self.captured.stdout + self.captured.stderr)
+
+    def test_measures_name_the_snapshot_on_the_1280_entry(self):
+        res = self.data["results"][0]
+        self.assertEqual(res["viewport"], "1280")
+        snap = res["measures"]["snapshot"]
+        self.assertEqual(snap["file"], "t-default-snapshot.html")
+        self.assertTrue(self.html_file.is_file())
+        self.assertGreater(snap["bytes"], self.html_file.stat().st_size)  # the page and its assets
+
+    def test_snapshot_keeps_script_added_content_and_drops_scripts(self):
+        self.assertIn("Added by a script", self.html)
+        self.assertEqual(self.parsed.find("script"), [])
+        self.assertNotIn("onclick", self.html)
+        self.assertEqual(len(self.parsed.find("button", id="go")), 1)
+
+    def test_snapshot_inlines_same_origin_css_and_rewrites_urls(self):
+        links = [a for t, a in self.parsed.tags if t == "link" and "stylesheet" in (a.get("rel") or "")]
+        self.assertFalse([a for a in links if "site.css" in a.get("href", "")], links)
+        css = "\n".join(self.parsed.styles)
+        self.assertIn("Fixture Jost", css)
+        self.assertIn(".hero h1", css)
+        self.assertIn(".note", css)  # from the @import, inlined
+        self.assertIn("max-width: 600px", css)  # the page's own media query, kept
+        self.assertIn(".inline-rule", css)  # the page's own <style>
+        # The one @import left is the sheet no plain fetch can get (below).
+        self.assertEqual([i for i in re.findall(r"@import[^;]*;", css) if "browser-only.css" not in i], [], css)
+        font = re.search(r'url\("?([^")]*jost-400[^")]*)"?\)', css)
+        self.assertTrue(font, css)
+        self.assertTrue(font.group(1).startswith("t-default-snapshot-assets/"), font.group(1))
+        self.assertTrue((self.out / font.group(1)).is_file())
+        stripe = re.search(r'url\("?([^")]*stripe[^")]*)"?\)', css)
+        self.assertTrue(stripe and stripe.group(1).startswith("t-default-snapshot-assets/"), css)
+        img = self.parsed.find("img", id="photo")[0]
+        self.assertTrue(img["src"].startswith("t-default-snapshot-assets/"), img)
+        self.assertTrue((self.out / img["src"]).is_file())
+        for cand in img["srcset"].split(","):
+            url = cand.split()[0]
+            self.assertTrue(url.startswith("t-default-snapshot-assets/") and (self.out / url).is_file(), img["srcset"])
+        self.assertNotIn("<base", self.html)
+        snap = self.data["results"][0]["measures"]["snapshot"]
+        self.assertEqual(set(snap), {"file", "bytes", "external"})
+
+    def test_snapshot_rasterizes_canvas_and_keeps_svg(self):
+        self.assertEqual(self.parsed.find("canvas"), [])
+        img = self.parsed.find("img", id="chart")
+        self.assertEqual(len(img), 1, self.parsed.find("img"))
+        self.assertEqual((img[0]["width"], img[0]["height"]), ("120", "60"))
+        self.assertTrue((self.out / img[0]["src"]).is_file(), img)
+        self.assertIn('<svg id="mark" width="40" height="40" viewBox="0 0 40 40">'
+                      '<circle cx="20" cy="20" r="16" fill="#0a7"></circle></svg>', self.html)
+
+    def test_snapshot_page_reports_its_counts(self):
+        probe = r"""
+const path = require('path');
+const [snapshotJs, root, url, outDir] = process.argv.slice(1);  // node -e: no script path in argv
+const { snapshotPage } = require(snapshotJs);
+const { launchChromium } = require(path.join(root, 'shared', 'review_page', 'launch.cjs'));
+const { chromium } = require(process.env.PROOFS_PLAYWRIGHT);
+(async () => {
+  const browser = await launchChromium(chromium, process.env);
+  const page = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
+  await page.goto(url, { waitUntil: 'networkidle' });
+  const r = await snapshotPage(page, outDir, 'x');
+  await browser.close();
+  process.stdout.write(JSON.stringify(r));
+})().catch((e) => { console.error(e.stack); process.exit(1); });
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            env = dict(os.environ, PROOFS_PLAYWRIGHT=playwright_dir())
+            r = subprocess.run([NODE, "-e", probe, str(SNAPSHOT), str(ROOT), self.base + "/snapshot/index.html", tmp],
+                               env=env, capture_output=True, text=True, timeout=180)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            res = json.loads(r.stdout)
+            self.assertEqual(res["file"], "x-snapshot.html")
+            self.assertEqual(res["canvases"], 1)
+            self.assertEqual(res["bytes"], sum(p.stat().st_size for p in Path(tmp).rglob("*") if p.is_file()))
+            self.assertTrue(res["assets"])
+            for a in res["assets"]:
+                self.assertTrue(a.startswith("x-snapshot-assets/"), a)
+                self.assertTrue((Path(tmp) / a).is_file(), a)
+            self.assertEqual(res["external"], [self.base.replace("127.0.0.1", "localhost") + "/snapshot/browser-only.css"])
+
+    PROBE = r"""
+const path = require('path');
+const [snapshotJs, root, url, outDir] = process.argv.slice(1);  // node -e: no script path in argv
+const { snapshotPage } = require(snapshotJs);
+const { launchChromium } = require(path.join(root, 'shared', 'review_page', 'launch.cjs'));
+const { chromium } = require(process.env.PROOFS_PLAYWRIGHT);
+(async () => {
+  const browser = await launchChromium(chromium, process.env);
+  const page = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
+  await page.goto(url, { waitUntil: 'load' });
+  await page.waitForTimeout(300);
+  const r = await snapshotPage(page, outDir, 'x');
+  await browser.close();
+  process.stdout.write(JSON.stringify(r));
+})().catch((e) => { console.error(e.stack); process.exit(1); });
+"""
+
+    def probe(self, url, tmp):
+        env = dict(os.environ, PROOFS_PLAYWRIGHT=playwright_dir())
+        r = subprocess.run([NODE, "-e", self.PROBE, str(SNAPSHOT), str(ROOT), url, tmp], env=env, capture_output=True,
+                           text=True, timeout=180)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return json.loads(r.stdout)
+
+    @unittest.skipUnless(Path("/etc/hosts").is_file(), "needs a local file to name")
+    def test_a_served_page_never_copies_a_local_file(self):
+        # A cross-origin sheet (and the page itself) naming file:///etc/hosts: nothing local is read.
+        hosts = Path("/etc/hosts").read_bytes()
+        with tempfile.TemporaryDirectory() as tmp:
+            res = self.probe(self.base + "/snapshot/file-leak.html", tmp)
+            for f in Path(tmp).rglob("*"):
+                if f.is_file() and f.suffix != ".html":
+                    self.assertNotEqual(f.read_bytes(), hosts, f)
+            text = (Path(tmp) / "x-snapshot.html").read_text()
+            self.assertIn("#123456", text)  # the sheet itself is still inlined
+            self.assertIn('@import url("file:///etc/hosts")', text)  # kept as a reference, never read
+            self.assertIn("file:///etc/hosts", res["external"])
+
+    @unittest.skipUnless(Path("/etc/hosts").is_file(), "needs a local file to name")
+    def test_a_file_page_never_reads_a_local_file_a_web_sheet_or_sprite_names(self):
+        # On a file: page, what a CORS-readable sheet from the web or a sprite fetched from the web
+        # names is checked against that sheet or sprite, not the page.
+        hosts = Path("/etc/hosts").read_bytes()
+        with tempfile.TemporaryDirectory() as tmp:
+            page = Path(tmp) / "page.html"
+            page.write_text('<!DOCTYPE html><html><head><meta charset="utf-8">'
+                            '<link rel="stylesheet" crossorigin="anonymous" href="%s/snapshot/cors-file.css"></head>'
+                            '<body><p class="corsy">x</p><svg width="10" height="10"><use href="%s/snapshot/sprite-file.svg#s"></use>'
+                            '</svg></body></html>' % (self.base, self.base))
+            out = Path(tmp) / "out"
+            out.mkdir()
+            res = self.probe(page.as_uri(), str(out))
+            text = (out / "x-snapshot.html").read_text()
+            self.assertIn("rgb(101, 67, 33)", text)   # the sheet was read in-page and inlined
+            self.assertIn("proofs-use-1", text)    # and the sprite's symbol copied in
+            for f in out.rglob("*"):
+                if f.is_file() and f.suffix != ".html":
+                    self.assertNotEqual(f.read_bytes(), hosts, f)
+            self.assertNotIn("data-proofs-from", text)
+            self.assertEqual(res["external"].count("file:///etc/hosts"), 1, res["external"])
+            self.assertEqual(text.count("file:///etc/hosts"), 2, text)   # both references kept as they were
+
+    def test_a_file_page_still_copies_its_own_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.probe((FIXTURES / "snapshot" / "index.html").as_uri(), tmp)
+            img = Tags((Path(tmp) / "x-snapshot.html").read_text()).find("img", id="photo")[0]
+            self.assertTrue(img["src"].startswith("x-snapshot-assets/"), img)
+            self.assertTrue((Path(tmp) / img["src"]).is_file())
+
+    def test_snapshot_inlines_a_cross_origin_sheet_it_can_fetch(self):
+        # A published page loads no stylesheet from another site, so a sheet the page could not
+        # read is fetched node-side and inlined; one that cannot be fetched stays an @import of
+        # its absolute URL and is listed in measures.json.
+        other = self.base.replace("127.0.0.1", "localhost") + "/snapshot/"
+        links = [a for t, a in self.parsed.tags if t == "link" and "stylesheet" in (a.get("rel") or "")]
+        self.assertEqual(links, [])
+        css = "\n".join(self.parsed.styles)
+        self.assertIn(".far { color: #fff; background: #7a2048;", css)
+        self.assertNotIn("far.css", self.html)
+        self.assertIn('@import url("%sbrowser-only.css");' % other, css)
+        snap = self.data["results"][0]["measures"]["snapshot"]
+        self.assertEqual(snap["external"], [other + "browser-only.css"])
+
+    def test_snapshot_publishes_no_token_target_or_nested_srcdoc(self):
+        for secret in ("SECRET-CSRF-META", "SECRET-FORM-TOKEN", "csrf-token", "csrf-param", "parent.__nested", "srcdoc"):
+            self.assertNotIn(secret, self.html)
+        self.assertEqual(self.parsed.find("input", name="authenticity_token")[0]["value"], "")
+        self.assertNotIn("target", self.parsed.find("a", id="away")[0])
+        self.assertNotIn("target", self.parsed.find("form", id="token-form")[0])
+        self.assertEqual(len(self.parsed.find("iframe", id="nested")), 1)
+
+    def render(self, width):
+        shot = self.out / f"snapshot-{width}.png"
+        env = dict(os.environ, PROOFS_PLAYWRIGHT=playwright_dir())
+        r = subprocess.run([NODE, "-e", SNAPSHOT_SHOT, str(ROOT), str(self.html_file), str(shot),
+                            str(self.out / f"t-default-{width}.png"), width], env=env, capture_output=True, text=True, timeout=180)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return json.loads(r.stdout)
+
+    def test_snapshot_renders_like_the_page(self):
+        res = self.render("1280")
+        self.assertTrue(res["fontLoaded"], "the @font-face font did not load from the assets folder over file://")
+        self.assertLess(res["pixelRatio"], 0.01, res)
+        self.assertIsNone(res["signature"])  # no measures passed, so no signature half
+        self.assertLessEqual(res["FIDELITY"]["pixelRatio"], 0.05)
+
+    def test_snapshot_renders_like_the_page_at_390(self):
+        # The phone layout comes from the page's own media queries, kept in the copy.
+        res = self.render("390")
+        self.assertTrue(res["fontLoaded"])
+        self.assertLess(res["pixelRatio"], 0.01, res)
+
+    def test_snapshot_keeps_each_sheets_media(self):
+        styles = self.parsed.find("style")
+        self.assertIn("print", [a.get("media") for a in styles])
+        self.assertIn("(max-width: 600px)", [a.get("media") for a in styles])
+        wide, narrow = self.render("1280")["probe"], self.render("390")["probe"]
+        self.assertNotEqual(wide["background"], "rgb(200, 0, 0)")  # the print sheet stays off screen
+        self.assertNotEqual(narrow["background"], "rgb(200, 0, 0)")
+        self.assertNotEqual(wide["color"], "rgb(0, 0, 200)")  # the max-width sheet only at 390
+        self.assertEqual(narrow["color"], "rgb(0, 0, 200)")
+
+    def test_snapshot_copies_an_external_svg_use_into_the_page(self):
+        # Chrome will not load an external <use> from a file:// page, so the symbol comes along inline.
+        use = self.parsed.find("use")
+        self.assertEqual(len(use), 1)
+        self.assertEqual(use[0]["href"], "#proofs-use-1")
+        self.assertEqual(len(self.parsed.find("symbol", id="proofs-use-1")), 1)
+        self.assertNotIn("icons.svg", self.html)
+
+    def test_without_the_flag_there_is_no_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, out = self.capture(tmp, "snapshot/index.html", "--sizes", "1280")
+            m = json.loads((out / "measures.json").read_text())["results"][0]["measures"]
+            self.assertNotIn("snapshot", m)
+            self.assertEqual(list(out.glob("*snapshot*")), [])
+
+
+@unittest.skipUnless(NODE, "node not found")
+class Fidelity(unittest.TestCase):
+    """shared/review_page/fidelity.cjs: the pixel half of the base-versus-capture check."""
+
+    PROBE = r"""
+const { compareShots } = require(process.argv[1]);  // node -e: no script path in argv
+const [a, b, sa, sb] = process.argv.slice(2);
+compareShots(a, b, sa ? { signatures: [JSON.parse(sa), JSON.parse(sb)] } : undefined)
+  .then((r) => process.stdout.write(JSON.stringify(r)));
+"""
+
+    def png(self, path, rows):
+        raw = b"".join(b"\x00" + bytes(c for px in row for c in px) for row in rows)
+        chunk = lambda k, b: struct.pack(">I", len(b)) + k + b + struct.pack(">I", zlib.crc32(k + b) & 0xffffffff)
+        Path(path).write_bytes(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", len(rows[0]), len(rows), 8, 2, 0, 0, 0))
+                               + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+
+    def compare(self, a, b, *sigs):
+        r = subprocess.run([NODE, "-e", self.PROBE, str(FIDELITY_JS), str(a), str(b), *sigs],
+                           capture_output=True, text=True, timeout=60)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return json.loads(r.stdout)
+
+    def test_ratio_counts_changed_pixels_and_extra_rows(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            a, b, c, d = (Path(tmp) / f"{n}.png" for n in "abcd")
+            white = [(255, 255, 255)] * 10
+            self.png(a, [white] * 10)
+            self.png(b, [white] * 9 + [[(0, 0, 0)] * 5 + [(250, 252, 255)] * 5])  # 5 changed, 5 within tolerance
+            self.png(c, [white] * 12)  # two extra rows
+            res = self.compare(a, b)
+            self.assertAlmostEqual(res["pixelRatio"], 0.05)
+            self.assertIsNone(res["signature"])
+            self.assertAlmostEqual(self.compare(a, c)["pixelRatio"], 20 / 120)
+            self.assertEqual(self.compare(a, a)["pixelRatio"], 0)
+
+    def test_signature_is_the_layout_similarity_when_given(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            a = Path(tmp) / "a.png"
+            self.png(a, [[(255, 255, 255)] * 4] * 4)
+            sig = json.dumps([{"kind": "heading", "x": 0.1, "y": 0.1, "w": 0.8, "h": 0.2},
+                              {"kind": "text", "x": 0.1, "y": 0.4, "w": 0.8, "h": 0.4}])
+            self.assertAlmostEqual(self.compare(a, a, sig, sig)["signature"], 1.0)
+
+    def test_thresholds_are_exported_with_both_halves(self):
+        r = subprocess.run([NODE, "-e", "process.stdout.write(JSON.stringify(require(process.argv[1]).FIDELITY))", str(FIDELITY_JS)],
+                           capture_output=True, text=True, timeout=60)
+        f = json.loads(r.stdout)
+        self.assertEqual(set(f), {"pixelRatio", "signature"})
+        self.assertTrue(0 < f["pixelRatio"] <= 0.01)
+        self.assertTrue(0 < f["signature"] <= 1)
 
 
 PROBE = r"""

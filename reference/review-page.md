@@ -122,6 +122,8 @@ inserted as written; every other text field is escaped.
 | `design-review` | Keep Original → `DENY`; Use Proposed → `ACCEPT (Use Proposed)`, or with variants Use Selected → `ACCEPT (Use Selected: Variant B)`; `ACCEPT WITH COMMENT` (with variants `ACCEPT WITH COMMENT (Use Selected: Variant B)`); `REVISE`; `PENDING`; Mark as read on |
 | `photo-picker` | Keep None → `DENY (Keep None)`, Use Selected → `ACCEPT (Use Selected: Option B, trail map)`, `ACCEPT WITH COMMENT (Use Selected: …)`, `REVISE`; `PENDING` |
 | `style-guide` | Deny → `DENY`, or `DENY (Works as Designed)` with its checkbox; Request Revision → `REVISE`; `ACCEPT (Apply Everywhere Now)`; `ACCEPT (Record for Later)` (with variants `… : Option B)`); comment box always open; legend on; undecided items left out of the export |
+| `refine` | design-review's Refine mode (see "Refine items" below): Yes → `YES`, No → `NO`, Revise → `REVISE` (needs a comment); `PENDING`; after a refine item's changes, `Combined: 1, 3` (the Yes changes' numbers) or `Combined: none` |
+| `compare` | design-review's rating step (see "Compare items" below): Less → `LESS`, Equal → `EQUAL`, More → `MORE`, the note box always open and optional; `PENDING` |
 
 Override keys: `buttons` (each `state`, `label`, `label_variant`, `export`,
 `export_variant` with `{sel}`, `comment`: `required` or `optional`, `meaning`),
@@ -167,6 +169,158 @@ Helper classes for item HTML: `.rp-panes` (side-by-side panes that stack on a ph
 page), `.rp-shot` (a screenshot), and `<del>` / `<ins>` inside `.rp-panes` for
 word-level diffs.
 
+#### Refine items
+
+design-review's Refine mode puts **one** item with `"kind": "refine"` on the page, in
+a section whose decisions are the `refine` preset (anything else, or a second refine
+item, is a spec error). It shows each change as its own card, numbered on from the
+page's running number, then the combined preview. A "Found by the capture" section
+after it (its own `decisions`, usually `design-review`) numbers on after the last
+change.
+
+| Field | Meaning |
+|---|---|
+| `kind` | `"refine"` |
+| `id` | the item's id (default `refine`); unique on the page, like the change ids |
+| `base` | `{"from": ".proofs/capture/before/<name>-default-snapshot.html"}`, the capture's snapshot (`--snapshot` writes `<name>-<state>-snapshot.html`); relative to the spec's folder, then the working directory. Each file of its sibling `<name>-snapshot-assets/` folder it refers to is embedded as a data URI, made once per file. A PNG becomes lossless WebP when that is smaller; nothing is resized or lossy, so the base renders like the page. A reference to a file the folder does not have is a spec error. Every `vh`, `svh`, `lvh` and `dvh` in its `<style>` elements and `style` attributes (and in the changes' `css`) is written as `calc(N * var(--rp-vh, 1vh))`, which each frame sets to its capture viewport's height / 100 (8 px at 1280, 8.44 px at 390), so a `min-height: 100vh` hero is as tall as in the before shot. Only declarations are rewritten: quoted strings, `url(...)` bodies and at-rule preludes stay as written. Known limits: `vmin` and `vmax` are not rewritten, and `max-height`, `min-height`, `orientation` and `aspect-ratio` media queries still see the frame's full height. A nested `<iframe>`'s `srcdoc` is dropped. A file the base still loads from another site (a stylesheet the snapshot could not fetch, an image or iframe `src`) is a builder warning: a published page will not load it |
+| `changes` | 1 to 8 changes (more than 8 says the page wants a Redesign); any other count is a spec error naming the cap |
+| `location` | the section's name, shown on every card whose change has no `location` of its own |
+| `before_scores` | the current page on the six criteria (as `scores` above), shown in the preview as "Current page" |
+| `set_scores` | the recommended changes together, on the same six criteria and checks, shown under it as "Your picks together (recommended)" |
+| `judged_by` | as above; shown once, in the preview. With it (or any scored change), an unscored change says "Not scored" and recommending one is a spec error |
+| `crops` | the folder `--crops` wrote (such as `.proofs/design-review/crops`), relative to the spec's folder, then the working directory. Each card then shows its change's before and after at 1280 and 390, embedded like any screenshot asset, or a width's note in their place. A folder with no `crops.json` yet leaves the cards' `data-rc-crops` slots empty |
+
+Each change:
+
+| Field | Meaning |
+|---|---|
+| `id` | lowercase letters, digits and hyphens (`[a-z0-9-]+`), unique on the page; the answer is saved under it |
+| `label` | required; the card's title and the export line |
+| `why_html` | required; one or two sentences: what it fixes and why |
+| `targets` | required; a non-empty list of the selectors it touches |
+| `css` | required; rules that apply only while the change is on. Every selector is prefixed with `html[data-rc~="<id>"] ` (each part of a comma list, and the rules inside `@media`, `@supports`, `@container`, `@layer` and `@starting-style`); backslash escapes (`.md\:flex`, `.a\,b`) and whitespace inside strings are kept as written. A leading `html` or `:root` takes the attribute itself (`html[data-rc~="<id>"].dark`); one inside a pseudo-class (`:is(html.dark) .a`) is not seen and gets the plain prefix, so it never matches: write it as `html.dark .a`. `@font-face`, `@keyframes` and statements like `@import` pass through. `@scope`, an unclosed block, a declaration outside a rule, or `</style>` is a spec error. `display: none` (outside comments) needs a `removes` line |
+| `swaps` | `[{selector, html}]`: one element's markup while the change is on (an icon, a badge, a control); never a section, never the brand, never new words. No `</template>` in `html`. A change with a swap needs a `removes` line saying what it replaces |
+| `removes` | `[{element, reason}]`: what the change hides or replaces, each shown on the card with its reason in the deny color |
+| `context` | optional; a non-empty list of selectors for the neighbors the change is judged against (the tiles a verdict line summarizes, the column a value lines up with). `--crops` takes them into the change's crops; they are not targets, so nothing checks that the change touches them. Part of the crop `key`, so adding one makes the old crops stale |
+| `scores` | `{gain, keeps}`, each a whole number 1 to 5 (`design-rubric.md`); any other key is a spec error |
+| `recommended` | `true` / `false` badge |
+| `location` | overrides the item's on this card |
+
+In the page, the snapshot is embedded once, as a JSON string in
+`<script type="application/json" id="rp-rc-base-<item id>">`, with one
+`<style data-rc-css>` (every change's scoped CSS) at the end of its `<head>` and one
+`<template data-rc-swap="<id>" data-rc-target="<selector>">` per swap at the end of
+its `<body>`. The engine gives it to both `<iframe class="rp-rc-frame"
+data-rc-width="1280|390" data-rc-height="800|844">` frames as their `srcdoc`, so the frames
+are empty without JavaScript. Each frame is measured at `data-rc-height` (the capture's
+viewport height at that width) and never shorter, so a page sized to 100% of the viewport (an
+`html, body { height: 100% }` app shell) lays out as the capture saw it. The frames take no
+taps (`pointer-events: none`): a link in the page would navigate the frame, or the review page
+with `target="_top"`. (`pointer-events: none` does not stop keyboard focus into a frame's links; adding the
+iframe `sandbox` attribute as well is a planned follow-up, once it is checked on an iPhone.) After each frame's `load` (and again after any later load) the engine
+writes the Yes set to the frame's `<html data-rc>` (empty in the Original view), puts
+each on change's swaps in place (restoring the original element when it goes off),
+scales the frame to its column and marks it `data-rc-ready="1"`; it repaints on every
+answer change. Undecided and recommended changes start off. A change is on while its
+id is in the frame's `<html data-rc>`. The preview has a
+`[data-rc-view="picks"|"original"]` toggle, and `window.rpRefine.state()` returns
+`{on, view}`: the ids answered Yes, in change order, and `"picks"` or `"original"`.
+`on` is the Yes set even in the Original view; read `view` to know what the frames show.
+A frame is marked ready only for the snapshot's own load (one with `<style data-rc-css>`),
+never for a blank document's, and is re-fitted whenever its column or its page changes size.
+Each change's JS item carries
+`refine: <item id>` and `near_copy: false`: `--smoke` skips the mockup and near-copy
+checks for it, and checks the Refine item instead. The preview's `data-rc-base` names the
+snapshot (relative to the working directory; only its file name when it is outside the
+project, and then `--smoke` needs `--shots DIR`) so `--smoke` finds its before shots beside
+it: the whole-page `<stem>-1280-full.png` and `<stem>-390-full.png` for
+`<stem>-snapshot.html` (the capture's naming), else `<stem>-default-<width>-full.png`. The
+base is shot full page the same way, so drift below the first screen counts. Its `refine` key holds
+`fidelity` (per width: `pixelRatio`, `before`), `overlaps` (`[{a, b, element, property}]`,
+change numbers), `checks` (per state and width: `base`, a change number or `all`) and
+`heights` (per width: the frame's `frame` height and the before shot's `before`, CSS px). Problem
+lines: `item home (Refine): base differs from the page at 390 (pixel ratio 0.031)` (over
+`FIDELITY.pixelRatio` in `shared/review_page/fidelity.cjs`, or no before shot at all),
+`item home (Refine): the 390 frame lays the page out 81980 px tall, but the before shot is 1650 px`
+(more than 2 px off), `item home (Refine): change 3: target .x matches nothing` (or `swap .x`,
+or `is not a valid selector`: with the change off and on, at both widths), `item home (Refine):
+change 3 hides 2 elements at 390px (.badge, .badge) with no removes line saying what and why`
+(display, `visibility`, `opacity`, a size of 0, or clipped away by an ancestor) and `item home
+(Refine): change 3 changes words in 1 element at 1280px (.total) ...` (its own text, its
+`text-transform`, a transparent color, or `::before`/`::after` `content`); a change that has
+`removes` lines gets those two as notes instead, naming them, for you to check they cover what it hides,
+`item home (Refine): changes 2 and 5 both change font-weight on .total` (each change is
+diffed on every property any change declares, so `--accent` in one and `color` in another
+meet on the element that reads it), `item home (Refine): change 3 swaps .status-icon, which
+change 4 also changes (color)`, and the design
+check, mid-word and sideways-scroll lines for `item home (Refine), change 3 on:` and
+`item home (Refine), all changes on:`. Those count only what the state adds to the page
+as it is; the page's own findings are notes (`item home (Refine), the page as it is: …`),
+and so is a change that makes one of them worse (`makes 1 text element already below AA
+contrast worse at 390px ("72%" 3.10 to 2.40)`; also tap targets and long lines).
+Measuring uses the test-only `window.rpRefine.only(ids)` (both frames show exactly
+those changes; `null` goes back to the answers), never the reader's answers.
+
+After the picks are built, `review_page.py --match-preview PAGE --picks 1,3 --shots DIR`
+compares the new capture's whole-page shots in `DIR` (the before shot's name, `after-` for
+`before-`, or the one `*-<width>-full.png`) with the base shot with those changes on, at
+1280 and 390: exit 0 on a match, 1 with one line per width when the build is off by more
+than `FIDELITY.pixelRatio` or leaves more than `MISSED_PICKS` of the picks' changed pixels
+unlike the preview, 2 when it cannot measure (no shot of the build, a `--shots` folder that
+does not exist, or picks that change nothing visible at either width). When a width differs
+and at least 70% of its differing pixels outside the picks' own are text, the line says so:
+that is what a page showing other data than the before looks like (fresh numbers, dates,
+names), so capture the build from the same data as the before.
+
+`review_page.py --crops PAGE --out DIR` cuts each change's crops from the built page's own
+frames, each at its width, with that one change off and then on (every other change off):
+`DIR/<change id>-<before|after>-<1280|390>.png`, shot at device scale `CROP_SCALE` (2), and
+`DIR/crops.json`, `{<change id>: {"key": "...", "1280": {x, y, w, h}, "390": {...}}}` in CSS
+pixels of the frame's page. `key` is a short hash of the change's `targets`, `css`, `swaps` and
+`context` (when it has one; the card's `data-rc-key`): a build whose change no longer matches its key shows no crops for
+it and warns on stderr to run `--crops` again, so a card never shows stale crops. A crop is the union of the boxes of everything the change's `targets` and `context` select,
+with the change off and on (so a target it hides or swaps counts), plus `CROP_MARGIN` (24 px,
+in `shared/review_page/crops.cjs`), kept inside the page, then grown until no fragment of
+text (one per line a text node runs over) crosses its edge, with the change off and on: a crop
+never cuts a word, so an inline target's crop takes in the whole lines it sits on. A reflow the
+change causes outside that box is not in it. A run first removes the PNGs of every change the
+folder's old `crops.json` names that is no longer on the page, and nothing else. A width where no target is shown (hidden or of no size) gets
+`{"note": "..."}` instead of a crop, printed as a `note:` line; it is not an error. A change
+that makes the page taller at a width gets `"taller": <px>` there, a `note:` line, and a
+"Makes the page 140 px taller at 390 px." line on its card (a crop shows only its targets).
+`--set 1,3` also writes `DIR/set-1280.png` and `DIR/set-390.png`: the whole base with those
+changes (the recommended set) on together, shot as the capture shoots a page, for the critic
+to score the set against the current page; a number the page does not have is exit 2. It writes
+nothing outside `DIR`; exit 2 when it cannot run (no Playwright or node, no Refine preview, or over 10 minutes; `--match-preview` stops the same way). Build
+again with the item's `crops` set to `DIR` to show them.
+
+### Compare items
+
+design-review's rating step, after the picks are built: **one** item with `"kind": "compare"`,
+in a section whose decisions are the `compare` preset (anything else is a spec error). It is
+answered, saved, copied and sent like any review item: `N. <label> — MORE — COMMENT: …`.
+
+| Field | Meaning |
+|---|---|
+| `kind` | `"compare"` |
+| `id` | default `compare` |
+| `original`, `built` | required; `{"from": "..."}`: a capture snapshot (its `-assets` folder embedded as a Refine base's is), any HTML file, or a folder (its `index.html`). Relative to the spec's folder, then the working directory. Every `<script>` and `on*` attribute is removed, every `vh` becomes a multiple of `--rp-vh` (as a Refine base), and a file the page loads from beside it (a relative `href` or `src`) is a builder warning: the frame cannot load it, so capture that side with `--snapshot` and compare the snapshots |
+| `changed_html` | required; one plain line, shown as "What changed:" above the toggle |
+| `label` | default "With your picks, do you like the page less, the same or more than the original?" |
+| `body_html` | not allowed: the builder writes the body |
+
+The body is the "What changed" line, a sticky bar with one **Original / With your picks**
+toggle (`[data-cmp-view="original"|"built"]`, 52 px tall, starting on the picks) and a "Rate it
+below" link to the answer, then two frames per width, stacked one above the other (1280 over 390):
+`<iframe class="rp-cmp-frame" data-cmp-v="original|built" data-cmp-width="1280|390">`. Each page is
+embedded once, as a JSON string in `<script type="application/json" id="rp-cmp-<id>-original">`
+(and `-built`); the engine gives it to that side's two frames as their `srcdoc`. The toggle shows
+one side at both widths at once; the other stays laid out but hidden (`visibility`), so switching
+is instant. Frames take no taps (`pointer-events: none`, `tabindex="-1"`), are measured at the
+capture's viewport height and never shorter, are scaled to their column so the page never scrolls
+sideways at 390, and are marked `data-cmp-ready="1"` once their page has loaded. The item's
+fingerprint covers both pages, so a new build never pre-fills the last build's rating.
+
 ### Follow-up rounds
 
 A follow-up round is the same spec rebuilt and republished to the same URL, so the
@@ -194,6 +348,14 @@ rules keep round 2 clean:
    `items`, with the earlier proposal in `history_html`. A new `round` changes every
    item's fingerprint, so a carried-forward item shows its old answer as an earlier
    one, never as a live pick.
+
+Refine changes follow the same rules. Each change carries a `rev` from its label,
+`why_html`, `targets`, `css`, `swaps`, `removes` and the round (`refine_rev`, the same
+mechanism as `item_rev`; `rev` on the change pins it), so a change revised under the same
+id in round 2 shows round 1's answer read-only and starts on Pending. Scores and crops are
+commentary and keep answers. A Refine change has no `history_html`: put round 1's rejected
+version in the refine item's intro. The `Combined:` line covers only the changes on this
+round's page; changes built in earlier rounds belong in `decided`.
 
 Rows and browser records saved by a page built before 1.10.0 carry no `rev` and
 restore as before. For a review already in flight on such a page, give the changed

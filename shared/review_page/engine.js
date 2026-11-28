@@ -149,11 +149,24 @@
     return line;
   }
 
+  // A Refine item's changes are items marked with its id; after the last one, one line
+  // names the changes answered Yes ("Combined: 1, 3"), or "Combined: none".
+  function combinedLine(sec, refine, recs) {
+    var yes = sec.items.filter(function (it) { return it.refine === refine && (recs[it.id] || {}).s === "accept"; })
+      .map(function (it) { return it.num; });
+    return "Combined: " + (yes.length ? yes.join(", ") : "none");
+  }
+
   var BLOCK = {
     review: function (sec, ss) {
-      var recs = ss.items || {};
-      return sec.items.map(function (it) { return reviewLine(sec, it, recs[it.id] || {}); })
-        .filter(function (l) { return l !== null; });
+      var recs = ss.items || {}, lines = [];
+      sec.items.forEach(function (it, i) {
+        var l = reviewLine(sec, it, recs[it.id] || {});
+        if (l !== null) lines.push(l);
+        var next = sec.items[i + 1];
+        if (it.refine && !(next && next.refine === it.refine)) lines.push(combinedLine(sec, it.refine, recs));
+      });
+      return lines;
     },
     questions: function (sec, ss) {
       var ans = ss.ans || {}, notes = ss.notes || {}, lines = [];
@@ -724,7 +737,7 @@
         var read = one("[data-read]", card);
         if (read) { read.checked = !!r.r; card.classList.toggle("rp-is-read", !!r.r); }
       }
-      function paint() { all(".rp-item", root).forEach(paintItem); tally(); }
+      function paint() { all(".rp-item", root).forEach(paintItem); tally(); refineSync(); }
       root.__rpRefresh = paint;
       all(".rp-item", root).forEach(function (card) {
         var id = card.dataset.id;
@@ -985,6 +998,205 @@
   S.sections.forEach(function (sec) {
     var root = rootOf(sec);
     if (root) SETUP[sec.kind](sec, root, secState(st, sec));
+  });
+
+  /* ------------------------------------------------- the Refine preview (design-review)
+     Both frames get the page's one embedded snapshot as their srcdoc. A srcdoc load
+     replaces the frame's document, so a frame is painted only after its load event, and
+     again after any later load. Painting writes the Yes set (or nothing, in the Original
+     view) to the frame's <html data-rc>, and puts each on change's swaps in place. */
+  var rc = null;
+  function refineSync() { if (rc) rc.sync(); }
+  (function () {
+    var preview = one("[data-rc-preview]");
+    var baseEl = preview && document.getElementById("rp-rc-base-" + preview.dataset.rcPreview);
+    if (!baseEl) return;
+    var refine = preview.dataset.rcPreview;
+    var sec = S.sections.filter(function (s) {
+      return s.kind === "review" && s.items.some(function (i) { return i.refine === refine; });
+    })[0];
+    if (!sec) return;
+    var ids = sec.items.filter(function (i) { return i.refine === refine; }).map(function (i) { return i.id; });
+    var view = "picks";
+    // Set only through rpRefine.only, for measuring: the on set whatever the answers say.
+    var only = null;
+    var frames = all(".rp-rc-frame", preview);
+    function picks() {
+      var recs = secState(st, sec).items || {};
+      return ids.filter(function (id) { return (recs[id] || {}).s === "accept"; });
+    }
+    // Every swap in place is undone (last first), then the on changes' swaps are made in
+    // spec order, so two swaps on one element always come back to the original.
+    function swaps(f, d, on) {
+      var done = f.__rcSwaps || [];
+      for (var i = done.length - 1; i >= 0; i--) {
+        var s = done[i];
+        if (s.now[0] && s.now[0].parentNode) {
+          s.now[0].parentNode.insertBefore(s.orig, s.now[0]);
+          s.now.forEach(function (n) { if (n.parentNode) n.parentNode.removeChild(n); });
+        }
+      }
+      f.__rcSwaps = [];
+      all("template[data-rc-swap]", d).forEach(function (tpl) {
+        if (on.indexOf(tpl.dataset.rcSwap) < 0) return;
+        var targets;
+        try { targets = all(tpl.dataset.rcTarget, d); } catch (e) { return; }
+        targets.forEach(function (el) {
+          var frag = tpl.content.cloneNode(true), now = Array.prototype.slice.call(frag.childNodes);
+          if (!now.length) return;
+          el.parentNode.insertBefore(frag, el);
+          el.parentNode.removeChild(el);
+          f.__rcSwaps.push({ orig: el, now: now });
+        });
+      });
+    }
+    // Scale = the column's width / the frame's width (never above 1); the box takes the
+    // scaled size, so the page never scrolls sideways.
+    function fit(f) {
+      var d = f.__rcDoc, box = f.parentNode, fig = box.parentNode;
+      var w = +f.dataset.rcWidth, edge = box.offsetWidth - box.clientWidth;
+      var s = Math.min(1, Math.max(0, fig.clientWidth - edge) / w);
+      // The page is measured with the frame at the capture's viewport height (data-rc-height:
+      // 800 at 1280, 844 at 390), never at its own last height: inside the frame, 100% of the
+      // viewport is the frame, so a page measured at its own height (an html, body { height:
+      // 100% } app shell, a wrapper with min-height: 100% and a footer below it) grows with
+      // every fit. At that height scrollHeight is the page's height as the capture's full shot
+      // has it, and it shrinks back when a change makes the page shorter. Viewport units are
+      // not in play: the builder made each vh a multiple of --rp-vh, set per frame on load.
+      var floor = +f.dataset.rcHeight || 0, h = floor;
+      if (d && d.documentElement) {
+        f.style.height = floor + "px";
+        var root = d.documentElement;
+        h = Math.max(floor, Math.ceil(root.scrollHeight), Math.ceil(root.getBoundingClientRect().height));
+      }
+      f.style.height = h + "px";
+      f.style.transform = s < 1 ? "scale(" + s + ")" : "";
+      box.style.width = Math.floor(w * s) + "px";
+      box.style.height = Math.ceil(h * s) + "px";
+    }
+    function paint(f) {
+      var d = f.__rcDoc;
+      if (!d || f.contentDocument !== d) return;
+      var on = only || (view === "picks" ? picks() : []);
+      d.documentElement.setAttribute("data-rc", on.join(" "));
+      swaps(f, d, on);
+      fit(f);
+      f.dataset.rcReady = "1";
+    }
+    function sync() {
+      all("[data-rc-view]", preview).forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.rcView === view)); });
+      frames.forEach(paint);
+    }
+    rc = { sync: sync };
+    frames.forEach(function (f) {
+      f.addEventListener("load", function () {
+        var d = f.contentDocument;
+        // Only the snapshot counts: WebKit can fire a load for the frame's initial
+        // about:blank after this listener is attached, and painting that would mark the
+        // frame ready before the snapshot is in it.
+        if (!d || !d.querySelector("style[data-rc-css]")) { f.__rcDoc = null; delete f.dataset.rcReady; return; }
+        f.__rcDoc = d;
+        f.__rcSwaps = [];
+        // 1vh as the capture saw it at this width (its viewport height / 100), so a 100vh
+        // hero is as tall here as in the before shot, whatever height the frame takes.
+        if (+f.dataset.rcHeight > 0) d.documentElement.style.setProperty("--rp-vh", +f.dataset.rcHeight / 100 + "px");
+        paint(f);
+        // Sizes change without a window resize: the page's scrollbar appearing, web fonts
+        // or images arriving late, content that grows. Watch the frame's page too.
+        var RO = d.defaultView && d.defaultView.ResizeObserver;
+        if (RO) new RO(function () { if (f.__rcDoc === d) fit(f); }).observe(d.documentElement);
+      });
+    });
+    if (window.ResizeObserver) {
+      var figRO = new ResizeObserver(function (es) {
+        es.forEach(function (e) {
+          var f = one(".rp-rc-frame", e.target);
+          if (f && f.__rcDoc) fit(f);
+        });
+      });
+      frames.forEach(function (f) { figRO.observe(f.parentNode.parentNode); });
+    }
+    all("[data-rc-view]", preview).forEach(function (b) {
+      b.addEventListener("click", function () { view = b.dataset.rcView; sync(); });
+    });
+    // A fallback for browsers without ResizeObserver.
+    var fitAll = function () { frames.forEach(function (f) { if (f.__rcDoc) fit(f); }); };
+    window.addEventListener("resize", fitAll);
+    // only(ids) is for --smoke, not readers: both frames show exactly these changes, whatever
+    // the answers say and without touching them; only(null) goes back to the answers. state()
+    // still reports the answers.
+    window.rpRefine = {
+      state: function () { return { on: picks(), view: view }; },
+      only: function (on) { only = on ? on.slice() : null; sync(); },
+    };
+    var base = JSON.parse(baseEl.textContent);
+    frames.forEach(function (f) { f.srcdoc = base; });
+    sync();
+  })();
+
+  /* ------------------------------------------------- the compare page (design-review)
+     A compare item holds two pages, the original and the built one, each embedded once.
+     Every width has a frame for each; one toggle shows one side in both widths. The hidden
+     side stays laid out (visibility, not display), so switching is instant. */
+  all("[data-cmp]").forEach(function (cmp) {
+    var id = cmp.dataset.cmp, docs = {};
+    var sides = ["original", "built"], view = "built";
+    for (var i = 0; i < sides.length; i++) {
+      var el = document.getElementById("rp-cmp-" + id + "-" + sides[i]);
+      if (!el) return;
+      docs[sides[i]] = JSON.parse(el.textContent);
+    }
+    var frames = all(".rp-cmp-frame", cmp), now = one("[data-cmp-now]", cmp);
+    // As the Refine preview fits its frames: scale = column / frame width (never above 1), the
+    // page measured at the capture's viewport height and never shorter, and the box takes the
+    // shown side's scaled size, so the review page never scrolls sideways.
+    function fit(box) {
+      var fig = box.parentNode, shown = 0, w = 0, s = 1;
+      all(".rp-cmp-frame", box).forEach(function (f) {
+        w = +f.dataset.cmpWidth;
+        s = Math.min(1, Math.max(0, fig.clientWidth - (box.offsetWidth - box.clientWidth)) / w);
+        var d = f.contentDocument, floor = +f.dataset.cmpHeight || 0, h = floor;
+        if (f.dataset.cmpReady === "1" && d && d.documentElement) {
+          f.style.height = floor + "px";
+          h = Math.max(floor, Math.ceil(d.documentElement.scrollHeight), Math.ceil(d.documentElement.getBoundingClientRect().height));
+        }
+        f.style.height = h + "px";
+        f.style.transform = s < 1 ? "scale(" + s + ")" : "";
+        if (f.dataset.cmpV === view) shown = h;
+      });
+      box.style.width = Math.floor(w * s) + "px";
+      box.style.height = Math.ceil(shown * s) + "px";
+    }
+    var boxes = all(".rp-cmp-box", cmp);
+    function fitAll() { boxes.forEach(fit); }
+    function sync() {
+      all("[data-cmp-view]", cmp).forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.cmpView === view)); });
+      frames.forEach(function (f) { f.hidden = f.dataset.cmpV !== view; });
+      if (now) now.textContent = view === "built" ? "With your picks" : "Original";
+      fitAll();
+    }
+    frames.forEach(function (f) {
+      f.addEventListener("load", function () {
+        var d = f.contentDocument;
+        // WebKit can fire a load for the initial about:blank: only the page's own load counts.
+        if (!d || !d.documentElement || d.URL !== "about:srcdoc") { delete f.dataset.cmpReady; return; }
+        if (+f.dataset.cmpHeight > 0) d.documentElement.style.setProperty("--rp-vh", +f.dataset.cmpHeight / 100 + "px");
+        f.dataset.cmpReady = "1";
+        fit(f.parentNode);
+        var RO = d.defaultView && d.defaultView.ResizeObserver;
+        if (RO) new RO(function () { fit(f.parentNode); }).observe(d.documentElement);
+      });
+      f.srcdoc = docs[f.dataset.cmpV];
+    });
+    all("[data-cmp-view]", cmp).forEach(function (b) {
+      b.addEventListener("click", function () { view = b.dataset.cmpView; sync(); });
+    });
+    if (window.ResizeObserver) {
+      var ro = new ResizeObserver(fitAll);
+      boxes.forEach(function (b) { ro.observe(b.parentNode); });
+    }
+    window.addEventListener("resize", fitAll);
+    sync();
   });
 
   /* ------------------------------------------------- the page's database, when present

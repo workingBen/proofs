@@ -169,6 +169,34 @@ class WithServerTest(unittest.TestCase):
         self.assertIn("server: stopped", r.stdout)
         self.assertTrue((self.dir / ".proofs" / "server.log").exists())
 
+    def test_server_log_never_lands_in_the_served_folder(self):
+        # Task 8: --cwd pointed at a built static folder, and .proofs/server.log was written
+        # into it, so the static server served it. The log and pidfile belong to the project
+        # (the folder the helper runs in), never to --cwd.
+        served = self.dir / "built"
+        served.mkdir()
+        (served / "index.html").write_text("<h1>hi</h1>")
+        start = "%s -m http.server %d --bind 127.0.0.1" % (PY, self.port)
+        args = [sys.executable, HELPER, "--start", start, "--url", self.url, "--cwd", str(served), "--",
+                "sh", "-c", 'curl -sf --noproxy "*" "$PROOFS_BASE_URL" > page.html']
+        r = subprocess.run(args, cwd=self.dir, capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertFalse((served / ".proofs").exists(), "wrote .proofs/ inside the served folder")
+        self.assertTrue((self.dir / ".proofs" / "server.log").exists())
+
+    def test_url_naming_a_file_gives_the_capture_its_folder(self):
+        # Task 8: --url http://host/index.html became PROOFS_BASE_URL as is, and the pages
+        # file's "/index.html" was joined onto it: /index.html/index.html, a 404, exit 6.
+        url = self.url + "index.html"
+        args = [sys.executable, HELPER, "--start", self.tree_server(), "--url", url, "--cwd", str(self.dir), "--",
+                "sh", "-c", 'printf %s "$PROOFS_BASE_URL" > base.txt']
+        (self.dir / "index.html").write_text("<h1>hi</h1>")
+        r = subprocess.run(args, cwd=self.dir, capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual((self.dir / "base.txt").read_text(), self.url)
+        self.assertIn("names a file", r.stdout)
+        self.assert_tree_gone()
+
     def test_helper_releases_its_output_pipes(self):
         # capture_output makes run() wait until every holder of the pipes closes them; a server
         # holding them (what kept the claude -p turn alive) would hit the timeout instead.

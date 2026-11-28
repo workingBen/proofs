@@ -473,6 +473,8 @@ class AdHocShellAndOpen(unittest.TestCase):
         found = 0
         for path in guidance_files():
             for m in re.finditer(builders + r" [^`\n]*?--out (\S+?)`?(?=[\s`;,)]|$)", path.read_text()):
+                if "--crops" in m.group(0):  # crops are images in a folder, not a built page
+                    continue
                 out = m.group(1).strip("`")
                 if out.startswith("<"):  # a placeholder in a helper's usage line
                     continue
@@ -1154,3 +1156,182 @@ class SkillsReadSettings(unittest.TestCase):
         self.assertIn("checkpoint setting's number of items (default 5)", self.text("skills/review-cycle/SKILL.md"))
         self.assertIn("mockups-per-item setting (default 2)", self.text("skills/visual-qa/SKILL.md"))
         self.assertIn("`PROOFS_SEND_WAIT_MIN`", self.text("reference/review-page.md"))
+
+
+class RefineGuidance(unittest.TestCase):
+    """Refine and Redesign modes (Proofs 1.11.0): the skill text, the rubric and the profile."""
+
+    def skill(self):
+        return " ".join((REPO / "skills" / "design-review" / "SKILL.md").read_text().split())
+
+    def rubric(self):
+        return " ".join((REPO / "reference" / "design-rubric.md").read_text().split())
+
+    def profile(self):
+        return " ".join((REPO / "reference" / "design-profile.md").read_text().split())
+
+    def test_skill_names_both_modes_and_gives_the_mode_rule(self):
+        text = self.skill()
+        self.assertIn("Refine mode", text)
+        self.assertIn("Redesign mode", text)
+        self.assertIn("Refine** when the page exists, renders, and the capture shows no blocking flaw", text)
+        self.assertIn("without asking for a new layout", text)
+        self.assertIn("**Redesign** when the request says redesign", text)
+        self.assertIn("Refine: your page works, so these are small changes you can take or leave. Say 'redesign' for full alternatives.", text)
+        self.assertIn("`intro_html`", text)
+        self.assertIn("In `claude -p`", text)
+
+    def test_refine_capture_takes_the_snapshot(self):
+        text = self.skill()
+        self.assertIn("--out .proofs/capture/before --sizes 390,1280 --snapshot", text)
+        # Task 8: the capture writes <name>-<state>-snapshot.html, and the docs said <name>-snapshot.html.
+        self.assertIn("<name>-<state>-snapshot.html", text)
+        self.assertIn("<name>-default-snapshot.html", text)
+        self.assertNotRegex(text, r"<name>-snapshot\.html")
+        ref = " ".join((REPO / "reference" / "review-page.md").read_text().split())
+        self.assertNotRegex(ref, r"<name>-snapshot\.html")
+
+    def test_refine_flow_is_in_order(self):
+        text = self.skill()
+        sec = text[text.index("### Refine mode"):text.index("### 4. Build the review page")]
+        steps = ["**Snapshot.**", "**Write the `changes`.**", "**Critic build.**", "**`--smoke`.**", "**Crops.**",
+                 "**Critic.**", "**Rebuild.**", "**Publish.**"]
+        pos = 0
+        for step in steps:
+            with self.subTest(step=step):
+                found = sec.find(step, pos)
+                self.assertNotEqual(found, -1, step)
+                pos = found
+        for cmd in ("--snapshot", "review_page.py --smoke .proofs/pages/<review-name>.html",
+                    "--crops .proofs/pages/<review-name>.html --out .proofs/design-review/crops"):
+            with self.subTest(cmd=cmd):
+                self.assertIn(cmd, sec)
+        for word in ("`base`", "`crops`", "`targets`", "`css`", "`swaps`", "`removes`", "3 to 8", "`refine`"):
+            with self.subTest(word=word):
+                self.assertIn(word, text)
+
+    def test_refine_critic_points_at_the_redesign_rules_and_lists_its_inputs(self):
+        text = self.skill()
+        sec = text[text.index("6. **Critic.**"):text.index("7. **Rebuild.**")]
+        self.assertNotIn("Same rules as step 4", sec)   # step 4 of this list is --smoke
+        self.assertIn('The Redesign critic\'s rules ("Who scores", in step 4)', sec)
+        self.assertIn("crops and `removes` lines only", sec)
+        self.assertIn("crops and `removes` lines only", self.rubric())
+        for given in ("crops at both widths", "`removes` lines", "`Density:` line", "the `--smoke` output",
+                      "the set shots", "the current page's shots at 1280 and 390"):
+            with self.subTest(given=given):
+                self.assertIn(given, sec)
+        self.assertIn("Never `why_html`", sec)
+        self.assertNotIn("shots and inventory only", sec)
+        self.assertIn("--crops .proofs/pages/<review-name>.html --out .proofs/design-review/crops --set 1,3", sec)
+        self.assertIn("`set-1280.png` and `set-390.png`", sec)
+
+    def test_match_preview_uses_the_same_data_as_the_before(self):
+        text = self.skill()
+        self.assertIn("**Capture the built page from the same input data as the before**", text)
+        self.assertIn("When you cannot use the same data, say so in chat", text)
+        self.assertIn("mostly text", text)
+
+    def test_apply_step_matches_the_preview_and_states_the_yes_plus_revise_rule(self):
+        text = self.skill()
+        self.assertIn("--match-preview .proofs/pages/<review-name>.html --picks 1,3 --shots .proofs/capture/after", text)
+        self.assertIn("A round with both `YES` and `REVISE`", text)
+        self.assertIn("fresh snapshot", text)
+
+    def test_redesign_falls_back_to_refine_and_reads_density(self):
+        text = self.skill()
+        self.assertIn("offers Refine for the next round", text)
+        self.assertIn("Density", text)
+
+    def test_rubric_has_a_refine_section(self):
+        text = self.rubric()
+        self.assertIn("## Refine mode", text)
+        for key in ("gain", "keeps"):
+            with self.subTest(key=key):
+                self.assertIn(f"`{key}`", text)
+        sec = text[text.index("## Refine mode"):]
+        for anchor in ("**1**", "**3**", "**5**"):
+            self.assertGreaterEqual(sec.count(anchor), 2, anchor)
+        self.assertIn("`gain` 3 or more, `keeps` 4 or more, and no failed design check", sec)
+        self.assertIn("no worse on any of the six criteria", sec)
+        self.assertIn("better on at least one", sec)
+
+    def test_rubric_grouping_and_fit_read_the_density_line(self):
+        text = self.rubric()
+        for key in ("grouping", "fit"):
+            sec = text[text.index(f"### `{key}`") + 5:]
+            sec = re.split(r"### |## ", sec)[0]
+            with self.subTest(key=key):
+                self.assertIn("`Density:` line", sec)
+
+    def test_profile_has_a_density_line_asked_with_audience(self):
+        text = self.profile()
+        self.assertIn("Density: dense. Many numbers on one screen; people scan, not read. Don't add padding.", text)
+        for word in ("`dense`", "`balanced`", "`airy`"):
+            self.assertIn(word, text)
+        self.assertIn("**Density**, asked next to Audience.", text)
+
+
+class AcceptanceRunGuidance(unittest.TestCase):
+    """What the Refine acceptance run on a real page (Task 8) found a real user would hit."""
+
+    def skill(self, name="design-review"):
+        return " ".join((REPO / "skills" / name / "SKILL.md").read_text().split())
+
+    def ref(self):
+        return " ".join((REPO / "reference" / "review-page.md").read_text().split())
+
+    def test_url_is_the_server_root(self):
+        self.assertIn("**`--url` is the server's root**", self.skill())
+
+    def test_every_capture_exit_code_and_a_finding_is_exit_0(self):
+        text = self.skill()
+        self.assertIn("**0 means the capture ran, with findings or without:**", text)
+        for code in ("1: the pages file", "2: Playwright", "3: the server never answered", "4: the server exited early",
+                     "5: another run holds the lock", "6: a page answered HTTP 400"):
+            self.assertIn(code, text)
+
+    def test_server_log_never_goes_into_the_served_folder(self):
+        self.assertIn("never into `--cwd`", self.skill())
+        self.assertNotIn("<base-dir>/.proofs/server.log", self.skill("pr-qa"))
+
+    def test_whole_page_scope_for_found_by_the_capture(self):
+        self.assertIn("**When the whole page is in scope**", self.skill())
+        self.assertIn('"Found by the capture" holds only the rows none of them fixes', self.skill())
+
+    def test_a_capture_items_fix_clears_the_floor_or_says_why_not(self):
+        text = self.skill()
+        self.assertIn("**The fix must clear the target the row measures**", text)
+        self.assertIn("14 px to 15 px under a 16 px floor", text)
+
+    def test_critic_fallback_when_no_helper_can_start(self):
+        text = self.skill()
+        self.assertIn("**When the setting is `helper` but no fresh helper can start**", text)
+        self.assertIn("**score in a separated pass.**", text)
+        self.assertIn("Set `judged_by` to `self`, and say so on the page", text)
+
+    def test_build_may_replace_a_property_and_capture_yes_is_proved_by_the_measure(self):
+        text = self.skill()
+        self.assertIn("**Building a change can mean replacing a property, not only adding a rule.**", text)
+        self.assertIn("**A `YES` on a \"Found by the capture\" item has no preview to match:**", text)
+        self.assertIn("quote the measure", text)
+
+    def test_several_builds_get_their_own_after_folders(self):
+        text = self.skill()
+        self.assertIn("`.proofs/capture/after-a`, `.proofs/capture/after-b`", text)
+
+    def test_crops_never_cut_words_and_take_context(self):
+        text, ref = self.skill(), self.ref()
+        self.assertIn("it never cuts a word", text)
+        self.assertIn("`context`", text)
+        self.assertIn("never cuts a word", ref)
+        self.assertIn("| `context` |", ref)
+
+    def test_the_rating_is_a_compare_page_in_the_refine_flow(self):
+        text, ref = self.skill(), self.ref()
+        self.assertIn("9. **Rating.**", text)
+        self.assertIn('"decisions": "compare"', text)
+        self.assertIn('"kind": "compare"', text)
+        self.assertIn("--out .proofs/pages/<review-name>-compare.html", text)
+        self.assertIn("### Compare items", ref)
+        self.assertIn("| `compare` |", ref)

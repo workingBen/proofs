@@ -1,0 +1,19 @@
+/* Same-origin sheet for the snapshot tests. Its URLs are relative to this file, not the page. */
+@import url("parts.css");
+
+@font-face {
+  font-family: "Fixture Jost";
+  src: url("../fonts/jost-400.woff2") format("woff2");
+  font-weight: 400;
+}
+
+body { margin: 0; font-family: "Fixture Jost", sans-serif; color: #1d2a33; background: #f6f3ec; }
+.hero { padding: 32px 48px; background: url(../img/stripe.png) repeat-x left bottom; }
+.hero h1 { font-size: 56px; line-height: 1.1; margin: 0 0 12px; }
+.row { display: flex; gap: 24px; padding: 24px 48px; align-items: center; }
+
+/* The page's own breakpoint: the snapshot keeps it, so a 390 frame shows the phone layout. */
+@media (max-width: 600px) {
+  .row { flex-direction: column; padding: 16px; }
+  .hero h1 { font-size: 36px; }
+}

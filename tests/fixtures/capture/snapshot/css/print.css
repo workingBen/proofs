@@ -1,0 +1,2 @@
+/* media="print": must not apply to the screen render of the snapshot. */
+.media-probe { background-color: rgb(200, 0, 0); }

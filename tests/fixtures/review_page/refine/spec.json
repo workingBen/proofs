@@ -1,0 +1,31 @@
+{
+  "title": "Host Headroom dashboard — Design Review (Refine)",
+  "project": {"name": "Host Headroom", "session": "refine fixture"},
+  "decisions": "refine",
+  "sections": [
+    {"items": [
+      {"kind": "refine", "id": "home", "location": "Dashboard",
+       "base": {"from": "before/home-snapshot.html"},
+       "judged_by": "helper",
+       "before_scores": {"hierarchy": 3, "action": 3, "fold": 4, "grouping": 4, "fit": 4, "care": 3},
+       "set_scores": {"hierarchy": 4, "action": 3, "fold": 4, "grouping": 4, "fit": 4, "care": 4},
+       "changes": [
+         {"id": "bold-totals", "label": "Bolder totals", "location": "Hosts table",
+          "why_html": "<p>The totals are what the reader came for; at regular weight they read like the host names.</p>",
+          "targets": [".total"], "css": ".total { font-weight: 700; }",
+          "scores": {"gain": 4, "keeps": 5}, "recommended": true},
+         {"id": "tight-rows", "label": "Tighter row spacing",
+          "why_html": "<p>Fits two more hosts above the fold.</p>",
+          "targets": [".rows td"], "css": ".rows td { padding: 6px 8px; }",
+          "scores": {"gain": 3, "keeps": 3}, "recommended": false},
+         {"id": "alert-color", "label": "Status color on the alert column",
+          "why_html": "<p>A high reading should stand out from an ok one.</p>",
+          "targets": [".alert", ".badge"], "css": ".alert { color: #b42318; } .badge { display: none; }",
+          "swaps": [{"selector": ".status-icon", "html": "<i class=\"status-icon\">▲</i>"}],
+          "removes": [{"element": "new badge", "reason": "It repeats what the alert color now says."},
+                      {"element": "! status icon", "reason": "An arrow that points up says high at a glance."}],
+          "scores": {"gain": 4, "keeps": 4}, "recommended": true}
+       ]}
+    ]}
+  ]
+}

@@ -1,0 +1,2 @@
+/* Served only to a browser's stylesheet request (Sec-Fetch-Dest: style), never to a plain fetch. */
+.browser-only { outline: 0; }

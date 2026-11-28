@@ -1,6 +1,6 @@
 ---
 name: pr-qa
-version: 1.9.9
+version: 1.9.10
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/skills/pr-qa/scripts/pr_qa_page.py *)
@@ -144,7 +144,6 @@ no token, no network, or no open PR, so it can never keep a session from startin
    of `.claude/settings.json` (project or user level). Resolve it **once**
    (`printenv PROOFS_PAGES PROOFS_BASE_DIR`, the default path's first line, which prints nothing for a setting that is unset), confirm the folder exists, and write the
    **literal resolved path** in every later command (`git worktree add`, `--cwd`,
-   the log path `<base-dir>/.proofs/server.log`,
    `git worktree remove`): shell variables do not survive between Bash calls, and
    hooks read literal paths. If `<base-dir>` already shows in `git worktree list`,
    run `git worktree remove --force <base-dir>` only if it is this repo's own
@@ -181,8 +180,8 @@ no token, no network, or no open PR, so it can never keep a session from startin
      ready and left running, so a reused port would be captured by mistake.
    - **The capture command is the default path's `capture.cjs` line**, run through
      `with_server.py --cwd <base-dir>` for the before run, and the same line with no `--cwd`
-     for the after run. Exit codes: 3 the server never answered (read `<base-dir>/.proofs/server.log`
-     for the before run, `.proofs/server.log` for the after run), 4 it exited early, 5
+     for the after run. Exit codes: 3 the server never answered (read `.proofs/server.log` in the project
+     for both runs: the helper writes its log and pidfile where it runs, never under `--cwd`), 4 it exited early, 5
      another run holds the lock; anything else is the capture's own. 3 is also `capture.cjs`'s untrusted-width exit and 2 with "Playwright not found" is the missing install; the stderr line says which. **6 means a page answered HTTP 400 or above, or rendered an error page ("Not Found")**: that shot is not the page, so it is left out of the evidence and the findings can never call the PR clean. Fix the pages file's `path` or the server and capture that side again; never build the page on it. Exit 0 does not
      prove the page is right: read each PNG and confirm it shows the route you meant.
      Never start a server yourself with `run_in_background` or `&`: in `claude -p` the

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Visual QA capture: screenshots + measurements for whole pages at three viewports.
 //
-//   node <skill folder>/scripts/capture.cjs pages.json [--out DIR] [--sizes 390,1440] [--evidence before|after] [--no-scroll] [--compare EARLIER/measures.json]
+//   node <skill folder>/scripts/capture.cjs pages.json [--out DIR] [--sizes 390,1440] [--evidence before|after] [--no-scroll] [--compare EARLIER/measures.json] [--snapshot]
 //
 // pages.json (see pages.example.json beside this file):
 //   {
@@ -19,7 +19,8 @@
 //
 // --sizes picks viewports by label (default: all of 1440, 1280, 390), or adds a desktop width
 // such as 1040 (400 to 2560), for a shot just above a breakpoint.
-// PROOFS_BASE_URL, when set, replaces "base" (so it runs unchanged after with_server.py --).
+// PROOFS_BASE_URL, when set, replaces "base" (so it runs unchanged after with_server.py --),
+// unless "base" is on the same server (same origin): then "base" is kept (chooseBase).
 // --evidence <label> prefixes every file the run writes with "<label>-" (a before and an
 // after run can share one --out) and also writes <out>/<label>.json in the shape pr-qa reads.
 // Before the shots and the measures, each page is scrolled to the bottom in steps and back to
@@ -46,6 +47,12 @@
 // --compare takes an earlier run's measures.json and lists, per page, size and check, the entries
 // that are new since then, by text, not by count ("newSince"): a fix that took small tap targets
 // from 11 to 9 had made 3 of the 9 (Astro run 3).
+// --snapshot also writes, for each page at 1280 (so only when 1280 is among the sizes), a
+// standalone copy of the rendered page: <name>-<state>-snapshot.html and its -snapshot-assets/
+// folder, the base design-review's Refine mode builds on (snapshot.cjs says what it keeps).
+// measures.json names it on the page's 1280 entry: "snapshot": { file, bytes, external } (file
+// null and an error when it failed); external lists the stylesheets from another site that could
+// not be fetched and so are still loaded from it (a published page will not load them). Without the flag nothing about the run changes.
 // Prints only the summary table, so the run stays small in context.
 
 const fs = require('fs');
@@ -56,14 +63,17 @@ const path = require('path');
 // installed, else the installed Google Chrome (no download), with the flag that stops
 // Chrome on macOS copying its whole app (about 1.4 GB) into a temp folder per launch.
 const LAUNCH = path.join(__dirname, '..', '..', '..', 'shared', 'review_page', 'launch.cjs');
-let launchChromium, HOW_TO, midWordBreaks;
+let launchChromium, HOW_TO, midWordBreaks, decodePng;
 try {
   ({ launchChromium, HOW_TO } = require(LAUNCH));
   ({ midWordBreaks } = require(path.join(path.dirname(LAUNCH), 'midword.cjs')));
+  // The PNG reader is shared with fidelity.cjs, which compares a Refine base with these shots.
+  ({ decodePng } = require(path.join(path.dirname(LAUNCH), 'png.cjs')));
 } catch (_) {
   console.error(`Cannot find ${LAUNCH}. Install the whole Proofs plugin, not the visual-qa folder on its own.`);
   process.exit(2);
 }
+const { snapshotPage } = require(path.join(__dirname, 'snapshot.cjs'));
 
 function loadPlaywright() {
   const tries = [
@@ -120,6 +130,20 @@ function resolveViewports(sizes) {
 
 // Base and path with exactly one slash between them, whatever either looks like. A path that
 // is a whole URL is used as is; one that starts with "?" or "#" goes straight onto the base.
+// PROOFS_BASE_URL (set by with_server.py from its --url) points the capture at the server that
+// helper started. When the pages file's own base is on that same server (same origin), the
+// pages file's base wins: it was written for these paths, and --url may name a page rather than
+// the root (Task 8: --url .../index.html plus the path "/index.html" made a 404). On another
+// origin (another port), PROOFS_BASE_URL wins, as before.
+function chooseBase(envBase, cfgBase) {
+  if (!envBase) return cfgBase;
+  if (!cfgBase) return envBase;
+  try {
+    if (new URL(envBase).origin === new URL(cfgBase).origin) return cfgBase;
+  } catch (_) { /* a base that does not parse: keep the env one, as before */ }
+  return envBase;
+}
+
 function joinUrl(base, p) {
   const pathPart = p == null ? '' : String(p);
   if (/^[a-z][a-z0-9+.-]*:/i.test(pathPart)) return pathPart;
@@ -661,46 +685,6 @@ const BLANK_SHARE = 0.9;
 // deliberate icon or toggle; three or more is content that never appeared.
 const HIDDEN_BLOCKS = 3;
 
-// The rows of an 8-bit, non-interlaced RGB or RGBA PNG (what Chrome writes), unfiltered; null
-// for any other kind.
-function decodePng(file) {
-  const zlib = require('zlib');
-  const data = fs.readFileSync(file);
-  let pos = 8, width = 0, height = 0, depth = 0, ctype = 0, interlace = 0;
-  const idat = [];
-  while (pos < data.length) {
-    const len = data.readUInt32BE(pos);
-    const kind = data.toString('latin1', pos + 4, pos + 8);
-    if (kind === 'IHDR') {
-      width = data.readUInt32BE(pos + 8); height = data.readUInt32BE(pos + 12);
-      depth = data[pos + 16]; ctype = data[pos + 17]; interlace = data[pos + 20];
-    } else if (kind === 'IDAT') idat.push(data.subarray(pos + 8, pos + 8 + len));
-    pos += 12 + len;
-  }
-  if (depth !== 8 || (ctype !== 2 && ctype !== 6) || interlace) return null;
-  const bpp = ctype === 6 ? 4 : 3, stride = width * bpp;
-  const raw = zlib.inflateSync(Buffer.concat(idat));
-  const rows = [];
-  let prev = Buffer.alloc(stride);
-  for (let y = 0; y < height; y++) {
-    const f = raw[y * (stride + 1)];
-    const line = Buffer.from(raw.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1)));
-    for (let i = 0; i < stride; i++) {
-      const a = i >= bpp ? line[i - bpp] : 0, b = prev[i], c = i >= bpp ? prev[i - bpp] : 0;
-      if (f === 1) line[i] = (line[i] + a) & 255;
-      else if (f === 2) line[i] = (line[i] + b) & 255;
-      else if (f === 3) line[i] = (line[i] + ((a + b) >> 1)) & 255;
-      else if (f === 4) {
-        const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
-        line[i] = (line[i] + (pa <= pb && pa <= pc ? a : pb <= pc ? b : c)) & 255;
-      }
-    }
-    rows.push(line);
-    prev = line;
-  }
-  return { width, height, bpp, ctype, rows };
-}
-
 const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
   let c = n;
   for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
@@ -980,7 +964,7 @@ async function main() {
   const opt = (name) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined; };
   const cfgPath = argv[0];
   if (!cfgPath || cfgPath.startsWith('--')) {
-    console.error('usage: capture.cjs pages.json [--out DIR] [--sizes 390,1440] [--evidence before|after] [--no-scroll]');
+    console.error('usage: capture.cjs pages.json [--out DIR] [--sizes 390,1440] [--evidence before|after] [--no-scroll] [--snapshot]');
     process.exit(1);
   }
   let cfg;
@@ -994,6 +978,7 @@ async function main() {
   const out = opt('--out') || path.join(path.dirname(cfgPath), 'shots');
   const evidence = opt('--evidence');
   const scroll = !argv.includes('--no-scroll');
+  const snapshot = argv.includes('--snapshot');
   const comparePath = opt('--compare');
   let earlier = null;
   if (comparePath) {
@@ -1012,7 +997,7 @@ async function main() {
       + `or a desktop width from ${EXTRA_MIN} to ${EXTRA_MAX}`);
     process.exit(1);
   }
-  const base = process.env.PROOFS_BASE_URL || cfg.base;
+  const base = chooseBase(process.env.PROOFS_BASE_URL, cfg.base);
   fs.mkdirSync(out, { recursive: true });
   const outParts = path.resolve(out).split(path.sep);
   if (outParts.includes('.proofs')) {
@@ -1058,11 +1043,22 @@ async function main() {
       try {
         await openPage(page, base, p, scroll);
         await page.screenshot({ path: path.join(out, `${file}.png`) });
+        // Right after the 1280 shot, so the copy is the page that shot shows (scrolled through, at the top).
+        let snap = null;
+        if (snapshot && label === '1280') {
+          try {
+            const s = await snapshotPage(page, out, `${prefix}${p.name}-${state}`);
+            snap = { file: s.file, bytes: s.bytes, external: s.external };
+          } catch (e) {
+            snap = { file: null, bytes: 0, error: e.message.split('\n')[0] };
+          }
+        }
         const tall = await page.evaluate(() => document.documentElement.scrollHeight);
         const fullScale = tall * (vp.deviceScaleFactor || 1) > FULL_MAX_PX ? 1 : (vp.deviceScaleFactor || 1);
         await page.screenshot({ path: path.join(out, `${file}-full.png`), fullPage: true, ...(fullScale === 1 && vp.deviceScaleFactor > 1 ? { scale: 'css' } : {}) });
         const m = await page.evaluate(measure, { items: p.items, minText, minTap });
         m.fullScale = fullScale;
+        if (snap) m.snapshot = snap;
         m.parts = [];
         const ranges = m.innerWidth === vp.width ? partRanges(m.pageHeight, m.viewport.w) : [];
         const fullPng = ranges.length ? decodePng(path.join(out, `${file}-full.png`)) : null;
@@ -1171,6 +1167,19 @@ async function main() {
       + 'shrinking everything; the other phone numbers were measured at that wider layout.',
   };
   if (seen.size) lines.push('', ...[...seen].map((s) => `- ${WORDS[s]}`));
+  // The table counts every entry; measures.json keeps the first 25 (or 15) of a long list, in
+  // page order. Say so where it happens (Task 8: "text below floor: 53" and 25 entries).
+  const CAPPED = [['text below floor', 'smallText', 'smallTextCount'], ['small tap targets', 'smallTaps', 'smallTapCount'],
+    ['off-center rows', 'offCenter', 'offCenterCount'], ['off-center columns', 'offColumns', 'offColumnCount'],
+    ['sections without headings', 'untitled', 'untitledCount']];
+  const capped = [];
+  for (const r of results.filter((x) => !x.error && x.measures)) {
+    for (const [name, list, count] of CAPPED) {
+      const n = r.measures[count], kept = (r.measures[list] || []).length;
+      if (n > kept) capped.push(`- ${r.page} ${r.state} at ${r.viewport}: ${name} counts ${n}; measures.json "${list}" lists only the first ${kept}, in page order`);
+    }
+  }
+  if (capped.length) lines.push('', 'capped lists: a count in the table is every entry found, and a long list is cut in measures.json:', ...capped);
   const offRows = results.filter((r) => !r.error && r.measures.offCenterCount);
   if (offRows.length) {
     lines.push('', 'off-center: a row inside a centered column (text-align: center) whose content sits to one side, '
@@ -1291,4 +1300,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { joinUrl, readPagesFile, PagesFileError, resolveTargets, resolveViewports };
+module.exports = { chooseBase, joinUrl, readPagesFile, PagesFileError, resolveTargets, resolveViewports, decodePng, VIEWPORTS };

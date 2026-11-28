@@ -1,0 +1,3 @@
+/* Served from another origin; names a local file twice. */
+@import url("file:///etc/hosts");
+.leak { color: #123456; background: url(file:///etc/hosts); }

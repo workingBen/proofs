@@ -1,0 +1,281 @@
+// Refine's change crops (spec §4, "One card per change"): for each change, its before and after
+// at 1280 and 390, cut from the built review page's own frames (each laid out at its real width)
+// with that one change off, then on, and every other change off. A crop is the union of the
+// boxes of the elements the change's `targets` select (and its optional `context` selectors: the
+// neighbors it is judged against), measured in the frame with the change off and on (so an element
+// it hides or swaps counts), plus CROP_MARGIN, kept inside the page, then grown until no line of
+// text crosses its edge, with the change off and on (snapToLines): a crop never cuts a word.
+// Usage: node crops.cjs <playwright package dir> <page.html> <out dir>
+// Writes <out>/<change id>-<before|after>-<1280|390>.png and <out>/crops.json,
+// { <change id>: { key, "1280": {x, y, w, h}, "390": {note} } }: CSS pixels in the frame's page, or
+// a note for a width where no target is shown (hidden or of no size), which gets no crop. key is
+// the card's data-rc-key (review_page.py change_key), so a later build skips crops gone stale. Prints
+// one JSON line: { out, crops, notes: [...], set }, or { error } when it cannot start. A change that
+// makes the page taller at a width gets "taller": <CSS px> on that width's entry and a note ("makes
+// the page 140 px taller at 390"), which its card shows. With a fifth argument, the numbers of the
+// recommended changes (such as 1,3), it also writes <out>/set-1280.png and <out>/set-390.png: the
+// whole base with those changes on together, shot as the capture shoots a page (fidelity.cjs
+// renderBase), for the critic to score the set against the current page; `set` names them.
+// Run through review_page.py --crops (--set).
+const fs = require("fs");
+const path = require("path");
+const { launchChromium } = require("./launch.cjs");
+const { renderBase } = require("./fidelity.cjs");
+
+// CSS pixels around the targets: enough to show what sits next to them (the row a value is in,
+// the space above a heading) without the crop becoming the section.
+const CROP_MARGIN = 24;
+// The device scale the crops are shot at: sharp on a phone's screen, where the owner reviews.
+const CROP_SCALE = 2;
+const WIDTHS = [1280, 390];
+// The review page is opened wide enough, and its column let out, for both frames to sit at
+// scale 1, so a crop is the frame's own pixels rather than a scaled-down copy.
+const PAGE_VIEWPORT = { width: 1600, height: 900 };
+
+// Runs in a frame: `box` grown until every fragment of visible text it touches is wholly inside it
+// (one rect per line a text node runs over), kept inside `limit` ({w, h}). Task 8: a crop of an
+// inline target plus the margin cut the label beside it mid-word.
+function snapToLines([box, limit]) {
+  const frags = [], walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+    if (!n.textContent.trim()) continue;
+    const range = document.createRange();
+    range.selectNodeContents(n);
+    for (const r of range.getClientRects()) {
+      if (r.width > 0 && r.height > 0) frags.push([r.left + scrollX, r.top + scrollY, r.right + scrollX, r.bottom + scrollY]);
+    }
+  }
+  let [x0, y0, x1, y1] = [box.x, box.y, box.x + box.w, box.y + box.h];
+  for (let pass = 0, grew = true; grew && pass < 50; pass++) {
+    grew = false;
+    for (const [a, b, c, d] of frags) {
+      if (c <= x0 || a >= x1 || d <= y0 || b >= y1) continue;    // does not touch the box
+      if (a >= x0 && b >= y0 && c <= x1 && d <= y1) continue;     // wholly inside
+      const n = [Math.min(x0, a), Math.min(y0, b), Math.max(x1, c), Math.max(y1, d)];
+      if (n[0] < x0 || n[1] < y0 || n[2] > x1 || n[3] > y1) { [x0, y0, x1, y1] = n; grew = true; }
+    }
+    x0 = Math.max(0, x0); y0 = Math.max(0, y0); x1 = Math.min(limit.w, x1); y1 = Math.min(limit.h, y1);
+  }
+  x0 = Math.max(0, Math.floor(x0)); y0 = Math.max(0, Math.floor(y0));
+  x1 = Math.min(Math.floor(limit.w), Math.ceil(x1)); y1 = Math.min(Math.floor(limit.h), Math.ceil(y1));
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+
+// Runs in a frame: the union of the boxes of every element `selectors` select that has a size,
+// in the frame page's coordinates, and that page's size; box is null when none is shown.
+function measureTargets(selectors) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const s of selectors) {
+    let els = [];
+    try { els = document.querySelectorAll(s); } catch (e) { continue; }
+    for (const el of els) {
+      const r = el.getBoundingClientRect();
+      if (!(r.width > 0 && r.height > 0)) continue;
+      const cs = getComputedStyle(el);
+      if (cs.visibility === "hidden" || cs.visibility === "collapse") continue;
+      x0 = Math.min(x0, r.left + scrollX); y0 = Math.min(y0, r.top + scrollY);
+      x1 = Math.max(x1, r.right + scrollX); y1 = Math.max(y1, r.bottom + scrollY);
+    }
+  }
+  const root = document.documentElement;
+  const page = { w: root.clientWidth, h: root.getBoundingClientRect().height, tall: Math.max(root.scrollHeight, root.getBoundingClientRect().height) };
+  return { box: x1 > x0 ? { x0, y0, x1, y1 } : null, page };
+}
+
+// The crop for one width from the off and on measures: their union plus the margin, kept inside
+// the page (its width, and the shorter of its two heights, so both crops are the same size and
+// neither runs past its frame), in whole pixels that still contain it. null when neither shows a target.
+function cropBox(off, on, margin = CROP_MARGIN) {
+  const boxes = [off.box, on.box].filter(Boolean);
+  if (!boxes.length) return null;
+  const w = Math.min(off.page.w, on.page.w), h = Math.min(off.page.h, on.page.h);
+  const x0 = Math.max(0, Math.floor(Math.min(...boxes.map((b) => b.x0)) - margin));
+  const y0 = Math.max(0, Math.floor(Math.min(...boxes.map((b) => b.y0)) - margin));
+  const x1 = Math.min(Math.floor(w), Math.ceil(Math.max(...boxes.map((b) => b.x1)) + margin));
+  const y1 = Math.min(Math.floor(h), Math.ceil(Math.max(...boxes.map((b) => b.y1)) + margin));
+  if (x1 <= x0 || y1 <= y0) return null;
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+
+// The crop PNGs a previous run wrote for changes that are no longer on the page (crops.json names
+// them), so a dropped change leaves nothing behind (Task 8). Only files of that exact name go.
+function removeDropped(outDir, ids) {
+  let old = {};
+  try { old = JSON.parse(fs.readFileSync(path.join(outDir, "crops.json"), "utf8")); } catch (_) { return; }
+  if (!old || typeof old !== "object") return;
+  for (const id of Object.keys(old)) {
+    if (ids.includes(id) || !/^[a-z0-9-]+$/.test(id)) continue;
+    for (const state of ["before", "after"]) for (const w of WIDTHS) {
+      try { fs.unlinkSync(path.join(outDir, `${id}-${state}-${w}.png`)); } catch (_) { /* not there */ }
+    }
+  }
+}
+
+// Fonts loaded in the frame, then two paints. The frames are sandboxed without allow-scripts, so
+// a callback queued inside one (requestAnimationFrame, setTimeout) never runs and Playwright
+// reports "Execution context was destroyed" for the evaluate waiting on it. Only a promise that
+// is already settled comes back from the frame; the paints are waited out in the review page,
+// which draws the frames.
+async function settle(frame) {
+  await frame.evaluate(() => document.fonts.ready.then(() => true));
+  await frame.page().evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+}
+
+// Both frames show exactly `ids` (the engine's test-only rpRefine.only), laid out and painted.
+async function show(page, frames, ids) {
+  await page.evaluate((ids) => window.rpRefine.only(ids), ids);
+  for (const w of WIDTHS) {
+    await page.waitForFunction(([w, want]) => {
+      const f = document.querySelector(`iframe.rp-rc-frame[data-rc-width="${w}"]`);
+      return f && f.dataset.rcReady === "1" && !f.style.transform && f.contentDocument &&
+        (f.contentDocument.documentElement.getAttribute("data-rc") || "") === want;
+    }, [w, ids.join(" ")], { timeout: 15000 });
+    await settle(frames[w]);
+  }
+}
+
+// A PNG of `box` (CSS pixels in the frame's page) of the frame at width w, from the review page.
+async function shoot(page, w, box, file) {
+  const at = await page.evaluate((w) => {
+    const r = document.querySelector(`iframe.rp-rc-frame[data-rc-width="${w}"]`).getBoundingClientRect();
+    return { x: r.left + scrollX, y: r.top + scrollY };
+  }, w);
+  await page.screenshot({ path: file, fullPage: true, clip: { x: at.x + box.x, y: at.y + box.y, width: box.w, height: box.h } });
+}
+
+async function main(pw, pagePath, outDir, setArg) {
+  const { chromium } = require(pw);
+  const browser = await launchChromium(chromium, process.env);
+  try {
+    const ctx = await browser.newContext({ viewport: PAGE_VIEWPORT, deviceScaleFactor: CROP_SCALE });
+    const page = await ctx.newPage();
+    await page.goto("file://" + path.resolve(pagePath));
+    const info = await page.evaluate(() => {
+      const prev = document.querySelector("[data-rc-preview]");
+      if (!prev) return null;
+      const id = prev.dataset.rcPreview;
+      const S = JSON.parse(document.getElementById("rp-spec").textContent);
+      return { id, changes: S.sections.flatMap((s) => s.items || []).filter((i) => i.refine === id) };
+    });
+    if (!info) return { error: `${pagePath} has no Refine preview` };
+    const setNums = setArg ? setArg.split(",").map((n) => n.trim()).filter(Boolean) : null;
+    if (setNums) {
+      const unknown = setNums.filter((n) => !info.changes.some((c) => c.num === n));
+      if (!setNums.length || unknown.length) return { error: `--set: no change ${unknown.join(", ") || "given"} on this page (its changes are ${info.changes.map((c) => c.num).join(", ")})` };
+    }
+    // Each change card carries its targets (data-rc-targets, a JSON list of selectors) and, when
+    // the change is judged against its neighbors, their selectors (data-rc-context).
+    const targets = {}, context = {}, keys = {};
+    for (const [id, t, cx, key] of await page.evaluate(() => Array.from(
+      document.querySelectorAll("[data-rc-change][data-rc-targets]"),
+      (el) => [el.dataset.rcChange, JSON.parse(el.dataset.rcTargets), JSON.parse(el.dataset.rcContext || "[]"), el.dataset.rcKey]))) {
+      targets[id] = t;
+      context[id] = cx;
+      keys[id] = key;
+    }
+    // Let the column out so both frames fit at scale 1; hide the page's fixed and sticky bars,
+    // which a full-page shot would paint over the frames.
+    await page.evaluate(() => {
+      const st = document.createElement("style");
+      st.textContent = ".rp-main { max-width: none !important; }";
+      document.head.appendChild(st);
+      for (const el of document.querySelectorAll("body *")) {
+        const p = getComputedStyle(el).position;
+        if (p === "fixed" || p === "sticky") el.style.setProperty("visibility", "hidden", "important");
+      }
+      window.dispatchEvent(new Event("resize"));
+    });
+    await page.waitForFunction(() => {
+      const f = document.querySelectorAll("iframe.rp-rc-frame");
+      return f.length > 0 && Array.from(f).every((x) => x.dataset.rcReady === "1" && !x.style.transform);
+    }, null, { timeout: 15000 });
+    const frames = {};
+    for (const w of WIDTHS) {
+      frames[w] = await (await page.$(`iframe.rp-rc-frame[data-rc-width="${w}"]`)).contentFrame();
+      // A transition would be caught part way from off to on; shoot the end of it.
+      await frames[w].evaluate(() => {
+        const st = document.createElement("style");
+        st.textContent = "*, *::before, *::after { transition: none !important; animation: none !important; }";
+        document.head.appendChild(st);
+      });
+    }
+
+    fs.mkdirSync(outDir, { recursive: true });
+    removeDropped(outDir, info.changes.map((c) => c.id));
+    const crops = {}, notes = [];
+    for (const c of info.changes) {
+      const sels = targets[c.id] || [];
+      const m = { off: {}, on: {} };
+      for (const [state, ids] of [["off", []], ["on", [c.id]]]) {
+        await show(page, frames, ids);
+        for (const w of WIDTHS) m[state][w] = await frames[w].evaluate(measureTargets, sels.concat(context[c.id] || []));
+      }
+      crops[c.id] = { key: keys[c.id] };
+      const boxes = {};
+      for (const w of WIDTHS) boxes[w] = cropBox(m.off[w], m.on[w]);
+      // Grow each box to whole lines of text in both states, until neither grows it again.
+      for (let round = 0; round < 4; round++) {
+        let grew = false;
+        for (const ids of [[], [c.id]]) {
+          await show(page, frames, ids);
+          for (const w of WIDTHS) {
+            const b = boxes[w];
+            if (!b) continue;
+            const limit = { w: Math.min(m.off[w].page.w, m.on[w].page.w), h: Math.min(m.off[w].page.h, m.on[w].page.h) };
+            const n = await frames[w].evaluate(snapToLines, [b, limit]);
+            if (n.x !== b.x || n.y !== b.y || n.w !== b.w || n.h !== b.h) { boxes[w] = n; grew = true; }
+          }
+        }
+        if (!grew) break;
+      }
+      for (const w of WIDTHS) {
+        const box = boxes[w];
+        if (box) crops[c.id][w] = box;
+        else {
+          const note = `Change ${c.num}: ${sels.join(", ")} ${sels.length > 1 ? "are" : "is"} not shown at ${w} px wide ` +
+            `(hidden or of no size, with the change off and on), so there is no crop at this width.`;
+          crops[c.id][w] = { note };
+          notes.push(note);
+        }
+        // A crop shows only the targets: a change that pushes everything below them down says so.
+        const taller = Math.round(m.on[w].page.tall - m.off[w].page.tall);
+        if (taller >= 1) {
+          crops[c.id][w].taller = taller;
+          notes.push(`Change ${c.num} makes the page ${taller} px taller at ${w}.`);
+        }
+      }
+      for (const [state, ids] of [["before", []], ["after", [c.id]]]) {
+        await show(page, frames, ids);
+        for (const w of WIDTHS) {
+          const box = crops[c.id][w];
+          if (box.note === undefined) await shoot(page, w, box, path.join(outDir, `${c.id}-${state}-${w}.png`));
+        }
+      }
+    }
+    await page.evaluate(() => window.rpRefine.only(null));
+    fs.writeFileSync(path.join(outDir, "crops.json"), JSON.stringify(crops, null, 2) + "\n");
+    let set = null;
+    if (setNums) {
+      const doc = await page.evaluate((id) => JSON.parse(document.getElementById("rp-rc-base-" + id).textContent), info.id);
+      const ids = info.changes.filter((c) => setNums.includes(c.num)).map((c) => c.id);
+      set = { changes: setNums, files: {} };
+      for (const w of WIDTHS) {
+        const file = `set-${w}.png`;
+        fs.writeFileSync(path.join(outDir, file), await renderBase(browser, doc, w, ids));
+        set.files[w] = file;
+      }
+    }
+    return { out: outDir, crops, notes, set };
+  } finally {
+    await browser.close();
+  }
+}
+
+if (require.main === module) {
+  const [pw, pagePath, outDir, setArg] = process.argv.slice(2);
+  main(pw, pagePath, path.resolve(outDir), setArg)
+    .then((r) => console.log(JSON.stringify(r)))
+    .catch((e) => { console.log(JSON.stringify({ error: "crops crashed: " + (e && e.message) })); process.exit(1); });
+}
+
+module.exports = { CROP_MARGIN, CROP_SCALE, measureTargets, cropBox, snapToLines, settle };

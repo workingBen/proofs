@@ -5,7 +5,10 @@ e = html.escape
 HERE = os.path.dirname(os.path.abspath(__file__))
 tpl = open(os.path.join(HERE, "skillpage_tpl.html")).read()
 style = re.search(r"<style>(.*?)</style>", tpl, re.S).group(1).replace("%%EXCSS%%", "")
-links = tpl[:tpl.index("<style>")].replace("<title>proofs · %%SKILL%%</title>", "<title>proofs</title>")
+links = (tpl[:tpl.index("<style>")].replace("<title>proofs · %%SKILL%%</title>", "<title>proofs</title>")
+         .replace("%%OGTITLE%%", "Proofs: skills for Claude Code")
+         .replace("%%OGDESC%%", e("Stop reading walls of terminal text. Every skill here includes a page you can look at, "
+                                  "click through and decide on, then hand back to Claude in one paste.")))
 
 # Top picks: a "Top pick" tag on the left, a ribbon on the right.
 TOP = {"design-review": "Start here", "pr-qa": "Critical for UI changes", "working-log": "Most used"}
@@ -40,11 +43,15 @@ VIDEO_ID = "LGoRROsziv8"
 MEDIA = os.path.join(HERE, "media")
 PLAY = ('<svg viewBox="0 0 24 24" width="34" height="34" fill="currentColor" aria-hidden="true">'
         '<path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.6-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>')
-hero_vid = (f'<figure class="hero-vid"><div class="vid" data-yt="{VIDEO_ID}">'
+# Two pinned notes from the card picture (BRAND.md): PICK 1 sits over the AFTER half of the
+# before/after cover, NOTE 2 on the top-right corner. Decorative, so hidden from screen readers.
+PINS = ('<span class="pin pin-pick" aria-hidden="true"><i>PICK 1</i><b>Variant B</b></span>'
+        '<span class="pin pin-note" aria-hidden="true"><i>NOTE 2</i><b>Make the button<br>lighter orange</b></span>')
+hero_vid = (f'<figure class="hero-vid"><div class="vid-wrap"><div class="vid" data-yt="{VIDEO_ID}">'
             '<button type="button" class="vid-play" aria-label="Play the one-minute Proofs video (loads YouTube)">'
             '<picture><source type="image/webp" srcset="media/proofs-short-cover.webp">'
             '<img src="media/proofs-short-cover.jpg" width="720" height="720" alt="" loading="eager" fetchpriority="high" decoding="async"></picture>'
-            f'<span class="vid-knob">{PLAY}</span></button></div>'
+            f'<span class="vid-knob">{PLAY}</span></button></div>{PINS}</div>'
             '<figcaption><b>Watch Proofs at work.</b> One minute, start to finish. '
             'Nothing loads from YouTube until you press play.</figcaption></figure>')
 show = ""
@@ -88,6 +95,27 @@ HERO_CSS = """
  .pp{grid-template-columns:minmax(0,1fr);padding:14px;gap:16px}
 }
 @media (max-width:440px){.vid-knob{width:68px;height:68px;margin:-34px 0 0 -34px}}
+/* The band: the top of the home page, always dark (also in light mode). BRAND.md. */
+.topband{background:radial-gradient(110% 130% at 88% 0%,#2f2719 0%,#231e15 42%,#18150f 75%,#121009 100%);color:#efe8dc;color-scheme:dark;
+  --fg:#efe8dc;--muted:#a69d8e;--line:#3a352c;--accent:#ff8a4c;--card:#1e1b16;--ink:#0b0a08;--paper:#efe8dc}
+.topband .top{border-bottom:1px solid #3a352c}
+.topband .hero .tagline{color:#d8cfbf}
+.topband .trybox{background:#0b0a08;border:1px solid #3a352c;color:#efe8dc}
+.topband .trybox button,.topband .vid-knob{background:#ff8a4c;color:#1b130c}
+.topband .vid{box-shadow:0 24px 50px rgba(0,0,0,.45)}
+.vid-wrap{position:relative}
+.topband+.showcase{padding-top:40px}
+.pin{position:absolute;z-index:2;pointer-events:none;border-radius:14px;padding:12px 16px 14px;box-shadow:0 12px 28px rgba(0,0,0,.28);white-space:nowrap}
+.pin i{display:block;font:600 11px/1 "JetBrains Mono",ui-monospace,Menlo,monospace;font-style:normal;letter-spacing:.14em;opacity:.78;margin-bottom:8px}
+.pin b{display:block;font:700 17px/1.15 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+.pin-pick{background:#ff8a4c;color:#1b130c;transform:rotate(-4deg);right:-14px;top:61%}
+.pin-note{background:#f8f5ee;color:#1f2a24;transform:rotate(3deg);right:-10px;top:-30px}
+.vid-wrap.playing .pin{display:none}
+@media (max-width:640px){
+ .pin{border-radius:11px;padding:8px 11px 9px}
+ .pin i{font-size:9.5px;margin-bottom:5px} .pin b{font-size:14px}
+ .pin-pick{right:-6px;top:63%} .pin-note{right:-6px;top:-16px}
+}
 """
 # Click-to-play: swap the cover button for the iframe. Until then the page makes no request to YouTube.
 VID_JS = r"""
@@ -99,11 +127,11 @@ VID_JS = r"""
     f.src='https://www.youtube-nocookie.com/embed/'+v.getAttribute('data-yt')+'?autoplay=1&rel=0&playsinline=1';
     f.title='Proofs at work, one minute';
     f.allow='autoplay; encrypted-media; picture-in-picture; fullscreen'; f.setAttribute('allowfullscreen','');
-    v.replaceChild(f,b); f.focus();
+    v.replaceChild(f,b); v.parentNode.classList.add('playing'); f.focus();
   });
 });
 </script>"""
-body = f'''<header class="top"><div class="in"><a class="logo" href="index.html">pro<i>o</i>fs</a><span>/ skills for Claude Code</span>{"<a href=\"#examples\" style=\"margin-left:auto;text-decoration:none\">Examples</a><a href=\"#skills\" style=\"text-decoration:none\">Skills ↓</a>" if (feat or steps) else "<a href=\"#skills\" style=\"margin-left:auto;text-decoration:none\">All skills ↓</a>"}<a href="https://github.com/workingBen/proofs" style="text-decoration:none">GitHub ↗</a></div></header>
+body = f'''<div class="topband"><header class="top"><div class="in"><a class="logo" href="index.html">pro<i>o</i>fs</a><span>/ skills for Claude Code</span>{"<a href=\"#examples\" style=\"margin-left:auto;text-decoration:none\">Examples</a><a href=\"#skills\" style=\"text-decoration:none\">Skills ↓</a>" if (feat or steps) else "<a href=\"#skills\" style=\"margin-left:auto;text-decoration:none\">All skills ↓</a>"}<a href="https://github.com/workingBen/proofs" style="text-decoration:none">GitHub ↗</a></div></header>
 <section class="hero home has-vid"><div class="in">
   <div class="eyebrow">Skills for Claude Code · {len([s for _, g in GROUPS for s in g])} skills · {total_f}+ features</div>
   <h1>Claude skills that <i>show</i> their work.</h1>{hero_vid}
@@ -111,7 +139,7 @@ body = f'''<header class="top"><div class="in"><a class="logo" href="index.html"
   <div class="tries"><div class="try"><span class="lbl">Install in Claude Code</span><div class="trybox"><code>/plugin marketplace add https://github.com/workingBen/proofs.git
 /plugin install proofs@proofs</code><button type="button" class="tryb">Copy</button></div></div>
   <div class="try"><span class="lbl">Then try this prompt</span><div class="trybox wrap"><code>Use the design-review skill to propose two or three design updates for the page [YOUR URL]</code><button type="button" class="tryb">Copy</button></div></div></div>
-</div></section>
+</div></section></div>
 {show}<section class="loopw"><div class="in"><h2 class="h2">How every skill works</h2><div class="loop">
   <div class="step"><span class="n">01</span><b>Claude shows you first</b><span>Mockups, measurements and drafts, before anything changes.</span></div>
   <div class="step"><span class="n">02</span><b>Publishes a page</b><span>A private review page, not a wall of chat.</span></div>
@@ -174,5 +202,9 @@ os.makedirs(OUT, exist_ok=True)
 os.makedirs(os.path.join(OUT, "media"), exist_ok=True)
 for f in ("proofs-short-cover.jpg", "proofs-short-cover.webp"):
     shutil.copyfile(os.path.join(MEDIA, f), os.path.join(OUT, "media", f))
+# Link-preview picture and tab icons, shared by every page's head (skillpage_tpl.html).
+os.makedirs(os.path.join(OUT, "assets"), exist_ok=True)
+for f in ("social-card.jpg", "favicon.svg", "apple-touch-icon.png"):
+    shutil.copyfile(os.path.join(MEDIA, f), os.path.join(OUT, "assets", f))
 open(os.path.join(OUT, "index.html"), "w", encoding="utf-8").write(out)
 print("index:", n_sk, "skill pages,", total_f, "features")

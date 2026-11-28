@@ -1,6 +1,6 @@
 ---
 name: style-guide
-version: 1.8.5
+version: 1.8.6
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -123,7 +123,7 @@ Check that the project's own instructions file (`CLAUDE.md` or the equivalent) a
 
 ### 7. Follow-up rounds on `REVISE` items
 
-Identical pattern to the sibling tools: scope the new Artifact to only the still-open items (every item without a final decision, not just the explicitly revised ones), carry the prior round's proposal forward on each card labeled "Round N," rebuild and republish to the same URL, and re-verify before every republish. If a prior round's already-decided item is worth keeping visible for context (for example, it's near a new item covering related ground), show it de-emphasized in `after_html` or a `history_html` rather than omitting it or presenting it as open again. It's there for continuity, not re-review.
+Identical pattern to the sibling tools: scope the new Artifact to only the still-open items (every item without a final decision, not just the explicitly revised ones), carry the prior round's proposal forward on each card labeled "Round N," rebuild and republish to the same URL, and re-verify before every republish. List every item decided in an earlier round in the spec's `decided` list (one `{id, title, decision, when}` line each), which the builder folds at the bottom under the open items, rather than omitting it or presenting it as open again. It's there for continuity, not re-review. Set `project.round` each round; an answer saved on last round's version of an item never pre-fills it, and the same round reloaded keeps every answer (`../../reference/review-page.md`, "Follow-up rounds").
 
 When the guide is done, tell the user that design-review uses it for its mockups' tokens and its critic's `fit` score, together with an optional design profile (the design profile path setting, default `docs/design-profile.md`: the owner's references, rules and audience; neither file is ever required).
 

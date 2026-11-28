@@ -1,9 +1,39 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 190" width="360" height="190" role="img" aria-labelledby="t d">
 <title id="t">Claude skills that show their work.</title>
 <desc id="d">Skills for Claude Code.</desc>
-<rect width="360" height="190" rx="16" fill="#15130f"/>
+<defs>
+<radialGradient id="g" cx="0.88" cy="0" r="1.25" gradientUnits="objectBoundingBox">
+<stop offset="0" stop-color="#2f2719"/><stop offset="0.42" stop-color="#231e15"/><stop offset="0.75" stop-color="#18150f"/><stop offset="1" stop-color="#121009"/>
+</radialGradient>
+<linearGradient id="gr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9fd0b6"/><stop offset="1" stop-color="#d7ebdf"/></linearGradient>
+<filter id="sh" x="-20%" y="-20%" width="140%" height="160%"><feDropShadow dx="0" dy="6" stdDeviation="7" flood-color="#000" flood-opacity=".3"/></filter>
+<clipPath id="c"><rect width="360" height="190" rx="16"/></clipPath>
+</defs>
+<g clip-path="url(#c)">
+<rect width="360" height="190" fill="url(#g)"/>
+<rect x="22" y="28" width="7" height="7" rx="2" fill="#ff8a4c"/>
+<text x="36" y="36" font-family="ui-monospace, Menlo, monospace" font-size="10" letter-spacing="2" fill="#a69d8e">SKILLS FOR CLAUDE CODE</text>
+<text x="20" y="96" font-family="Georgia, 'Times New Roman', serif" font-size="52" letter-spacing="-1" fill="#efe8dc">pro<tspan font-style="italic" fill="#ff8a4c">o</tspan>fs</text>
+<text font-family="Georgia, 'Times New Roman', serif" font-size="19" fill="#efe8dc"><tspan x="22" y="136">Claude skills that</tspan><tspan x="22" y="159"><tspan font-style="italic" fill="#ff8a4c">show</tspan> their work.</tspan></text>
+<rect x="214" y="52" width="170" height="170" rx="14" fill="#faf8f2" filter="url(#sh)"/>
+<rect x="226" y="64" width="58" height="58" rx="9" fill="#f0ebe1"/>
+<rect x="234" y="72" width="42" height="24" rx="6" fill="url(#gr)"/>
+<rect x="234" y="104" width="34" height="7" rx="3.5" fill="#ddd5c6"/>
+<rect x="292" y="64" width="58" height="58" rx="9" fill="#fff" stroke="#c2410c" stroke-width="3"/>
+<rect x="300" y="72" width="42" height="24" rx="6" fill="url(#gr)"/>
+<rect x="300" y="104" width="34" height="7" rx="3.5" fill="#ddd5c6"/>
+<rect x="226" y="134" width="100" height="7" rx="3.5" fill="#e7e1d5"/>
+<g transform="translate(274 70) rotate(-4)" filter="url(#sh)">
+<rect width="80" height="50" rx="10" fill="#ff8a4c"/>
+<text x="10" y="17" font-family="ui-monospace, Menlo, monospace" font-size="8" letter-spacing="1.5" fill="#1b130c" opacity=".78">PICK 1</text>
+<text x="10" y="37" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-weight="700" font-size="12" fill="#1b130c">Variant B</text>
+</g>
+<g transform="translate(222 124) rotate(3)" filter="url(#sh)">
+<rect width="100" height="54" rx="8" fill="#f8f5ee"/>
+<text x="8" y="14" font-family="ui-monospace, Menlo, monospace" font-size="7" letter-spacing="1.5" fill="#1f2a24" opacity=".78">NOTE 2</text>
+<text x="8" y="32" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-weight="700" font-size="10" fill="#1f2a24">Make the button</text>
+<text x="8" y="44" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-weight="700" font-size="10" fill="#1f2a24">lighter orange</text>
+</g>
+</g>
 <rect x="0.5" y="0.5" width="359" height="189" rx="16" fill="none" stroke="#3a352c"/>
-<rect x="26" y="33" width="9" height="9" rx="2" fill="#ff8a4c"/>
-<text x="44" y="42" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" letter-spacing="2" fill="#a69d8e">SKILLS FOR CLAUDE CODE</text>
-<text font-family="Georgia, 'Times New Roman', serif" font-size="38" fill="#efe8dc"><tspan x="26" y="105">Claude skills that</tspan><tspan x="26" y="152"><tspan font-style="italic" fill="#ff8a4c">show</tspan> their work.</tspan></text>
 </svg>

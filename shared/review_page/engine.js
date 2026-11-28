@@ -306,6 +306,58 @@
     var a = b.answer;
     return !!((a && (typeof a !== "object" || Object.keys(a).length)) || b.note || b.read || b.variant || b.works_as_designed);
   }
+  /* Rounds. A review item carries `rev`, a fingerprint of its proposal (label, body,
+     options and round; review_page.py's item_rev), and every answer is saved with the rev
+     it was given on. A saved answer whose rev differs from the item's was given on an
+     earlier round's version: it never pre-fills the item, and shows on it read-only as
+     "Round 1: ...". The same build reloaded or republished keeps its rev, so nothing
+     typed this round is ever dropped. Rows and records without a rev (pages built before
+     1.10.0) restore as before. */
+  function staleFor(it, saved) { return !!(it && it.rev && saved && saved.rev && saved.rev !== it.rev); }
+  function earlierOf(ss) { return (ss.earlier = ss.earlier || {}); }
+  function earlierEntry(answer, note, variant, round) {
+    if (!answer && !trimmed(note)) return null;
+    return { round: round || null, answer: answer || null, note: note || "", variant: variant || null };
+  }
+  // Both lists in order, without repeats (the same answer kept here and in the store).
+  function mergeEarlier(a, b) {
+    var out = [], seen = {};
+    (a || []).concat(b || []).forEach(function (e) {
+      if (!e || typeof e !== "object") return;
+      var k = canon({ round: e.round || null, answer: e.answer || null, note: e.note || "", variant: e.variant || null });
+      if (seen[k]) return;
+      seen[k] = 1;
+      out.push(e);
+    });
+    return out.slice(-10);
+  }
+  // Move this browser's answers given on an earlier round's items to their earlier lists.
+  function sweepStale(S, st) {
+    (S.sections || []).forEach(function (sec) {
+      if (sec.kind !== "review") return;
+      var ss = ((st.sec || {})[sec.id]) || {}, recs = ss.items || {};
+      sec.items.forEach(function (it) {
+        var r = recs[it.id];
+        if (!staleFor(it, r)) return;
+        var e = earlierEntry(r.s, r.c, r.v, r.round);
+        if (e) earlierOf(ss)[it.id] = mergeEarlier(earlierOf(ss)[it.id], [e]);
+        delete recs[it.id];
+      });
+    });
+    return st;
+  }
+  // "Round 1: Approve with Comment (Option B): “too much space”", for the item's card.
+  function earlierLine(sec, it, e) {
+    var b = e.answer ? buttonFor(sec, e.answer) : null;
+    var what = b ? b.label.replace(/^[^A-Za-z]+/, "") : e.answer ? String(e.answer) : "No decision";
+    if (e.variant) {
+      var v = (it.variants || []).filter(function (x) { return x.key === e.variant; })[0];
+      what += " (" + (v ? v.label + (v.name ? ", " + v.name : "") : "Option " + e.variant) + ")";
+    }
+    var note = trimmed(e.note);
+    return (e.round ? "Round " + e.round : "An earlier round") + ": " + what + (note ? ": “" + note + "”" : "");
+  }
+
   // { docId: body } for every card that holds anything. Bodies carry no timestamp.
   function answerDocs(S, st) {
     var out = {};
@@ -319,9 +371,13 @@
       var ss = ((st.sec || {})[sec.id]) || {}, ans = ss.ans || {}, notes = ss.notes || {}, read = ss.read || {};
       sec.items.forEach(function (it) {
         if (sec.kind === "review") {
-          var r = (ss.items || {})[it.id] || {};
-          put(sec, it.id, "review", { answer: r.s || null, variant: r.v || null, works_as_designed: !!r.w,
-                                     note: r.c || "", read: !!r.r });
+          var r = (ss.items || {})[it.id] || {}, f = { answer: r.s || null, variant: r.v || null,
+                                                       works_as_designed: !!r.w, note: r.c || "", read: !!r.r };
+          // Which build of the item the answer was given on (see "Rounds" below).
+          if (it.rev) { f.rev = r.rev || it.rev; f.round = r.rev ? (r.round || null) : (it.round || null); }
+          var early = (ss.earlier || {})[it.id];
+          if (early && early.length) f.earlier = early;
+          put(sec, it.id, "review", f);
         } else if (sec.kind === "questions" || sec.kind === "qa") {
           var id = it.qid || it.qaid;
           // A text-box-only question: what the reader typed is the answer.
@@ -355,9 +411,18 @@
       var ss = secState(st, sec);
       if (sec.kind === "review") {
         ss.items = ss.items || {};
-        var r = ss.items[d.id] = ss.items[d.id] || {};
-        r.s = d.answer || null; r.v = d.variant || undefined; r.w = !!d.works_as_designed;
-        r.c = d.note || ""; r.r = !!d.read;
+        var early = mergeEarlier(earlierOf(ss)[d.id], d.earlier);
+        if (staleFor(it, d)) {
+          // Given on an earlier round's version of this item: context, never the live answer.
+          delete ss.items[d.id];
+          early = mergeEarlier(early, [earlierEntry(d.answer, d.note, d.variant, d.round)]);
+        } else {
+          var r = ss.items[d.id] = ss.items[d.id] || {};
+          r.s = d.answer || null; r.v = d.variant || undefined; r.w = !!d.works_as_designed;
+          r.c = d.note || ""; r.r = !!d.read;
+          if (it.rev) { r.rev = it.rev; r.round = it.round || null; }
+        }
+        if (early.length) earlierOf(ss)[d.id] = early;
       } else if (sec.kind === "questions" || sec.kind === "qa") {
         ss.ans = ss.ans || {}; ss.notes = ss.notes || {};
         if (it.text) {
@@ -470,7 +535,7 @@
   if (typeof module !== "undefined" && module.exports) {
     module.exports = { exportText: exportText, answeredCount: answeredCount, answerDocs: answerDocs, applyAnswerDocs: applyAnswerDocs,
                        docIdFor: docIdFor, DB_COLLECTION: DB_COLLECTION, sendText: sendText, pickupNote: pickupNote,
-                       settingCheck: settingCheck };
+                       settingCheck: settingCheck, sweepStale: sweepStale, earlierLine: earlierLine };
   }
   if (typeof document === "undefined") return;
 
@@ -478,6 +543,7 @@
   var S = JSON.parse(document.getElementById("rp-spec").textContent);
   var st = {};
   try { st = JSON.parse(localStorage.getItem(S.key) || "{}") || {}; } catch (e) { st = {}; }
+  sweepStale(S, st);
   function store() { try { localStorage.setItem(S.key, JSON.stringify(st)); } catch (e) { /* private window */ } }
   // Which cards changed since the last save, stamped in st.at (when) and st.unsent (not
   // yet in the store), so a change the page never got to send survives a reload and is
@@ -632,10 +698,31 @@
     review: function (sec, root, ss) {
       ss.items = ss.items || {};
       var D = sec.decisions;
-      function rec(id) { return (ss.items[id] = ss.items[id] || {}); }
       function itemSpec(id) { return sec.items.filter(function (i) { return i.id === id; })[0]; }
+      function rec(id) {
+        var r = ss.items[id] = ss.items[id] || {}, it = itemSpec(id);
+        if (it && it.rev && !r.rev) { r.rev = it.rev; r.round = it.round || null; }
+        return r;
+      }
+      function paintEarlier(card, it) {
+        var box = one("[data-earlier]", card), list = ((ss.earlier || {})[it.id]) || [];
+        if (!box) return;
+        box.hidden = !list.length;
+        box.textContent = "";
+        if (!list.length) return;
+        var h = document.createElement("div");
+        h.className = "rp-earlier-h";
+        h.textContent = list.length === 1 ? "Your answer last round" : "Your answers in earlier rounds";
+        box.appendChild(h);
+        list.forEach(function (e) {
+          var p = document.createElement("p");
+          p.textContent = earlierLine(sec, it, e);
+          box.appendChild(p);
+        });
+      }
       function paintItem(card) {
         var id = card.dataset.id, r = rec(id), it = itemSpec(id);
+        paintEarlier(card, it);
         all(".rp-btn", card).forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.choice === r.s)); });
         var v = (it.variants || []).length ? variantOf(it, r.v).key : null;
         all(".rp-variant", card).forEach(function (el) { el.setAttribute("aria-pressed", String(el.dataset.variant === v)); });
@@ -1075,8 +1162,10 @@
   function cleared(b) {
     // An undone setting keeps the row's shape (answer null means no change to apply).
     if (b.kind === "setting") return { id: b.id, section: b.section, kind: b.kind, answer: null, from: b.from, scope: b.scope, note: "" };
-    return { id: b.id, section: b.section, kind: b.kind, answer: b.kind === "log" ? {} : null, note: "", read: false,
-             variant: b.kind === "review" ? null : undefined, works_as_designed: b.kind === "review" ? false : undefined };
+    var c = { id: b.id, section: b.section, kind: b.kind, answer: b.kind === "log" ? {} : null, note: "", read: false,
+              variant: b.kind === "review" ? null : undefined, works_as_designed: b.kind === "review" ? false : undefined };
+    ["rev", "round", "earlier"].forEach(function (k) { if (b[k] !== undefined) c[k] = b[k]; });
+    return c;
   }
   function dbFlush() {
     if (!dbs.db || dbs.off) return;
@@ -1192,8 +1281,11 @@
         var body = d.data() || {};
         // Only cards still on this page take part, so a republish never clears old rows.
         var sec = S.sections.filter(function (x) { return x.id === body.section; })[0];
-        if (body.kind !== "extra" && !(sec && sec.items.some(function (i) { return (i.id || i.qid || i.qaid) === body.id; }))) return;
-        dbs.base[d.id] = bodyOf(body);
+        var item = sec && sec.items.filter(function (i) { return (i.id || i.qid || i.qaid) === body.id; })[0];
+        if (body.kind !== "extra" && !item) return;
+        // An answer from an earlier round's item is shown as such and left in the store as it
+        // is, until the reader answers this round (that row then carries it in `earlier`).
+        if (!(sec && sec.kind === "review" && staleFor(item, body))) dbs.base[d.id] = bodyOf(body);
         // The newer updated_at wins: a local change the store never got is pushed below.
         if (!(at[d.id] && at[d.id] > (body.updated_at || ""))) {
           remote.push(body);

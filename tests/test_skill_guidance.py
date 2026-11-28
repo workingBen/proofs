@@ -1159,7 +1159,7 @@ class SkillsReadSettings(unittest.TestCase):
 
 
 class RefineGuidance(unittest.TestCase):
-    """Refine and Redesign modes (Proofs 1.10.0): the skill text, the rubric and the profile."""
+    """Refine and Redesign modes (Proofs 1.11.0): the skill text, the rubric and the profile."""
 
     def skill(self):
         return " ".join((REPO / "skills" / "design-review" / "SKILL.md").read_text().split())

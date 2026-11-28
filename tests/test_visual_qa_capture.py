@@ -1114,7 +1114,7 @@ class Tags(html.parser.HTMLParser):
 
 @unittest.skipUnless(NODE and playwright_dir(), "Playwright not found: set PROOFS_PLAYWRIGHT or install it in ~/.cache/proofs-playwright")
 class Snapshot(unittest.TestCase):
-    """Task 2 (1.10.0): --snapshot writes a standalone copy of the rendered page at 1280, the base Refine builds on."""
+    """Task 2 (1.11.0): --snapshot writes a standalone copy of the rendered page at 1280, the base Refine builds on."""
 
     capture = PhoneWidth.capture
 

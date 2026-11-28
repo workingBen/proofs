@@ -1,6 +1,6 @@
 ---
 name: design-review
-version: 1.13.0
+version: 1.14.0
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -147,7 +147,7 @@ Write the content; the builder writes the page. Read `../../reference/review-pag
 - **Crops come from the capture's parts, not from CSS.** For a section of a tall page, put the part shot that holds it (`before/<name>-default-390-part-03.png`) in `assets` and show that, using the section's y from `measures.json` to pick the part; never embed a long page's full shot (Astro run 3: a 31,000 px shot made the page 8.2 MB) and never build a page to measure positions (a "ruler" page, offsets guessed as `margin-top` percentages: Astro run 3 spent about a quarter of the review's turns on it). If no part holds the section whole, show the two parts around it.
 - **Put what the capture found on the page, not only in chat.** Any row in the before capture's table that is not about the sections you were asked to change (`off-center rows`, `off-center columns`, `mid-word breaks`, `sideways scroll`, `sections without headings`, and the like) goes in a second `review` section titled **"Found by the capture"**, after the requested items: one item per flaw, its measured numbers and the shot in `body_html`, the fix you would make as the proposal, `"category": "capture"`. These items need no mockup: the capture's own numbers, where the flaw is (`midWordAt`'s element and heading, or the entry's `y`), the part shot that shows it, and one sentence of fix are the whole item. The reader accepts (you fix it with the picks) or denies (you leave it); an offer in chat alone is never seen by someone who reads only the page (Astro run 2: both baseline flaws were caught and offered only in chat). With none, leave the section out.
 - **Open decisions go first. Always.** Things needing a decision this round are the first section, above any recap, carried-forward context, or settled material (`after_html`, or a collapsed block). A reviewer should never scroll past what they have already read to reach the first open item.
-- **"Mark as read" drops an item from the next round.** The page exports it as `READ`; next round, do not render that item again, not even dimmed. Carrying context forward applies to an *open* item's own history (`history_html`), not to items the reader has finished with.
+- **"Mark as read" drops an item's card from the next round.** The page exports it as `READ`; next round, do not render that item as a card again, not even dimmed: it gets one line in the folded Decided list at the bottom, like any other settled item (§6). Carrying context forward applies to an *open* item's own history (`history_html`), not to items the reader has finished with.
 - **The export's first line is the page's bracketed title**, because pasted decisions arrive in chat with no other context. The builder writes it, plus the variant letter:
 
   ```
@@ -199,7 +199,13 @@ Then rebuild styles if the project compiles them and verify against a real rende
 
 ### 6. Follow-up rounds on `REVISE` items
 
-In Refine mode, capture again with `--snapshot` first (the page now has the `YES` changes built in), so the new base, crops and preview show the real page as it is. Scope the new Artifact to only the still-open item(s). Carry the prior round's rejected proposal forward on each card in `history_html` (clearly labeled "Round 1," "Round 2," etc.) alongside the new one, rebuild and republish to the same URL, re-running the verification before every republish; a smaller page is not a lower-risk page. Items the reader marked read are dropped, not carried.
+Between rounds, rebuild the same spec and republish to the same URL, re-running the verification before every republish; a smaller page is not a lower-risk page. The page's database and the reader's browser still hold last round's answers, so build the round this way (`../../reference/review-page.md`, "Follow-up rounds"):
+
+- **In Refine mode, take a fresh base.** Capture again with `--snapshot` first (the page now has the `YES` changes built in), so the new base, crops and preview show the real page as it is, and the open item(s) are the only Refine changes still on the page. Every rule below applies to a Refine round too.
+- **Open items on top.** Only the still-open item(s) (`REVISE`, and any `PENDING` left from the last round) are cards, in `items`. Carry the prior round's rejected proposal forward on each card in `history_html` (clearly labeled "Round 1," "Round 2," etc.) alongside the new one.
+- **Decided items at the bottom, as decided.** Every item settled in an earlier round (`ACCEPT`, `ACCEPT WITH COMMENT`, `DENY`, or marked read) leaves `items` for the spec's `decided` list: one `{id, title, decision, when}` line each (`"decision": "ACCEPT WITH COMMENT: brushed brass, applied"`, `"when": "Round 1"`). The builder folds it at the bottom, under the open items, whatever the spec order. Never drop a settled item silently and never show it as a card again: the reader should see at a glance what is done and what still needs them.
+- **Set `project.round`** to the round number (`2`, `3`, …). Stale answers never pre-fill: every item carries a fingerprint of its proposal and its round, and an answer saved on another one shows on the card read-only ("Your answer last round · Round 1: Approve with Comment: …") with the buttons on Pending and the comment box empty. You do not need new item ids for that. The same round reloaded or republished keeps every answer, so never bump `round` or change a card's body just to republish; for a same-round fix to the body that must keep the reader's answers, pin `rev` (the reference says how).
+- **Read the answers after a round as the page gives them.** `--answers` and Copy report only answers given on this round's items; an earlier round's answer on a carried item is context, never a decision.
 
 ## Worked example
 

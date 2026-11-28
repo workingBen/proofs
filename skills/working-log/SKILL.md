@@ -1,6 +1,6 @@
 ---
 name: working-log
-version: 1.13.0
+version: 1.14.0
 allowed-tools:
   - Read(/${CLAUDE_PLUGIN_ROOT}/**)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/shared/review_page/review_page.py *)
@@ -21,6 +21,7 @@ when it has content:
    skill), plus one-line links to other pages that need them.
 2. **Checks for you**: checks only the user can run (written by the `qa-checklist` skill).
 3. **Log**: newest message first, a **Read this** tick per entry. A ticked entry folds to one line under **Read** at the bottom of the log; unticking it brings the full card back.
+   On a laptop the page also reads the keyboard: **r** marks the highlighted entry read and moves on, **j** / **k** highlight the next / previous unread entry, **u** undoes the last **r**. A small key hint sits bottom-right (hidden on touch screens).
 4. **Decided**: settled items, folded away.
 
 One **Copy my replies** button exports every section's block as plain text the user

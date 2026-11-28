@@ -4549,3 +4549,95 @@ class CompareBrowser(unittest.TestCase):
                            cwd=str(self.proj), timeout=300)
         res = json.loads(r.stdout)
         self.assertEqual(res.get("problems"), [], res)
+
+
+READ_KEYS_DRIVER = r"""
+const fs = require("fs");
+const html = fs.readFileSync(process.argv[2], "utf8");
+const code = html.match(/<script>\n([\s\S]*?)\n<\/script>/)[1];
+const m = { exports: {} };
+new Function("module", code)(m);
+const { readKeys, READ_KEY_MODES } = m.exports;
+// Five entries; an entry is a plain object. setRead logs what a tick click would do.
+const ents = [0, 1, 2, 3, 4].map((i) => ({ id: i, read: false }));
+const log = [];
+let hl = null;
+const env = {
+  entries: () => ents,
+  isRead: (e) => e.read,
+  visibleUnread: () => ents.filter((e) => !e.read)[0] || null,
+  typing: (t) => !!(t && t.typing),
+  setRead: (e, on) => { if (e.read === on) return false; e.read = on; log.push((on ? "read " : "unread ") + e.id); return true; },
+  highlight: (e) => { hl = e && e.id; },
+  reveal: (e) => log.push("reveal " + e.id),
+};
+const k = readKeys(env);
+const press = (key, extra) => k.key(Object.assign({ key, target: {} }, extra || {}));
+k.sync();
+const out = { modes: READ_KEY_MODES, start: hl };
+out.r1 = [press("r"), hl];                     // marks 0 read, highlight moves to 1
+out.j = [press("j"), hl];                      // 1 -> 2
+out.k = [press("k"), hl];                      // 2 -> 1
+out.rUpper = [press("R"), hl];                 // case-insensitive: marks 1, highlight 2
+out.u = [press("u"), hl, ents[1].read];        // undo the last (entry 1), highlight it
+out.typing = [press("r", { target: { typing: true } }), ents.filter((e) => e.read).length];
+out.ctrl = [press("r", { ctrlKey: true }), press("r", { metaKey: true }), press("r", { altKey: true })];
+out.other = press("x");
+out.log = log;
+console.log(JSON.stringify(out));
+"""
+
+
+@unittest.skipUnless(NODE, "node not found")
+class ReadKeys(unittest.TestCase):
+    """r / j / k / u on log and session pages, driven against the engine's own handler."""
+
+    def build(self, mode):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        src = Path(tmp.name) / "s.json"
+        src.write_text((EXAMPLES / ("log.json" if mode == "log" else "session.json")).read_text())
+        out = Path(tmp.name) / "p.html"
+        r = subprocess.run([sys.executable, str(BUILD), str(src), "--out", str(out), "--no-check"],
+                           capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return out
+
+    def drive(self, page):
+        d = page.parent / "keys.cjs"
+        d.write_text(READ_KEYS_DRIVER)
+        r = subprocess.run([NODE, str(d), str(page)], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return json.loads(r.stdout)
+
+    def test_keys_mark_move_undo_and_ignore_typing_and_modifiers(self):
+        for mode in ("log", "session"):
+            got = self.drive(self.build(mode))
+            self.assertEqual(got["modes"], ["log", "session"])
+            self.assertEqual(got["start"], 0)
+            self.assertEqual(got["r1"], [True, 1])
+            self.assertEqual(got["j"], [True, 2])
+            self.assertEqual(got["k"], [True, 1])
+            self.assertEqual(got["rUpper"], [True, 2])
+            self.assertEqual(got["u"], [True, 1, False])
+            self.assertEqual(got["typing"], [False, 1])
+            self.assertEqual(got["ctrl"], [False, False, False])
+            self.assertFalse(got["other"])
+            self.assertEqual(got["log"][0], "read 0")
+            self.assertIn("unread 1", got["log"])
+
+    def test_the_page_wires_keys_for_log_and_session_only(self):
+        for name in ("log.json", "session.json", "questions.json", "design-review.json"):
+            spec = json.loads((EXAMPLES / name).read_text())
+            with self.subTest(name):
+                self.assertEqual(spec["mode"] in ("log", "session"), name in ("log.json", "session.json"))
+        engine = (RP / "engine.js").read_text()
+        self.assertIn('READ_KEY_MODES.indexOf(S.mode) >= 0', engine)
+        self.assertIn('aria-hidden", "true"', engine)
+
+    def test_the_chip_uses_the_page_tokens_and_hides_on_touch(self):
+        css = (RP / "style.css").read_text()
+        chip = css[css.index(".rp-keys {"):]
+        self.assertIn("var(--rp-ink)", chip)
+        self.assertIn("@media (hover:none)", chip)
+        self.assertIn("outline:3px solid var(--rp-accent)", css)

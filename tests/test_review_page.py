@@ -789,6 +789,37 @@ class Refine(unittest.TestCase):
         self.assertTrue(m, "no card for change %s" % cid)
         return m.group(0)
 
+    def change_revs(self, spec):
+        text = self.html(spec)
+        js = json.loads(re.search(r'id="rp-spec">(.*?)</script>', text, re.S).group(1))
+        return {it["id"]: (it.get("rev"), it.get("round")) for s in js["sections"] if s["kind"] == "review"
+                for it in s["items"] if it.get("refine")}
+
+    def test_refine_changes_carry_a_round_fingerprint_like_items(self):
+        base = self.change_revs(self.spec())
+        cid = next(iter(base))
+        self.assertTrue(all(r[0] for r in base.values()), "every change needs a rev")
+        # A republish of the same round, with commentary changed, keeps every answer.
+        s = self.spec()
+        self.item(s)["changes"][0]["scores"] = {"gain": 5, "keeps": 5}
+        self.assertEqual(self.change_revs(s)[cid], base[cid])
+        # A change revised in round 2 under the same id does not keep round 1's rev.
+        s = self.spec()
+        self.item(s)["changes"][0]["css"] = self.item(s)["changes"][0]["css"] + " /* round 2 */ "
+        self.assertNotEqual(self.change_revs(s)[cid][0], base[cid][0])
+        s = self.spec()
+        self.item(s)["changes"][0]["why_html"] = "<p>Rewritten after round 1</p>"
+        self.assertNotEqual(self.change_revs(s)[cid][0], base[cid][0])
+        # A new round changes every change's rev, and a change left alone keeps its other id's.
+        s = self.spec()
+        s["project"] = dict(s.get("project") or {}, round=2)
+        r2 = self.change_revs(s)
+        self.assertTrue(all(r2[k][0] != base[k][0] and r2[k][1] == "2" for k in base))
+        # A pinned rev wins.
+        s = self.spec()
+        self.item(s)["changes"][0]["rev"] = "typo-fix"
+        self.assertEqual(self.change_revs(s)[cid][0], "typo-fix")
+
     @unittest.skipUnless(NODE, "node is not installed")
     def test_refine_export_lists_each_change_and_the_combined_line(self):
         text = self.export({"bold-totals": {"s": "accept"}, "tight-rows": {"s": "deny"}, "alert-color": {"s": "accept"}})

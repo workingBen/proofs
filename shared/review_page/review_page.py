@@ -725,6 +725,19 @@ def item_rev(it, rnd):
     return hashlib.sha1(json.dumps(what, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:10]
 
 
+def refine_rev(it, c, rnd):
+    """A Refine change's fingerprint, the same mechanism as item_rev: what the reader decides
+    on (label, why, targets, css, swaps, removes) and the round. A change revised under the
+    same id gets a new rev, so round 1's answer shows read-only and never pre-fills it.
+    Scores, crops and the rest are commentary and stay out. `rev` on the change pins it."""
+    if c.get("rev"):
+        return str(c["rev"])
+    what = {"label": c.get("label"), "why": c.get("why_html") or "", "targets": c.get("targets"),
+            "css": c.get("css") or "", "swaps": c.get("swaps") or [], "removes": c.get("removes") or [],
+            "round": rnd}
+    return hashlib.sha1(json.dumps(what, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:10]
+
+
 def notes_box(qid, label):
     return ('<div class="notes"><label for="n-%s">%s</label><textarea id="n-%s" data-note="%s"></textarea></div>'
             % (esc(qid), esc(label), esc(qid), esc(qid)))
@@ -2061,7 +2074,9 @@ def refine_entry(it, sec, ctx):
               % (it["id"], len(far), "" if len(far) == 1 else "s", ", ".join(far[:3]), ", ..." if len(far) > 3 else "",
                  "it" if len(far) == 1 else "them"), file=sys.stderr)
     load_crops(it, ctx.spec)
+    rnd = item_round(it, ctx.spec)
     js = [{"id": c["id"], "num": c["_num"], "label": c["label"], "category": None, "variants": [],
+           "rev": refine_rev(it, c, rnd), "round": rnd,
            "selected": None, "before_font_sizes": [], "before_sections": None,
            # Measured inside the frames, never as mockups: no near-copy check (spec §3).
            "design_review": False, "near_copy": False, "refine": it["id"],

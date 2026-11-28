@@ -317,6 +317,14 @@ rules keep round 2 clean:
    item's fingerprint, so a carried-forward item shows its old answer as an earlier
    one, never as a live pick.
 
+Refine changes follow the same rules. Each change carries a `rev` from its label,
+`why_html`, `targets`, `css`, `swaps`, `removes` and the round (`refine_rev`, the same
+mechanism as `item_rev`; `rev` on the change pins it), so a change revised under the same
+id in round 2 shows round 1's answer read-only and starts on Pending. Scores and crops are
+commentary and keep answers. A Refine change has no `history_html`: put round 1's rejected
+version in the refine item's intro. The `Combined:` line covers only the changes on this
+round's page; changes built in earlier rounds belong in `decided`.
+
 Rows and browser records saved by a page built before 1.10.0 carry no `rev` and
 restore as before. For a review already in flight on such a page, give the changed
 items new ids in the next round.
